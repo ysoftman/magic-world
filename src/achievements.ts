@@ -1,3 +1,4 @@
+import { MAX_LEVEL } from "./config";
 import { GameState } from "./gameState";
 import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS } from "./levels";
 import { CATCHABLE } from "./monsters";
@@ -101,6 +102,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: "ICE BREAKER",
     desc: "Defeat the GLACIER GOLEM",
     check: () => GameState.quest.snowBoss,
+  },
+  {
+    id: "ascendant",
+    name: "ASCENDANT",
+    desc: `Reach level ${MAX_LEVEL}`,
+    check: () => GameState.player.level >= MAX_LEVEL,
   },
 ];
 
