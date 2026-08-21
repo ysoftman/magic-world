@@ -80,6 +80,19 @@ export const ENEMIES: Record<string, EnemyDef> = {
     rare: true, // night-only world jackpot: big payout, not required for collection
     weakness: "ice", // cold snuffs out its ghost-flame
   },
+  frostMoth: { name: "FROST MOTH", texture: "frostMoth", hp: 44, atk: 14, def: 2, exp: 58, gold: 38, weakness: "fire" },
+  yeti: { name: "YETI", texture: "yeti", hp: 72, atk: 17, def: 4, exp: 95, gold: 60, weakness: "bolt" },
+  iceGolem: {
+    name: "GLACIER GOLEM",
+    texture: "iceGolem",
+    hp: 200,
+    atk: 20,
+    def: 6,
+    exp: 400,
+    gold: 500,
+    boss: true, // SNOW FIELD superboss: post-game challenge past the MOSS GOLEM
+    weakness: "fire", // glacial body shatters under heat
+  },
 };
 
 // Bosses can't be caught (throwCandy refuses them), and rare monsters are a

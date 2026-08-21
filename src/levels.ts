@@ -20,7 +20,7 @@ export interface MonsterZone {
   w: number;
   h: number;
   count: number;
-  kind?: "slime" | "goblin" | "wolf" | "bat" | "wasp" | "spider" | "orc";
+  kind?: "slime" | "goblin" | "wolf" | "bat" | "wasp" | "spider" | "orc" | "frostMoth" | "yeti";
 }
 
 export const MONSTER_ZONES: MonsterZone[] = [
@@ -290,6 +290,81 @@ export function buildForest(): number[][] {
   markZones(
     map,
     FOREST_ZONES.filter((z) => z.count > 1),
+  );
+
+  return map;
+}
+
+// Snow Field: post-game area past the MOSS GOLEM, reached from a mountain
+// pass in the overworld's north-west corner
+export const SNOW_W = 24;
+export const SNOW_H = 16;
+export const SNOW_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+
+// World-map position of the pass. Reachable on foot: road x=7 up to (7,2),
+// west along the empty row 1 — the house block starts at tile x=3 on row 2,
+// so row 1 stays clear all the way to (1,1).
+export const SNOW_POS = { x: 1 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+
+export const SNOW_ZONES: Array<MonsterZone & { kind?: "frostMoth" | "yeti" }> = [
+  { cx: 5 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },
+  { cx: 19 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },
+  { cx: 5 * TILE, cy: 10 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2, kind: "yeti" },
+  { cx: 19 * TILE, cy: 9 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2, kind: "yeti" },
+  // clear of the entry spawn at (12.5, 3.5), same rule as DUNGEON_ZONES
+  { cx: 12 * TILE, cy: 6 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },
+  { cx: 12 * TILE, cy: 12 * TILE, w: 3 * TILE, h: 2 * TILE, count: 1 }, // glacier golem boss
+];
+
+export const SNOW_TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
+  { id: "snow-1", x: 3 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 },
+  { id: "snow-2", x: 21 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 },
+  { id: "snow-3", x: 8 * TILE + TILE / 2, y: 13 * TILE + TILE / 2 },
+];
+
+export function buildSnow(): number[][] {
+  const map: number[][] = Array.from({ length: SNOW_H }, () => Array<number>(SNOW_W).fill(T_GRASS));
+
+  for (let x = 0; x < SNOW_W; x++) {
+    map[0][x] = T_TREE;
+    map[SNOW_H - 1][x] = T_TREE;
+  }
+  for (let y = 0; y < SNOW_H; y++) {
+    map[y][0] = T_TREE;
+    map[y][SNOW_W - 1] = T_TREE;
+  }
+
+  // winding path: entrance (top-center) down, across, down into the boss basin
+  stamp(map, 11, 1, ["PP", "PP", "PP"]);
+  stamp(map, 9, 3, ["PPPPPP"]);
+  stamp(map, 9, 4, ["P", "P"]);
+  stamp(map, 15, 5, ["PPPPP"]);
+  stamp(map, 19, 6, ["P", "P", "P"]);
+  stamp(map, 14, 8, ["PPPP"]);
+  stamp(map, 17, 9, ["P", "P"]);
+
+  // frozen ponds
+  stamp(map, 2, 2, ["WW", "WW"]);
+  stamp(map, 20, 11, ["WWW", "WWW"]);
+  stamp(map, 3, 12, ["WW", "WW"]);
+
+  // wind-carved rock clusters
+  stamp(map, 7, 2, ["T"]);
+  stamp(map, 16, 2, [".T.", "TTT"]);
+  stamp(map, 22, 3, ["T"]);
+  stamp(map, 8, 6, ["T.T", ".T."]);
+  stamp(map, 2, 8, ["T"]);
+  stamp(map, 16, 11, [".T.", "TTT"]);
+  stamp(map, 10, 10, ["T.T"]);
+  stamp(map, 21, 8, ["T"]);
+  stamp(map, 6, 14, ["TT"]);
+  stamp(map, 14, 14, ["T"]);
+
+  // same marking rule as the forest; the boss basin stays unmarked so the
+  // GLACIER GOLEM is still a surprise
+  markZones(
+    map,
+    SNOW_ZONES.filter((z) => z.count > 1),
   );
 
   return map;

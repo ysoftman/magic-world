@@ -361,6 +361,66 @@ const WISP_TILE = [
   "......dwwd......",
   "................",
 ];
+
+const FROST_MOTH_PALETTE = { w: 0xe0f2fe, W: 0xbae6fd, b: 0x38bdf8, d: 0x0369a1, e: 0xef4444 };
+const FROST_MOTH_TILE = [
+  "................",
+  "..ww........ww..",
+  ".wWWw......wWWw.",
+  ".wWWWbbbbbbWWWw.",
+  ".wWWWWbbbbWWWWw.",
+  "..wWWWbbeebWWWw.",
+  "..wWWWbbbbWWWw..",
+  "...wWbbbbbbWw...",
+  "...wWbdbdbdbW...",
+  "....wbbbbbbbw...",
+  "....wbdbdbdb....",
+  ".....wbbbbb.....",
+  "......wbbb......",
+  ".......wb.......",
+  "................",
+  "................",
+];
+
+const YETI_PALETTE = { f: 0xf1f5f9, F: 0xcbd5e1, s: 0x93c5fd, e: 0x1e3a8a, m: 0x64748b };
+const YETI_TILE = [
+  "................",
+  "................",
+  "....ffffffff....",
+  "...ffffFFFFFFf..",
+  "..fffFssssssFff.",
+  "..ffFsssssssFff.",
+  "..ffFseesseFff..",
+  "..ffFssssssFff..",
+  "..ffFsmmmmsFff..",
+  "..ffffffffffff..",
+  ".ffffffffffffff.",
+  ".ffFFFFFFFFFFff.",
+  ".ffFFFFFFFFFfff.",
+  "..fff..ff..fff..",
+  "..fff..ff..fff..",
+  "................",
+];
+
+const ICE_GOLEM_PALETTE = { i: 0xa5f3fc, I: 0x67e8f9, c: 0x22d3ee, d: 0x0e7490, k: 0x334155, e: 0xffffff };
+const ICE_GOLEM_TILE = [
+  "................",
+  ".....iiiiii.....",
+  "....iIiiiiIi....",
+  "....iIeeeeIi....",
+  "....iiiiiiii....",
+  "...kiIiiiiIik...",
+  "..kkiIciicIikk..",
+  ".k.kiIciicIik.k.",
+  ".kk.iIIIIIIi.kk.",
+  ".kk.iiIddIii.kk.",
+  ".k.kiiiDDiiik.k.",
+  "....kiiiiiiik...",
+  "....kiiIIiiik...",
+  "....kiI..Iik....",
+  "....kii..iik....",
+  "................",
+];
 const BAT_PALETTE = { b: 0x7c3aed, B: 0x5b21b6, d: 0x3b0764, w: 0xffffff, e: 0xf87171 };
 const BAT_TILE = [
   "bb............bb",
@@ -879,12 +939,16 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "spider", SPIDER_TILE, SPIDER_PALETTE);
     makeTexture(this, "orc", ORC_TILE, ORC_PALETTE);
     makeTexture(this, "wisp", WISP_TILE, WISP_PALETTE);
+    makeTexture(this, "frostMoth", FROST_MOTH_TILE, FROST_MOTH_PALETTE);
+    makeTexture(this, "yeti", YETI_TILE, YETI_PALETTE);
+    makeTexture(this, "iceGolem", ICE_GOLEM_TILE, ICE_GOLEM_PALETTE);
 
     makeTexture(this, "dust", ["dd", "dd"], { d: 0xcbbfa8 });
     makeTexture(this, "spark", SPARK_TILE, SPARK_PALETTE);
     makeTexture(this, "glow", GLOW_TILE, GLOW_PALETTE);
     makeTexture(this, "coin", COIN_TILE, COIN_PALETTE);
     makeTexture(this, "firefly", FIREFLY_TILE, FIREFLY_PALETTE);
+    makeTexture(this, "snowflake", ["ww", "ww"], { w: 0xffffff });
     makeTexture(this, "chest", CHEST_TILE, CHEST_PALETTE);
     makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE);
 

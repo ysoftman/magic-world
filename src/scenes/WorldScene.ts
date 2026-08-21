@@ -18,6 +18,7 @@ import {
   PLAYER_SPAWN,
   RANK_BOARD_POS,
   SHOP_POS,
+  SNOW_POS,
   SOLID,
   T_WATER_A,
   T_WATER_B,
@@ -100,6 +101,7 @@ export class WorldScene extends Phaser.Scene {
   private resting = false;
   private enteringDungeon = false;
   private enteringForest = false;
+  private enteringSnow = false;
   // true while overlapping the forest zone; reset a full tile away so the
   // sealed-entrance dialogue doesn't restart every overlap frame
   private forestOverlapActive = false;
@@ -160,7 +162,7 @@ export class WorldScene extends Phaser.Scene {
     super("World");
   }
 
-  create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean }): void {
+  create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean; fromSnow?: boolean }): void {
     Sfx.playBgm(OVERWORLD_THEME);
     this.roamers = [];
     // Every entry gets a grace period, not just a return from battle: nothing
@@ -171,6 +173,7 @@ export class WorldScene extends Phaser.Scene {
     this.resting = false;
     this.enteringDungeon = false;
     this.enteringForest = false;
+    this.enteringSnow = false;
     this.forestOverlapActive = false;
     this.quitConfirm = false;
     this.quitting = false;
@@ -262,6 +265,15 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
+    // north-west mountain pass to the snow field: sign beside the opening,
+    // name above it — same dressing pattern as the forest entrance
+    const snowSignX = Phaser.Math.Clamp(SNOW_POS.x + TILE, TILE, (MAP_W - 1) * TILE);
+    this.add.image(snowSignX, SNOW_POS.y, "sign").setDepth(9);
+    this.add
+      .text(SNOW_POS.x, SNOW_POS.y - 40, "SNOW PASS", retroStyle(6, "#a5f3fc"))
+      .setOrigin(0.5)
+      .setDepth(11);
+
     this.add.sprite(HUNTER_POS.x, HUNTER_POS.y, "npc").setDepth(10).setTint(0x86efac);
     this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
     this.add
@@ -279,14 +291,17 @@ export class WorldScene extends Phaser.Scene {
     const nearCave = Math.abs(respawn.x - CAVE_POS.x) <= TILE / 2 && Math.abs(respawn.y - CAVE_POS.y) <= TILE / 2;
     const fromDungeon = !!data?.fromDungeon || nearCave;
     const fromForest = !!data?.fromForest;
+    const fromSnow = !!data?.fromSnow;
     const spawn = fromDungeon
       ? { x: CAVE_POS.x, y: CAVE_POS.y + TILE * 2 }
       : fromForest
         ? { x: FOREST_POS.x, y: FOREST_POS.y + TILE * 2 }
-        : respawn;
-    // just walked out of the cave/forest: hold off re-triggering it in case
-    // the player is still holding the walk-in key
-    if (fromDungeon || fromForest) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
+        : fromSnow
+          ? { x: SNOW_POS.x, y: SNOW_POS.y + TILE * 2 }
+          : respawn;
+    // just walked out of the cave/forest/snow: hold off re-triggering it in
+    // case the player is still holding the walk-in key
+    if (fromDungeon || fromForest || fromSnow) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
     this.player = this.physics.add.sprite(spawn.x, spawn.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
@@ -404,6 +419,19 @@ export class WorldScene extends Phaser.Scene {
       this.enterForest();
     });
 
+    const snowPass = this.add.zone(SNOW_POS.x, SNOW_POS.y, TILE, TILE).setDepth(1);
+    this.physics.add.existing(snowPass);
+    this.physics.add.overlap(this.player, snowPass, () => {
+      if (this.enteringSnow || this.enteringDungeon || this.enteringForest || this.encounterCooldown > 0) return;
+      if (this.uiBlocking()) return;
+      // post-game gate: the pass only thaws once the forest boss falls
+      if (!GameState.quest.forestBoss) {
+        this.dialogue.start(["The northern pass is", "choked with eternal", "snow...", "Something ancient stirs", "beyond the ice."]);
+        return;
+      }
+      this.enterSnow();
+    });
+
     this.time.addEvent({
       delay: 400,
       loop: true,
@@ -511,6 +539,7 @@ export class WorldScene extends Phaser.Scene {
       { x: CAVE_POS.x, y: CAVE_POS.y, color: 0xff5555 },
       { x: RANK_BOARD_POS.x, y: RANK_BOARD_POS.y, color: 0xc084fc },
       { x: FOREST_POS.x, y: FOREST_POS.y, color: 0x4ade80 },
+      { x: SNOW_POS.x, y: SNOW_POS.y, color: 0xa5f3fc },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
     ]);
 
@@ -603,6 +632,17 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start("Forest");
+    });
+  }
+
+  private enterSnow(): void {
+    if (this.enteringSnow) return;
+    this.enteringSnow = true;
+    Sfx.night();
+    this.player.setVelocity(0, 0);
+    this.cameras.main.fadeOut(200, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start("Snow");
     });
   }
 

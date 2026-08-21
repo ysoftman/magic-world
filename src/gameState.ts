@@ -75,6 +75,8 @@ export interface QuestState {
   forestBoss: boolean;
   forestReward: boolean;
   bestiaryReward: boolean;
+  // post-game superboss in the SNOW FIELD, unlocked after the MOSS GOLEM falls
+  snowBoss: boolean;
   // HUNTER side quests: first a kill bounty (4 bats), then a collection
   // bounty (any 3 catches past the snapshot taken when it was accepted)
   hunterBatsAccepted: boolean;
@@ -178,6 +180,7 @@ export const GameState = {
     forestBoss: false,
     forestReward: false,
     bestiaryReward: false,
+    snowBoss: false,
     hunterBatsAccepted: false,
     batsSlain: 0,
     hunterBatsReward: false,
@@ -311,6 +314,7 @@ export const GameState = {
       forestBoss: false,
       forestReward: false,
       bestiaryReward: false,
+      snowBoss: false,
       hunterBatsAccepted: false,
       batsSlain: 0,
       hunterBatsReward: false,

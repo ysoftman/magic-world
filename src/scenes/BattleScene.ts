@@ -102,7 +102,7 @@ export class BattleScene extends Phaser.Scene {
   private running = false;
   private night = false;
   private waitingAction: { resolve: (a: MenuAction) => void } | null = null;
-  private origin: "World" | "Dungeon" | "Forest" = "World";
+  private origin: "World" | "Dungeon" | "Forest" | "Snow" = "World";
   private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
 
@@ -116,7 +116,7 @@ export class BattleScene extends Phaser.Scene {
     super("Battle");
   }
 
-  init(data: { enemy: string; from?: "World" | "Dungeon" | "Forest" }): void {
+  init(data: { enemy: string; from?: "World" | "Dungeon" | "Forest" | "Snow" }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
     this.combo = 0;
@@ -133,7 +133,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.exp = Math.round(def.exp * NIGHT_LOOT_MULT);
     }
     const from = data?.from;
-    this.origin = from === "Dungeon" || from === "Forest" ? from : "World";
+    this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" ? from : "World";
     if (!GameState.seenMonsters.includes(def.name)) {
       GameState.seenMonsters.push(def.name);
       // persist immediately: a battle ended by RUN never reaches the
@@ -993,6 +993,7 @@ export class BattleScene extends Phaser.Scene {
       // two story bosses share the `boss` flag; each sets its own quest gate
       if (this.enemy.boss) {
         if (this.enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;
+        else if (this.enemy.name === ENEMIES.iceGolem.name) GameState.quest.snowBoss = true;
         else GameState.quest.bossDefeated = true;
       }
       GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + 5);
@@ -1104,7 +1105,8 @@ export class BattleScene extends Phaser.Scene {
     GameState.lockEncounters(4000);
     this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      const target = this.origin === "Dungeon" ? "Dungeon" : this.origin === "Forest" ? "Forest" : "World";
+      const target =
+        this.origin === "Dungeon" ? "Dungeon" : this.origin === "Forest" ? "Forest" : this.origin === "Snow" ? "Snow" : "World";
       this.scene.start(target, {
         fromBattle: true,
       });
