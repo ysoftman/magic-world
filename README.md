@@ -4,19 +4,6 @@
 
 ![tech](https://img.shields.io/badge/Phaser-4.x-blue) ![tech](https://img.shields.io/badge/TypeScript-7.x-3178c6) ![tech](https://img.shields.io/badge/Vite-8.x-646cff) ![tech](https://img.shields.io/badge/Bun-ready-f472b6)
 
-## 특징
-
-- **코드로 그린 픽셀아트** — 이미지 에셋 없이 `src/pixelart.ts`에서 스프라이트·타일을 전부 생성
-- **4개 필드 + 턴제 전투** — 마을(월드맵), 던전, 숲, 포스트게임 설원(스노우 필드)을 탐험하고 몬스터와 턴제 전투
-- **성장 시스템** — 최대 Lv 30, HP/MP/ATK/DEF 스탯, 검·방패 → 미스릴 장비 티어
-- **몬스터 도감(베스티어리)** — 슬라임, 고블린, 늑대, 박쥐, 말벌, 거미, 오크, 프로스트 모스, 예티 + 보스(킹 슬라임, 트롤 킹, 모스 골렘, 글레이셔 골렘 등)
-- **콘텐츠** — 상점, 낚시 미니게임(마을 + 설원 아이스 피싱), 보물상자(던전 3개 + 숲 4개 + 설원 3개), 업적 15종
-- **사이드 퀘스트** — ELDER 메인 스토리 보상 체인, HUNTER 3단계 바운티(박쥐 → 포획 → 예티)
-- **마을 랭킹판** — 레벨 도달 기록 영구 저장 Top-10 리더보드 (세이브 삭제와 무관하게 유지)
-- **낮/밤 사이클**, 미니맵, 대화창, 상태 HUD
-- **WebAudio 사운드** — BGM/SFX, 탭 전환 시 자동 suspend/resume
-- **localStorage 세이브** — 언제든 저장/복원 (`Ctrl+S`)
-
 ## build / run
 
 [Bun](https://bun.sh) 필요.
