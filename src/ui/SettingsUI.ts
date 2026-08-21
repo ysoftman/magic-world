@@ -2,21 +2,22 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, TEXT_SPEEDS } from "../gameState";
-import { retroStyle } from "../pixelart";
+import { retroStyle, showToast } from "../pixelart";
 
 const PANEL_W = 560;
-const PANEL_H = 300;
+const PANEL_H = 360;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
-const ROW_GAP = 56;
+const ROW_GAP = 44;
 
 const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
-const LABELS = ["BGM VOLUME", "SFX VOLUME", "TEXT SPEED"];
+const LABELS = ["BGM VOLUME", "SFX VOLUME", "TEXT SPEED", "EXPORT SAVE", "IMPORT SAVE"];
 
 export class SettingsUI {
   private active = false;
   private row = 0;
   private closeQueued = false;
 
+  private scene: Phaser.Scene;
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
   private title: Phaser.GameObjects.Text;
@@ -24,6 +25,7 @@ export class SettingsUI {
   private hint: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
       .setScrollFactor(0)
@@ -51,7 +53,7 @@ export class SettingsUI {
       this.rows.push(row);
     });
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: CLOSE", retroStyle(4, "#8ecbff"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: APPLY/CLOSE   ESC: CLOSE", retroStyle(4, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -72,7 +74,11 @@ export class SettingsUI {
     const queueClose = () => {
       if (this.active) this.closeQueued = true;
     };
-    z.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
+    z.on(Phaser.Input.Keyboard.Events.DOWN, () => {
+      if (!this.active) return;
+      if (this.row >= LABELS.length - 2) this.activate();
+      else this.closeQueued = true;
+    });
     esc.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
     o.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
   }
@@ -124,7 +130,7 @@ export class SettingsUI {
   }
 
   private adjust(dir: number): void {
-    if (!this.active) return;
+    if (!this.active || this.row >= LABELS.length - 2) return;
     if (this.row === 0) this.setVolume("bgmVolume", GameState.bgmVolume + dir * 0.1);
     else if (this.row === 1) this.setVolume("sfxVolume", GameState.sfxVolume + dir * 0.1);
     else {
@@ -143,6 +149,45 @@ export class SettingsUI {
     Sfx.spark();
   }
 
+  private activate(): void {
+    if (this.row === LABELS.length - 2) this.exportSave();
+    else this.importSave();
+  }
+
+  private exportSave(): void {
+    const code = GameState.exportSaveCode();
+    if (!code) {
+      Sfx.error();
+      showToast(this.scene, "NO SAVE TO EXPORT");
+      return;
+    }
+    navigator.clipboard
+      ?.writeText(code)
+      .then(() => {
+        Sfx.buy();
+        showToast(this.scene, "SAVE CODE COPIED");
+      })
+      .catch(() => {
+        window.prompt("COPY THIS CODE:", code);
+        Sfx.buy();
+      });
+  }
+
+  private importSave(): void {
+    const code = window.prompt("PASTE SAVE CODE:");
+    if (!code) return;
+    if (!GameState.importSaveCode(code)) {
+      Sfx.error();
+      showToast(this.scene, "INVALID CODE");
+      return;
+    }
+    Sfx.buy();
+    showToast(this.scene, "SAVE IMPORTED - RELOADING");
+    // Reload instead of scene.start: every scene's SHUTDOWN handler saves the
+    // in-memory state and would overwrite the code just imported
+    this.scene.time.delayedCall(900, () => location.reload());
+  }
+
   private refresh(): void {
     const bar = (v: number): string => {
       const n = Math.round(v * 10);
@@ -152,10 +197,13 @@ export class SettingsUI {
       `${bar(GameState.bgmVolume)}  ${Math.round(GameState.bgmVolume * 100)}%`,
       `${bar(GameState.sfxVolume)}  ${Math.round(GameState.sfxVolume * 100)}%`,
       SPEED_LABELS[GameState.textSpeed] ?? "NORMAL",
+      "",
+      "",
     ];
     LABELS.forEach((label, i) => {
       const selected = i === this.row;
-      this.rows[i].setText(`${selected ? "> " : ""}${label}: ${values[i]}`);
+      const value = values[i] ? `: ${values[i]}` : "";
+      this.rows[i].setText(`${selected ? "> " : ""}${label}${value}`);
       this.rows[i].setColor(selected ? "#ffd166" : "#f5f5f5");
     });
   }

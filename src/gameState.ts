@@ -425,4 +425,26 @@ export const GameState = {
   clearSave(): void {
     localStorage.removeItem(SAVE_KEY);
   },
+
+  // UTF-8-safe Base64: player names can be non-Latin1, and plain btoa would
+  // throw on them, so the JSON goes through TextEncoder bytes first
+  exportSaveCode(): string {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return "";
+    let bin = "";
+    for (const b of new TextEncoder().encode(raw)) bin += String.fromCharCode(b);
+    return btoa(bin);
+  },
+  importSaveCode(code: string): boolean {
+    try {
+      const bin = atob(code.trim());
+      const json = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+      const data = JSON.parse(json) as { player?: { level?: unknown } } | null;
+      if (!data || typeof data.player?.level !== "number") return false;
+      localStorage.setItem(SAVE_KEY, json);
+      return true;
+    } catch {
+      return false;
+    }
+  },
 };
