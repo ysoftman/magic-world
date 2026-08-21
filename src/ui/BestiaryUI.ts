@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { CATCHABLE, ENEMIES } from "../monsters";
@@ -32,6 +33,7 @@ export class BestiaryUI {
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
   private title: Phaser.GameObjects.Text;
+  private hint: Phaser.GameObjects.Text;
   private counter: Phaser.GameObjects.Text;
   private icons: Phaser.GameObjects.Sprite[] = [];
   private rows: Phaser.GameObjects.Text[] = [];
@@ -55,6 +57,12 @@ export class BestiaryUI {
       .setVisible(false);
     this.title = scene.add
       .text(GAME_WIDTH / 2, PANEL_TOP + 44, "BESTIARY", retroStyle(8, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.hint = scene.add
+      .text(GAME_WIDTH / 2, PANEL_TOP + 84, "CLICK A CAUGHT MONSTER TO SET COMPANION", retroStyle(4, "#666666"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -88,6 +96,20 @@ export class BestiaryUI {
         .setDepth(152)
         .setVisible(false);
       this.rows.push(row);
+
+      // click a caught species to make it the battle companion; a click on
+      // an unseen "???" row (still hit-testable — Text keeps its full box
+      // even when showing the placeholder) is a no-op via the caught check
+      const selectCompanion = () => {
+        if (!GameState.caught.includes(def.name) || GameState.companion === def.name) return;
+        GameState.companion = def.name;
+        Sfx.buy();
+        showToast(this.scene, `COMPANION: ${def.name}`);
+        GameState.save();
+        this.refresh();
+      };
+      icon.setInteractive({ useHandCursor: true }).on("pointerdown", selectCompanion);
+      row.setInteractive({ useHandCursor: true }).on("pointerdown", selectCompanion);
     });
 
     const kb = scene.input.keyboard!;
@@ -106,6 +128,7 @@ export class BestiaryUI {
     this.dim.setVisible(true);
     this.panel.setVisible(true);
     this.title.setVisible(true);
+    this.hint.setVisible(true);
     this.counter.setVisible(true);
     for (const t of this.rows) t.setVisible(true);
     this.refresh();
@@ -116,6 +139,7 @@ export class BestiaryUI {
     this.dim.setVisible(false);
     this.panel.setVisible(false);
     this.title.setVisible(false);
+    this.hint.setVisible(false);
     this.counter.setVisible(false);
     for (const s of this.icons) s.setVisible(false);
     for (const t of this.rows) t.setVisible(false);
@@ -149,10 +173,13 @@ export class BestiaryUI {
     SPECIES.forEach((def, i) => {
       const rowSeen = GameState.seenMonsters.includes(def.name);
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
+      const isCompanion = rowCaught > 0 && def.name === GameState.companion;
       this.icons[i].setVisible(rowSeen);
-      const hint = rowSeen && def.weakness ? `  WEAK:${def.weakness.toUpperCase()}` : "";
-      this.rows[i].setText(rowSeen ? `${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}${hint}` : "???");
-      this.rows[i].setColor(rowSeen ? "#ffffff" : "#666666");
+      const weaknessHint = rowSeen && def.weakness ? `  WEAK:${def.weakness.toUpperCase()}` : "";
+      this.rows[i].setText(
+        rowSeen ? `${isCompanion ? "★ " : ""}${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}${weaknessHint}` : "???",
+      );
+      this.rows[i].setColor(!rowSeen ? "#666666" : isCompanion ? "#4ade80" : "#ffffff");
     });
   }
 
@@ -160,6 +187,7 @@ export class BestiaryUI {
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();
+    this.hint.destroy();
     this.counter.destroy();
     for (const s of this.icons) s.destroy();
     for (const t of this.rows) t.destroy();
