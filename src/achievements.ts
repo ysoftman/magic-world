@@ -1,11 +1,11 @@
 import { GameState } from "./gameState";
-import { FOREST_TREASURE_POS, TREASURE_POS } from "./levels";
+import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS } from "./levels";
 import { CATCHABLE } from "./monsters";
 
-// Total chests across the dungeon (3) and the forest (4) — the number the
-// treasure-hunter achievement keys off, so adding a chest to either map is a
-// one-line update here instead of a drift-prone literal.
-export const TOTAL_TREASURES = TREASURE_POS.length + FOREST_TREASURE_POS.length;
+// Total chests across the dungeon (3), the forest (4) and the snow field (3)
+// — the number the treasure-hunter achievement keys off, so adding a chest to
+// any map is a one-line update here instead of a drift-prone literal.
+export const TOTAL_TREASURES = TREASURE_POS.length + FOREST_TREASURE_POS.length + SNOW_TREASURE_POS.length;
 
 export interface AchievementDef {
   id: string;
