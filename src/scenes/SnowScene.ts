@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { Sfx, SNOW_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
@@ -95,6 +96,14 @@ export class SnowScene extends Phaser.Scene {
   private quitConfirm = false;
   private quitting = false;
   private unsubSaved: () => void = () => {};
+  // claims achievements at most once per second so earned-here achievements
+  // (e.g. defeating a boss) toast immediately instead of waiting for the
+  // player to wander back to World, the only scene that used to poll this
+  private achievementCheckAccum = 0;
+  // true while an achievement save is in flight, so the onSaved "SAVED" toast
+  // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
+  // object (showToast reuses one per scene)
+  private suppressSavedToast = false;
   private yQueued = false;
   private nQueued = false;
   private escQueued = false;
@@ -131,7 +140,9 @@ export class SnowScene extends Phaser.Scene {
     // — SHUTDOWN listeners fire in registration order, so this unsubscribes
     // before that save happens and no toast gets created on a scene that's
     // already tearing down. Keep this the first SHUTDOWN listener.
-    this.unsubSaved = onSaved(() => showToast(this, "SAVED", STATUS_HUD_TOAST_Y));
+    this.unsubSaved = onSaved(() => {
+      if (!this.suppressSavedToast) showToast(this, "SAVED", STATUS_HUD_TOAST_Y);
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildSnow();
@@ -375,6 +386,21 @@ export class SnowScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     GameState.minutes += delta / 1000;
     this.updateStatus();
+
+    this.achievementCheckAccum += delta;
+    if (this.achievementCheckAccum >= 1000) {
+      this.achievementCheckAccum = 0;
+      const earned = claimAchievements();
+      if (earned.length > 0) {
+        this.suppressSavedToast = true;
+        GameState.save();
+        this.suppressSavedToast = false;
+      }
+      for (const id of earned) {
+        const def = ACHIEVEMENTS.find((a) => a.id === id);
+        if (def) showToast(this, `ACHIEVEMENT: ${def.name}!`);
+      }
+    }
 
     if (this.sQueued) {
       this.sQueued = false;
