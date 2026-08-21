@@ -60,24 +60,27 @@ const WATER_B = [
   "WWBBWWWWWWWWWWWW",
 ];
 
-const TREE_PALETTE = { b: 0x0a331f, d: 0x0d4528, L: 0x155e38, t: 0x3d2c18 };
+// The tree is drawn straight onto a copy of the grass speckle pattern (g/G/L
+// shared with GRASS_TILE) so the tile merges into the map instead of reading
+// as a dark box; b outlines the canopy, c highlights it, t is the trunk.
+const TREE_PALETTE = { g: 0x1f5c42, G: 0x16432f, L: 0x2a6b4d, b: 0x0a331f, d: 0x0d4528, c: 0x155e38, t: 0x3d2c18 };
 const TREE_TILE = [
-  "bbbbbbbbbbbbbbbb",
-  "bbbbbbbbbbbbbbbb",
-  "bbbbLddddddLbbbb",
-  "bbbddddddddddbbb",
-  "bbddddddddddddbb",
-  "bbddddddddddddbb",
+  "gggggggggggggggg",
+  "gggggggggggggggg",
+  "gGggbcddddddcbgg",
+  "ggbddddddddddbgg",
+  "gbddddddddddddbg",
+  "gbddddddddddddbg",
   "bddddddddddddddb",
   "bddddddddddddddb",
   "bddddddddddddddb",
-  "bbddddddddddddbb",
-  "bbbbddddddddbbbb",
-  "bbbbbbttttbbbbbb",
-  "bbbbbbttttbbbbbb",
-  "bbbbbbttttbbbbbb",
-  "bbbbbttttttbbbbb",
-  "bbbbbbbbbbbbbbbb",
+  "gbddddddddddddbg",
+  "gggbddddddddbggg",
+  "ggggggttttgggggg",
+  "ggggggttttgggggg",
+  "gGggggttttgggggg",
+  "gggggttttttggLgg",
+  "gggggggggggggggg",
 ];
 
 const PATH_PALETTE = { p: 0x735f43, P: 0x5e4c33 };
@@ -627,72 +630,190 @@ function makeBattleBg(scene: Phaser.Scene): void {
 
 function makeTitleBg(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
-  g.fillStyle(0x0133a9, 1);
-  g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-  g.fillStyle(0xe8eaf8, 0.15);
-  g.fillCircle(320, 184, 224);
-  g.fillStyle(0xf6f6ff, 0.28);
-  g.fillCircle(320, 184, 152);
-  g.fillStyle(0xf6f6ff, 1);
-  g.fillCircle(320, 184, 64);
-  g.fillStyle(0xffffff, 1);
-  g.fillCircle(320, 184, 44);
-  g.fillStyle(0xd9ddf2, 1);
-  g.fillCircle(300, 164, 12);
-  g.fillCircle(340, 200, 8);
-  g.fillCircle(312, 208, 6);
-
-  for (let i = 0; i < 45; i++) {
-    g.fillStyle(0xffffff, Math.random() * 0.8 + 0.2);
-    g.fillRect(Math.floor(Math.random() * GAME_WIDTH), Math.floor(Math.random() * 400), 4, 4);
+  // twilight sky: indigo night melting into a violet-pink horizon
+  const SKY_BANDS: Array<[number, number]> = [
+    [0x120b33, 150],
+    [0x1d1247, 130],
+    [0x2c1a63, 110],
+    [0x45247c, 90],
+    [0x6c3091, 70],
+    [0x94489b, 50],
+  ];
+  let skyY = 0;
+  for (const [color, h] of SKY_BANDS) {
+    g.fillStyle(color, 1);
+    g.fillRect(0, skyY, GAME_WIDTH, h);
+    skyY += h;
   }
 
-  g.fillStyle(0x261973, 1);
-  g.fillTriangle(-80, 480, 240, 240, 600, 480);
-  g.fillTriangle(360, 480, 800, 280, 1280, 480);
-  g.fillStyle(0x17235a, 1);
-  g.fillTriangle(80, 560, 440, 360, 760, 560);
-  g.fillTriangle(600, 560, 1000, 380, 1360, 560);
+  g.fillStyle(0xc86bd9, 0.1);
+  g.fillEllipse(260, 190, 420, 110);
+  g.fillEllipse(860, 110, 360, 90);
+  g.fillStyle(0x64d9e8, 0.08);
+  g.fillEllipse(580, 250, 480, 100);
 
-  g.fillStyle(0x1a1240, 1);
-  g.fillRect(560, 472, 104, 88);
-  g.fillRect(688, 488, 136, 72);
-  g.fillStyle(0x8a2b3a, 1);
-  g.fillTriangle(552, 472, 612, 416, 672, 472);
-  g.fillTriangle(680, 488, 756, 432, 832, 488);
-  g.fillStyle(0xffd672, 1);
-  g.fillRect(584, 496, 24, 28);
-  g.fillRect(712, 512, 24, 28);
-  g.fillRect(768, 504, 24, 28);
+  for (let i = 0; i < 90; i++) {
+    g.fillStyle(0xffffff, Math.random() * 0.75 + 0.15);
+    g.fillRect(Math.floor(Math.random() * GAME_WIDTH), Math.floor(Math.random() * 420), 4, 4);
+  }
+  const crossStar = (x: number, y: number, s: number, a: number): void => {
+    g.fillStyle(0xffffff, a);
+    g.fillRect(x - s, y - 2, s * 2, 4);
+    g.fillRect(x - 2, y - s, 4, s * 2);
+  };
+  crossStar(180, 90, 14, 0.9);
+  crossStar(520, 60, 10, 0.8);
+  crossStar(1180, 70, 12, 0.85);
+  crossStar(700, 160, 8, 0.7);
 
-  g.fillStyle(0x1a1240, 1);
-  g.fillRect(1072, 384, 56, 96);
-  g.fillStyle(0x8a2b3a, 1);
-  g.fillTriangle(1048, 384, 1100, 328, 1152, 384);
-  g.fillStyle(0xffd672, 1);
-  g.fillRect(1084, 400, 16, 20);
-  g.fillRect(1084, 436, 16, 20);
-  g.fillStyle(0xff8a3d, 1);
-  g.fillCircle(1100, 312, 16);
-  g.fillStyle(0xffd672, 0.6);
-  g.fillCircle(1100, 312, 28);
-  g.fillStyle(0xff5555, 0.4);
-  g.fillCircle(1100, 312, 40);
+  g.fillStyle(0xffffff, 0.9);
+  g.fillCircle(820, 84, 3);
+  g.fillStyle(0xffffff, 0.45);
+  g.fillCircle(800, 92, 2);
+  g.fillStyle(0xffffff, 0.25);
+  g.fillCircle(782, 99, 2);
+  g.fillStyle(0xffffff, 0.12);
+  g.fillCircle(766, 106, 2);
 
-  g.fillStyle(0x0e5226, 1);
-  g.fillCircle(80, 664, 64);
-  g.fillCircle(192, 680, 80);
-  g.fillCircle(320, 632, 52);
-  g.fillCircle(480, 672, 72);
-  g.fillCircle(960, 656, 60);
-  g.fillCircle(1200, 680, 88);
-  g.fillStyle(0x0f6a2a, 1);
-  g.fillCircle(216, 648, 36);
-  g.fillCircle(504, 640, 28);
-  g.fillCircle(1224, 648, 36);
-  g.fillStyle(0x081b12, 1);
-  g.fillRect(0, 672, GAME_WIDTH, 48);
+  g.fillStyle(0xfff3c4, 0.07);
+  g.fillCircle(150, 100, 80);
+  g.fillStyle(0xfff3c4, 0.12);
+  g.fillCircle(150, 100, 64);
+  g.fillStyle(0xffedb0, 0.35);
+  g.fillCircle(150, 100, 52);
+  g.fillStyle(0xfdf0c2, 1);
+  g.fillCircle(150, 100, 40);
+  g.fillStyle(0xe8d79a, 1);
+  g.fillCircle(136, 86, 7);
+  g.fillCircle(163, 110, 5);
+  g.fillCircle(146, 118, 4);
+
+  g.fillStyle(0x241a4a, 1);
+  g.fillTriangle(-120, 600, 200, 400, 520, 600);
+  g.fillTriangle(340, 600, 700, 370, 1060, 600);
+  g.fillTriangle(880, 600, 1160, 430, 1400, 600);
+  g.fillStyle(0x1c1440, 1);
+  g.fillTriangle(-60, 600, 320, 470, 700, 600);
+  g.fillTriangle(560, 600, 940, 450, 1320, 600);
+
+  const island = (x: number, y: number, w: number): void => {
+    g.fillStyle(0x7ef9ff, 0.06);
+    g.fillEllipse(x, y + 26, w * 1.5, 40);
+    g.fillStyle(0x3a2a55, 1);
+    g.fillTriangle(x - w / 2, y, x + w / 2, y, x, y + w * 0.42);
+    g.fillStyle(0x241a3e, 1);
+    g.fillTriangle(x - w * 0.18, y + 8, x + w * 0.3, y + 6, x + w * 0.05, y + w * 0.34);
+    g.fillRect(x - w * 0.22, y + 14, 3, 22);
+    g.fillRect(x + w * 0.1, y + 18, 3, 16);
+    g.fillRect(x + w * 0.26, y + 10, 3, 12);
+    g.fillStyle(0x1f6b46, 1);
+    g.fillEllipse(x, y, w, 26);
+    g.fillStyle(0x2a8a5a, 1);
+    g.fillEllipse(x, y - 4, w * 0.82, 16);
+  };
+
+  island(230, 320, 200);
+  g.fillStyle(0x0f3d24, 1);
+  g.fillTriangle(212, 308, 228, 272, 244, 308);
+  g.fillRect(225, 306, 6, 10);
+
+  island(330, 450, 100);
+  g.fillStyle(0x67e8f9, 1);
+  g.fillTriangle(318, 438, 330, 406, 342, 438);
+  g.fillStyle(0xa5f3fc, 0.8);
+  g.fillTriangle(324, 438, 330, 416, 336, 438);
+
+  const STONE = 0x191238;
+  const ROOF = 0x3d1d5c;
+  g.fillStyle(0x141033, 1);
+  g.fillEllipse(1020, 620, 460, 90);
+  g.fillStyle(STONE, 1);
+  g.fillRect(940, 500, 160, 110);
+  g.fillRect(908, 520, 40, 90);
+  g.fillRect(1092, 520, 40, 90);
+  g.fillRect(986, 430, 68, 80);
+  for (let i = 0; i < 5; i++) g.fillRect(944 + i * 32, 492, 16, 10);
+  g.fillStyle(ROOF, 1);
+  g.fillTriangle(900, 520, 928, 484, 956, 520);
+  g.fillTriangle(1084, 520, 1112, 484, 1140, 520);
+  g.fillTriangle(978, 430, 1020, 372, 1062, 430);
+  g.fillStyle(0x7ef9ff, 0.25);
+  g.fillCircle(1020, 360, 22);
+  g.fillStyle(0x7ef9ff, 0.5);
+  g.fillCircle(1020, 360, 13);
+  g.fillStyle(0xd9fbff, 1);
+  g.fillCircle(1020, 360, 7);
+  const win = (x: number, y: number): void => {
+    g.fillStyle(0xffd166, 0.25);
+    g.fillRect(x - 2, y - 2, 12, 16);
+    g.fillStyle(0xffd166, 1);
+    g.fillRect(x, y, 8, 12);
+  };
+  win(964, 530);
+  win(1000, 530);
+  win(1036, 530);
+  win(964, 566);
+  win(1036, 566);
+  win(918, 544);
+  win(1108, 544);
+  win(1010, 452);
+  win(1010, 482);
+  g.fillStyle(0x0b0820, 1);
+  g.fillRect(1000, 574, 40, 36);
+
+  g.fillStyle(0x12331f, 1);
+  g.fillRect(0, 600, GAME_WIDTH, 120);
+  g.fillStyle(0x0c2718, 1);
+  g.fillRect(0, 668, GAME_WIDTH, 52);
+  g.fillStyle(0x1a4a2c, 0.6);
+  g.fillRect(120, 620, 180, 6);
+  g.fillRect(420, 640, 220, 6);
+  g.fillRect(760, 616, 160, 6);
+  g.fillRect(1040, 644, 180, 6);
+
+  const pine = (x: number, base: number, h: number): void => {
+    g.fillStyle(0x081b12, 1);
+    g.fillTriangle(x - h * 0.32, base, x, base - h, x + h * 0.32, base);
+    g.fillTriangle(x - h * 0.24, base - h * 0.45, x, base - h * 1.35, x + h * 0.24, base - h * 0.45);
+    g.fillRect(x - 3, base - 6, 6, 10);
+  };
+  pine(80, 640, 90);
+  pine(150, 660, 120);
+  pine(230, 645, 80);
+  pine(310, 668, 100);
+  pine(1210, 655, 95);
+  pine(1265, 640, 75);
+
+  for (let i = 0; i < 26; i++) {
+    const fx = Math.floor(Math.random() * GAME_WIDTH);
+    const fy = 560 + Math.floor(Math.random() * 130);
+    g.fillStyle(0xffe066, 0.12);
+    g.fillCircle(fx, fy, 8);
+    g.fillStyle(0xffe066, Math.random() * 0.5 + 0.3);
+    g.fillRect(fx - 2, fy - 2, 4, 4);
+  }
+
+  const sparkle = (x: number, y: number, c: number, a: number): void => {
+    g.fillStyle(c, a);
+    g.fillRect(x - 2, y - 6, 4, 12);
+    g.fillRect(x - 6, y - 2, 12, 4);
+  };
+  sparkle(560, 500, 0x7ef9ff, 0.5);
+  sparkle(660, 460, 0xffd166, 0.4);
+  sparkle(760, 520, 0x7ef9ff, 0.35);
+  sparkle(470, 540, 0xd9fbff, 0.3);
+  sparkle(1130, 470, 0x7ef9ff, 0.45);
+  sparkle(360, 480, 0xffd166, 0.35);
+
+  g.fillStyle(0x7ef9ff, 0.12);
+  g.fillEllipse(110, 690, 220, 60);
+  g.fillStyle(0x67e8f9, 1);
+  g.fillTriangle(60, 712, 90, 640, 120, 712);
+  g.fillTriangle(110, 712, 135, 664, 160, 712);
+  g.fillStyle(0xa5f3fc, 0.8);
+  g.fillTriangle(78, 712, 90, 662, 102, 712);
+
   g.generateTexture("title-bg", GAME_WIDTH, GAME_HEIGHT);
   g.destroy();
 }

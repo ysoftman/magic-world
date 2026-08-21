@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, TEXT_SPEEDS } from "../gameState";
 import { retroStyle, showToast } from "../pixelart";
 
-const PANEL_W = 560;
+const PANEL_W = 960;
 const PANEL_H = 360;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const ROW_GAP = 44;
@@ -53,7 +53,7 @@ export class SettingsUI {
       this.rows.push(row);
     });
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: APPLY/CLOSE   ESC: CLOSE", retroStyle(4, "#8ecbff"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE", retroStyle(4, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

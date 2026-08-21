@@ -4,11 +4,11 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { retroStyle } from "../pixelart";
 
-// 12 achievements in two columns of six; a single column of twelve needed a
-// panel taller than the 720px screen (same constraint as BestiaryUI).
+// 13 achievements in two columns; ROW_GAP is sized so seven rows plus the
+// header/footer still fit the 720px screen (same constraint as BestiaryUI).
 const COLS = 2;
 const ROWS = Math.ceil(ACHIEVEMENTS.length / COLS);
-const ROW_GAP = 84;
+const ROW_GAP = 72;
 const PANEL_W = 1160;
 const PANEL_H = 200 + ROWS * ROW_GAP;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
@@ -73,7 +73,7 @@ export class AchievementsUI {
       );
       this.descs.push(
         scene.add
-          .text(x + NAME_DX, y + 30, "", retroStyle(5, "#444444"))
+          .text(x + NAME_DX, y + 30, "", retroStyle(4, "#444444"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)

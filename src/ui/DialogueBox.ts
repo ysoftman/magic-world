@@ -3,6 +3,10 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { retroStyle } from "../pixelart";
 
+const FONT_SIZE = 32;
+const CHARS_PER_ROW = Math.floor((GAME_WIDTH - 128) / FONT_SIZE);
+const ROWS_PER_PAGE = 5;
+
 export class DialogueBox {
   private scene: Phaser.Scene;
   private lines: string[] = [];
@@ -10,6 +14,8 @@ export class DialogueBox {
   private charIndex = 0;
   private typing = false;
   private active = false;
+  private pageSize = 1;
+  private pageText = "";
 
   private border: Phaser.GameObjects.Rectangle;
   private box: Phaser.GameObjects.Rectangle;
@@ -85,21 +91,33 @@ export class DialogueBox {
   }
 
   private typeLine(): void {
-    const line = this.lines[this.index];
-    if (!line) {
+    // Pack lines until the box is full: callers pass sentence-sized strings,
+    // and paging them one-per-keypress left most of the box empty.
+    const page: string[] = [];
+    let rows = 0;
+    while (this.index + page.length < this.lines.length) {
+      const line = this.lines[this.index + page.length];
+      const needed = Math.max(1, Math.ceil(line.length / CHARS_PER_ROW));
+      if (page.length > 0 && rows + needed > ROWS_PER_PAGE) break;
+      page.push(line);
+      rows += needed;
+    }
+    if (page.length === 0) {
       this.close();
       return;
     }
+    this.pageSize = page.length;
+    this.pageText = page.join("\n");
     this.text.setText("");
     this.typing = true;
     this.charIndex = 0;
     this.timer = this.scene.time.addEvent({
       delay: 22 / GameState.textSpeed,
-      repeat: line.length,
+      repeat: this.pageText.length,
       callback: () => {
         this.charIndex++;
-        this.text.setText(line.slice(0, this.charIndex));
-        if (this.charIndex >= line.length) {
+        this.text.setText(this.pageText.slice(0, this.charIndex));
+        if (this.charIndex >= this.pageText.length) {
           this.typing = false;
           this.timer?.remove();
         }
@@ -120,10 +138,10 @@ export class DialogueBox {
     if (this.typing) {
       this.typing = false;
       this.timer?.remove();
-      this.text.setText(this.lines[this.index]);
+      this.text.setText(this.pageText);
       return;
     }
-    this.index++;
+    this.index += this.pageSize;
     if (this.index < this.lines.length) {
       this.typeLine();
     } else {

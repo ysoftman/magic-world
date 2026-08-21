@@ -7,6 +7,7 @@ import { SettingsUI } from "../ui/SettingsUI";
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
+  private settingsUI?: SettingsUI;
 
   constructor() {
     super("Title");
@@ -49,6 +50,7 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const settings = new SettingsUI(this);
+    this.settingsUI = settings;
 
     let confirmDelete = false;
 
@@ -114,6 +116,8 @@ export class TitleScene extends Phaser.Scene {
         Sfx.error();
         prompt.setText("DELETE SAVE? Y/N").setColor("#ff5555");
         continueText.setText("Y: DELETE  N: CANCEL");
+      } else if (e.key === "o" || e.key === "O") {
+        settings.open();
       }
     });
     this.input.on("pointerdown", () => {
@@ -126,5 +130,11 @@ export class TitleScene extends Phaser.Scene {
       }
       start(GameState.hasSave());
     });
+  }
+
+  // SettingsUI closes via a queued flag processed in update(); without this
+  // override the panel would open on O and never close again.
+  update(): void {
+    this.settingsUI?.update();
   }
 }
