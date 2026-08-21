@@ -68,6 +68,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     check: () => GameState.openedTreasures.length >= TOTAL_TREASURES,
   },
   {
+    id: "tamed",
+    name: "TAMED",
+    desc: "Catch your first monster",
+    check: () => GameState.caught.length >= 1,
+  },
+  {
     id: "collector",
     name: "COLLECTOR",
     desc: "Catch every catchable monster",
