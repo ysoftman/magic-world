@@ -949,6 +949,7 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "coin", COIN_TILE, COIN_PALETTE);
     makeTexture(this, "firefly", FIREFLY_TILE, FIREFLY_PALETTE);
     makeTexture(this, "snowflake", ["ww", "ww"], { w: 0xffffff });
+    makeTexture(this, "leaf", ["gd", "dg"], { g: 0x4ade80, d: 0x15803d });
     makeTexture(this, "chest", CHEST_TILE, CHEST_PALETTE);
     makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE);
 

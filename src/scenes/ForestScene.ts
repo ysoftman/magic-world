@@ -62,6 +62,7 @@ export class ForestScene extends Phaser.Scene {
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private leaves!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer[] = [];
   private encounterCooldown = 0;
@@ -213,6 +214,21 @@ export class ForestScene extends Phaser.Scene {
       emitting: false,
     });
     this.fireflies.startFollow(this.player, 0, 0);
+
+    // constant drift of falling leaves under the canopy: screen-space, same
+    // always-on ambience as the Snow Field's blizzard
+    this.leaves = this.add.particles(0, 0, "leaf", {
+      x: { min: -20, max: GAME_WIDTH + 20 },
+      y: -8,
+      lifespan: 6000,
+      speedY: { min: 20, max: 45 },
+      speedX: { min: -30, max: 30 },
+      rotate: { min: 0, max: 360 },
+      scale: { min: 0.5, max: 0.9 },
+      alpha: { start: 0.8, end: 0.3 },
+      frequency: 220,
+    });
+    this.leaves.setScrollFactor(0).setDepth(90);
 
     this.spawnMonsters();
 
