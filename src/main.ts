@@ -1,13 +1,14 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "./config";
+import { Sfx } from "./audio";
+import { GAME_HEIGHT, GAME_WIDTH } from "./config";
+import { GameState } from "./gameState";
+import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
+import { DungeonScene } from "./scenes/DungeonScene";
+import { EndingScene } from "./scenes/EndingScene";
+import { ForestScene } from "./scenes/ForestScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { WorldScene } from "./scenes/WorldScene";
-import { DungeonScene } from "./scenes/DungeonScene";
-import { ForestScene } from "./scenes/ForestScene";
-import { BattleScene } from "./scenes/BattleScene";
-import { GameState } from "./gameState";
-import { Sfx } from "./audio";
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) Sfx.suspendBgmForHiddenTab();
@@ -32,7 +33,7 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, WorldScene, DungeonScene, ForestScene, BattleScene],
+  scene: [BootScene, TitleScene, WorldScene, DungeonScene, ForestScene, BattleScene, EndingScene],
 };
 
 // Canvas text bakes in whatever font is available at draw time; unlike DOM

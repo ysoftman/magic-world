@@ -869,6 +869,14 @@ export class BattleScene extends Phaser.Scene {
       this.coinBurst.explode(10);
     }
     await this.say("Battle won!");
+    // story complete: the forest boss is the final boss — roll the ending
+    if (this.enemy.boss && this.enemy.name === ENEMIES.mossGolem.name) {
+      this.cameras.main.fadeOut(1500, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.scene.start("Ending");
+      });
+      return;
+    }
     this.end();
   }
 
