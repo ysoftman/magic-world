@@ -1,16 +1,19 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { GAME_WIDTH } from "../config";
-import { GameState, QuestState, clock, expToNext, isNight } from "../gameState";
-import { PixelMap, makeTexture, retroStyle } from "../pixelart";
+import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
+import { makeTexture, type PixelMap, retroStyle } from "../pixelart";
 
 export const STATUS_HUD_HEIGHT = 88;
 export const STATUS_HUD_TOAST_Y = STATUS_HUD_HEIGHT + 12;
 
-// The single quest slot shows whichever chapter is currently open.
+// The single quest slot shows whichever chapter is currently open; once the
+// main chain is done it tracks the HUNTER's side bounties instead.
 function questLabel(q: QuestState): string {
   if (!q.bossDefeated) return `SLIMES ${q.slimes}/5`;
   if (!q.forestBoss) return "FIND GOLEM";
   if (!q.forestReward) return "SEE ELDER";
+  if (q.hunterBatsAccepted && !q.hunterBatsReward) return `BATS ${Math.min(q.batsSlain, 4)}/4`;
+  if (q.hunterCatchAccepted && !q.hunterCatchReward) return `CATCH ${Math.min(GameState.caught.length - q.caughtAtAccept, 3)}/3`;
   return "QUEST DONE";
 }
 
@@ -29,28 +32,10 @@ const COLORS = {
 // Day/night indicator icons (8x8 rows = 32x32px at PIXEL=4): a yellow sun with
 // a circle-ish core and corner/edge rays, and a pale crescent moon. Drawn as a
 // right-anchored image on row 1 so it can't overlap the GOLD segment.
-const SUN_ROWS = [
-  ".X....X.",
-  "..X..X..",
-  ".XXXXXX.",
-  "XXXXXXXX",
-  "XXXXXXXX",
-  ".XXXXXX.",
-  "..X..X..",
-  ".X....X.",
-];
+const SUN_ROWS = [".X....X.", "..X..X..", ".XXXXXX.", "XXXXXXXX", "XXXXXXXX", ".XXXXXX.", "..X..X..", ".X....X."];
 const SUN_PALETTE: PixelMap = { X: 0xfde047 };
 
-const MOON_ROWS = [
-  "..XXXX..",
-  ".XXXXXX.",
-  "XXXXXX..",
-  "XXXX....",
-  "XXXX....",
-  "XXXXXX..",
-  ".XXXXXX.",
-  "..XXXX..",
-];
+const MOON_ROWS = ["..XXXX..", ".XXXXXX.", "XXXXXX..", "XXXX....", "XXXX....", "XXXXXX..", ".XXXXXX.", "..XXXX.."];
 const MOON_PALETTE: PixelMap = { X: 0xcbd5e1 };
 
 // Compact top-of-screen overlay: colored stat segments on row 1, quest/caught
@@ -78,11 +63,7 @@ export class StatusHud {
       .setScrollFactor(0)
       .setStrokeStyle(1, 0xffffff)
       .setDepth(110);
-    this.accent = scene.add
-      .rectangle(0, 0, GAME_WIDTH, 4, 0xfbbf24, 0.9)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(111);
+    this.accent = scene.add.rectangle(0, 0, GAME_WIDTH, 4, 0xfbbf24, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(111);
 
     this.makeDayNightTextures();
     this.dayNightIcon = scene.add
@@ -106,21 +87,9 @@ export class StatusHud {
     this.addSegment(248, 58, 5, COLORS.caught);
     this.addSegment(452, 58, 5, COLORS.exp);
 
-    this.hpBar = scene.add
-      .rectangle(444, 46, 192, 5, 0x4ade80, 1)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(110);
-    this.mpBar = scene.add
-      .rectangle(684, 46, 192, 5, 0x60a5fa, 1)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(110);
-    this.expBar = scene.add
-      .rectangle(516, 68, 740, 8, 0x22c55e, 1)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(110);
+    this.hpBar = scene.add.rectangle(444, 46, 192, 5, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.mpBar = scene.add.rectangle(684, 46, 192, 5, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.expBar = scene.add.rectangle(516, 68, 740, 8, 0x22c55e, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
 
     this.setVisible(GameState.hudVisible);
     this.update();
@@ -138,11 +107,7 @@ export class StatusHud {
   }
 
   private addSegment(x: number, y: number, size: number, color: string, originX = 0): void {
-    const t = this.scene.add
-      .text(x, y, "", retroStyle(size, color))
-      .setOrigin(originX, 0)
-      .setScrollFactor(0)
-      .setDepth(111);
+    const t = this.scene.add.text(x, y, "", retroStyle(size, color)).setOrigin(originX, 0).setScrollFactor(0).setDepth(111);
     this.segments.push(t);
     this.lastTexts.push("");
     this.lastColors.push("");

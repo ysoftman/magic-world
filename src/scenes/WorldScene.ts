@@ -10,6 +10,7 @@ import {
   FISH_POS,
   FOREST_POS,
   HOUSE_POS,
+  HUNTER_POS,
   MAP_H,
   MAP_W,
   MONSTER_ZONES,
@@ -250,6 +251,13 @@ export class WorldScene extends Phaser.Scene {
     this.add.ellipse(this.guardPos.x, this.guardPos.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
     this.add
       .text(this.guardPos.x, this.guardPos.y - 48, "GUARD", retroStyle(5, "#67e8f9"))
+      .setOrigin(0.5)
+      .setDepth(11);
+
+    this.add.sprite(HUNTER_POS.x, HUNTER_POS.y, "npc").setDepth(10).setTint(0x86efac);
+    this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
+    this.add
+      .text(HUNTER_POS.x, HUNTER_POS.y - 48, "HUNTER", retroStyle(5, "#86efac"))
       .setOrigin(0.5)
       .setDepth(11);
 
@@ -861,6 +869,10 @@ export class WorldScene extends Phaser.Scene {
       );
       return true;
     }
+    if (near(HUNTER_POS.x, HUNTER_POS.y)) {
+      this.startHunterDialogue();
+      return true;
+    }
     if (near(HOUSE_POS.x + TILE, HOUSE_POS.y + 2 * TILE)) {
       this.rest();
       return true;
@@ -964,6 +976,47 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     this.dialogue.start(["The realm owes you", "everything, hero."], "ELDER");
+  }
+
+  private startHunterDialogue(): void {
+    const q = GameState.quest;
+    if (!q.hunterBatsAccepted) {
+      q.hunterBatsAccepted = true;
+      this.dialogue.start(["Psst, hero! BATS nest", "in the northern cave.", "Slay 4 of them and", "I will pay you well."], "HUNTER");
+      return;
+    }
+    if (!q.hunterBatsReward) {
+      if (q.batsSlain < 4) {
+        this.dialogue.start([`You have felled ${q.batsSlain}`, "of 4 bats. The cave is", "north — keep going!"], "HUNTER");
+        return;
+      }
+      q.hunterBatsReward = true;
+      GameState.gainGold(40);
+      GameState.inventory.potion += 2;
+      Sfx.buy();
+      this.dialogue.start(["4 bats down! Take", "40 gold and 2 POTIONS."], "HUNTER");
+      return;
+    }
+    if (!q.hunterCatchAccepted) {
+      q.hunterCatchAccepted = true;
+      q.caughtAtAccept = GameState.caught.length;
+      this.dialogue.start(["Now a different job:", "catch any 3 beasts", "with CANDY. Fresh", "catches only!"], "HUNTER");
+      return;
+    }
+    if (!q.hunterCatchReward) {
+      const caught = Math.min(GameState.caught.length - q.caughtAtAccept, 3);
+      if (caught < 3) {
+        this.dialogue.start([`${caught} of 3 beasts caught.`, "Throw CANDY in battle", "to fill the order!"], "HUNTER");
+        return;
+      }
+      q.hunterCatchReward = true;
+      GameState.gainGold(80);
+      GameState.inventory.ether += 2;
+      Sfx.buy();
+      this.dialogue.start(["A fine haul! Take", "80 gold and 2 ETHERS."], "HUNTER");
+      return;
+    }
+    this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
   }
 
   private checkEncounter(delta: number): void {

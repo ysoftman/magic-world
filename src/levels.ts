@@ -152,6 +152,10 @@ export const CAVE_POS = { x: 19 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
 // both his 120px talk radius and the ELDER name label, so nothing overlaps
 export const RANK_BOARD_POS = { x: 14 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 
+// monster hunter offering side bounties, three tiles east of the RANK BOARD on
+// the main road — outside both the ELDER's and the board's 120px talk radii
+export const HUNTER_POS = { x: 17 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
+
 // Fishing spot on the pond's south-west bank at (23,5). The pond's other
 // banks sit inside monster zones (slime west, wolf south-east, trees east),
 // but this corner is reached from the road at (22,7) via two grass tiles,

@@ -75,6 +75,14 @@ export interface QuestState {
   forestBoss: boolean;
   forestReward: boolean;
   bestiaryReward: boolean;
+  // HUNTER side quests: first a kill bounty (4 bats), then a collection
+  // bounty (any 3 catches past the snapshot taken when it was accepted)
+  hunterBatsAccepted: boolean;
+  batsSlain: number;
+  hunterBatsReward: boolean;
+  hunterCatchAccepted: boolean;
+  caughtAtAccept: number;
+  hunterCatchReward: boolean;
 }
 
 const SAVE_KEY = "magic-world-save";
@@ -166,6 +174,12 @@ export const GameState = {
     forestBoss: false,
     forestReward: false,
     bestiaryReward: false,
+    hunterBatsAccepted: false,
+    batsSlain: 0,
+    hunterBatsReward: false,
+    hunterCatchAccepted: false,
+    caughtAtAccept: 0,
+    hunterCatchReward: false,
   } as QuestState,
   minutes: 360,
   pos: undefined as { x: number; y: number } | undefined,
@@ -290,6 +304,12 @@ export const GameState = {
       forestBoss: false,
       forestReward: false,
       bestiaryReward: false,
+      hunterBatsAccepted: false,
+      batsSlain: 0,
+      hunterBatsReward: false,
+      hunterCatchAccepted: false,
+      caughtAtAccept: 0,
+      hunterCatchReward: false,
     };
     this.minutes = 360;
     this.pos = undefined;
