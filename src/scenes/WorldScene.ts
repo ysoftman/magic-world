@@ -707,9 +707,13 @@ export class WorldScene extends Phaser.Scene {
         GameState.save();
         this.suppressSavedToast = false;
       }
-      for (const id of earned) {
-        const def = ACHIEVEMENTS.find((a) => a.id === id);
-        if (def) showToast(this, `ACHIEVEMENT: ${def.name}!`);
+      // showToast reuses one Text per scene, so several achievements earned in
+      // the same tick (e.g. an 8-hit combo that also fells a boss) would
+      // otherwise clobber each other with only the last one ever visible —
+      // batch every name earned this tick into a single toast instead.
+      const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
+      if (names.length > 0) {
+        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`);
       }
     }
 
