@@ -141,7 +141,8 @@ export class BestiaryUI {
       const rowSeen = GameState.seenMonsters.includes(def.name);
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       this.icons[i].setVisible(rowSeen);
-      this.rows[i].setText(rowSeen ? `${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}` : "???");
+      const hint = rowSeen && def.weakness ? `  WEAK:${def.weakness.toUpperCase()}` : "";
+      this.rows[i].setText(rowSeen ? `${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}${hint}` : "???");
       this.rows[i].setColor(rowSeen ? "#ffffff" : "#666666");
     });
   }

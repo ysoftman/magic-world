@@ -2,13 +2,15 @@ import Phaser from "phaser";
 import { BATTLE_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP } from "../config";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
-import { ENEMIES, type EnemyDef } from "../monsters";
+import { type Element, ENEMIES, type EnemyDef } from "../monsters";
 import { retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
 import { NIGHT_RANGE, NIGHT_TINT } from "../ui/NightOverlay";
 
 const CRIT_CHANCE = 0.1;
 const CRIT_MULT = 2;
+// an attack spell hitting a species' weakness multiplies its rolled damage
+const WEAKNESS_MULT = 1.5;
 const NIGHT_STAT_MULT = 1.25;
 const NIGHT_LOOT_MULT = 1.5;
 const STREAK_MIN = 3;
@@ -55,13 +57,14 @@ interface Spell {
   kind: "attack" | "heal";
   power: number;
   color: number;
+  element?: Element; // checked against the enemy's weakness for bonus damage
 }
 
 const SPELLS: Spell[] = [
-  { name: "FIRE", cost: 3, learnLevel: 1, kind: "attack", power: 10, color: 0xffa500 },
+  { name: "FIRE", cost: 3, learnLevel: 1, kind: "attack", power: 10, color: 0xffa500, element: "fire" },
   { name: "HEAL", cost: 4, learnLevel: 5, kind: "heal", power: 20, color: 0x4ade80 },
-  { name: "ICE", cost: 6, learnLevel: 9, kind: "attack", power: 18, color: 0x67e8f9 },
-  { name: "BOLT", cost: 10, learnLevel: 14, kind: "attack", power: 30, color: 0xfde047 },
+  { name: "ICE", cost: 6, learnLevel: 9, kind: "attack", power: 18, color: 0x67e8f9, element: "ice" },
+  { name: "BOLT", cost: 10, learnLevel: 14, kind: "attack", power: 30, color: 0xfde047, element: "bolt" },
 ];
 
 const SPELLS_PER_ROW = 2;
@@ -645,12 +648,18 @@ export class BattleScene extends Phaser.Scene {
       await this.say(`${spell.name} restores ${healed} HP!`);
       return;
     }
-    const dmg = spell.power + Math.floor(Math.random() * Math.ceil(spell.power / 2));
+    const roll = spell.power + Math.floor(Math.random() * Math.ceil(spell.power / 2));
+    const weak = spell.element !== undefined && this.enemy.weakness === spell.element;
+    const dmg = Math.floor(roll * (weak ? WEAKNESS_MULT : 1));
     await this.castProjectile(spell.color);
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
-    await this.say(`${spell.name}! ${dmg} damage!`);
+    if (weak) {
+      Sfx.critical();
+      this.cameras.main.shake(120, 0.01);
+    }
+    await this.say(weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
   }
