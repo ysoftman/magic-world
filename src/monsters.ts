@@ -69,6 +69,17 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // FOREST story boss: same flag/uncatchable path as KING SLIME
     weakness: "fire", // a mossy plant body burns
   },
+  wisp: {
+    name: "NIGHT WISP",
+    texture: "wisp",
+    hp: 34,
+    atk: 10,
+    def: 1,
+    exp: 55,
+    gold: 70,
+    rare: true, // night-only world jackpot: big payout, not required for collection
+    weakness: "ice", // cold snuffs out its ghost-flame
+  },
 };
 
 // Bosses can't be caught (throwCandy refuses them), and rare monsters are a

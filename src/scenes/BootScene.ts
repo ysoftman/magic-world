@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { makeTexture, makeTilesetTexture } from "../pixelart";
 
 const GRASS_PALETTE = { g: 0x1f5c42, G: 0x16432f, L: 0x2a6b4d };
@@ -161,11 +161,7 @@ const HERO_HEAD = [
   "...hssssssssh...",
   "....hhhhhhhh....",
 ];
-const HERO_TORSO = [
-  ".....tttttt.....",
-  "....tttttttt....",
-  "...ttbbbbbbtt...",
-];
+const HERO_TORSO = [".....tttttt.....", "....tttttttt....", "...ttbbbbbbtt..."];
 
 const HERO_UP_HEAD = [
   "................",
@@ -191,36 +187,11 @@ const HERO_SIDE_HEAD = [
   "....hhhhhhhh....",
 ];
 
-const HERO_LEGS_STRIDE_A = [
-  "..s..pp..pp..s..",
-  "...spp....pps...",
-  "....ooo..ooo....",
-  "................",
-];
-const HERO_LEGS_PASS_A = [
-  "..s..pppppp..s..",
-  "...spppppppps...",
-  "....oooooooo....",
-  "................",
-];
-const HERO_LEGS_STRIDE_B = [
-  "..s..pp..pp..s..",
-  "....ppp..ppp....",
-  "....ooo..ooo....",
-  "................",
-];
-const HERO_LEGS_PASS_B = [
-  "....pppppppp....",
-  "...spppppppps...",
-  "....oooooooo....",
-  "................",
-];
-const HERO_LEGS_IDLE = [
-  "..s..pppppp..s..",
-  "..s..pppppp..s..",
-  "..oo.oooooo.oo..",
-  "................",
-];
+const HERO_LEGS_STRIDE_A = ["..s..pp..pp..s..", "...spp....pps...", "....ooo..ooo....", "................"];
+const HERO_LEGS_PASS_A = ["..s..pppppp..s..", "...spppppppps...", "....oooooooo....", "................"];
+const HERO_LEGS_STRIDE_B = ["..s..pp..pp..s..", "....ppp..ppp....", "....ooo..ooo....", "................"];
+const HERO_LEGS_PASS_B = ["....pppppppp....", "...spppppppps...", "....oooooooo....", "................"];
+const HERO_LEGS_IDLE = ["..s..pppppp..s..", "..s..pppppp..s..", "..oo.oooooo.oo..", "................"];
 
 const EQUIP_SWORD_PALETTE = { w: 0xd1d5db, d: 0x64748b, g: 0xf59e0b, b: 0x6b4226 };
 const EQUIP_SWORD_TILE = [
@@ -368,6 +339,25 @@ const WOLF_TILE = [
   "................",
 ];
 
+const WISP_PALETTE = { d: 0x0c4a6e, c: 0x38bdf8, w: 0xe0f2fe, k: 0x082f49 };
+const WISP_TILE = [
+  "................",
+  "......dddd......",
+  "....ddccccdd....",
+  "...dcccwwcccd...",
+  "..dccwwwwwwccd..",
+  ".dccwwwwwwwwccd.",
+  ".dcwwwkwwkwwwcd.",
+  ".dcwwwkwwkwwwcd.",
+  ".dcwwwwwwwwwwcd.",
+  ".dccwwwwwwwwccd.",
+  "..dccwwwwwwccd..",
+  "...dcccwwcccd...",
+  "....ddccccdd....",
+  ".....ddccdd.....",
+  "......dwwd......",
+  "................",
+];
 const BAT_PALETTE = { b: 0x7c3aed, B: 0x5b21b6, d: 0x3b0764, w: 0xffffff, e: 0xf87171 };
 const BAT_TILE = [
   "bb............bb",
@@ -464,16 +454,7 @@ const MOSS_GOLEM_PALETTE = {
 };
 
 const SPARK_PALETTE = { y: 0xffdd44 };
-const SPARK_TILE = [
-  "..y.....",
-  "..y.....",
-  "..y.....",
-  "yyyyyyyy",
-  "..y.....",
-  "..y.....",
-  "..y.....",
-  "........",
-];
+const SPARK_TILE = ["..y.....", "..y.....", "..y.....", "yyyyyyyy", "..y.....", "..y.....", "..y.....", "........"];
 
 const GLOW_PALETTE = { g: 0x8ecbff, w: 0xffffff };
 const GLOW_TILE = [
@@ -516,16 +497,7 @@ const COIN_TILE = [
 ];
 
 const FIREFLY_PALETTE = { w: 0xe9ff66 };
-const FIREFLY_TILE = [
-  "........",
-  "........",
-  "..ww....",
-  ".wwww...",
-  "..ww....",
-  "........",
-  "........",
-  "........",
-];
+const FIREFLY_TILE = ["........", "........", "..ww....", ".wwww...", "..ww....", "........", "........", "........"];
 
 const CHEST_PALETTE = { b: 0x4a2f1a, w: 0x8a5a2b, L: 0xd1a455, l: 0x3d2c18, Y: 0xffd166 };
 const CHEST_TILE = [
@@ -748,45 +720,24 @@ export class BootScene extends Phaser.Scene {
         { rows: TALL_TILE, palette: TALL_PALETTE },
         { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
       ],
-      16
+      16,
     );
 
-    const flipRows = (rows: string[]): string[] =>
-      rows.map((r) => [...r].reverse().join(""));
+    const flipRows = (rows: string[]): string[] => rows.map((r) => [...r].reverse().join(""));
 
-    const walkFrames = [
-      HERO_LEGS_STRIDE_A,
-      HERO_LEGS_PASS_A,
-      HERO_LEGS_STRIDE_B,
-      HERO_LEGS_PASS_B,
-    ];
+    const walkFrames = [HERO_LEGS_STRIDE_A, HERO_LEGS_PASS_A, HERO_LEGS_STRIDE_B, HERO_LEGS_PASS_B];
     for (let i = 0; i < walkFrames.length; i++) {
       const legs = walkFrames[i];
       makeTexture(this, `hero-down-${i}`, [...HERO_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
       makeTexture(this, `hero-up-${i}`, [...HERO_UP_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
       makeTexture(this, `hero-right-${i}`, [...HERO_SIDE_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
-      makeTexture(
-        this,
-        `hero-left-${i}`,
-        [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...legs],
-        HERO_PALETTE
-      );
+      makeTexture(this, `hero-left-${i}`, [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...legs], HERO_PALETTE);
     }
 
     makeTexture(this, "hero-idle-down", [...HERO_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
     makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
-    makeTexture(
-      this,
-      "hero-idle-right",
-      [...HERO_SIDE_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE],
-      HERO_PALETTE
-    );
-    makeTexture(
-      this,
-      "hero-idle-left",
-      [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...HERO_LEGS_IDLE],
-      HERO_PALETTE
-    );
+    makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
+    makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
 
     makeTexture(this, "equip-sword", EQUIP_SWORD_TILE, EQUIP_SWORD_PALETTE);
     makeTexture(this, "equip-shield", EQUIP_SHIELD_TILE, EQUIP_SHIELD_PALETTE);
@@ -806,6 +757,7 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "wasp", WASP_TILE, WASP_PALETTE);
     makeTexture(this, "spider", SPIDER_TILE, SPIDER_PALETTE);
     makeTexture(this, "orc", ORC_TILE, ORC_PALETTE);
+    makeTexture(this, "wisp", WISP_TILE, WISP_PALETTE);
 
     makeTexture(this, "dust", ["dd", "dd"], { d: 0xcbbfa8 });
     makeTexture(this, "spark", SPARK_TILE, SPARK_PALETTE);

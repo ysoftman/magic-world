@@ -59,7 +59,7 @@ interface Roamer {
   targetY: number;
   wait: number;
   speed: number;
-  kind: "slime" | "troll" | "wolf" | "goldSlime";
+  kind: "slime" | "troll" | "wolf" | "goldSlime" | "wisp";
 }
 
 const IDLE_TEXTURE: Record<LastMove, string> = {
@@ -86,6 +86,8 @@ export class WorldScene extends Phaser.Scene {
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer[] = [];
+  private wispRoamer?: Roamer;
+  private wasNight = false;
   private encounterCooldown = 0;
   private lastMove: LastMove = "down";
   private night!: NightOverlay;
@@ -168,6 +170,8 @@ export class WorldScene extends Phaser.Scene {
     this.forestOverlapActive = false;
     this.quitConfirm = false;
     this.quitting = false;
+    this.wispRoamer = undefined;
+    this.wasNight = isNight();
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
     // — SHUTDOWN listeners fire in registration order, so this unsubscribes
@@ -620,6 +624,13 @@ export class WorldScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     GameState.minutes += delta / 1000;
+
+    const night = isNight();
+    if (night !== this.wasNight) {
+      this.wasNight = night;
+      if (night) this.spawnNightWisp(true);
+      else this.removeNightWisp();
+    }
     this.updateStatus();
     this.updateDayNight();
     this.updateHomeBubble();
@@ -1125,6 +1136,54 @@ export class WorldScene extends Phaser.Scene {
         ease: "Sine.easeInOut",
       });
     }
+
+    if (isNight()) this.spawnNightWisp();
+  }
+
+  // the NIGHT WISP is the overworld's night-exclusive jackpot: one roamer that
+  // exists only while isNight(), withdrawn again at dawn
+  private spawnNightWisp(toast = false): void {
+    if (this.wispRoamer) return;
+    const zone = MONSTER_ZONES[Math.floor(Math.random() * MONSTER_ZONES.length)];
+    const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
+    const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
+    const sprite = this.roamerGroup.create(x, y, "wisp") as Phaser.Physics.Arcade.Sprite;
+    sprite.setDepth(10);
+    sprite.body?.setSize(40, 24).setOffset(12, 32);
+    const roamer: Roamer = {
+      sprite,
+      minX: zone.cx - zone.w / 2 + 8,
+      maxX: zone.cx + zone.w / 2 - 8,
+      minY: zone.cy - zone.h / 2 + 8,
+      maxY: zone.cy + zone.h / 2 - 8,
+      targetX: x,
+      targetY: y,
+      wait: 300 + Math.random() * 800,
+      speed: 56 + Math.random() * 40,
+      kind: "wisp",
+    };
+    this.roamers.push(roamer);
+    this.wispRoamer = roamer;
+    this.tweens.add({
+      targets: sprite,
+      scaleX: 1.12,
+      scaleY: 0.88,
+      duration: 280,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    if (toast) showToast(this, "A NIGHT WISP EMERGES!");
+  }
+
+  private removeNightWisp(): void {
+    const wisp = this.wispRoamer;
+    if (!wisp) return;
+    this.wispRoamer = undefined;
+    const i = this.roamers.indexOf(wisp);
+    if (i >= 0) this.roamers.splice(i, 1);
+    this.tweens.killTweensOf(wisp.sprite);
+    wisp.sprite.destroy();
   }
 
   private updateRoamers(delta: number): void {
@@ -1154,7 +1213,7 @@ export class WorldScene extends Phaser.Scene {
     r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
-  private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime"): void {
+  private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime" | "wisp"): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
