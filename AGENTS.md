@@ -16,6 +16,11 @@
 - 임시 디버그 훅(예: `Object.assign(window, { __game })`)은 커밋 전에 반드시 제거한다.
 - `/tmp/pwcheck/` 등 임시 디렉터리의 파일은 저장소 정리 대상에서 제외한다.
 
+## TODO.md
+
+- 완료되지 않은(진행 중) 작업이나 앞으로 작업할 내용은 루트의 `TODO.md`에 기록한다.
+- 작업을 완료하면 해당 항목을 `TODO.md`에서 삭제한다.
+
 ## 기타
 
 - 빌드: `bun run build` (tsc + vite build)
