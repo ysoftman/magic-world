@@ -107,7 +107,9 @@ export class DialogueBox {
       return;
     }
     this.pageSize = page.length;
-    this.pageText = page.join("\n");
+    // Space-join so setWordWrapWidth wraps only at the real box width; "\n"
+    // forced every fragment onto its own row even at half-filled width.
+    this.pageText = page.join(" ");
     this.text.setText("");
     this.typing = true;
     this.charIndex = 0;
