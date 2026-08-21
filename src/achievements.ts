@@ -1,4 +1,4 @@
-import { MAX_LEVEL } from "./config";
+import { MAX_GOLD, MAX_LEVEL } from "./config";
 import { GameState } from "./gameState";
 import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS } from "./levels";
 import { CATCHABLE } from "./monsters";
@@ -126,6 +126,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: "ASCENDANT",
     desc: `Reach level ${MAX_LEVEL}`,
     check: () => GameState.player.level >= MAX_LEVEL,
+  },
+  {
+    id: "tycoon",
+    name: "TYCOON",
+    desc: `Hold ${MAX_GOLD} gold at once`,
+    check: () => GameState.gold >= MAX_GOLD,
   },
 ];
 
