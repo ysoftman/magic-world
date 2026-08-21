@@ -90,6 +90,7 @@ export class BattleScene extends Phaser.Scene {
   private pendingSpell!: Spell;
   private spellTexts: Phaser.GameObjects.Text[] = [];
   private spellCursor!: Phaser.GameObjects.Text;
+  private companionSprite?: Phaser.GameObjects.Sprite;
   private hintText!: Phaser.GameObjects.Text;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
@@ -184,6 +185,12 @@ export class BattleScene extends Phaser.Scene {
     this.shieldOverlay = this.add.sprite(292, 368, GameState.armorTexture()).setScale(2);
     this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
     this.shieldOverlay.setVisible(!!GameState.equipped.armor);
+
+    const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
+    if (companionDef) {
+      this.companionSprite = this.add.sprite(180, 440, companionDef.texture).setScale(1.5);
+      if (companionDef.tint) this.companionSprite.setTint(companionDef.tint);
+    }
 
     this.window(32, 24, 464, 176);
     this.window(GAME_WIDTH - 496, 24, 464, 176);
@@ -596,6 +603,10 @@ export class BattleScene extends Phaser.Scene {
       if (!this.running) return;
       if (this.enemy.curHp <= 0) return this.victory();
 
+      await this.companionAttack();
+      if (!this.running) return;
+      if (this.enemy.curHp <= 0) return this.victory();
+
       await this.enemyTurn();
     }
   }
@@ -777,11 +788,45 @@ export class BattleScene extends Phaser.Scene {
     if (ratio < 0.5) chance = 0.4 + (1 - ratio) * 0.3;
     if (Math.random() < chance) {
       GameState.caught.push(this.enemy.name);
-      await this.say(`You caught ${this.enemy.name}!`);
+      GameState.companion = this.enemy.name;
+      await this.say(`You caught ${this.enemy.name}! It joins your party!`);
       Sfx.victory();
       return this.victory(true);
     }
     await this.say("It broke free!");
+  }
+
+  // the caught monster fights alongside the hero: one follow-up strike per
+  // turn, scaled by its species attack plus half the hero's level
+  private async companionAttack(): Promise<void> {
+    const name = GameState.companion;
+    const def = name ? Object.values(ENEMIES).find((e) => e.name === name) : undefined;
+    if (!name || !def || !this.companionSprite) return;
+    Sfx.attack();
+    const sprite = this.companionSprite;
+    let dmg = 0;
+    let crit = false;
+    await new Promise<void>((resolve) => {
+      this.tweens.add({
+        targets: sprite,
+        x: this.enemySprite.x - 90,
+        y: this.enemySprite.y + 70,
+        duration: 200,
+        yoyo: true,
+        hold: 80,
+        onYoyo: () => {
+          ({ dmg, crit } = this.calcDamage(def.atk + Math.floor(GameState.player.level / 2), this.enemy.def));
+          if (crit) Sfx.critical();
+          this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
+          this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+          this.hitBurst.explode(crit ? 12 : 6);
+          this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg, crit);
+          this.updateEnemyHp();
+        },
+        onComplete: () => resolve(),
+      });
+    });
+    await this.say(crit ? `CRITICAL! ${name} helps for ${dmg}!` : `${name} attacks for ${dmg}!`);
   }
 
   private async enemyTurn(): Promise<void> {
