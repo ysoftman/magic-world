@@ -5,3 +5,4 @@ dist
 .codegraph
 .omo/
 .playwright-mcp/
+.serena
