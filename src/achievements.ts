@@ -96,6 +96,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     desc: "Reach level 10",
     check: () => GameState.player.level >= 10,
   },
+  {
+    id: "ice-breaker",
+    name: "ICE BREAKER",
+    desc: "Defeat the GLACIER GOLEM",
+    check: () => GameState.quest.snowBoss,
+  },
 ];
 
 // Returns the ids of achievements that the current state newly satisfies.

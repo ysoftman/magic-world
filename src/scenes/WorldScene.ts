@@ -1028,6 +1028,17 @@ export class WorldScene extends Phaser.Scene {
       this.dialogue.start(["The forest is at peace!", "Take this 200 gold and", "a MYTHRIL SWORD!"], "ELDER");
       return;
     }
+    if (!q.snowReward && q.snowBoss) {
+      q.snowReward = true;
+      GameState.gainGold(300);
+      GameState.inventory.elixir += 2;
+      Sfx.buy();
+      this.dialogue.start(
+        ["The GLACIER GOLEM...", "fallen? You are the", "truest hero this realm", "has ever known.", "300 gold and 2 ELIXIRS!"],
+        "ELDER",
+      );
+      return;
+    }
     if (!q.bestiaryReward && allSpeciesCaught(GameState.caught)) {
       q.bestiaryReward = true;
       GameState.gainGold(500);
