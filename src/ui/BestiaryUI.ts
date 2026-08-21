@@ -132,7 +132,12 @@ export class BestiaryUI {
     // never be caught, so counting them would make 100% unreachable.
     const seen = SPECIES.filter((def) => GameState.seenMonsters.includes(def.name)).length;
     const caught = CATCHABLE.filter((def) => GameState.caught.includes(def.name)).length;
-    this.counter.setText(`SEEN ${seen}/${SPECIES.length}  CAUGHT ${caught}/${CATCHABLE.length}`);
+    const title = GameState.bestiaryTitle();
+    const bonus = GameState.bestiaryBonus();
+    this.counter.setText(
+      `SEEN ${seen}/${SPECIES.length}  CAUGHT ${caught}/${CATCHABLE.length}${title ? `  RANK:${title}` : ""}\n` +
+        `COMPLETION BONUS ATK+${bonus} DEF+${bonus}`,
+    );
     if (caught === CATCHABLE.length && !this.allCaughtToastShown) {
       this.allCaughtToastShown = true;
       showToast(this.scene, "ALL CAUGHT! SEE THE ELDER");

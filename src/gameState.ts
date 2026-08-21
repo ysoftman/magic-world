@@ -1,4 +1,5 @@
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
+import { CATCHABLE } from "./monsters";
 import { recordRank } from "./ranking";
 
 export interface PlayerState {
@@ -186,11 +187,26 @@ export const GameState = {
     this.gold += added;
     return added;
   },
+  // bestiary completion rewards: +1 ATK/+1 DEF per 20% of catchable species
+  // caught, plus a rank title shown in the bestiary
+  bestiaryCompletion(): number {
+    return new Set(this.caught).size / CATCHABLE.length;
+  },
+  bestiaryBonus(): number {
+    return Math.floor(this.bestiaryCompletion() * 5);
+  },
+  bestiaryTitle(): string {
+    const pct = this.bestiaryCompletion();
+    if (pct >= 1) return "MONSTER MASTER";
+    if (pct >= 0.75) return "BEAST TAMER";
+    if (pct >= 0.5) return "HUNTER";
+    return "";
+  },
   effAtk(): number {
-    return this.player.atk + (this.equipped.weapon ? EQUIP_BONUS[this.equipped.weapon] : 0);
+    return this.player.atk + (this.equipped.weapon ? EQUIP_BONUS[this.equipped.weapon] : 0) + this.bestiaryBonus();
   },
   effDef(): number {
-    return this.player.def + (this.equipped.armor ? EQUIP_BONUS[this.equipped.armor] : 0);
+    return this.player.def + (this.equipped.armor ? EQUIP_BONUS[this.equipped.armor] : 0) + this.bestiaryBonus();
   },
   weaponTexture(): string {
     return this.equipped.weapon ? EQUIP_TEXTURE[this.equipped.weapon] : "equip-sword";
