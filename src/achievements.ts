@@ -92,6 +92,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     check: () => GameState.quest.goldenSlimes >= 1,
   },
   {
+    id: "ghost-hunter",
+    name: "GHOST HUNTER",
+    desc: "Defeat a NIGHT WISP",
+    check: () => GameState.quest.wispsDefeated >= 1,
+  },
+  {
     id: "golem-breaker",
     name: "GOLEM BREAKER",
     desc: "Defeat the MOSS GOLEM",

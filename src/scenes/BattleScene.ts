@@ -989,6 +989,7 @@ export class BattleScene extends Phaser.Scene {
       GameState.battles += 1;
       if (this.enemy.name === "SLIME") GameState.quest.slimes += 1;
       if (this.enemy.name === "GOLDEN SLIME") GameState.quest.goldenSlimes += 1;
+      if (this.enemy.name === ENEMIES.wisp.name) GameState.quest.wispsDefeated += 1;
       if (this.enemy.name === "BAT") GameState.quest.batsSlain += 1;
       if (this.enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
       // two story bosses share the `boss` flag; each sets its own quest gate

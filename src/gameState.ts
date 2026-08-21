@@ -69,6 +69,7 @@ export const EQUIP_TEXTURE: Record<EquipmentKey, string> = {
 export interface QuestState {
   slimes: number;
   goldenSlimes: number;
+  wispsDefeated: number;
   slimeReward: boolean;
   bossDefeated: boolean;
   finalReward: boolean;
@@ -180,6 +181,7 @@ export const GameState = {
   quest: {
     slimes: 0,
     goldenSlimes: 0,
+    wispsDefeated: 0,
     slimeReward: false,
     bossDefeated: false,
     finalReward: false,
@@ -318,6 +320,7 @@ export const GameState = {
     this.quest = {
       slimes: 0,
       goldenSlimes: 0,
+      wispsDefeated: 0,
       slimeReward: false,
       bossDefeated: false,
       finalReward: false,
