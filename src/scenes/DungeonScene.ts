@@ -23,6 +23,7 @@ import { CompanionSprite } from "../ui/CompanionSprite";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 
@@ -87,6 +88,7 @@ export class DungeonScene extends Phaser.Scene {
   private iQueued = false;
   private bQueued = false;
   private aQueued = false;
+  private oQueued = false;
   private qQueued = false;
   private quitConfirm = false;
   private quitting = false;
@@ -112,6 +114,7 @@ export class DungeonScene extends Phaser.Scene {
   private inventory!: InventoryUI;
   private bestiary!: BestiaryUI;
   private achievementsUI!: AchievementsUI;
+  private settingsUI!: SettingsUI;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -280,6 +283,9 @@ export class DungeonScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.aQueued = true;
     });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.O).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.oQueued = true;
+    });
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
@@ -324,6 +330,7 @@ export class DungeonScene extends Phaser.Scene {
     this.inventory = new InventoryUI(this);
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
+    this.settingsUI = new SettingsUI(this);
 
     this.hud = new StatusHud(this);
 
@@ -342,6 +349,7 @@ export class DungeonScene extends Phaser.Scene {
       this.inventory.destroy();
       this.bestiary.destroy();
       this.achievementsUI.destroy();
+      this.settingsUI.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       this.quitConfirmText.destroy();
@@ -444,12 +452,17 @@ export class DungeonScene extends Phaser.Scene {
         this.aQueued = false;
         if (this.achievementsUI.isActive()) this.achievementsUI.close();
       }
+      if (this.oQueued) {
+        this.oQueued = false;
+        if (this.settingsUI.isActive()) this.settingsUI.close();
+      }
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.dust.emitting = false;
       this.inventory.update();
       this.bestiary.update();
       this.achievementsUI.update();
+      this.settingsUI.update();
       this.updateRoamers(delta);
       return;
     }
@@ -469,6 +482,12 @@ export class DungeonScene extends Phaser.Scene {
     if (this.aQueued) {
       this.aQueued = false;
       this.achievementsUI.open();
+      return;
+    }
+
+    if (this.oQueued) {
+      this.oQueued = false;
+      this.settingsUI.open();
       return;
     }
 
@@ -519,7 +538,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return this.inventory.isActive() || this.bestiary.isActive() || this.achievementsUI.isActive();
+    return this.inventory.isActive() || this.bestiary.isActive() || this.achievementsUI.isActive() || this.settingsUI.isActive();
   }
 
   private toggleStatus(): void {
