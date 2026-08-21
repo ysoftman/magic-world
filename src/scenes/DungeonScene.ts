@@ -17,6 +17,7 @@ import {
   TREASURE_POS,
 } from "../levels";
 import { retroStyle, showToast } from "../pixelart";
+import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
 import { InventoryUI } from "../ui/InventoryUI";
@@ -85,6 +86,7 @@ export class DungeonScene extends Phaser.Scene {
   private tQueued = false;
   private iQueued = false;
   private bQueued = false;
+  private aQueued = false;
   private qQueued = false;
   private quitConfirm = false;
   private quitting = false;
@@ -109,6 +111,7 @@ export class DungeonScene extends Phaser.Scene {
   private minimap!: Minimap;
   private inventory!: InventoryUI;
   private bestiary!: BestiaryUI;
+  private achievementsUI!: AchievementsUI;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -274,6 +277,9 @@ export class DungeonScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.B).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.bQueued = true;
     });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.aQueued = true;
+    });
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
@@ -294,7 +300,7 @@ export class DungeonScene extends Phaser.Scene {
       .text(
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
-        "HJKL:MOVE  I:ITEMS  B:BESTIARY  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  FIND THE KING!",
+        "HJKL:MOVE  I:ITEMS  B:BESTIARY  A:ACHIEVE  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  FIND THE KING!",
         retroStyle(6, "#9f9fd0"),
       )
       .setOrigin(1, 1)
@@ -317,6 +323,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.inventory = new InventoryUI(this);
     this.bestiary = new BestiaryUI(this);
+    this.achievementsUI = new AchievementsUI(this);
 
     this.hud = new StatusHud(this);
 
@@ -334,6 +341,7 @@ export class DungeonScene extends Phaser.Scene {
       this.minimap.destroy();
       this.inventory.destroy();
       this.bestiary.destroy();
+      this.achievementsUI.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       this.quitConfirmText.destroy();
@@ -432,11 +440,16 @@ export class DungeonScene extends Phaser.Scene {
         this.bQueued = false;
         if (this.bestiary.isActive()) this.bestiary.close();
       }
+      if (this.aQueued) {
+        this.aQueued = false;
+        if (this.achievementsUI.isActive()) this.achievementsUI.close();
+      }
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.dust.emitting = false;
       this.inventory.update();
       this.bestiary.update();
+      this.achievementsUI.update();
       this.updateRoamers(delta);
       return;
     }
@@ -450,6 +463,12 @@ export class DungeonScene extends Phaser.Scene {
     if (this.bQueued) {
       this.bQueued = false;
       this.bestiary.open();
+      return;
+    }
+
+    if (this.aQueued) {
+      this.aQueued = false;
+      this.achievementsUI.open();
       return;
     }
 
@@ -500,7 +519,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return this.inventory.isActive() || this.bestiary.isActive();
+    return this.inventory.isActive() || this.bestiary.isActive() || this.achievementsUI.isActive();
   }
 
   private toggleStatus(): void {
