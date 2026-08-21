@@ -14,6 +14,7 @@ function questLabel(q: QuestState): string {
   if (!q.forestReward) return "SEE ELDER";
   if (q.hunterBatsAccepted && !q.hunterBatsReward) return `BATS ${Math.min(q.batsSlain, 4)}/4`;
   if (q.hunterCatchAccepted && !q.hunterCatchReward) return `CATCH ${Math.min(GameState.caught.length - q.caughtAtAccept, 3)}/3`;
+  if (q.hunterYetiAccepted && !q.hunterYetiReward) return `YETIS ${Math.min(q.yetisSlain, 3)}/3`;
   return "QUEST DONE";
 }
 
