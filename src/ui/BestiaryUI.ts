@@ -8,9 +8,13 @@ const SPECIES = Object.values(ENEMIES);
 
 // Two columns: one column of ten species needed a panel taller than the
 // 720px screen, which cut off the title, the last row and the counter.
+// ROW_GAP (and the icon scale with it) shrinks as more species are added, so
+// the panel keeps fitting the screen instead of silently clipping again.
 const COLS = 2;
 const ROWS = Math.ceil(SPECIES.length / COLS);
-const ROW_GAP = 80;
+const MAX_PANEL_H = GAME_HEIGHT - 40;
+const ROW_GAP = Math.min(80, Math.floor((MAX_PANEL_H - 200) / ROWS));
+const ICON_SCALE = (ROW_GAP / 80) * 0.9;
 const PANEL_W = 1160;
 const PANEL_H = 200 + ROWS * ROW_GAP;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
@@ -71,7 +75,7 @@ export class BestiaryUI {
         .sprite(x + ICON_DX, y, def.texture)
         // the source art is a full 64px tile; 1.4x overlapped the rows above
         // and below it, so keep it just under the row gap
-        .setScale(0.9)
+        .setScale(ICON_SCALE)
         .setScrollFactor(0)
         .setDepth(152)
         .setVisible(false);
