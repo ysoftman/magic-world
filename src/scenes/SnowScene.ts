@@ -6,6 +6,7 @@ import {
   buildSnow,
   escapeFromZones,
   SNOW_ENTRY,
+  SNOW_FISH_POS,
   SNOW_H,
   SNOW_TREASURE_POS,
   SNOW_W,
@@ -18,6 +19,7 @@ import {
 import { ENEMIES } from "../monsters";
 import { retroStyle, showToast } from "../pixelart";
 import { BestiaryUI } from "../ui/BestiaryUI";
+import { FishingUI } from "../ui/Fishing";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
@@ -81,6 +83,8 @@ export class SnowScene extends Phaser.Scene {
   private keyL!: Phaser.Input.Keyboard.Key;
   private keyS!: Phaser.Input.Keyboard.Key;
   private keyM!: Phaser.Input.Keyboard.Key;
+  private keyZ!: Phaser.Input.Keyboard.Key;
+  private zQueued = false;
   private mQueued = false;
   private tQueued = false;
   private iQueued = false;
@@ -101,6 +105,7 @@ export class SnowScene extends Phaser.Scene {
   private minimap!: Minimap;
   private inventory!: InventoryUI;
   private bestiary!: BestiaryUI;
+  private fishing!: FishingUI;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -233,6 +238,13 @@ export class SnowScene extends Phaser.Scene {
 
     this.spawnTreasures();
 
+    this.add.image(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE, "sign").setDepth(9);
+    this.add
+      .text(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE - 48, "ICE FISHING", retroStyle(5, "#38bdf8"))
+      .setOrigin(0.5)
+      .setDepth(11);
+    this.fishing = new FishingUI(this);
+
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;
       const r = this.roamers.find((r) => r.sprite === roamer);
@@ -265,6 +277,10 @@ export class SnowScene extends Phaser.Scene {
     this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
     this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
     this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.keyZ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    this.keyZ.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.zQueued = true;
+    });
     this.keyS = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyS.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (e.ctrlKey) this.ctrlSQueued = true;
@@ -303,7 +319,7 @@ export class SnowScene extends Phaser.Scene {
       .text(
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
-        "HJKL:MOVE  I:ITEMS  B:BESTIARY  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  BEWARE THE GLACIER GOLEM!",
+        "HJKL:MOVE  Z:FISH  I:ITEMS  B:BESTIARY  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  BEWARE THE GLACIER GOLEM!",
         retroStyle(6, "#a5f3fc"),
       )
       .setOrigin(1, 1)
@@ -314,6 +330,7 @@ export class SnowScene extends Phaser.Scene {
     // exit + unopened chests; the golem's basin is deliberately not marked
     this.minimap = new Minimap(this, level, this.player, [
       { x: SNOW_ENTRY.x, y: SNOW_ENTRY.y, color: 0xffd166 },
+      { x: SNOW_FISH_POS.x, y: SNOW_FISH_POS.y, color: 0x38bdf8 },
       ...SNOW_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
         x: t.x,
         y: t.y,
@@ -343,6 +360,7 @@ export class SnowScene extends Phaser.Scene {
       this.minimap.destroy();
       this.inventory.destroy();
       this.bestiary.destroy();
+      this.fishing.destroy();
       this.night.destroy();
       this.snowfall.destroy();
       this.quitConfirmText.destroy();
@@ -415,6 +433,7 @@ export class SnowScene extends Phaser.Scene {
     // run through the cave or forest had no way to drink a potion outside of a
     // battle.
     if (this.uiBlocking()) {
+      this.zQueued = false;
       if (this.iQueued) {
         this.iQueued = false;
         if (this.inventory.isActive()) this.inventory.close();
@@ -428,6 +447,7 @@ export class SnowScene extends Phaser.Scene {
       this.dust.emitting = false;
       this.inventory.update();
       this.bestiary.update();
+      this.fishing.update();
       this.updateRoamers(delta);
       return;
     }
@@ -442,6 +462,17 @@ export class SnowScene extends Phaser.Scene {
       this.bQueued = false;
       this.bestiary.open();
       return;
+    }
+
+    if (this.zQueued) {
+      this.zQueued = false;
+      const dx = this.player.x - SNOW_FISH_POS.x;
+      const dy = this.player.y - SNOW_FISH_POS.y;
+      if (dx * dx + dy * dy <= 120 * 120) {
+        Sfx.buy();
+        this.fishing.open();
+        return;
+      }
     }
 
     let vx = 0;
@@ -492,7 +523,7 @@ export class SnowScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return this.inventory.isActive() || this.bestiary.isActive();
+    return this.inventory.isActive() || this.bestiary.isActive() || this.fishing.isActive();
   }
 
   private toggleStatus(): void {

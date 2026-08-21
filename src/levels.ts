@@ -316,6 +316,11 @@ export const SNOW_ZONES: Array<MonsterZone & { kind?: "frostMoth" | "yeti" }> = 
   { cx: 12 * TILE, cy: 12 * TILE, w: 3 * TILE, h: 2 * TILE, count: 1 }, // glacier golem boss
 ];
 
+// Ice fishing spot on the north-west frozen pond's south bank (3,4) — clear
+// of the frostMoth zone at (4-5, 3-4) and reachable straight off the entry
+// path at (9,3-5) by walking west across open grass.
+export const SNOW_FISH_POS = { x: 3 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 };
+
 export const SNOW_TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
   { id: "snow-1", x: 3 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 },
   { id: "snow-2", x: 21 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 },
