@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DUNGEON_THEME, Sfx } from "../audio";
+import { Sfx, SNOW_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
 import {
@@ -109,7 +109,7 @@ export class SnowScene extends Phaser.Scene {
   }
 
   create(): void {
-    Sfx.playBgm(DUNGEON_THEME);
+    Sfx.playBgm(SNOW_THEME);
     this.roamers = [];
     // Every entry gets a grace period, not just a return from battle: nothing
     // locked encounters when walking into the cave or forest, and their entry

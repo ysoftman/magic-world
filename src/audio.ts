@@ -188,6 +188,42 @@ export const DUNGEON_THEME: Note[] = [
   { freq: null, dur: 0.6 },
 ];
 
+// Sparse, wind-swept theme for the Snow Field: long rests between notes so
+// the constant blizzard particles and the whistling silence carry the mood.
+export const SNOW_THEME: Note[] = [
+  { freq: 440, dur: 0.5 },
+  { freq: null, dur: 0.6 },
+  { freq: 392, dur: 0.5 },
+  { freq: null, dur: 0.6 },
+  { freq: 349, dur: 0.7 },
+  { freq: null, dur: 0.8 },
+  { freq: 330, dur: 0.9 },
+  { freq: null, dur: 1.0 },
+  { freq: 294, dur: 0.5 },
+  { freq: null, dur: 0.5 },
+  { freq: 330, dur: 0.5 },
+  { freq: null, dur: 0.5 },
+  { freq: 349, dur: 0.7 },
+  { freq: null, dur: 0.8 },
+  { freq: 262, dur: 0.9 },
+  { freq: null, dur: 1.0 },
+  // a colder, higher answer before settling back down
+  { freq: 587, dur: 0.4 },
+  { freq: null, dur: 0.5 },
+  { freq: 523, dur: 0.4 },
+  { freq: null, dur: 0.5 },
+  { freq: 494, dur: 0.6 },
+  { freq: null, dur: 0.7 },
+  { freq: 440, dur: 0.8 },
+  { freq: null, dur: 0.9 },
+  { freq: 349, dur: 0.5 },
+  { freq: null, dur: 0.5 },
+  { freq: 294, dur: 0.7 },
+  { freq: null, dur: 0.8 },
+  { freq: 220, dur: 1.2 },
+  { freq: null, dur: 1.2 },
+];
+
 // Driving riff with two variations and a run back home, ~4s per loop
 export const BATTLE_THEME: Note[] = [
   { freq: 523, dur: 0.12 },
