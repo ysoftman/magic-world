@@ -301,35 +301,42 @@ const BGM_VOLUME = 0.055;
 export class Sfx {
   private static ctx: AudioContext | null = null;
   private static master: GainNode | null = null;
+  private static bgmBus: GainNode | null = null;
+  private static sfxBus: GainNode | null = null;
   private static bgmTimer: ReturnType<typeof setTimeout> | null = null;
   private static bgmTrack: Note[] | null = null;
 
   static ensure(): void {
-    if (this.ctx) {
+    if (Sfx.ctx) {
       // autoplay policies can start (or leave) the context suspended when
       // it's created before any user gesture, e.g. by the title screen's
       // BGM starting on load; nothing else in this file ever resumes it
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+      if (Sfx.ctx.state === "suspended") void Sfx.ctx.resume();
       return;
     }
     try {
-      const AC =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AC();
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      Sfx.ctx = new AC();
       // notes -> master gain -> limiter -> speakers, so boosting the master
       // can't clip when a BGM note and a hit land on the same frame
-      const limiter = this.ctx.createDynamicsCompressor();
+      const limiter = Sfx.ctx.createDynamicsCompressor();
       limiter.threshold.value = -8;
       limiter.ratio.value = 12;
       limiter.attack.value = 0.003;
       limiter.release.value = 0.1;
-      this.master = this.ctx.createGain();
-      this.master.gain.value = MASTER_VOLUME;
-      this.master.connect(limiter).connect(this.ctx.destination);
+      Sfx.master = Sfx.ctx.createGain();
+      Sfx.master.gain.value = MASTER_VOLUME;
+      Sfx.master.connect(limiter).connect(Sfx.ctx.destination);
+      Sfx.bgmBus = Sfx.ctx.createGain();
+      Sfx.sfxBus = Sfx.ctx.createGain();
+      Sfx.applyVolumes();
+      Sfx.bgmBus.connect(Sfx.master);
+      Sfx.sfxBus.connect(Sfx.master);
     } catch {
-      this.ctx = null;
-      this.master = null;
+      Sfx.ctx = null;
+      Sfx.master = null;
+      Sfx.bgmBus = null;
+      Sfx.sfxBus = null;
     }
   }
 
@@ -339,23 +346,31 @@ export class Sfx {
     return GameState.soundMuted;
   }
 
+  // settings-screen volume knobs: BGM and effects get separate gain buses so
+  // each mixes live without touching the per-note levels baked into callers
+  static applyVolumes(): void {
+    if (!Sfx.ctx || !Sfx.bgmBus || !Sfx.sfxBus) return;
+    Sfx.bgmBus.gain.value = GameState.bgmVolume;
+    Sfx.sfxBus.gain.value = GameState.sfxVolume;
+  }
+
   static playBgm(track: Note[]): void {
-    if (this.bgmTrack === track) return; // already looping this one
-    this.bgmTrack = track;
-    this.restartBgmLoop();
+    if (Sfx.bgmTrack === track) return; // already looping this one
+    Sfx.bgmTrack = track;
+    Sfx.restartBgmLoop();
   }
 
   private static restartBgmLoop(): void {
-    if (this.bgmTimer !== null) clearTimeout(this.bgmTimer);
-    this.bgmTimer = null;
-    const track = this.bgmTrack;
+    if (Sfx.bgmTimer !== null) clearTimeout(Sfx.bgmTimer);
+    Sfx.bgmTimer = null;
+    const track = Sfx.bgmTrack;
     if (!track) return;
     let i = 0;
     const step = (): void => {
       const note = track[i % track.length];
-      if (note.freq) this.tone(note.freq, note.dur * 0.9, "triangle", BGM_VOLUME);
+      if (note.freq) Sfx.tone(note.freq, note.dur * 0.9, "triangle", BGM_VOLUME, 0, Sfx.bgmBus);
       i++;
-      this.bgmTimer = setTimeout(step, note.dur * 1000);
+      Sfx.bgmTimer = setTimeout(step, note.dur * 1000);
     };
     step();
   }
@@ -365,128 +380,122 @@ export class Sfx {
   // instead and pick the same track back up (from its first note) on
   // return. Wired to document visibilitychange in main.ts.
   static suspendBgmForHiddenTab(): void {
-    if (this.bgmTimer !== null) clearTimeout(this.bgmTimer);
-    this.bgmTimer = null;
+    if (Sfx.bgmTimer !== null) clearTimeout(Sfx.bgmTimer);
+    Sfx.bgmTimer = null;
   }
 
   static resumeBgmFromHiddenTab(): void {
-    if (this.bgmTrack && this.bgmTimer === null) this.restartBgmLoop();
+    if (Sfx.bgmTrack && Sfx.bgmTimer === null) Sfx.restartBgmLoop();
   }
 
-  private static tone(
-    freq: number,
-    dur: number,
-    type: OscillatorType = "square",
-    vol = 0.08,
-    when = 0
-  ): void {
+  private static tone(freq: number, dur: number, type: OscillatorType = "square", vol = 0.08, when = 0, bus: GainNode | null = null): void {
     if (GameState.soundMuted) return;
-    this.ensure();
-    if (!this.ctx) return;
+    Sfx.ensure();
+    if (!Sfx.ctx) return;
     // autoplay policy: a context created before any user gesture stays
     // suspended with currentTime frozen, so every scheduled note would pile
     // onto the same timestamp and fire at once on resume — skip them instead
-    if (this.ctx.state !== "running") return;
-    const t = this.ctx.currentTime + when;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    if (Sfx.ctx.state !== "running") return;
+    const t = Sfx.ctx.currentTime + when;
+    const osc = Sfx.ctx.createOscillator();
+    const gain = Sfx.ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t);
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(gain).connect(this.master ?? this.ctx.destination);
+    osc.connect(gain).connect(bus ?? Sfx.sfxBus ?? Sfx.master ?? Sfx.ctx.destination);
     osc.start(t);
     osc.stop(t + dur);
   }
 
   static move(): void {
-    this.tone(600, 0.03, "square", 0.04);
+    Sfx.tone(600, 0.03, "square", 0.04);
   }
 
   static attack(): void {
-    this.tone(240, 0.08, "square", 0.09);
-    this.tone(180, 0.12, "square", 0.08, 0.03);
+    Sfx.tone(240, 0.08, "square", 0.09);
+    Sfx.tone(180, 0.12, "square", 0.08, 0.03);
   }
 
   static critical(): void {
-    this.tone(150, 0.05, "square", 0.1);
-    this.tone(700, 0.1, "square", 0.09, 0.04);
+    Sfx.tone(150, 0.05, "square", 0.1);
+    Sfx.tone(700, 0.1, "square", 0.09, 0.04);
   }
 
   static magic(): void {
-    this.tone(440, 0.12, "triangle", 0.08);
-    this.tone(660, 0.14, "triangle", 0.07, 0.06);
-    this.tone(880, 0.18, "triangle", 0.06, 0.12);
+    Sfx.tone(440, 0.12, "triangle", 0.08);
+    Sfx.tone(660, 0.14, "triangle", 0.07, 0.06);
+    Sfx.tone(880, 0.18, "triangle", 0.06, 0.12);
   }
 
   static hit(): void {
-    this.tone(110, 0.16, "sawtooth", 0.1);
-    this.tone(80, 0.2, "sawtooth", 0.08, 0.03);
+    Sfx.tone(110, 0.16, "sawtooth", 0.1);
+    Sfx.tone(80, 0.2, "sawtooth", 0.08, 0.03);
   }
 
   static victory(): void {
-    this.tone(523, 0.1, "square", 0.07);
-    this.tone(659, 0.1, "square", 0.07, 0.09);
-    this.tone(784, 0.18, "square", 0.07, 0.18);
+    Sfx.tone(523, 0.1, "square", 0.07);
+    Sfx.tone(659, 0.1, "square", 0.07, 0.09);
+    Sfx.tone(784, 0.18, "square", 0.07, 0.18);
   }
 
   static levelup(): void {
-    this.tone(523, 0.09, "square", 0.08);
-    this.tone(659, 0.09, "square", 0.08, 0.08);
-    this.tone(784, 0.09, "square", 0.08, 0.16);
-    this.tone(1047, 0.22, "square", 0.08, 0.24);
+    Sfx.tone(523, 0.09, "square", 0.08);
+    Sfx.tone(659, 0.09, "square", 0.08, 0.08);
+    Sfx.tone(784, 0.09, "square", 0.08, 0.16);
+    Sfx.tone(1047, 0.22, "square", 0.08, 0.24);
   }
 
   static capture(): void {
-    this.tone(784, 0.1, "triangle", 0.08);
-    this.tone(659, 0.1, "triangle", 0.08, 0.09);
-    this.tone(523, 0.2, "triangle", 0.08, 0.18);
+    Sfx.tone(784, 0.1, "triangle", 0.08);
+    Sfx.tone(659, 0.1, "triangle", 0.08, 0.09);
+    Sfx.tone(523, 0.2, "triangle", 0.08, 0.18);
   }
 
   static buy(): void {
-    this.tone(880, 0.06, "square", 0.06);
-    this.tone(1320, 0.1, "square", 0.06, 0.05);
+    Sfx.tone(880, 0.06, "square", 0.06);
+    Sfx.tone(1320, 0.1, "square", 0.06, 0.05);
   }
 
   static error(): void {
-    this.tone(160, 0.12, "sawtooth", 0.08);
+    Sfx.tone(160, 0.12, "sawtooth", 0.08);
   }
 
   static run(): void {
-    this.tone(600, 0.06, "square", 0.06);
-    this.tone(700, 0.06, "square", 0.06, 0.05);
-    this.tone(800, 0.1, "square", 0.06, 0.1);
+    Sfx.tone(600, 0.06, "square", 0.06);
+    Sfx.tone(700, 0.06, "square", 0.06, 0.05);
+    Sfx.tone(800, 0.1, "square", 0.06, 0.1);
   }
 
   static boss(): void {
-    this.tone(90, 0.35, "sawtooth", 0.11);
-    this.tone(120, 0.35, "sawtooth", 0.09, 0.2);
+    Sfx.tone(90, 0.35, "sawtooth", 0.11);
+    Sfx.tone(120, 0.35, "sawtooth", 0.09, 0.2);
   }
 
   static pickup(): void {
-    this.tone(880, 0.07, "square", 0.06);
-    this.tone(1175, 0.12, "square", 0.06, 0.06);
+    Sfx.tone(880, 0.07, "square", 0.06);
+    Sfx.tone(1175, 0.12, "square", 0.06, 0.06);
   }
 
   static spark(): void {
-    this.tone(1400, 0.04, "square", 0.05);
-    this.tone(900, 0.06, "square", 0.04, 0.03);
+    Sfx.tone(1400, 0.04, "square", 0.05);
+    Sfx.tone(900, 0.06, "square", 0.04, 0.03);
   }
 
   static chest(): void {
-    this.tone(200, 0.12, "sawtooth", 0.08);
-    this.tone(150, 0.1, "sawtooth", 0.07, 0.08);
-    this.tone(660, 0.14, "square", 0.06, 0.14);
+    Sfx.tone(200, 0.12, "sawtooth", 0.08);
+    Sfx.tone(150, 0.1, "sawtooth", 0.07, 0.08);
+    Sfx.tone(660, 0.14, "square", 0.06, 0.14);
   }
 
   static night(): void {
-    this.tone(330, 0.1, "triangle", 0.05);
+    Sfx.tone(330, 0.1, "triangle", 0.05);
   }
 
   static gameover(): void {
-    this.tone(392, 0.2, "square", 0.08);
-    this.tone(330, 0.2, "square", 0.08, 0.18);
-    this.tone(262, 0.3, "square", 0.08, 0.36);
-    this.tone(196, 0.5, "square", 0.08, 0.56);
+    Sfx.tone(392, 0.2, "square", 0.08);
+    Sfx.tone(330, 0.2, "square", 0.08, 0.18);
+    Sfx.tone(262, 0.3, "square", 0.08, 0.36);
+    Sfx.tone(196, 0.5, "square", 0.08, 0.56);
   }
 }

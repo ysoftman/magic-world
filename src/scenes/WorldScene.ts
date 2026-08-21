@@ -34,6 +34,7 @@ import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { RankingUI } from "../ui/RankingUI";
+import { SettingsUI } from "../ui/SettingsUI";
 import { ShopUI } from "../ui/Shop";
 import { STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
@@ -82,6 +83,7 @@ export class WorldScene extends Phaser.Scene {
   private rankBoard!: RankingUI;
   private fishing!: FishingUI;
   private achievementsUI!: AchievementsUI;
+  private settingsUI!: SettingsUI;
   private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
@@ -110,6 +112,7 @@ export class WorldScene extends Phaser.Scene {
   private tQueued = false;
   private bQueued = false;
   private aQueued = false;
+  private oQueued = false;
   private qQueued = false;
   // claims achievements at most once per second; the checks read live
   // GameState, so battle/fishing/treasure mutations made while a modal or
@@ -147,6 +150,7 @@ export class WorldScene extends Phaser.Scene {
   private keyY!: Phaser.Input.Keyboard.Key;
   private keyN!: Phaser.Input.Keyboard.Key;
   private keyEsc!: Phaser.Input.Keyboard.Key;
+  private keyO!: Phaser.Input.Keyboard.Key;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -469,6 +473,10 @@ export class WorldScene extends Phaser.Scene {
     this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.nQueued = true;
     });
+    this.keyO = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
+    this.keyO.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.oQueued = true;
+    });
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (this.quitConfirm && !e.repeat) this.escQueued = true;
@@ -481,6 +489,7 @@ export class WorldScene extends Phaser.Scene {
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
     this.achievementsUI = new AchievementsUI(this);
+    this.settingsUI = new SettingsUI(this);
 
     const hint = this.add
       .text(
@@ -618,7 +627,8 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.isActive() ||
       this.rankBoard.isActive() ||
       this.fishing.isActive() ||
-      this.achievementsUI.isActive()
+      this.achievementsUI.isActive() ||
+      this.settingsUI.isActive()
     );
   }
 
@@ -697,6 +707,7 @@ export class WorldScene extends Phaser.Scene {
         this.bQueued =
         this.tQueued =
         this.aQueued =
+        this.oQueued =
           false;
       if (this.yQueued) {
         this.yQueued = false;
@@ -743,6 +754,10 @@ export class WorldScene extends Phaser.Scene {
         this.aQueued = false;
         if (this.achievementsUI.isActive()) this.achievementsUI.close();
       }
+      if (this.oQueued) {
+        this.oQueued = false;
+        if (this.settingsUI.isActive()) this.settingsUI.close();
+      }
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.dust.emitting = false;
@@ -753,6 +768,7 @@ export class WorldScene extends Phaser.Scene {
       this.rankBoard.update();
       this.fishing.update();
       this.achievementsUI.update();
+      this.settingsUI.update();
       this.updateRoamers(delta);
       return;
     }
@@ -772,6 +788,12 @@ export class WorldScene extends Phaser.Scene {
     if (this.aQueued) {
       this.aQueued = false;
       this.achievementsUI.open();
+      return;
+    }
+
+    if (this.oQueued) {
+      this.oQueued = false;
+      this.settingsUI.open();
       return;
     }
 

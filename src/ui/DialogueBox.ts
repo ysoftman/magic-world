@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GameState } from "../gameState";
 import { retroStyle } from "../pixelart";
 
 export class DialogueBox {
@@ -93,7 +94,7 @@ export class DialogueBox {
     this.typing = true;
     this.charIndex = 0;
     this.timer = this.scene.time.addEvent({
-      delay: 22,
+      delay: 22 / GameState.textSpeed,
       repeat: line.length,
       callback: () => {
         this.charIndex++;

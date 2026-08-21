@@ -3,6 +3,7 @@ import { Sfx, TITLE_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_VERSION, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { retroStyle } from "../pixelart";
+import { SettingsUI } from "../ui/SettingsUI";
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
@@ -39,8 +40,15 @@ export class TitleScene extends Phaser.Scene {
     });
 
     const continueText = this.add
-      .text(GAME_WIDTH / 2, 660, hasSave ? "C: CONTINUE  N: NEW GAME  D: DELETE SAVE" : "NO SAVE FOUND", retroStyle(6, "#8ecbff"))
+      .text(
+        GAME_WIDTH / 2,
+        660,
+        hasSave ? "C: CONTINUE  N: NEW GAME  D: DELETE SAVE  O: SETTINGS" : "O: SETTINGS",
+        retroStyle(6, "#8ecbff"),
+      )
       .setOrigin(0.5);
+
+    const settings = new SettingsUI(this);
 
     let confirmDelete = false;
 
@@ -48,10 +56,10 @@ export class TitleScene extends Phaser.Scene {
       prompt.setColor("#ffffff");
       if (GameState.hasSave()) {
         prompt.setText("PRESS ENTER TO CONTINUE");
-        continueText.setText("C: CONTINUE  N: NEW GAME  D: DELETE SAVE");
+        continueText.setText("C: CONTINUE  N: NEW GAME  D: DELETE SAVE  O: SETTINGS");
       } else {
         prompt.setText("PRESS ENTER");
-        continueText.setText("NO SAVE FOUND");
+        continueText.setText("O: SETTINGS");
       }
     };
 
@@ -82,6 +90,7 @@ export class TitleScene extends Phaser.Scene {
       // events here and delete the save that was just written
       if (e.repeat) return;
       Sfx.ensure();
+      if (settings.isActive()) return;
       if (confirmDelete) {
         if (e.key === "y" || e.key === "Y") {
           confirmDelete = false;
@@ -109,6 +118,7 @@ export class TitleScene extends Phaser.Scene {
     });
     this.input.on("pointerdown", () => {
       Sfx.ensure();
+      if (settings.isActive()) return;
       if (confirmDelete) {
         confirmDelete = false;
         showMenu();

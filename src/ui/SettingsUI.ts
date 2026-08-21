@@ -1,0 +1,162 @@
+import Phaser from "phaser";
+import { Sfx } from "../audio";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GameState, TEXT_SPEEDS } from "../gameState";
+import { retroStyle } from "../pixelart";
+
+const PANEL_W = 560;
+const PANEL_H = 300;
+const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
+const ROW_GAP = 56;
+
+const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
+const LABELS = ["BGM VOLUME", "SFX VOLUME", "TEXT SPEED"];
+
+export class SettingsUI {
+  private active = false;
+  private row = 0;
+  private closeQueued = false;
+
+  private dim: Phaser.GameObjects.Rectangle;
+  private panel: Phaser.GameObjects.Rectangle;
+  private title: Phaser.GameObjects.Text;
+  private rows: Phaser.GameObjects.Text[] = [];
+  private hint: Phaser.GameObjects.Text;
+
+  constructor(scene: Phaser.Scene) {
+    this.dim = scene.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
+      .setScrollFactor(0)
+      .setDepth(150)
+      .setVisible(false);
+    this.panel = scene.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
+      .setScrollFactor(0)
+      .setDepth(151)
+      .setStrokeStyle(2, 0xffffff)
+      .setVisible(false);
+    this.title = scene.add
+      .text(GAME_WIDTH / 2, PANEL_TOP + 44, "SETTINGS", retroStyle(8, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    LABELS.forEach((_, i) => {
+      const row = scene.add
+        .text(GAME_WIDTH / 2, PANEL_TOP + 120 + i * ROW_GAP, "", retroStyle(6, "#f5f5f5"))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(152)
+        .setVisible(false);
+      this.rows.push(row);
+    });
+    this.hint = scene.add
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: CLOSE", retroStyle(4, "#8ecbff"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+
+    const kb = scene.input.keyboard!;
+    const up = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    const down = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    const left = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    const right = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    const z = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    const esc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const o = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
+    up.on(Phaser.Input.Keyboard.Events.DOWN, () => this.moveRow(-1));
+    down.on(Phaser.Input.Keyboard.Events.DOWN, () => this.moveRow(1));
+    left.on(Phaser.Input.Keyboard.Events.DOWN, () => this.adjust(-1));
+    right.on(Phaser.Input.Keyboard.Events.DOWN, () => this.adjust(1));
+    const queueClose = () => {
+      if (this.active) this.closeQueued = true;
+    };
+    z.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
+    esc.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
+    o.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
+  }
+
+  open(): void {
+    this.active = true;
+    this.closeQueued = false;
+    this.row = 0;
+    this.dim.setVisible(true);
+    this.panel.setVisible(true);
+    this.title.setVisible(true);
+    this.hint.setVisible(true);
+    for (const t of this.rows) t.setVisible(true);
+    this.refresh();
+  }
+
+  close(): void {
+    this.active = false;
+    this.dim.setVisible(false);
+    this.panel.setVisible(false);
+    this.title.setVisible(false);
+    this.hint.setVisible(false);
+    for (const t of this.rows) t.setVisible(false);
+  }
+
+  isActive(): boolean {
+    return this.active;
+  }
+
+  update(): void {
+    if (!this.active || !this.closeQueued) return;
+    this.closeQueued = false;
+    this.close();
+  }
+
+  destroy(): void {
+    this.dim.destroy();
+    this.panel.destroy();
+    this.title.destroy();
+    this.hint.destroy();
+    for (const t of this.rows) t.destroy();
+  }
+
+  private moveRow(dir: number): void {
+    if (!this.active) return;
+    this.row = (this.row + dir + LABELS.length) % LABELS.length;
+    Sfx.move();
+    this.refresh();
+  }
+
+  private adjust(dir: number): void {
+    if (!this.active) return;
+    if (this.row === 0) this.setVolume("bgmVolume", GameState.bgmVolume + dir * 0.1);
+    else if (this.row === 1) this.setVolume("sfxVolume", GameState.sfxVolume + dir * 0.1);
+    else {
+      const i = TEXT_SPEEDS.indexOf(GameState.textSpeed);
+      GameState.textSpeed = TEXT_SPEEDS[(i + dir + TEXT_SPEEDS.length) % TEXT_SPEEDS.length];
+      GameState.saveSettings();
+      Sfx.move();
+    }
+    this.refresh();
+  }
+
+  private setVolume(key: "bgmVolume" | "sfxVolume", value: number): void {
+    GameState[key] = Math.min(1, Math.max(0, Math.round(value * 10) / 10));
+    GameState.saveSettings();
+    Sfx.applyVolumes();
+    Sfx.spark();
+  }
+
+  private refresh(): void {
+    const bar = (v: number): string => {
+      const n = Math.round(v * 10);
+      return "#".repeat(n) + "-".repeat(10 - n);
+    };
+    const values = [
+      `${bar(GameState.bgmVolume)}  ${Math.round(GameState.bgmVolume * 100)}%`,
+      `${bar(GameState.sfxVolume)}  ${Math.round(GameState.sfxVolume * 100)}%`,
+      SPEED_LABELS[GameState.textSpeed] ?? "NORMAL",
+    ];
+    LABELS.forEach((label, i) => {
+      const selected = i === this.row;
+      this.rows[i].setText(`${selected ? "> " : ""}${label}: ${values[i]}`);
+      this.rows[i].setColor(selected ? "#ffd166" : "#f5f5f5");
+    });
+  }
+}

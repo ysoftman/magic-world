@@ -127,6 +127,10 @@ export function nightFactor(): number {
   return (h - 19.5) / 0.5;
 }
 
+export const TEXT_SPEEDS = [0.5, 1, 2];
+
+const clampVolume = (v: unknown): number => (typeof v === "number" && v >= 0 && v <= 1 ? Math.round(v * 10) / 10 : 1);
+
 export const GameState = {
   player: {
     name: "HERO",
@@ -186,6 +190,9 @@ export const GameState = {
   encounterLockUntil: 0,
   hudVisible: true,
   soundMuted: false,
+  bgmVolume: 1,
+  sfxVolume: 1,
+  textSpeed: 1,
 
   lockEncounters(ms: number): void {
     this.encounterLockUntil = Date.now() + ms;
@@ -395,12 +402,24 @@ export const GameState = {
       const s = JSON.parse(raw);
       this.hudVisible = s.hudVisible ?? true;
       this.soundMuted = s.soundMuted ?? false;
+      this.bgmVolume = clampVolume(s.bgmVolume);
+      this.sfxVolume = clampVolume(s.sfxVolume);
+      this.textSpeed = TEXT_SPEEDS.includes(s.textSpeed) ? s.textSpeed : 1;
     } catch {
       /* keep defaults */
     }
   },
   saveSettings(): void {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ hudVisible: this.hudVisible, soundMuted: this.soundMuted }));
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        hudVisible: this.hudVisible,
+        soundMuted: this.soundMuted,
+        bgmVolume: this.bgmVolume,
+        sfxVolume: this.sfxVolume,
+        textSpeed: this.textSpeed,
+      }),
+    );
   },
 
   clearSave(): void {
