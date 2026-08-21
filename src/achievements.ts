@@ -98,6 +98,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     check: () => GameState.quest.wispsDefeated >= 1,
   },
   {
+    id: "combo-master",
+    name: "COMBO MASTER",
+    desc: "Reach an 8-hit combo in one battle",
+    check: () => GameState.quest.comboCapped,
+  },
+  {
     id: "golem-breaker",
     name: "GOLEM BREAKER",
     desc: "Defeat the MOSS GOLEM",

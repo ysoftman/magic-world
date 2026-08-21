@@ -70,6 +70,7 @@ export interface QuestState {
   slimes: number;
   goldenSlimes: number;
   wispsDefeated: number;
+  comboCapped: boolean;
   slimeReward: boolean;
   bossDefeated: boolean;
   finalReward: boolean;
@@ -182,6 +183,7 @@ export const GameState = {
     slimes: 0,
     goldenSlimes: 0,
     wispsDefeated: 0,
+    comboCapped: false,
     slimeReward: false,
     bossDefeated: false,
     finalReward: false,
@@ -321,6 +323,7 @@ export const GameState = {
       slimes: 0,
       goldenSlimes: 0,
       wispsDefeated: 0,
+      comboCapped: false,
       slimeReward: false,
       bossDefeated: false,
       finalReward: false,

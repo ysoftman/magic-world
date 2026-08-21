@@ -622,6 +622,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.attack();
     await this.lunge();
     this.combo += 1;
+    if (this.combo >= COMBO_CAP) GameState.quest.comboCapped = true;
     this.updateCombo();
     const comboBonus = this.comboBonus();
     const { dmg, crit } = this.calcDamage(GameState.effAtk(), this.enemy.def);
