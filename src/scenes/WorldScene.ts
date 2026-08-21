@@ -35,6 +35,7 @@ import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { RankingUI } from "../ui/RankingUI";
 import { ShopUI } from "../ui/Shop";
 import { STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
+import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 
 const ENCOUNTER_RATE = 0.18;
 const ENCOUNTER_COOLDOWN = 600;
@@ -87,6 +88,7 @@ export class WorldScene extends Phaser.Scene {
   private encounterCooldown = 0;
   private lastMove: LastMove = "down";
   private night!: NightOverlay;
+  private touch?: TouchControls;
   private homeLabel!: Phaser.GameObjects.Text;
   private homeBubble!: Phaser.GameObjects.Container;
   private bubbleVisible = false;
@@ -496,6 +498,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.hud = new StatusHud(this);
 
+    if (isTouchDevice()) this.touch = new TouchControls(this);
+
     this.quitConfirmText = this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
       .setOrigin(0.5)
@@ -517,6 +521,7 @@ export class WorldScene extends Phaser.Scene {
       this.night.destroy();
       hint.destroy();
       this.quitConfirmText.destroy();
+      this.touch?.destroy();
     });
   }
 

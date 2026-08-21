@@ -1,26 +1,27 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "../config";
+import { DUNGEON_THEME, Sfx } from "../audio";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
-import { retroStyle, showToast } from "../pixelart";
-import { StatusHud, STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y } from "../ui/StatusHud";
-import { Minimap } from "../ui/Minimap";
-import { InventoryUI } from "../ui/InventoryUI";
-import { BestiaryUI } from "../ui/BestiaryUI";
-import { NightOverlay, NIGHT_ENCOUNTER_MULT } from "../ui/NightOverlay";
-import { Sfx, DUNGEON_THEME } from "../audio";
 import {
   buildDungeon,
-  DUNGEON_W,
-  DUNGEON_H,
   DUNGEON_ENTRY,
+  DUNGEON_H,
+  DUNGEON_W,
   DUNGEON_ZONES,
-  TREASURE_POS,
-  TILE,
+  escapeFromZones,
   SOLID,
   T_WATER_A,
   T_WATER_B,
-  escapeFromZones,
+  TILE,
+  TREASURE_POS,
 } from "../levels";
+import { retroStyle, showToast } from "../pixelart";
+import { BestiaryUI } from "../ui/BestiaryUI";
+import { InventoryUI } from "../ui/InventoryUI";
+import { Minimap } from "../ui/Minimap";
+import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
+import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -98,6 +99,7 @@ export class DungeonScene extends Phaser.Scene {
   private inventory!: InventoryUI;
   private bestiary!: BestiaryUI;
   private night!: NightOverlay;
+  private touch?: TouchControls;
 
   constructor() {
     super("Dungeon");
@@ -136,20 +138,14 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, DUNGEON_W * TILE, DUNGEON_H * TILE);
 
     this.add
-      .text(DUNGEON_W * TILE / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
+      .text((DUNGEON_W * TILE) / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(95);
 
-    this.add
-      .image(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y, "cave")
-      .setDepth(9);
+    this.add.image(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y, "cave").setDepth(9);
 
-    this.player = this.physics.add.sprite(
-      DUNGEON_ENTRY.x,
-      DUNGEON_ENTRY.y + TILE * 2,
-      "hero-idle-down"
-    );
+    this.player = this.physics.add.sprite(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y + TILE * 2, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
@@ -160,21 +156,12 @@ export class DungeonScene extends Phaser.Scene {
     // made walking into the cave start a fight straight away.
     this.escapeMonsterZone();
 
-    this.playerShadow = this.add
-      .ellipse(this.player.x, this.player.y + 28, 40, 16, 0x000000, 0.4)
-      .setDepth(5);
+    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
 
-    this.weaponOverlay = this.add
-      .sprite(this.player.x, this.player.y, "equip-sword")
-      .setDepth(11)
-      .setVisible(false);
-    this.shieldOverlay = this.add
-      .sprite(this.player.x, this.player.y, "equip-shield")
-      .setDepth(11)
-      .setVisible(false);
+    this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
+    this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
-    const walkFrames = (dir: string): Phaser.Types.Animations.AnimationFrame[] =>
-      [0, 1, 2, 3].map((i) => ({ key: `hero-${dir}-${i}` }));
+    const walkFrames = (dir: string): Phaser.Types.Animations.AnimationFrame[] => [0, 1, 2, 3].map((i) => ({ key: `hero-${dir}-${i}` }));
 
     if (!this.anims.exists("walk-down")) {
       this.anims.create({
@@ -264,30 +251,18 @@ export class DungeonScene extends Phaser.Scene {
     this.keyM.on(Phaser.Input.Keyboard.Events.DOWN, () => {
       this.mQueued = true;
     });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.T).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (!e.repeat) this.tQueued = true;
-      }
-    );
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.I).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (!e.repeat) this.iQueued = true;
-      }
-    );
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.B).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (!e.repeat) this.bQueued = true;
-      }
-    );
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (!e.repeat) this.qQueued = true;
-      }
-    );
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.T).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.tQueued = true;
+    });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.I).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.iQueued = true;
+    });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.B).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.bQueued = true;
+    });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.qQueued = true;
+    });
     this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
     this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.yQueued = true;
@@ -306,7 +281,7 @@ export class DungeonScene extends Phaser.Scene {
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
         "HJKL:MOVE  I:ITEMS  B:BESTIARY  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  FIND THE KING!",
-        retroStyle(6, "#9f9fd0")
+        retroStyle(6, "#9f9fd0"),
       )
       .setOrigin(1, 1)
       .setAlign("right")
@@ -331,6 +306,8 @@ export class DungeonScene extends Phaser.Scene {
 
     this.hud = new StatusHud(this);
 
+    if (isTouchDevice()) this.touch = new TouchControls(this);
+
     this.quitConfirmText = this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
       .setOrigin(0.5)
@@ -345,6 +322,7 @@ export class DungeonScene extends Phaser.Scene {
       this.bestiary.destroy();
       this.night.destroy();
       this.quitConfirmText.destroy();
+      this.touch?.destroy();
     });
   }
 
@@ -522,8 +500,7 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
     const nearExit =
-      Math.abs(this.player.x - DUNGEON_ENTRY.x) < EXIT_SAFE_RADIUS_X &&
-      Math.abs(this.player.y - DUNGEON_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
+      Math.abs(this.player.x - DUNGEON_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - DUNGEON_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
     const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);
     if (Math.random() < rate) {
@@ -532,15 +509,10 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(
-      DUNGEON_ZONES,
-      this.player.x,
-      this.player.y,
-      (tx, ty) => {
-        const tile = this.layer.getTileAt(tx, ty);
-        return !!tile && !SOLID.has(tile.index);
-      }
-    );
+    const spot = escapeFromZones(DUNGEON_ZONES, this.player.x, this.player.y, (tx, ty) => {
+      const tile = this.layer.getTileAt(tx, ty);
+      return !!tile && !SOLID.has(tile.index);
+    });
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 
@@ -551,18 +523,8 @@ export class DungeonScene extends Phaser.Scene {
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: Roamer["kind"] = isBoss
-          ? "king"
-          : zone.kind === "bat"
-            ? "bat"
-            : Math.random() < 0.5
-              ? "slime"
-              : "goblin";
-        const sprite = this.roamerGroup.create(
-          x,
-          y,
-          kind
-        ) as Phaser.Physics.Arcade.Sprite;
+        const kind: Roamer["kind"] = isBoss ? "king" : zone.kind === "bat" ? "bat" : Math.random() < 0.5 ? "slime" : "goblin";
+        const sprite = this.roamerGroup.create(x, y, kind) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
         if (kind === "king") {
