@@ -29,6 +29,7 @@ import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { retroStyle, showToast } from "../pixelart";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
+import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { FishingUI } from "../ui/Fishing";
 import { InventoryUI } from "../ui/InventoryUI";
@@ -74,6 +75,7 @@ const IDLE_TEXTURE: Record<LastMove, string> = {
 export class WorldScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
+  private companionFollower!: CompanionSprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private layer!: Phaser.Tilemaps.TilemapLayer;
@@ -314,6 +316,7 @@ export class WorldScene extends Phaser.Scene {
     if (data?.fromBattle) this.escapeMonsterZone();
 
     this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
+    this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
@@ -569,6 +572,7 @@ export class WorldScene extends Phaser.Scene {
       this.achievementsUI.destroy();
       this.minimap.destroy();
       this.night.destroy();
+      this.companionFollower.destroy();
       hint.destroy();
       this.quitConfirmText.destroy();
       this.touch?.destroy();
@@ -867,6 +871,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.playerShadow.setPosition(this.player.x, this.player.y + 28);
+    this.companionFollower.update(this.player.x, this.player.y);
     this.dust.emitting = moving;
     this.updateEquipOverlays();
     this.updateRoamers(delta);
