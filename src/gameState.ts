@@ -86,6 +86,11 @@ export interface QuestState {
   hunterCatchAccepted: boolean;
   caughtAtAccept: number;
   hunterCatchReward: boolean;
+  // third HUNTER bounty, offered once the forest boss falls and opens the
+  // snow pass: a kill bounty against the SNOW FIELD's YETIs
+  hunterYetiAccepted: boolean;
+  yetisSlain: number;
+  hunterYetiReward: boolean;
 }
 
 const SAVE_KEY = "magic-world-save";
@@ -189,6 +194,9 @@ export const GameState = {
     hunterCatchAccepted: false,
     caughtAtAccept: 0,
     hunterCatchReward: false,
+    hunterYetiAccepted: false,
+    yetisSlain: 0,
+    hunterYetiReward: false,
   } as QuestState,
   minutes: 360,
   pos: undefined as { x: number; y: number } | undefined,
@@ -324,6 +332,9 @@ export const GameState = {
       hunterCatchAccepted: false,
       caughtAtAccept: 0,
       hunterCatchReward: false,
+      hunterYetiAccepted: false,
+      yetisSlain: 0,
+      hunterYetiReward: false,
     };
     this.minutes = 360;
     this.pos = undefined;

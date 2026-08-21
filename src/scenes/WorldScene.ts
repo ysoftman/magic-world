@@ -1100,6 +1100,30 @@ export class WorldScene extends Phaser.Scene {
       this.dialogue.start(["A fine haul! Take", "80 gold and 2 ETHERS."], "HUNTER");
       return;
     }
+    if (!q.forestBoss) {
+      this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
+      return;
+    }
+    if (!q.hunterYetiAccepted) {
+      q.hunterYetiAccepted = true;
+      this.dialogue.start(
+        ["One more job, hero:", "YETIS roam the snow", "pass to the north.", "Slay 3 and I'll pay", "handsomely."],
+        "HUNTER",
+      );
+      return;
+    }
+    if (!q.hunterYetiReward) {
+      if (q.yetisSlain < 3) {
+        this.dialogue.start([`${q.yetisSlain} of 3 yetis felled.`, "The pass is north", "of the village."], "HUNTER");
+        return;
+      }
+      q.hunterYetiReward = true;
+      GameState.gainGold(150);
+      GameState.inventory.hiPotion += 2;
+      Sfx.buy();
+      this.dialogue.start(["3 yetis down! Take", "150 gold and 2", "HI-POTIONS."], "HUNTER");
+      return;
+    }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
   }
 
