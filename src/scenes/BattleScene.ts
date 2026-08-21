@@ -7,7 +7,6 @@ import { retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
 import { NIGHT_RANGE, NIGHT_TINT } from "../ui/NightOverlay";
 
-const MP_COST = 3;
 const CRIT_CHANCE = 0.1;
 const CRIT_MULT = 2;
 const NIGHT_STAT_MULT = 1.25;
@@ -47,6 +46,26 @@ const ITEM_COL_X = 48;
 const ITEM_COL_WIDTH = 280;
 const ITEM_TEXT_OFFSET = 32;
 
+// Spells are learned automatically at their level gate, so nothing about
+// them needs saving: an old save just knows fewer spells until it levels up.
+interface Spell {
+  name: string;
+  cost: number;
+  learnLevel: number;
+  kind: "attack" | "heal";
+  power: number;
+  color: number;
+}
+
+const SPELLS: Spell[] = [
+  { name: "FIRE", cost: 3, learnLevel: 1, kind: "attack", power: 10, color: 0xffa500 },
+  { name: "HEAL", cost: 4, learnLevel: 5, kind: "heal", power: 20, color: 0x4ade80 },
+  { name: "ICE", cost: 6, learnLevel: 9, kind: "attack", power: 18, color: 0x67e8f9 },
+  { name: "BOLT", cost: 10, learnLevel: 14, kind: "attack", power: 30, color: 0xfde047 },
+];
+
+const SPELLS_PER_ROW = 2;
+
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyDef & { curHp: number };
   private enemySprite!: Phaser.GameObjects.Sprite;
@@ -62,6 +81,12 @@ export class BattleScene extends Phaser.Scene {
   private itemIndex = 0;
   private itemTexts: Phaser.GameObjects.Text[] = [];
   private itemCursor!: Phaser.GameObjects.Text;
+
+  private inSpells = false;
+  private spellIndex = 0;
+  private pendingSpell!: Spell;
+  private spellTexts: Phaser.GameObjects.Text[] = [];
+  private spellCursor!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
@@ -117,6 +142,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.playBgm(BATTLE_THEME);
     this.menuTexts = [];
     this.itemTexts = [];
+    this.spellTexts = [];
     this.inItems = false;
     this.itemIndex = 0;
     this.waitingAction = null;
@@ -215,6 +241,17 @@ export class BattleScene extends Phaser.Scene {
     }
     this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
 
+    const spellY = GAME_HEIGHT - 232;
+    for (let i = 0; i < SPELLS.length; i++) {
+      const colX = ITEM_COL_X + (i % SPELLS_PER_ROW) * ITEM_COL_WIDTH;
+      const t = this.add
+        .text(colX + ITEM_TEXT_OFFSET, spellY + Math.floor(i / SPELLS_PER_ROW) * 40, "", retroStyle(6, "#ffffff"))
+        .setOrigin(0, 0.5)
+        .setVisible(false);
+      this.spellTexts.push(t);
+    }
+    this.spellCursor = this.add.text(0, spellY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
+
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
       lifespan: 300,
@@ -312,6 +349,52 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.inSpells) {
+      const known = this.knownSpells();
+      if (e.code === "ArrowLeft" || e.code === "KeyH") {
+        this.spellIndex = (this.spellIndex + known.length - 1) % known.length;
+        Sfx.move();
+        this.renderSpells();
+        return;
+      }
+      if (e.code === "ArrowRight" || e.code === "KeyL") {
+        this.spellIndex = (this.spellIndex + 1) % known.length;
+        Sfx.move();
+        this.renderSpells();
+        return;
+      }
+      if (e.code === "ArrowUp" || e.code === "KeyK") {
+        this.spellIndex = (this.spellIndex + known.length - SPELLS_PER_ROW) % known.length;
+        Sfx.move();
+        this.renderSpells();
+        return;
+      }
+      if (e.code === "ArrowDown" || e.code === "KeyJ") {
+        this.spellIndex = (this.spellIndex + SPELLS_PER_ROW) % known.length;
+        Sfx.move();
+        this.renderSpells();
+        return;
+      }
+      if (e.code === "Escape") {
+        this.inSpells = false;
+        this.hideSpells();
+        this.renderMenu();
+        return;
+      }
+      if (e.code === "KeyZ") {
+        const spell = known[this.spellIndex];
+        if (!spell || !this.canCast(spell)) {
+          Sfx.error();
+          return;
+        }
+        this.inSpells = false;
+        this.pendingSpell = spell;
+        this.hideSpells();
+        this.resolveAction("magic");
+      }
+      return;
+    }
+
     if (e.code === "Escape") {
       this.resolveAction("run");
       return;
@@ -321,7 +404,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (e.code === "KeyF") {
-      this.resolveAction("magic");
+      this.hideMenu();
+      this.spellIndex = 0;
+      this.renderSpells();
+      this.inSpells = true;
       return;
     }
     if (e.code === "KeyI") {
@@ -356,6 +442,25 @@ export class BattleScene extends Phaser.Scene {
         this.inItems = false;
         this.hideItems();
         this.resolveAction(slot.action);
+        return;
+      }
+      return;
+    }
+
+    if (this.inSpells) {
+      const known = this.knownSpells();
+      for (let i = 0; i < this.spellTexts.length; i++) {
+        const t = this.spellTexts[i];
+        if (!t.visible || !t.getBounds().contains(pointer.x, pointer.y)) continue;
+        const spell = known[i];
+        if (!spell || !this.canCast(spell)) {
+          Sfx.error();
+          return;
+        }
+        this.inSpells = false;
+        this.pendingSpell = spell;
+        this.hideSpells();
+        this.resolveAction("magic");
         return;
       }
       return;
@@ -408,6 +513,30 @@ export class BattleScene extends Phaser.Scene {
     this.hintText.setText("H/L/J/K:NAV  Z:OK  ESC:BACK");
   }
 
+  private knownSpells(): Spell[] {
+    return SPELLS.filter((s) => GameState.player.level >= s.learnLevel);
+  }
+
+  private hideSpells(): void {
+    for (const t of this.spellTexts) t.setVisible(false);
+    this.spellCursor.setVisible(false);
+  }
+
+  private renderSpells(): void {
+    const known = this.knownSpells();
+    for (let i = 0; i < known.length; i++) {
+      const spell = known[i];
+      this.spellTexts[i].setVisible(true);
+      this.spellTexts[i].setText(`${spell.name}   MP${spell.cost}`);
+      this.spellTexts[i].setColor(GameState.player.mp >= spell.cost ? "#ffffff" : "#666666");
+    }
+    this.spellCursor.setVisible(true);
+    const target = this.spellTexts[this.spellIndex];
+    this.spellCursor.setX(target.x - ITEM_TEXT_OFFSET);
+    this.spellCursor.setY(target.y);
+    this.hintText.setText("H/L/J/K:NAV  Z:OK  ESC:BACK");
+  }
+
   private async runBattle(): Promise<void> {
     if (this.enemy.boss || this.enemy.giant) Sfx.boss();
     await this.say(`${this.enemy.name} blocks your way!`);
@@ -415,11 +544,7 @@ export class BattleScene extends Phaser.Scene {
     while (this.running) {
       if (GameState.player.hp <= 0) return this.defeat();
 
-      let action = await this.playerTurn();
-      while (action === "magic" && GameState.player.mp < MP_COST) {
-        await this.say("Not enough MP!");
-        action = await this.playerTurn();
-      }
+      const action = await this.playerTurn();
 
       switch (action) {
         case "run": {
@@ -440,7 +565,7 @@ export class BattleScene extends Phaser.Scene {
           await this.playerAttack();
           break;
         case "magic":
-          await this.playerMagic();
+          await this.castSpell(this.pendingSpell);
           break;
         case "potion":
           await this.usePotion();
@@ -500,17 +625,32 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyHp();
   }
 
-  private async playerMagic(): Promise<void> {
+  private canCast(spell: Spell): boolean {
+    if (GameState.player.mp < spell.cost) return false;
+    return !(spell.kind === "heal" && GameState.player.hp >= GameState.effMaxHp());
+  }
+
+  private async castSpell(spell: Spell): Promise<void> {
     this.resetCombo();
     Sfx.magic();
-    GameState.player.mp -= MP_COST;
+    GameState.player.mp -= spell.cost;
     this.updatePlayerStats();
-    const dmg = 10 + Math.floor(Math.random() * 5);
-    await this.fireball();
+    if (spell.kind === "heal") {
+      const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, spell.power);
+      GameState.player.hp += healed;
+      this.updatePlayerStats();
+      this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+      this.healBurst.explode(12);
+      this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+      await this.say(`${spell.name} restores ${healed} HP!`);
+      return;
+    }
+    const dmg = spell.power + Math.floor(Math.random() * Math.ceil(spell.power / 2));
+    await this.castProjectile(spell.color);
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
-    this.enemySprite.setTint(0xffa500).setTintMode(Phaser.TintModes.FILL);
+    this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
-    await this.say(`FIRE! ${dmg} damage!`);
+    await this.say(`${spell.name}! ${dmg} damage!`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
   }
@@ -682,8 +822,8 @@ export class BattleScene extends Phaser.Scene {
     syncOverlays();
   }
 
-  private async fireball(): Promise<void> {
-    const fb = this.add.circle(this.playerSprite.x + 40, this.playerSprite.y - 20, 16, 0xffa500).setDepth(20);
+  private async castProjectile(color: number): Promise<void> {
+    const fb = this.add.circle(this.playerSprite.x + 40, this.playerSprite.y - 20, 16, color).setDepth(20);
     this.tweens.add({
       targets: fb,
       alpha: { from: 1, to: 0.5 },
@@ -694,7 +834,7 @@ export class BattleScene extends Phaser.Scene {
     await this.tweenPromise(fb, { x: this.enemySprite.x, y: this.enemySprite.y }, 240);
     this.tweens.killTweensOf(fb); // the repeat:-1 pulse tween outlives destroy() otherwise
     fb.destroy();
-    const boom = this.add.circle(this.enemySprite.x, this.enemySprite.y, 24, 0xff5500).setDepth(20);
+    const boom = this.add.circle(this.enemySprite.x, this.enemySprite.y, 24, color).setDepth(20);
     this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.glowBurst.explode(12);
     this.cameras.main.shake(100, 0.008);
