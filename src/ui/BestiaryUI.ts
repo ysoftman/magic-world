@@ -272,10 +272,20 @@ export class BestiaryUI {
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
       this.icons[i].setVisible(rowSeen);
+      const base = `${isCompanion ? "★ " : ""}${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}`;
       const weaknessHint = rowSeen && def.weakness ? `  WEAK:${def.weakness.toUpperCase()}` : "";
-      this.rows[i].setText(
-        rowSeen ? `${isCompanion ? "★ " : ""}${def.name}${rowCaught > 0 ? ` (x${rowCaught})` : ""}${weaknessHint}` : "???",
-      );
+      if (!rowSeen) {
+        this.rows[i].setText("???");
+      } else if (!weaknessHint) {
+        this.rows[i].setText(base);
+      } else {
+        // star + long name + catch count + weakness can outrun the column
+        // width (a two-column layout has no room to widen into) — measure
+        // the actual render and drop the weakness hint rather than spill
+        // into the next column
+        this.rows[i].setText(base + weaknessHint);
+        if (this.rows[i].width > COL_W - NAME_DX - 20) this.rows[i].setText(base);
+      }
       this.rows[i].setColor(!rowSeen ? "#666666" : isCompanion ? "#4ade80" : "#ffffff");
     });
     this.renderCursor();
