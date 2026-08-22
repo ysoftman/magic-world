@@ -53,7 +53,12 @@ export class SettingsUI {
       this.rows.push(row);
     });
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "ARROWS: SELECT/ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE", retroStyle(4, "#8ecbff"))
+      .text(
+        GAME_WIDTH / 2,
+        PANEL_TOP + PANEL_H - 36,
+        "ARROWS/HJKL: SELECT/ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE",
+        retroStyle(4, "#8ecbff"),
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -64,13 +69,27 @@ export class SettingsUI {
     const down = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
     const left = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
     const right = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    // vim-style aliases — same keys InventoryUI/BestiaryUI already use, and
+    // the same shared-Key-instance-by-keycode setup they rely on
+    const h = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
+    const j = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    const k = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
+    const l = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
     const z = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
     const esc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const o = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
-    up.on(Phaser.Input.Keyboard.Events.DOWN, () => this.moveRow(-1));
-    down.on(Phaser.Input.Keyboard.Events.DOWN, () => this.moveRow(1));
-    left.on(Phaser.Input.Keyboard.Events.DOWN, () => this.adjust(-1));
-    right.on(Phaser.Input.Keyboard.Events.DOWN, () => this.adjust(1));
+    const moveUp = () => this.moveRow(-1);
+    const moveDown = () => this.moveRow(1);
+    const adjustLeft = () => this.adjust(-1);
+    const adjustRight = () => this.adjust(1);
+    up.on(Phaser.Input.Keyboard.Events.DOWN, moveUp);
+    k.on(Phaser.Input.Keyboard.Events.DOWN, moveUp);
+    down.on(Phaser.Input.Keyboard.Events.DOWN, moveDown);
+    j.on(Phaser.Input.Keyboard.Events.DOWN, moveDown);
+    left.on(Phaser.Input.Keyboard.Events.DOWN, adjustLeft);
+    h.on(Phaser.Input.Keyboard.Events.DOWN, adjustLeft);
+    right.on(Phaser.Input.Keyboard.Events.DOWN, adjustRight);
+    l.on(Phaser.Input.Keyboard.Events.DOWN, adjustRight);
     const queueClose = () => {
       if (this.active) this.closeQueued = true;
     };

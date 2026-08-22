@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
-import { CATCHABLE, ENEMIES } from "../monsters";
+import { CATCHABLE, ENEMIES, type EnemyDef } from "../monsters";
 import { retroStyle, showToast } from "../pixelart";
 
 const SPECIES = Object.values(ENEMIES);
@@ -29,6 +29,7 @@ export class BestiaryUI {
   private scene: Phaser.Scene;
   private active = false;
   private allCaughtToastShown = false;
+  private index = 0;
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
@@ -37,10 +38,25 @@ export class BestiaryUI {
   private counter: Phaser.GameObjects.Text;
   private icons: Phaser.GameObjects.Sprite[] = [];
   private rows: Phaser.GameObjects.Text[] = [];
+  private cursor: Phaser.GameObjects.Text;
 
   private keyEsc: Phaser.Input.Keyboard.Key;
   private keyB: Phaser.Input.Keyboard.Key;
+  private keyUp: Phaser.Input.Keyboard.Key;
+  private keyDown: Phaser.Input.Keyboard.Key;
+  private keyLeft: Phaser.Input.Keyboard.Key;
+  private keyRight: Phaser.Input.Keyboard.Key;
+  private keyH: Phaser.Input.Keyboard.Key;
+  private keyJ: Phaser.Input.Keyboard.Key;
+  private keyK: Phaser.Input.Keyboard.Key;
+  private keyL: Phaser.Input.Keyboard.Key;
+  private keyZ: Phaser.Input.Keyboard.Key;
   private closeQueued = false;
+  private upQueued = false;
+  private downQueued = false;
+  private leftQueued = false;
+  private rightQueued = false;
+  private zQueued = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -62,7 +78,7 @@ export class BestiaryUI {
       .setDepth(152)
       .setVisible(false);
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 84, "CLICK A CAUGHT MONSTER TO SET COMPANION", retroStyle(4, "#666666"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + 84, "CLICK OR HJKL+Z A CAUGHT MONSTER TO SET COMPANION", retroStyle(4, "#666666"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -97,27 +113,15 @@ export class BestiaryUI {
         .setVisible(false);
       this.rows.push(row);
 
-      // click a caught species to make it the battle companion; a click on
-      // an unseen "???" row (still hit-testable — Text keeps its full box
-      // even when showing the placeholder) is a no-op via the caught check
-      const selectCompanion = () => {
-        if (GameState.companion === def.name) return;
-        if (!GameState.caught.includes(def.name)) {
-          // seen-but-not-caught rows are clickable but did nothing here,
-          // which looked identical to the click not registering at all
-          Sfx.error();
-          showToast(this.scene, "NOT CAUGHT YET");
-          return;
-        }
-        GameState.companion = def.name;
-        Sfx.buy();
-        showToast(this.scene, `COMPANION: ${def.name}`);
-        GameState.save();
-        this.refresh();
-      };
+      // click a caught species to make it the battle companion (HJKL+Z does
+      // the same thing via trySelectCompanion, see update()); a click on an
+      // unseen "???" row (still hit-testable — Text keeps its full box even
+      // when showing the placeholder) is a no-op via the caught check
+      const selectCompanion = () => this.trySelectCompanion(def);
       icon.setInteractive({ useHandCursor: true }).on("pointerdown", selectCompanion);
       row.setInteractive({ useHandCursor: true }).on("pointerdown", selectCompanion);
     });
+    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
 
     const kb = scene.input.keyboard!;
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
@@ -127,17 +131,68 @@ export class BestiaryUI {
     };
     this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
     this.keyB.on(Phaser.Input.Keyboard.Events.DOWN, queueClose);
+
+    // HJKL/arrows move a cursor over the two columns, Z confirms — same
+    // scheme as InventoryUI, so the row cursor jumps a full column (ROWS)
+    this.keyUp = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this.keyDown = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    this.keyRight = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    this.keyH = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
+    this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
+    this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.keyZ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    const DOWN = Phaser.Input.Keyboard.Events.DOWN;
+    const queue = (flag: "upQueued" | "downQueued" | "leftQueued" | "rightQueued") => () => {
+      this[flag] = true;
+    };
+    this.keyUp.on(DOWN, queue("upQueued"));
+    this.keyK.on(DOWN, queue("upQueued"));
+    this.keyDown.on(DOWN, queue("downQueued"));
+    this.keyJ.on(DOWN, queue("downQueued"));
+    this.keyLeft.on(DOWN, queue("leftQueued"));
+    this.keyH.on(DOWN, queue("leftQueued"));
+    this.keyRight.on(DOWN, queue("rightQueued"));
+    this.keyL.on(DOWN, queue("rightQueued"));
+    this.keyZ.on(DOWN, () => {
+      this.zQueued = true;
+    });
+  }
+
+  // shared by mouse click and the Z-key confirm
+  private trySelectCompanion(def: EnemyDef): void {
+    if (GameState.companion === def.name) return;
+    if (!GameState.caught.includes(def.name)) {
+      // seen-but-not-caught rows are selectable but did nothing here, which
+      // looked identical to the click/key not registering at all
+      Sfx.error();
+      showToast(this.scene, "NOT CAUGHT YET");
+      return;
+    }
+    GameState.companion = def.name;
+    Sfx.buy();
+    showToast(this.scene, `COMPANION: ${def.name}`);
+    GameState.save();
+    this.refresh();
   }
 
   open(): void {
     this.active = true;
+    this.index = 0;
     this.closeQueued = false;
+    this.upQueued = false;
+    this.downQueued = false;
+    this.leftQueued = false;
+    this.rightQueued = false;
+    this.zQueued = false;
     this.dim.setVisible(true);
     this.panel.setVisible(true);
     this.title.setVisible(true);
     this.hint.setVisible(true);
     this.counter.setVisible(true);
     for (const t of this.rows) t.setVisible(true);
+    this.cursor.setVisible(true);
     this.refresh();
   }
 
@@ -150,6 +205,7 @@ export class BestiaryUI {
     this.counter.setVisible(false);
     for (const s of this.icons) s.setVisible(false);
     for (const t of this.rows) t.setVisible(false);
+    this.cursor.setVisible(false);
   }
 
   isActive(): boolean {
@@ -157,9 +213,39 @@ export class BestiaryUI {
   }
 
   update(): void {
-    if (!this.active || !this.closeQueued) return;
-    this.closeQueued = false;
-    this.close();
+    if (!this.active) return;
+    if (this.closeQueued) {
+      this.closeQueued = false;
+      this.close();
+      return;
+    }
+    const prev = this.index;
+    if (this.upQueued) {
+      this.upQueued = false;
+      this.index = (this.index + SPECIES.length - 1) % SPECIES.length;
+    }
+    if (this.downQueued) {
+      this.downQueued = false;
+      this.index = (this.index + 1) % SPECIES.length;
+    }
+    if (this.leftQueued || this.rightQueued) {
+      this.leftQueued = false;
+      this.rightQueued = false;
+      this.index = (this.index + ROWS) % SPECIES.length;
+    }
+    if (this.index !== prev) {
+      Sfx.move();
+      this.renderCursor();
+    }
+    if (this.zQueued) {
+      this.zQueued = false;
+      this.trySelectCompanion(SPECIES[this.index]);
+    }
+  }
+
+  private renderCursor(): void {
+    const target = this.rows[this.index];
+    this.cursor.setPosition(target.x - 26, target.y);
   }
 
   private refresh(): void {
@@ -188,6 +274,7 @@ export class BestiaryUI {
       );
       this.rows[i].setColor(!rowSeen ? "#666666" : isCompanion ? "#4ade80" : "#ffffff");
     });
+    this.renderCursor();
   }
 
   destroy(): void {
@@ -198,6 +285,7 @@ export class BestiaryUI {
     this.counter.destroy();
     for (const s of this.icons) s.destroy();
     for (const t of this.rows) t.destroy();
+    this.cursor.destroy();
     // keys are shared instances from kb.addKey (same keycode → same object);
     // destroying them would wipe other panels' listeners. Scene shutdown
     // already tears every Key down via KeyboardPlugin.removeAllKeys(true).
