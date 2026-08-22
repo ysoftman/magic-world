@@ -9,6 +9,7 @@ import {
   escapeFromZones,
   FISH_POS,
   FOREST_POS,
+  GAMBLER_POS,
   HOUSE_POS,
   HUNTER_POS,
   MAP_H,
@@ -33,6 +34,7 @@ import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { FishingUI } from "../ui/Fishing";
 import { InventoryUI } from "../ui/InventoryUI";
+import { LuckyWheel } from "../ui/LuckyWheel";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { RankingUI } from "../ui/RankingUI";
@@ -85,6 +87,7 @@ export class WorldScene extends Phaser.Scene {
   private bestiary!: BestiaryUI;
   private rankBoard!: RankingUI;
   private fishing!: FishingUI;
+  private luckyWheel!: LuckyWheel;
   private achievementsUI!: AchievementsUI;
   private settingsUI!: SettingsUI;
   private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -282,6 +285,13 @@ export class WorldScene extends Phaser.Scene {
     this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
     this.add
       .text(HUNTER_POS.x, HUNTER_POS.y - 48, "HUNTER", retroStyle(5, "#86efac"))
+      .setOrigin(0.5)
+      .setDepth(11);
+
+    this.add.sprite(GAMBLER_POS.x, GAMBLER_POS.y, "npc").setDepth(10).setTint(0xf472b6);
+    this.add.ellipse(GAMBLER_POS.x, GAMBLER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
+    this.add
+      .text(GAMBLER_POS.x, GAMBLER_POS.y - 48, "GAMBLER", retroStyle(5, "#f472b6"))
       .setOrigin(0.5)
       .setDepth(11);
 
@@ -525,6 +535,7 @@ export class WorldScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
+    this.luckyWheel = new LuckyWheel(this);
     this.achievementsUI = new AchievementsUI(this);
     this.settingsUI = new SettingsUI(this);
 
@@ -586,6 +597,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.destroy();
       this.rankBoard.destroy();
       this.fishing.destroy();
+      this.luckyWheel.destroy();
       this.achievementsUI.destroy();
       this.minimap.destroy();
       this.night.destroy();
@@ -696,6 +708,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.isActive() ||
       this.rankBoard.isActive() ||
       this.fishing.isActive() ||
+      this.luckyWheel.isActive() ||
       this.achievementsUI.isActive() ||
       this.settingsUI.isActive()
     );
@@ -841,6 +854,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.update();
       this.rankBoard.update();
       this.fishing.update();
+      this.luckyWheel.update();
       this.achievementsUI.update();
       this.settingsUI.update();
       this.updateRoamers(delta);
@@ -993,6 +1007,11 @@ export class WorldScene extends Phaser.Scene {
     if (near(FISH_POS.x, FISH_POS.y)) {
       Sfx.buy();
       this.fishing.open();
+      return true;
+    }
+    if (near(GAMBLER_POS.x, GAMBLER_POS.y)) {
+      Sfx.buy();
+      this.luckyWheel.open();
       return true;
     }
     return false;

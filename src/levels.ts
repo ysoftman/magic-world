@@ -156,6 +156,11 @@ export const RANK_BOARD_POS = { x: 14 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 
 // the main road — outside both the ELDER's and the board's 120px talk radii
 export const HUNTER_POS = { x: 17 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 
+// gambler offering the lucky wheel, three tiles east of the HUNTER on the
+// main road — same spacing convention, clear of his talk radius and of the
+// wolf zone further east
+export const GAMBLER_POS = { x: 20 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
+
 // Fishing spot on the pond's south-west bank at (23,5). The pond's other
 // banks sit inside monster zones (slime west, wolf south-east, trees east),
 // but this corner is reached from the road at (22,7) via two grass tiles,
