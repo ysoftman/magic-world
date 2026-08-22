@@ -84,7 +84,7 @@ export class BestiaryUI {
       .setDepth(152)
       .setVisible(false);
     this.counter = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 44, "", retroStyle(6, "#8ecbff"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 56, "", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -255,9 +255,12 @@ export class BestiaryUI {
     const caught = CATCHABLE.filter((def) => GameState.caught.includes(def.name)).length;
     const title = GameState.bestiaryTitle();
     const bonus = GameState.bestiaryBonus();
+    const companionLine = GameState.companion
+      ? `\nCOMPANION: ${GameState.companion}  BOND+${GameState.companionBondBonus(GameState.companion)} ATK`
+      : "";
     this.counter.setText(
       `SEEN ${seen}/${SPECIES.length}  CAUGHT ${caught}/${CATCHABLE.length}${title ? `  RANK:${title}` : ""}\n` +
-        `COMPLETION BONUS ATK+${bonus} DEF+${bonus}`,
+        `COMPLETION BONUS ATK+${bonus} DEF+${bonus}${companionLine}`,
     );
     if (caught === CATCHABLE.length && !this.allCaughtToastShown) {
       this.allCaughtToastShown = true;

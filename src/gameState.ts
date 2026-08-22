@@ -178,6 +178,9 @@ export const GameState = {
   caught: [] as string[],
   seenMonsters: [] as string[],
   companion: null as string | null,
+  // battles fought alongside each companion species, by name — grows a
+  // small permanent ATK bonus for that companion (see companionBondBonus)
+  companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
   quest: {
     slimes: 0,
@@ -240,6 +243,13 @@ export const GameState = {
     if (pct >= 0.75) return "BEAST TAMER";
     if (pct >= 0.5) return "HUNTER";
     return "";
+  },
+  // +1 ATK per 10 battles fought alongside this companion, capped at +5 —
+  // companions have no DEF stat of their own (they never take damage
+  // individually), so unlike bestiaryBonus this only scales their attack
+  companionBondBonus(name: string | null): number {
+    if (!name) return 0;
+    return Math.min(5, Math.floor((this.companionBond[name] ?? 0) / 10));
   },
   effAtk(): number {
     return this.player.atk + (this.equipped.weapon ? EQUIP_BONUS[this.equipped.weapon] : 0) + this.bestiaryBonus();
@@ -318,6 +328,7 @@ export const GameState = {
     this.caught = [];
     this.seenMonsters = [];
     this.companion = null;
+    this.companionBond = {};
     this.openedTreasures = [];
     this.quest = {
       slimes: 0,
@@ -366,6 +377,7 @@ export const GameState = {
         caught: this.caught,
         seenMonsters: this.seenMonsters,
         companion: this.companion,
+        companionBond: this.companionBond,
         openedTreasures: this.openedTreasures,
         quest: this.quest,
         minutes: this.minutes,
@@ -406,6 +418,7 @@ export const GameState = {
       this.caught = data.caught ?? [];
       this.seenMonsters = data.seenMonsters ?? [];
       this.companion = data.companion ?? null;
+      this.companionBond = data.companionBond ?? {};
       this.openedTreasures = data.openedTreasures ?? [];
       Object.assign(this.quest, data.quest);
       this.minutes = data.minutes ?? 360;

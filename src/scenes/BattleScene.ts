@@ -884,6 +884,9 @@ export class BattleScene extends Phaser.Scene {
     const name = GameState.companion;
     const def = name ? Object.values(ENEMIES).find((e) => e.name === name) : undefined;
     if (!name || !def || !this.companionSprite) return;
+    // one more battle fought together — grows this companion's permanent
+    // bond bonus (see GameState.companionBondBonus)
+    GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
     Sfx.attack();
     const sprite = this.companionSprite;
     let dmg = 0;
@@ -897,7 +900,8 @@ export class BattleScene extends Phaser.Scene {
         yoyo: true,
         hold: 80,
         onYoyo: () => {
-          ({ dmg, crit } = this.calcDamage(def.atk + Math.floor(GameState.player.level / 2), this.enemy.def));
+          const atk = def.atk + Math.floor(GameState.player.level / 2) + GameState.companionBondBonus(name);
+          ({ dmg, crit } = this.calcDamage(atk, this.enemy.def));
           if (crit) Sfx.critical();
           this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
           this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
