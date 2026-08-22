@@ -266,7 +266,7 @@ export class SnowScene extends Phaser.Scene {
     this.fishing = new FishingUI(this, true);
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      if (this.encounterCooldown > 0) return;
+      if (this.encounterCooldown > 0 || this.uiBlocking()) return;
       const r = this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.

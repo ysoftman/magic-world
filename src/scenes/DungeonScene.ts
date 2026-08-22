@@ -234,13 +234,15 @@ export class DungeonScene extends Phaser.Scene {
     this.spawnTreasures();
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      if (this.encounterCooldown > 0) return;
+      if (this.encounterCooldown > 0 || this.uiBlocking()) return;
       // cramped zones can overlap the player with more than one roamer on
       // the same tick; always let the rare one win the tie instead of
       // whichever roamer the physics engine happened to report first
-      // (same fix as WorldScene's troll/goldSlime tie-break)
-      const cursed = this.roamers.find((r) => r.kind === "cursedGoblin");
-      const r = cursed && this.physics.overlap(this.player, cursed.sprite) ? cursed : this.roamers.find((r) => r.sprite === roamer);
+      // (same fix as WorldScene's troll/goldSlime tie-break). Filtered on
+      // overlap too, not just kind — more than one cursed goblin can spawn,
+      // and a non-overlapping one shouldn't shadow the real match below.
+      const cursed = this.roamers.find((r) => r.kind === "cursedGoblin" && this.physics.overlap(this.player, r.sprite));
+      const r = cursed ?? this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
       this.startBattle(r?.kind ?? "slime");
@@ -615,7 +617,7 @@ export class DungeonScene extends Phaser.Scene {
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: "slime" | "goblin" | "king" | "bat" = isBoss
+        const kind: Exclude<Roamer["kind"], "cursedGoblin"> = isBoss
           ? "king"
           : zone.kind === "bat"
             ? "bat"
