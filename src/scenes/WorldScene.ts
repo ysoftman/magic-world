@@ -577,6 +577,7 @@ export class WorldScene extends Phaser.Scene {
       { x: CAVE_POS.x, y: CAVE_POS.y, color: 0xff5555 },
       { x: RANK_BOARD_POS.x, y: RANK_BOARD_POS.y, color: 0xc084fc },
       { x: BOUNTY_BOARD_POS.x, y: BOUNTY_BOARD_POS.y, color: 0xfacc15 },
+      { x: GAMBLER_POS.x, y: GAMBLER_POS.y, color: 0xf472b6 },
       { x: FOREST_POS.x, y: FOREST_POS.y, color: 0x4ade80 },
       { x: SNOW_POS.x, y: SNOW_POS.y, color: 0xa5f3fc },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
@@ -1211,8 +1212,10 @@ export class WorldScene extends Phaser.Scene {
       this.dialogue.start([`TARGET: ${b.target}`, `PROGRESS: ${progress}/${b.need}`, `REWARD: ${b.reward} GOLD`], "BOUNTY BOARD");
       return;
     }
-    b.claimed = true;
     const gained = GameState.gainGold(b.reward);
+    // only latch claimed once gold actually landed — at the cap gainGold()
+    // returns 0, same MAX_GOLD edge BattleScene's steal already guards
+    if (gained > 0) b.claimed = true;
     Sfx.buy();
     GameState.save();
     this.dialogue.start(["BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`], "BOUNTY BOARD");

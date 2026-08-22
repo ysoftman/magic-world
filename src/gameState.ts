@@ -298,6 +298,13 @@ export const GameState = {
   // gate in this game (day/night, NIGHT WISP) just reflecting current state
   rollBountyIfStale(): void {
     if (this.bounty && this.bounty.day === dayIndex()) return;
+    // a finished-but-unclaimed bounty still gets paid before it's discarded —
+    // "no partial credit" is meant for unfinished progress, not for silently
+    // voiding a reward the player already earned just because they didn't
+    // walk back to the board before the day rolled over
+    if (this.bounty && !this.bounty.claimed && this.bounty.have >= this.bounty.need) {
+      this.gainGold(this.bounty.reward);
+    }
     const pool = this.bountyPool();
     const target = pool[Math.floor(Math.random() * pool.length)];
     const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive
