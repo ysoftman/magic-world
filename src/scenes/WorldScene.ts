@@ -725,7 +725,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    GameState.minutes += delta / 1000;
+    GameState.minutes += (delta / 1000) * GameState.timeSpeed;
 
     const night = isNight();
     if (night !== this.wasNight) {

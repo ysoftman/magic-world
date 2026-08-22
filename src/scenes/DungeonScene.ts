@@ -380,7 +380,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    GameState.minutes += delta / 1000;
+    GameState.minutes += (delta / 1000) * GameState.timeSpeed;
     this.updateStatus();
 
     this.achievementCheckAccum += delta;

@@ -1,16 +1,17 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { GameState, TEXT_SPEEDS } from "../gameState";
+import { GameState, TEXT_SPEEDS, TIME_SPEEDS } from "../gameState";
 import { retroStyle, showToast } from "../pixelart";
 
 const PANEL_W = 960;
-const PANEL_H = 360;
+const PANEL_H = 404;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const ROW_GAP = 44;
 
 const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
-const LABELS = ["BGM VOLUME", "SFX VOLUME", "TEXT SPEED", "EXPORT SAVE", "IMPORT SAVE"];
+const TIME_SPEED_LABELS: Record<number, string> = { 1: "NORMAL", 5: "FAST", 20: "VERY FAST" };
+const LABELS = ["BGM VOLUME", "SFX VOLUME", "TEXT SPEED", "TIME SPEED", "EXPORT SAVE", "IMPORT SAVE"];
 
 export class SettingsUI {
   private active = false;
@@ -152,9 +153,14 @@ export class SettingsUI {
     if (!this.active || this.row >= LABELS.length - 2) return;
     if (this.row === 0) this.setVolume("bgmVolume", GameState.bgmVolume + dir * 0.1);
     else if (this.row === 1) this.setVolume("sfxVolume", GameState.sfxVolume + dir * 0.1);
-    else {
+    else if (this.row === 2) {
       const i = TEXT_SPEEDS.indexOf(GameState.textSpeed);
       GameState.textSpeed = TEXT_SPEEDS[(i + dir + TEXT_SPEEDS.length) % TEXT_SPEEDS.length];
+      GameState.saveSettings();
+      Sfx.move();
+    } else {
+      const i = TIME_SPEEDS.indexOf(GameState.timeSpeed);
+      GameState.timeSpeed = TIME_SPEEDS[(i + dir + TIME_SPEEDS.length) % TIME_SPEEDS.length];
       GameState.saveSettings();
       Sfx.move();
     }
@@ -216,6 +222,7 @@ export class SettingsUI {
       `${bar(GameState.bgmVolume)}  ${Math.round(GameState.bgmVolume * 100)}%`,
       `${bar(GameState.sfxVolume)}  ${Math.round(GameState.sfxVolume * 100)}%`,
       SPEED_LABELS[GameState.textSpeed] ?? "NORMAL",
+      TIME_SPEED_LABELS[GameState.timeSpeed] ?? "NORMAL",
       "",
       "",
     ];

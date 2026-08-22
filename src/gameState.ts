@@ -166,6 +166,9 @@ export function nightFactor(): number {
 }
 
 export const TEXT_SPEEDS = [0.5, 1, 2];
+// multiplies how fast GameState.minutes advances (day/night, bounty-board
+// day rollover) — a local display preference like textSpeed, not save state
+export const TIME_SPEEDS = [1, 5, 20];
 
 const clampVolume = (v: unknown): number => (typeof v === "number" && v >= 0 && v <= 1 ? Math.round(v * 10) / 10 : 1);
 
@@ -244,6 +247,7 @@ export const GameState = {
   bgmVolume: 1,
   sfxVolume: 1,
   textSpeed: 1,
+  timeSpeed: 1,
 
   lockEncounters(ms: number): void {
     this.encounterLockUntil = Date.now() + ms;
@@ -511,6 +515,7 @@ export const GameState = {
       this.bgmVolume = clampVolume(s.bgmVolume);
       this.sfxVolume = clampVolume(s.sfxVolume);
       this.textSpeed = TEXT_SPEEDS.includes(s.textSpeed) ? s.textSpeed : 1;
+      this.timeSpeed = TIME_SPEEDS.includes(s.timeSpeed) ? s.timeSpeed : 1;
     } catch {
       /* keep defaults */
     }
@@ -524,6 +529,7 @@ export const GameState = {
         bgmVolume: this.bgmVolume,
         sfxVolume: this.sfxVolume,
         textSpeed: this.textSpeed,
+        timeSpeed: this.timeSpeed,
       }),
     );
   },
