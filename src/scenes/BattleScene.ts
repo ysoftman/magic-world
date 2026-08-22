@@ -24,8 +24,12 @@ const STREAK_CAP = 8;
 // outpaces pausing to heal; items/magic/flee reset it
 const COMBO_PCT = 0.1;
 const COMBO_CAP = 8;
+// flat roll, independent of enemy HP — unlike throwCandy's ratio-based
+// capture chance, so players can't game it by whittling the enemy down first
+const STEAL_CHANCE = 0.35;
+const STEAL_GOLD_PCT = 0.4;
 
-type MenuAction = "fight" | "magic" | "run" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
+type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
 
 interface ItemSlot {
   label: string;
@@ -77,7 +81,7 @@ export class BattleScene extends Phaser.Scene {
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private msgText!: Phaser.GameObjects.Text;
 
-  private menuItems: ("fight" | "magic" | "item" | "run")[] = ["fight", "magic", "item", "run"];
+  private menuItems: ("fight" | "magic" | "item" | "steal" | "run")[] = ["fight", "magic", "item", "steal", "run"];
   private menuTexts: Phaser.GameObjects.Text[] = [];
 
   private inItems = false;
@@ -105,6 +109,8 @@ export class BattleScene extends Phaser.Scene {
   private origin: "World" | "Dungeon" | "Forest" | "Snow" = "World";
   private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
+  // one successful steal per battle; failed attempts don't count against it
+  private stolen = false;
 
   private hitBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private glowBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -120,6 +126,7 @@ export class BattleScene extends Phaser.Scene {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
     this.combo = 0;
+    this.stolen = false;
     const def = ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime;
     this.enemy = { ...def, curHp: def.hp };
     // Night is the risk/reward shift: tougher enemies, richer payout. Applied
@@ -219,6 +226,7 @@ export class BattleScene extends Phaser.Scene {
       fight: "A:FIGHT",
       magic: "F:MAGIC",
       item: "I:ITEM",
+      steal: "S:STEAL",
       run: "ESC:RUN",
     };
     let x = 128;
@@ -424,6 +432,10 @@ export class BattleScene extends Phaser.Scene {
       this.hideMenu();
       this.renderItems();
       this.inItems = true;
+      return;
+    }
+    if (e.code === "KeyS") {
+      this.resolveAction("steal");
     }
   }
 
@@ -597,6 +609,9 @@ export class BattleScene extends Phaser.Scene {
           break;
         case "bomb":
           await this.throwBomb();
+          break;
+        case "steal":
+          await this.attemptSteal();
           break;
       }
 
@@ -795,6 +810,34 @@ export class BattleScene extends Phaser.Scene {
       return this.victory(true);
     }
     await this.say("It broke free!");
+  }
+
+  // one chance per battle to lift bonus gold instead of fighting; costs the
+  // turn the same as any other non-fight action (companion still attacks,
+  // enemy still counters) whether it succeeds or not
+  private async attemptSteal(): Promise<void> {
+    this.resetCombo();
+    if (this.enemy.boss) {
+      Sfx.error();
+      await this.say(`You can't steal from the ${this.enemy.name}!`);
+      return;
+    }
+    if (this.stolen) {
+      Sfx.error();
+      await this.say("There's nothing left to steal!");
+      return;
+    }
+    if (Math.random() < STEAL_CHANCE) {
+      this.stolen = true;
+      const stolenGold = GameState.gainGold(Math.floor(this.enemy.gold * STEAL_GOLD_PCT));
+      Sfx.pickup();
+      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+      this.coinBurst.explode(8);
+      await this.say(`You lift ${stolenGold} gold from the ${this.enemy.name}!`);
+      return;
+    }
+    Sfx.error();
+    await this.say("You failed to steal anything!");
   }
 
   // the caught monster fights alongside the hero: one follow-up strike per
@@ -1136,12 +1179,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private awaitAdvance(resolve: () => void): void {
-    this.hintText.setText("Z/A/I/F/ESC:CONTINUE");
+    this.hintText.setText("Z/A/I/F/S/ESC:CONTINUE");
     const done = () => {
       this.input.keyboard?.removeListener("keydown-Z", done);
       this.input.keyboard?.removeListener("keydown-A", done);
       this.input.keyboard?.removeListener("keydown-I", done);
       this.input.keyboard?.removeListener("keydown-F", done);
+      this.input.keyboard?.removeListener("keydown-S", done);
       this.input.keyboard?.removeListener("keydown-ESC", done);
       this.input.keyboard?.removeListener("keydown-SPACE", done);
       this.input.off("pointerdown", done);
@@ -1151,6 +1195,7 @@ export class BattleScene extends Phaser.Scene {
     this.input.keyboard?.once("keydown-A", done);
     this.input.keyboard?.once("keydown-I", done);
     this.input.keyboard?.once("keydown-F", done);
+    this.input.keyboard?.once("keydown-S", done);
     this.input.keyboard?.once("keydown-ESC", done);
     this.input.keyboard?.once("keydown-SPACE", done);
     this.input.once("pointerdown", done);
