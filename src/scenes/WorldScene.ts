@@ -742,9 +742,9 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.gCheatQueued) {
       this.gCheatQueued = false;
-      GameState.gainGold(100);
+      const gained = GameState.gainGold(100);
       GameState.save();
-      this.flashNote("+100G (CHEAT)");
+      this.flashNote(`+${gained}G (CHEAT)`);
     }
 
     this.achievementCheckAccum += delta;
@@ -1065,9 +1065,9 @@ export class WorldScene extends Phaser.Scene {
     const q = GameState.quest;
     if (!q.slimeReward && q.slimes >= 5) {
       q.slimeReward = true;
-      GameState.gainGold(30);
+      const gained = GameState.gainGold(30);
       Sfx.buy();
-      this.dialogue.start(["Well done, hero!", "You hunted 5 slimes.", "Take these 30 gold!"], "ELDER");
+      this.dialogue.start(["Well done, hero!", "You hunted 5 slimes.", `Take these ${gained} gold!`], "ELDER");
       return;
     }
     if (!q.bossDefeated) {
@@ -1079,9 +1079,9 @@ export class WorldScene extends Phaser.Scene {
     }
     if (!q.finalReward) {
       q.finalReward = true;
-      GameState.gainGold(100);
+      const gained = GameState.gainGold(100);
       Sfx.buy();
-      this.dialogue.start(["You are our hero!", "The KING SLIME is gone.", "Take this 100 gold!"], "ELDER");
+      this.dialogue.start(["You are our hero!", "The KING SLIME is gone.", `Take this ${gained} gold!`], "ELDER");
       return;
     }
     if (!q.forestBoss) {
@@ -1090,31 +1090,31 @@ export class WorldScene extends Phaser.Scene {
     }
     if (!q.forestReward) {
       q.forestReward = true;
-      GameState.gainGold(200);
+      const gained = GameState.gainGold(200);
       GameState.inventory.mythrilSword += 1;
       Sfx.buy();
-      this.dialogue.start(["The forest is at peace!", "Take this 200 gold and", "a MYTHRIL SWORD!"], "ELDER");
+      this.dialogue.start(["The forest is at peace!", `Take this ${gained} gold and`, "a MYTHRIL SWORD!"], "ELDER");
       return;
     }
     if (!q.snowReward && q.snowBoss) {
       q.snowReward = true;
-      GameState.gainGold(300);
+      const gained = GameState.gainGold(300);
       GameState.inventory.elixir += 2;
       Sfx.buy();
       this.dialogue.start(
-        ["The GLACIER GOLEM...", "fallen? You are the", "truest hero this realm", "has ever known.", "300 gold and 2 ELIXIRS!"],
+        ["The GLACIER GOLEM...", "fallen? You are the", "truest hero this realm", "has ever known.", `${gained} gold and 2 ELIXIRS!`],
         "ELDER",
       );
       return;
     }
     if (!q.bestiaryReward && allSpeciesCaught(GameState.caught)) {
       q.bestiaryReward = true;
-      GameState.gainGold(500);
+      const gained = GameState.gainGold(500);
       GameState.inventory.elixir += 3;
       GameState.inventory.mythrilShield += 1;
       Sfx.buy();
       this.dialogue.start(
-        ["You caught every beast", "in the realm! A feat no", "hero has matched.", "500 gold, 3 ELIXIRS and", "a MYTHRIL SHIELD!"],
+        ["You caught every beast", "in the realm! A feat no", "hero has matched.", `${gained} gold, 3 ELIXIRS and`, "a MYTHRIL SHIELD!"],
         "ELDER",
       );
       return;
@@ -1143,10 +1143,10 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       q.hunterBatsReward = true;
-      GameState.gainGold(40);
+      const gained = GameState.gainGold(40);
       GameState.inventory.potion += 2;
       Sfx.buy();
-      this.dialogue.start(["4 bats down! Take", "40 gold and 2 POTIONS."], "HUNTER");
+      this.dialogue.start(["4 bats down! Take", `${gained} gold and 2 POTIONS.`], "HUNTER");
       return;
     }
     if (!q.hunterCatchAccepted) {
@@ -1162,10 +1162,10 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       q.hunterCatchReward = true;
-      GameState.gainGold(80);
+      const gained = GameState.gainGold(80);
       GameState.inventory.ether += 2;
       Sfx.buy();
-      this.dialogue.start(["A fine haul! Take", "80 gold and 2 ETHERS."], "HUNTER");
+      this.dialogue.start(["A fine haul! Take", `${gained} gold and 2 ETHERS.`], "HUNTER");
       return;
     }
     if (!q.forestBoss) {
@@ -1186,10 +1186,10 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       q.hunterYetiReward = true;
-      GameState.gainGold(150);
+      const gained = GameState.gainGold(150);
       GameState.inventory.hiPotion += 2;
       Sfx.buy();
-      this.dialogue.start(["3 yetis down! Take", "150 gold and 2", "HI-POTIONS."], "HUNTER");
+      this.dialogue.start(["3 yetis down! Take", `${gained} gold and 2`, "HI-POTIONS."], "HUNTER");
       return;
     }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");

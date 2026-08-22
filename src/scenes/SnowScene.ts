@@ -718,8 +718,7 @@ export class SnowScene extends Phaser.Scene {
     GameState.openedTreasures.push(id);
     chest.setTexture("chest-open");
     Sfx.chest();
-    const gold = 15 + Math.floor(Math.random() * 16);
-    GameState.gainGold(gold);
+    const gold = GameState.gainGold(15 + Math.floor(Math.random() * 16));
     let loot = "";
     const r = Math.random();
     if (r < 0.4) {
