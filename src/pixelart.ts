@@ -1,14 +1,11 @@
-import Phaser from "phaser";
-import { RETRO_FONT, PIXEL, GAME_WIDTH } from "./config";
+import type Phaser from "phaser";
+import { GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
 
 export interface PixelMap {
   [ch: string]: number;
 }
 
-export function retroStyle(
-  size = 8,
-  color = "#ffffff"
-): Phaser.Types.GameObjects.Text.TextStyle {
+export function retroStyle(size = 8, color = "#ffffff"): Phaser.Types.GameObjects.Text.TextStyle {
   return {
     fontFamily: RETRO_FONT,
     fontSize: `${size * PIXEL}px`,
@@ -32,7 +29,11 @@ export function showToast(scene: Phaser.Scene, text: string, y = 8): void {
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(200)
-      .setAlpha(0);
+      .setAlpha(0)
+      // batched "ACHIEVEMENTS: A, B, C!" toasts can outrun GAME_WIDTH — wrap
+      // instead of spilling past the canvas edges.
+      .setWordWrapWidth(GAME_WIDTH - 80, true)
+      .setAlign("center");
   }
   scene.tweens.killTweensOf(t);
   t.setText(text).setAlpha(0);
@@ -45,13 +46,7 @@ export function showToast(scene: Phaser.Scene, text: string, y = 8): void {
   });
 }
 
-export function drawRows(
-  g: Phaser.GameObjects.Graphics,
-  rows: string[],
-  palette: PixelMap,
-  ox: number,
-  oy: number
-): void {
+export function drawRows(g: Phaser.GameObjects.Graphics, rows: string[], palette: PixelMap, ox: number, oy: number): void {
   for (let y = 0; y < rows.length; y++) {
     const row = rows[y];
     for (let x = 0; x < row.length; x++) {
@@ -64,12 +59,7 @@ export function drawRows(
   }
 }
 
-export function makeTexture(
-  scene: Phaser.Scene,
-  key: string,
-  rows: string[],
-  palette: PixelMap
-): void {
+export function makeTexture(scene: Phaser.Scene, key: string, rows: string[], palette: PixelMap): void {
   const w = Math.max(...rows.map((r) => r.length));
   const h = rows.length;
   const g = scene.add.graphics();
@@ -82,7 +72,7 @@ export function makeTilesetTexture(
   scene: Phaser.Scene,
   key: string,
   tiles: Array<{ rows: string[]; palette: PixelMap }>,
-  tileSize: number
+  tileSize: number,
 ): void {
   const g = scene.add.graphics();
   tiles.forEach((t, i) => drawRows(g, t.rows, t.palette, i * tileSize * PIXEL, 0));

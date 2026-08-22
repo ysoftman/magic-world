@@ -104,9 +104,10 @@ export class WorldScene extends Phaser.Scene {
   private enteringDungeon = false;
   private enteringForest = false;
   private enteringSnow = false;
-  // true while overlapping the forest zone; reset a full tile away so the
-  // sealed-entrance dialogue doesn't restart every overlap frame
+  // true while overlapping the forest/snow zone; reset a full tile away so
+  // the sealed-entrance dialogue doesn't restart every overlap frame
   private forestOverlapActive = false;
+  private snowOverlapActive = false;
   private zQueued = false;
   private sQueued = false;
   private ctrlSQueued = false;
@@ -177,6 +178,7 @@ export class WorldScene extends Phaser.Scene {
     this.enteringForest = false;
     this.enteringSnow = false;
     this.forestOverlapActive = false;
+    this.snowOverlapActive = false;
     this.quitConfirm = false;
     this.quitting = false;
     this.wispRoamer = undefined;
@@ -427,6 +429,10 @@ export class WorldScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, snowPass, () => {
       if (this.enteringSnow || this.enteringDungeon || this.enteringForest || this.encounterCooldown > 0) return;
       if (this.uiBlocking()) return;
+      // overlap fires every frame while the body stays in the zone, so only
+      // act on the entry edge and reset on exit (see updateSnowGate)
+      if (this.snowOverlapActive) return;
+      this.snowOverlapActive = true;
       // post-game gate: the pass only thaws once the forest boss falls
       if (!GameState.quest.forestBoss) {
         this.dialogue.start(["The northern pass is", "choked with eternal", "snow...", "Something ancient stirs", "beyond the ice."]);
@@ -526,13 +532,24 @@ export class WorldScene extends Phaser.Scene {
       .text(
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
-        "HJKL:MOVE Z:TALK/OK I:ITEMS ESC:SKIP\nS:HUD M:MUTE B:BESTIARY A:ACHIEVE T:MAP Q:QUIT CTRL+S:SAVE",
+        "HJKL:MOVE Z:TALK/OK I:ITEMS ESC:SKIP\nS:HUD M:MUTE B:BESTIARY A:ACHIEVE O:SETTINGS T:MAP Q:QUIT CTRL+S:SAVE ?:HELP",
         retroStyle(6, "#9f9fd0"),
       )
       .setOrigin(1, 1)
       .setAlign("right")
       .setScrollFactor(0)
-      .setDepth(100);
+      .setDepth(100)
+      .setVisible(false)
+      // the key list outgrew one line per row (O:SETTINGS, ?:HELP) and, being
+      // right-anchored, was running off the left edge instead of wrapping
+      .setWordWrapWidth(GAME_WIDTH - 16, true);
+    // key hints are a popup now, not a permanent fixture — "?" toggles them
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH).on(
+      Phaser.Input.Keyboard.Events.DOWN,
+      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+        if (!e.repeat) hint.setVisible(!hint.visible);
+      },
+    );
 
     // key landmarks in world px, drawn as colored dots over the tile map
     this.minimap = new Minimap(this, level, this.player, [
@@ -659,6 +676,14 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  // same fix as updateForestGate, for the snow pass's sealed-entrance dialogue
+  private updateSnowGate(): void {
+    if (!this.snowOverlapActive) return;
+    if (Math.abs(this.player.x - SNOW_POS.x) > TILE || Math.abs(this.player.y - SNOW_POS.y) > TILE) {
+      this.snowOverlapActive = false;
+    }
+  }
+
   // true while a modal panel owns input — every place that checks this must
   // use this method instead of listing the panels itself, or a newly added
   // panel silently stops blocking (this happened once already: overlap
@@ -689,6 +714,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateDayNight();
     this.updateHomeBubble();
     this.updateForestGate();
+    this.updateSnowGate();
     this.minimap.update();
 
     if (this.gCheatQueued) {

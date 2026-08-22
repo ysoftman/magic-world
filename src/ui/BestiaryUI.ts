@@ -101,7 +101,14 @@ export class BestiaryUI {
       // an unseen "???" row (still hit-testable — Text keeps its full box
       // even when showing the placeholder) is a no-op via the caught check
       const selectCompanion = () => {
-        if (!GameState.caught.includes(def.name) || GameState.companion === def.name) return;
+        if (GameState.companion === def.name) return;
+        if (!GameState.caught.includes(def.name)) {
+          // seen-but-not-caught rows are clickable but did nothing here,
+          // which looked identical to the click not registering at all
+          Sfx.error();
+          showToast(this.scene, "NOT CAUGHT YET");
+          return;
+        }
         GameState.companion = def.name;
         Sfx.buy();
         showToast(this.scene, `COMPANION: ${def.name}`);

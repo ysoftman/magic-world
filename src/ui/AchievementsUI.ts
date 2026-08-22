@@ -13,7 +13,9 @@ const ROWS = Math.ceil(ACHIEVEMENTS.length / COLS);
 const MAX_PANEL_H = GAME_HEIGHT - 40;
 const ROW_GAP = Math.min(72, Math.floor((MAX_PANEL_H - 200) / ROWS));
 const DESC_DY = ROW_GAP * 0.42;
-const PANEL_W = 1160;
+// wide enough for the longest desc ("Reach an 8-hit combo in one battle") to
+// clear the column edge — a longer one added later will need this bumped too
+const PANEL_W = 1220;
 const PANEL_H = 200 + ROWS * ROW_GAP;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const COL_W = 560;

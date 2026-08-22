@@ -341,17 +341,28 @@ export class SnowScene extends Phaser.Scene {
       if (!e.repeat) this.escQueued = true;
     });
 
-    this.add
+    const hint = this.add
       .text(
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
-        "HJKL:MOVE  Z:FISH  I:ITEMS  B:BESTIARY  A:ACHIEVE  T:MAP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  BEWARE THE GLACIER GOLEM!",
+        "HJKL:MOVE  Z:FISH  I:ITEMS  B:BESTIARY  A:ACHIEVE  O:SETTINGS  T:MAP  ?:HELP\nS:HUD  M:MUTE  Q:QUIT  CTRL+S:SAVE  BEWARE THE GLACIER GOLEM!",
         retroStyle(6, "#a5f3fc"),
       )
       .setOrigin(1, 1)
       .setAlign("right")
       .setScrollFactor(0)
-      .setDepth(100);
+      .setDepth(100)
+      .setVisible(false)
+      // the key list outgrew one line per row (O:SETTINGS, ?:HELP) and, being
+      // right-anchored, was running off the left edge instead of wrapping
+      .setWordWrapWidth(GAME_WIDTH - 16, true);
+    // key hints are a popup now, not a permanent fixture — "?" toggles them
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH).on(
+      Phaser.Input.Keyboard.Events.DOWN,
+      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+        if (!e.repeat) hint.setVisible(!hint.visible);
+      },
+    );
 
     // exit + unopened chests; the golem's basin is deliberately not marked
     this.minimap = new Minimap(this, level, this.player, [
@@ -394,6 +405,7 @@ export class SnowScene extends Phaser.Scene {
       this.night.destroy();
       this.snowfall.destroy();
       this.companionFollower.destroy();
+      hint.destroy();
       this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
