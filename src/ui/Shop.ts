@@ -1,13 +1,18 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "../config";
-import { GameState } from "../gameState";
-import { retroStyle } from "../pixelart";
 import { Sfx } from "../audio";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { EQUIP_SLOT, GameState, type InventoryState } from "../gameState";
+import { retroStyle } from "../pixelart";
+
+type EquipKey = "sword" | "shield" | "ironSword" | "ironShield" | "amulet" | "mythrilSword" | "mythrilShield";
 
 interface ShopItem {
   name: string;
   price: number;
-  key?: "sword" | "shield" | "ironSword" | "ironShield" | "amulet" | "mythrilSword" | "mythrilShield";
+  // every item maps 1:1 to an inventory count — sell mode reads/decrements
+  // this regardless of whether it's a consumable or equipment
+  invKey: keyof InventoryState;
+  key?: EquipKey;
   // Gated stock: shown as LOCKED until the quest opens it, so late-game gear
   // can't be bought at level 1 and flatten the difficulty curve.
   unlocked?: () => boolean;
@@ -18,6 +23,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "POTION",
     price: 10,
+    invKey: "potion",
     buy: () => {
       GameState.inventory.potion += 1;
       return "Potion acquired!";
@@ -26,6 +32,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "MPOTION",
     price: 15,
+    invKey: "mPotion",
     buy: () => {
       GameState.inventory.mPotion += 1;
       return "MPotion acquired!";
@@ -34,6 +41,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "CANDY",
     price: 20,
+    invKey: "candy",
     buy: () => {
       GameState.inventory.candy += 1;
       return "Candy acquired!";
@@ -42,6 +50,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "HI-POTION",
     price: 30,
+    invKey: "hiPotion",
     buy: () => {
       GameState.inventory.hiPotion += 1;
       return "Hi-Potion acquired!";
@@ -50,6 +59,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "ETHER",
     price: 25,
+    invKey: "ether",
     buy: () => {
       GameState.inventory.ether += 1;
       return "Ether acquired!";
@@ -58,6 +68,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "ELIXIR",
     price: 100,
+    invKey: "elixir",
     buy: () => {
       GameState.inventory.elixir += 1;
       return "Elixir acquired!";
@@ -66,6 +77,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "BOMB",
     price: 50,
+    invKey: "bomb",
     buy: () => {
       GameState.inventory.bomb += 1;
       return "Bomb acquired!";
@@ -74,6 +86,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "SWORD",
     price: 80,
+    invKey: "sword",
     key: "sword",
     buy: () => {
       GameState.inventory.sword += 1;
@@ -83,6 +96,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "SHIELD",
     price: 80,
+    invKey: "shield",
     key: "shield",
     buy: () => {
       GameState.inventory.shield += 1;
@@ -92,6 +106,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "IRON SWORD",
     price: 180,
+    invKey: "ironSword",
     key: "ironSword",
     buy: () => {
       GameState.inventory.ironSword += 1;
@@ -101,6 +116,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "IRON SHIELD",
     price: 180,
+    invKey: "ironShield",
     key: "ironShield",
     buy: () => {
       GameState.inventory.ironShield += 1;
@@ -110,6 +126,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "AMULET",
     price: 120,
+    invKey: "amulet",
     key: "amulet",
     buy: () => {
       GameState.inventory.amulet += 1;
@@ -119,6 +136,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "MYTHRIL SWORD",
     price: 320,
+    invKey: "mythrilSword",
     key: "mythrilSword",
     unlocked: () => GameState.quest.bossDefeated,
     buy: () => {
@@ -129,6 +147,7 @@ const SHOP_ITEMS: ShopItem[] = [
   {
     name: "MYTHRIL SHIELD",
     price: 320,
+    invKey: "mythrilShield",
     key: "mythrilShield",
     unlocked: () => GameState.quest.bossDefeated,
     buy: () => {
@@ -137,6 +156,9 @@ const SHOP_ITEMS: ShopItem[] = [
     },
   },
 ];
+
+// half the buy price, floored, never free
+const sellPrice = (price: number): number => Math.max(1, Math.floor(price / 2));
 
 const SHOP_ROWS = Math.ceil(SHOP_ITEMS.length / 2);
 const SHOP_ROW_GAP = 44;
@@ -154,6 +176,7 @@ export class ShopUI {
   private scene: Phaser.Scene;
   private active = false;
   private index = 0;
+  private mode: "buy" | "sell" = "buy";
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
@@ -164,6 +187,7 @@ export class ShopUI {
   private cursor: Phaser.GameObjects.Text;
   private goldText: Phaser.GameObjects.Text;
   private msg: Phaser.GameObjects.Text;
+  private hint: Phaser.GameObjects.Text;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private keyUp: Phaser.Input.Keyboard.Key;
@@ -175,6 +199,7 @@ export class ShopUI {
   private keyK: Phaser.Input.Keyboard.Key;
   private keyL: Phaser.Input.Keyboard.Key;
   private keyZ: Phaser.Input.Keyboard.Key;
+  private keyTab: Phaser.Input.Keyboard.Key;
   private keyEsc: Phaser.Input.Keyboard.Key;
 
   private upQueued = false;
@@ -182,6 +207,7 @@ export class ShopUI {
   private leftQueued = false;
   private rightQueued = false;
   private zQueued = false;
+  private tabQueued = false;
   private escQueued = false;
 
   constructor(scene: Phaser.Scene) {
@@ -212,7 +238,7 @@ export class ShopUI {
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
-          .setVisible(false)
+          .setVisible(false),
       );
     });
 
@@ -222,12 +248,7 @@ export class ShopUI {
       const x = NAME_X + col * COL_W;
       const y = startY + (i % SHOP_ROWS) * SHOP_ROW_GAP;
       this.items.push(
-        scene.add
-          .text(x, y, item.name, retroStyle(6, "#ffffff"))
-          .setOrigin(0, 0.5)
-          .setScrollFactor(0)
-          .setDepth(152)
-          .setVisible(false)
+        scene.add.text(x, y, item.name, retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.prices.push(
         scene.add
@@ -235,15 +256,10 @@ export class ShopUI {
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
-          .setVisible(false)
+          .setVisible(false),
       );
     });
-    this.cursor = scene.add
-      .text(0, 0, ">", retroStyle(6, "#ffd166"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(152)
-      .setVisible(false);
+    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
 
     this.goldText = scene.add
       .text(GAME_WIDTH / 2 + PANEL_W / 2 - 40, PANEL_TOP + 40, "G 0", retroStyle(6, "#8ecbff"))
@@ -253,6 +269,12 @@ export class ShopUI {
       .setVisible(false);
     this.msg = scene.add
       .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 34, "", retroStyle(6, "#f5f5f5"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.hint = scene.add
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 12, "TAB: BUY/SELL", retroStyle(4, "#666666"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -268,6 +290,7 @@ export class ShopUI {
     this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
     this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
     this.keyZ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    this.keyTab = kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     const DOWN = Phaser.Input.Keyboard.Events.DOWN;
@@ -285,6 +308,9 @@ export class ShopUI {
     this.keyZ.on(DOWN, () => {
       this.zQueued = true;
     });
+    this.keyTab.on(DOWN, () => {
+      this.tabQueued = true;
+    });
     this.keyEsc.on(DOWN, () => {
       this.escQueued = true;
     });
@@ -293,17 +319,20 @@ export class ShopUI {
   open(): void {
     this.active = true;
     this.index = 0;
+    this.mode = "buy";
     this.upQueued = false;
     this.downQueued = false;
     this.leftQueued = false;
     this.rightQueued = false;
     this.zQueued = false;
+    this.tabQueued = false;
     this.escQueued = false;
     this.dim.setVisible(true);
     this.panel.setVisible(true);
     this.title.setVisible(true);
     this.goldText.setVisible(true);
     this.msg.setVisible(true);
+    this.hint.setVisible(true);
     for (const t of this.items) t.setVisible(true);
     for (const t of this.prices) t.setVisible(true);
     for (const t of this.headers) t.setVisible(true);
@@ -321,6 +350,12 @@ export class ShopUI {
       this.escQueued = false;
       this.close();
       return;
+    }
+    if (this.tabQueued) {
+      this.tabQueued = false;
+      this.mode = this.mode === "buy" ? "sell" : "buy";
+      Sfx.move();
+      this.refresh();
     }
     const prev = this.index;
     if (this.upQueued) {
@@ -342,7 +377,8 @@ export class ShopUI {
     }
     if (this.zQueued) {
       this.zQueued = false;
-      this.buy();
+      if (this.mode === "buy") this.buy();
+      else this.sell();
     }
   }
 
@@ -371,6 +407,24 @@ export class ShopUI {
     this.refresh();
   }
 
+  private sell(): void {
+    const item = SHOP_ITEMS[this.index];
+    if (GameState.inventory[item.invKey] <= 0) {
+      Sfx.error();
+      this.showMsg("Nothing to sell!");
+      return;
+    }
+    // selling your last one while it's worn unequips it first, same as
+    // dropping it from the inventory screen would imply
+    if (item.key && GameState.isEquipped(item.key)) GameState.unequip(EQUIP_SLOT[item.key]);
+    GameState.inventory[item.invKey] -= 1;
+    const gold = GameState.gainGold(sellPrice(item.price));
+    Sfx.buy();
+    GameState.save();
+    this.showMsg(`Sold for ${gold}G!`);
+    this.refresh();
+  }
+
   private showMsg(text: string): void {
     this.msgTimer?.remove();
     this.msg.setText(text);
@@ -381,16 +435,22 @@ export class ShopUI {
   }
 
   private refresh(): void {
-    this.goldText.setText("G " + GameState.gold);
+    this.goldText.setText(`G ${GameState.gold}`);
+    this.title.setText(this.mode === "buy" ? "SHOP" : "SHOP - SELL");
     for (let i = 0; i < SHOP_ITEMS.length; i++) {
       const item = SHOP_ITEMS[i];
+      if (this.mode === "sell") {
+        const count = GameState.inventory[item.invKey];
+        const color = count > 0 ? "#ffffff" : "#666666";
+        this.items[i].setText(item.name + (count > 1 ? ` (x${count})` : "")).setColor(color);
+        this.prices[i].setText(count > 0 ? `+${sellPrice(item.price)}G` : "NONE").setColor(color);
+        continue;
+      }
       const locked = item.unlocked ? !item.unlocked() : false;
       const owned = item.key ? GameState.inventory[item.key] > 0 : false;
       const color = locked ? "#8b5cf6" : owned ? "#666666" : "#ffffff";
-      this.items[i].setColor(color);
-      this.prices[i]
-        .setText(locked ? "LOCKED" : owned ? "SOLD" : `${item.price}G`)
-        .setColor(color);
+      this.items[i].setText(item.name).setColor(color);
+      this.prices[i].setText(locked ? "LOCKED" : owned ? "SOLD" : `${item.price}G`).setColor(color);
     }
     this.renderCursor();
   }
@@ -408,6 +468,7 @@ export class ShopUI {
     this.goldText.setVisible(false);
     this.msg.setVisible(false);
     this.msg.setText("");
+    this.hint.setVisible(false);
     this.msgTimer?.remove();
     for (const t of this.items) t.setVisible(false);
     for (const t of this.prices) t.setVisible(false);
@@ -421,6 +482,7 @@ export class ShopUI {
     this.title.destroy();
     this.goldText.destroy();
     this.msg.destroy();
+    this.hint.destroy();
     this.msgTimer?.remove();
     for (const t of this.items) t.destroy();
     for (const t of this.prices) t.destroy();
