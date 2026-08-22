@@ -111,9 +111,15 @@ export class LuckyWheel {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
-      .setVisible(false);
+      .setVisible(false)
+      // some result/idle lines run wider than the panel — wrap instead of
+      // spilling past the border, same fix as Fishing.ts's status text
+      .setWordWrapWidth(PANEL_W - 40, true)
+      .setAlign("center");
+    // only UP/DOWN/J/K are bound below — this is a single column, not a
+    // grid, so no H/L to advertise
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "HJKL: MOVE   Z: SPIN   ESC: CLOSE", retroStyle(4, "#666666"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "J/K: MOVE   Z: SPIN   ESC: CLOSE", retroStyle(4, "#666666"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -150,6 +156,7 @@ export class LuckyWheel {
 
   open(): void {
     this.active = true;
+    this.dirty = false;
     this.index = 0;
     this.state = "select";
     this.upQueued = false;
@@ -174,9 +181,11 @@ export class LuckyWheel {
 
   update(): void {
     if (!this.active) return;
+    // ESC is swallowed mid-spin — the wager is already deducted, and closing
+    // before resolve() ran would forfeit it with no payout and no message
     if (this.escQueued) {
       this.escQueued = false;
-      this.close();
+      if (this.state !== "spinning") this.close();
       return;
     }
     const now = this.scene.time.now;
@@ -258,6 +267,10 @@ export class LuckyWheel {
       Sfx.victory();
       this.status.setText(`${outcome.name}! +${gained}G`);
     }
+    // write the result out now, not on close() — a bust reloaded before
+    // closing the panel must not get to keep the pre-spin gold (Shop/Fishing
+    // can defer safely since neither of their outcomes is ever negative)
+    GameState.save();
     this.state = "result";
     this.resultUntil = this.scene.time.now + RESULT_HOLD;
   }

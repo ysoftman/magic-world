@@ -599,6 +599,7 @@ export class WorldScene extends Phaser.Scene {
       this.fishing.destroy();
       this.luckyWheel.destroy();
       this.achievementsUI.destroy();
+      this.settingsUI.destroy();
       this.minimap.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
