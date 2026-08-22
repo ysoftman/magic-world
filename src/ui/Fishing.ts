@@ -18,13 +18,26 @@ interface FishDef {
   min: number;
   max: number;
   chance: number;
+  // top-tier catches also grant a consumable, on top of the gold roll
+  bonusItem?: "potion" | "hiPotion";
 }
 
 const FISH_TABLE: FishDef[] = [
   { name: "MINNOW", min: 5, max: 10, chance: 0.45 },
   { name: "PERCH", min: 12, max: 20, chance: 0.3 },
   { name: "TROUT", min: 25, max: 40, chance: 0.17 },
-  { name: "GOLDEN FISH", min: 80, max: 120, chance: 0.08 },
+  { name: "GOLDEN FISH", min: 80, max: 120, chance: 0.08, bonusItem: "potion" },
+];
+
+// same odds/value curve as the town pond — the snow field isn't meant to be
+// strictly better, just re-themed — except the top tier gives a HI-POTION
+// instead of a POTION, matching how victory() already rewards boss kills
+// richer than regular ones
+const ARCTIC_FISH_TABLE: FishDef[] = [
+  { name: "ICE SHRIMP", min: 5, max: 10, chance: 0.45 },
+  { name: "FROST PERCH", min: 12, max: 20, chance: 0.3 },
+  { name: "GLACIER TROUT", min: 25, max: 40, chance: 0.17 },
+  { name: "AURORA KOI", min: 80, max: 120, chance: 0.08, bonusItem: "hiPotion" },
 ];
 
 type FishState = "cast" | "bite" | "result";
@@ -51,9 +64,11 @@ export class FishingUI {
 
   private zQueued = false;
   private escQueued = false;
+  private table: FishDef[];
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, arctic = false) {
     this.scene = scene;
+    this.table = arctic ? ARCTIC_FISH_TABLE : FISH_TABLE;
 
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
@@ -67,7 +82,7 @@ export class FishingUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 34, "FISHING", retroStyle(8, "#38bdf8"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + 34, arctic ? "ICE FISHING" : "FISHING", retroStyle(8, "#38bdf8"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -206,22 +221,24 @@ export class FishingUI {
     this.biteMark.setVisible(false);
     this.bobber.setY(WATER_Y);
     let r = Math.random();
-    let fish: FishDef = FISH_TABLE[FISH_TABLE.length - 1];
-    for (const f of FISH_TABLE) {
+    let fish: FishDef = this.table[this.table.length - 1];
+    for (const f of this.table) {
       if (r < f.chance) {
         fish = f;
         break;
       }
       r -= f.chance;
     }
-    const gold = Phaser.Math.Between(fish.min, fish.max);
-    GameState.gainGold(gold);
+    // gainGold()'s return value, not the raw roll, so the message never
+    // overstates what was actually credited near the gold cap
+    const gold = GameState.gainGold(Phaser.Math.Between(fish.min, fish.max));
     GameState.fishCaught += 1;
     this.dirty = true;
     this.count.setText(`FISH CAUGHT: ${GameState.fishCaught}`);
-    if (fish.name === "GOLDEN FISH") {
-      GameState.inventory.potion += 1;
-      this.status.setText(`CAUGHT: GOLDEN FISH! +${gold}G +POTION`);
+    if (fish.bonusItem) {
+      GameState.inventory[fish.bonusItem] += 1;
+      const label = fish.bonusItem === "hiPotion" ? "HI-POTION" : "POTION";
+      this.status.setText(`CAUGHT: ${fish.name}! +${gold}G +${label}`);
       Sfx.victory();
     } else {
       this.status.setText(`CAUGHT: ${fish.name}  +${gold}G`);

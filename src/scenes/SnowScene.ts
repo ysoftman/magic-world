@@ -263,7 +263,7 @@ export class SnowScene extends Phaser.Scene {
       .text(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE - 48, "ICE FISHING", retroStyle(5, "#38bdf8"))
       .setOrigin(0.5)
       .setDepth(11);
-    this.fishing = new FishingUI(this);
+    this.fishing = new FishingUI(this, true);
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;
