@@ -1079,6 +1079,9 @@ export class BattleScene extends Phaser.Scene {
       if (this.enemy.name === ENEMIES.wisp.name) GameState.quest.wispsDefeated += 1;
       if (this.enemy.name === "BAT") GameState.quest.batsSlain += 1;
       if (this.enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
+      // daily bounty board: unbounded like the counters above, only ever
+      // compared/clamped at display time
+      if (GameState.bounty && this.enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
       // two story bosses share the `boss` flag; each sets its own quest gate
       if (this.enemy.boss) {
         if (this.enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;

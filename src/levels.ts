@@ -161,6 +161,12 @@ export const HUNTER_POS = { x: 17 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 // wolf zone further east
 export const GAMBLER_POS = { x: 20 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 
+// bounty board, on the town's other (north-south) road at x=7 — the east-west
+// road's 3-tile-spacing convention ran out of room before the wolf zone at
+// x=24, so this uses the unused road instead, clear of the tree gap at y=4-5
+// and of the slime zone further south (cx=4, cy=12)
+export const BOUNTY_BOARD_POS = { x: 7 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
+
 // Fishing spot on the pond's south-west bank at (23,5). The pond's other
 // banks sit inside monster zones (slime west, wolf south-east, trees east),
 // but this corner is reached from the road at (22,7) via two grass tiles,

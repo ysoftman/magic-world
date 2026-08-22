@@ -4,6 +4,7 @@ import { OVERWORLD_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
 import {
+  BOUNTY_BOARD_POS,
   buildLevel,
   CAVE_POS,
   escapeFromZones,
@@ -239,6 +240,12 @@ export class WorldScene extends Phaser.Scene {
     this.add.image(RANK_BOARD_POS.x, RANK_BOARD_POS.y, "sign").setDepth(9);
     this.add
       .text(RANK_BOARD_POS.x, RANK_BOARD_POS.y - 48, "RANK BOARD", retroStyle(5, "#c084fc"))
+      .setOrigin(0.5)
+      .setDepth(11);
+
+    this.add.image(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y, "sign").setDepth(9);
+    this.add
+      .text(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y - 48, "BOUNTY BOARD", retroStyle(5, "#facc15"))
       .setOrigin(0.5)
       .setDepth(11);
 
@@ -569,6 +576,7 @@ export class WorldScene extends Phaser.Scene {
       { x: NPC_POS.x, y: NPC_POS.y, color: 0x8ecbff },
       { x: CAVE_POS.x, y: CAVE_POS.y, color: 0xff5555 },
       { x: RANK_BOARD_POS.x, y: RANK_BOARD_POS.y, color: 0xc084fc },
+      { x: BOUNTY_BOARD_POS.x, y: BOUNTY_BOARD_POS.y, color: 0xfacc15 },
       { x: FOREST_POS.x, y: FOREST_POS.y, color: 0x4ade80 },
       { x: SNOW_POS.x, y: SNOW_POS.y, color: 0xa5f3fc },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
@@ -1005,6 +1013,10 @@ export class WorldScene extends Phaser.Scene {
       this.rankBoard.open();
       return true;
     }
+    if (near(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y)) {
+      this.startBountyDialogue();
+      return true;
+    }
     if (near(FISH_POS.x, FISH_POS.y)) {
       Sfx.buy();
       this.fishing.open();
@@ -1180,6 +1192,30 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
+  }
+
+  // rerolls once a new in-game day starts (or on first read), then either
+  // shows progress, pays out a finished bounty once, or says it's already
+  // been claimed — no streak/partial-credit tracking, same as every other
+  // day-based gate in this game
+  private startBountyDialogue(): void {
+    GameState.rollBountyIfStale();
+    const b = GameState.bounty;
+    if (!b) return;
+    if (b.claimed) {
+      this.dialogue.start(["ALREADY CLAIMED TODAY.", "COME BACK TOMORROW."], "BOUNTY BOARD");
+      return;
+    }
+    const progress = Math.min(b.have, b.need);
+    if (progress < b.need) {
+      this.dialogue.start([`TARGET: ${b.target}`, `PROGRESS: ${progress}/${b.need}`, `REWARD: ${b.reward} GOLD`], "BOUNTY BOARD");
+      return;
+    }
+    b.claimed = true;
+    const gained = GameState.gainGold(b.reward);
+    Sfx.buy();
+    GameState.save();
+    this.dialogue.start(["BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`], "BOUNTY BOARD");
   }
 
   private checkEncounter(delta: number): void {

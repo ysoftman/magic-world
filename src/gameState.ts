@@ -1,6 +1,16 @@
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
-import { CATCHABLE } from "./monsters";
+import { CATCHABLE, type EnemyDef } from "./monsters";
 import { recordRank } from "./ranking";
+
+// bounty board eligibility: these only roam the forest/snow fields, which
+// stay locked behind the same quest flags WorldScene already gates them on
+const FOREST_BOUNTY_MONSTERS = new Set(["WASP", "SPIDER", "ORC"]);
+const SNOW_BOUNTY_MONSTERS = new Set(["FROST MOTH", "YETI"]);
+// bounty gold reward as a multiple of the target's own kill-gold value —
+// sized against HUNTER's existing fixed bounties (roughly 0.8x-1.9x raw
+// kill value once their item bonuses are folded in), biased to the high
+// end since a rotating bounty can't attach a themed item like HUNTER's do
+const BOUNTY_MULT = 1.5;
 
 export interface PlayerState {
   name: string;
@@ -95,6 +105,18 @@ export interface QuestState {
   hunterYetiReward: boolean;
 }
 
+// daily bounty board: unlike HUNTER's fixed chain, this rerolls a random
+// target every in-game day. `have` is never capped at increment time (same
+// unbounded-then-clamp-at-display convention as batsSlain/yetisSlain above).
+export interface BountyState {
+  target: string; // an ENEMIES[...].name
+  need: number;
+  have: number;
+  reward: number;
+  day: number; // dayIndex() at roll time — compared to detect a new day
+  claimed: boolean;
+}
+
 const SAVE_KEY = "magic-world-save";
 const SETTINGS_KEY = "magic-world-settings";
 
@@ -122,6 +144,12 @@ export function minute(): number {
 
 export function clock(): string {
   return `${String(hour()).padStart(2, "0")}:${String(minute()).padStart(2, "0")}`;
+}
+
+// GameState.minutes never wraps on its own (only hour()/minute() do, via %) —
+// this is the same /1440 divisor rest() already uses to roll to next dawn
+export function dayIndex(): number {
+  return Math.floor(GameState.minutes / 1440);
 }
 
 export function isNight(): boolean {
@@ -207,6 +235,7 @@ export const GameState = {
     yetisSlain: 0,
     hunterYetiReward: false,
   } as QuestState,
+  bounty: null as BountyState | null,
   minutes: 360,
   pos: undefined as { x: number; y: number } | undefined,
   encounterLockUntil: 0,
@@ -252,6 +281,34 @@ export const GameState = {
   companionBondBonus(name: string | null): number {
     if (!name) return 0;
     return Math.min(5, Math.floor((this.companionBond[name] ?? 0) / 10));
+  },
+  // eligible bounty targets: every catchable species except the TROLL KING
+  // (a rare 35%-per-load World roamer — could make that day's bounty
+  // impossible), gated by the same quest flags that unlock their area
+  bountyPool(): EnemyDef[] {
+    return CATCHABLE.filter((e) => {
+      if (e.giant) return false;
+      if (FOREST_BOUNTY_MONSTERS.has(e.name)) return this.quest.bossDefeated;
+      if (SNOW_BOUNTY_MONSTERS.has(e.name)) return this.quest.forestBoss;
+      return true;
+    });
+  },
+  // rerolls the board once a new in-game day starts (or on first visit);
+  // no partial credit or streak carries over, same as every other day-based
+  // gate in this game (day/night, NIGHT WISP) just reflecting current state
+  rollBountyIfStale(): void {
+    if (this.bounty && this.bounty.day === dayIndex()) return;
+    const pool = this.bountyPool();
+    const target = pool[Math.floor(Math.random() * pool.length)];
+    const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive
+    this.bounty = {
+      target: target.name,
+      need,
+      have: 0,
+      reward: Math.round(need * target.gold * BOUNTY_MULT),
+      day: dayIndex(),
+      claimed: false,
+    };
   },
   effAtk(): number {
     return this.player.atk + (this.equipped.weapon ? EQUIP_BONUS[this.equipped.weapon] : 0) + this.bestiaryBonus();
@@ -355,6 +412,7 @@ export const GameState = {
       yetisSlain: 0,
       hunterYetiReward: false,
     };
+    this.bounty = null;
     this.minutes = 360;
     this.pos = undefined;
     this.encounterLockUntil = 0;
@@ -382,6 +440,7 @@ export const GameState = {
         companionBond: this.companionBond,
         openedTreasures: this.openedTreasures,
         quest: this.quest,
+        bounty: this.bounty,
         minutes: this.minutes,
         pos: this.pos,
         encounterLockUntil: this.encounterLockUntil,
@@ -423,6 +482,7 @@ export const GameState = {
       this.companionBond = data.companionBond ?? {};
       this.openedTreasures = data.openedTreasures ?? [];
       Object.assign(this.quest, data.quest);
+      this.bounty = data.bounty ?? null;
       this.minutes = data.minutes ?? 360;
       this.pos = data.pos;
       this.encounterLockUntil = data.encounterLockUntil ?? 0;
