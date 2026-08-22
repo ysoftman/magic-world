@@ -36,6 +36,9 @@ const MAX_COOLDOWN_STEP = 50;
 const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
+// same per-roll rarity as WorldScene's GOLDEN_SLIME_CHANCE, applied to
+// goblin rolls only — a dungeon-exclusive jackpot, tint-only reskin
+const CURSED_GOBLIN_CHANCE = 0.08;
 
 interface Roamer {
   sprite: Phaser.Physics.Arcade.Sprite;
@@ -47,7 +50,7 @@ interface Roamer {
   targetY: number;
   wait: number;
   speed: number;
-  kind: "slime" | "goblin" | "king" | "bat";
+  kind: "slime" | "goblin" | "king" | "bat" | "cursedGoblin";
 }
 
 const IDLE_TEXTURE: Record<LastMove, string> = {
@@ -232,7 +235,12 @@ export class DungeonScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;
-      const r = this.roamers.find((r) => r.sprite === roamer);
+      // cramped zones can overlap the player with more than one roamer on
+      // the same tick; always let the rare one win the tie instead of
+      // whichever roamer the physics engine happened to report first
+      // (same fix as WorldScene's troll/goldSlime tie-break)
+      const cursed = this.roamers.find((r) => r.kind === "cursedGoblin");
+      const r = cursed && this.physics.overlap(this.player, cursed.sprite) ? cursed : this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
       this.startBattle(r?.kind ?? "slime");
@@ -607,13 +615,25 @@ export class DungeonScene extends Phaser.Scene {
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: Roamer["kind"] = isBoss ? "king" : zone.kind === "bat" ? "bat" : Math.random() < 0.5 ? "slime" : "goblin";
+        const kind: "slime" | "goblin" | "king" | "bat" = isBoss
+          ? "king"
+          : zone.kind === "bat"
+            ? "bat"
+            : Math.random() < 0.5
+              ? "slime"
+              : "goblin";
+        // rare tinted reskin, same pattern as WorldScene's GOLDEN SLIME —
+        // texture stays the base kind, only the sprite tint + bookkeeping
+        // "kind" used for battle dispatch changes
+        const cursed = kind === "goblin" && Math.random() < CURSED_GOBLIN_CHANCE;
+        const roamerKind: Roamer["kind"] = cursed ? "cursedGoblin" : kind;
         const sprite = this.roamerGroup.create(x, y, kind) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
         if (kind === "king") {
           sprite.setScale(1.5);
         }
+        if (cursed) sprite.setTint(0x9333ea);
         this.roamers.push({
           sprite,
           minX: zone.cx - zone.w / 2 + 8,
@@ -624,7 +644,7 @@ export class DungeonScene extends Phaser.Scene {
           targetY: y,
           wait: 300 + Math.random() * 800,
           speed: (isBoss ? 40 : 56) + Math.random() * 40,
-          kind,
+          kind: roamerKind,
         });
         this.tweens.add({
           targets: sprite,
@@ -708,7 +728,7 @@ export class DungeonScene extends Phaser.Scene {
     r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
-  private startBattle(enemy?: "slime" | "goblin" | "king" | "bat"): void {
+  private startBattle(enemy?: Roamer["kind"]): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;

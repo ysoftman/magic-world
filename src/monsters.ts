@@ -31,6 +31,18 @@ export const ENEMIES: Record<string, EnemyDef> = {
     weakness: "fire",
   },
   goblin: { name: "GOBLIN", texture: "goblin", hp: 22, atk: 7, def: 1, exp: 14, gold: 9, weakness: "bolt" },
+  cursedGoblin: {
+    name: "CURSED GOBLIN",
+    texture: "goblin",
+    tint: 0x9333ea,
+    hp: 38,
+    atk: 8,
+    def: 2,
+    exp: 70,
+    gold: 108,
+    rare: true, // dungeon-exclusive jackpot: same tint-only reskin as GOLDEN SLIME
+    weakness: "bolt",
+  },
   bat: { name: "BAT", texture: "bat", hp: 18, atk: 6, def: 0, exp: 12, gold: 8, weakness: "ice" },
   wolf: { name: "WOLF", texture: "wolf", hp: 30, atk: 9, def: 1, exp: 25, gold: 15, weakness: "fire" },
   king: {
