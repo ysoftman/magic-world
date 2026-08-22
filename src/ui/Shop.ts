@@ -1,148 +1,42 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { EQUIP_SLOT, GameState, type InventoryState } from "../gameState";
+import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
+import { EQUIP_SLOT, type EquipmentKey, GameState, type InventoryState } from "../gameState";
 import { retroStyle } from "../pixelart";
-
-type EquipKey = "sword" | "shield" | "ironSword" | "ironShield" | "amulet" | "mythrilSword" | "mythrilShield";
 
 interface ShopItem {
   name: string;
   price: number;
-  // every item maps 1:1 to an inventory count — sell mode reads/decrements
-  // this regardless of whether it's a consumable or equipment
+  // every item maps 1:1 to an inventory count — buy/sell just add/remove one
+  // of this field, regardless of whether it's a consumable or equipment
   invKey: keyof InventoryState;
-  key?: EquipKey;
+  key?: EquipmentKey;
   // Gated stock: shown as LOCKED until the quest opens it, so late-game gear
   // can't be bought at level 1 and flatten the difficulty curve.
   unlocked?: () => boolean;
-  buy(): string;
+  msg: string;
 }
 
 const SHOP_ITEMS: ShopItem[] = [
-  {
-    name: "POTION",
-    price: 10,
-    invKey: "potion",
-    buy: () => {
-      GameState.inventory.potion += 1;
-      return "Potion acquired!";
-    },
-  },
-  {
-    name: "MPOTION",
-    price: 15,
-    invKey: "mPotion",
-    buy: () => {
-      GameState.inventory.mPotion += 1;
-      return "MPotion acquired!";
-    },
-  },
-  {
-    name: "CANDY",
-    price: 20,
-    invKey: "candy",
-    buy: () => {
-      GameState.inventory.candy += 1;
-      return "Candy acquired!";
-    },
-  },
-  {
-    name: "HI-POTION",
-    price: 30,
-    invKey: "hiPotion",
-    buy: () => {
-      GameState.inventory.hiPotion += 1;
-      return "Hi-Potion acquired!";
-    },
-  },
-  {
-    name: "ETHER",
-    price: 25,
-    invKey: "ether",
-    buy: () => {
-      GameState.inventory.ether += 1;
-      return "Ether acquired!";
-    },
-  },
-  {
-    name: "ELIXIR",
-    price: 100,
-    invKey: "elixir",
-    buy: () => {
-      GameState.inventory.elixir += 1;
-      return "Elixir acquired!";
-    },
-  },
-  {
-    name: "BOMB",
-    price: 50,
-    invKey: "bomb",
-    buy: () => {
-      GameState.inventory.bomb += 1;
-      return "Bomb acquired!";
-    },
-  },
-  {
-    name: "SWORD",
-    price: 80,
-    invKey: "sword",
-    key: "sword",
-    buy: () => {
-      GameState.inventory.sword += 1;
-      return "Sword acquired!";
-    },
-  },
-  {
-    name: "SHIELD",
-    price: 80,
-    invKey: "shield",
-    key: "shield",
-    buy: () => {
-      GameState.inventory.shield += 1;
-      return "Shield acquired!";
-    },
-  },
-  {
-    name: "IRON SWORD",
-    price: 180,
-    invKey: "ironSword",
-    key: "ironSword",
-    buy: () => {
-      GameState.inventory.ironSword += 1;
-      return "Iron Sword acquired!";
-    },
-  },
-  {
-    name: "IRON SHIELD",
-    price: 180,
-    invKey: "ironShield",
-    key: "ironShield",
-    buy: () => {
-      GameState.inventory.ironShield += 1;
-      return "Iron Shield acquired!";
-    },
-  },
-  {
-    name: "AMULET",
-    price: 120,
-    invKey: "amulet",
-    key: "amulet",
-    buy: () => {
-      GameState.inventory.amulet += 1;
-      return "Amulet acquired!";
-    },
-  },
+  { name: "POTION", price: 10, invKey: "potion", msg: "Potion acquired!" },
+  { name: "MPOTION", price: 15, invKey: "mPotion", msg: "MPotion acquired!" },
+  { name: "CANDY", price: 20, invKey: "candy", msg: "Candy acquired!" },
+  { name: "HI-POTION", price: 30, invKey: "hiPotion", msg: "Hi-Potion acquired!" },
+  { name: "ETHER", price: 25, invKey: "ether", msg: "Ether acquired!" },
+  { name: "ELIXIR", price: 100, invKey: "elixir", msg: "Elixir acquired!" },
+  { name: "BOMB", price: 50, invKey: "bomb", msg: "Bomb acquired!" },
+  { name: "SWORD", price: 80, invKey: "sword", key: "sword", msg: "Sword acquired!" },
+  { name: "SHIELD", price: 80, invKey: "shield", key: "shield", msg: "Shield acquired!" },
+  { name: "IRON SWORD", price: 180, invKey: "ironSword", key: "ironSword", msg: "Iron Sword acquired!" },
+  { name: "IRON SHIELD", price: 180, invKey: "ironShield", key: "ironShield", msg: "Iron Shield acquired!" },
+  { name: "AMULET", price: 120, invKey: "amulet", key: "amulet", msg: "Amulet acquired!" },
   {
     name: "MYTHRIL SWORD",
     price: 320,
     invKey: "mythrilSword",
     key: "mythrilSword",
     unlocked: () => GameState.quest.bossDefeated,
-    buy: () => {
-      GameState.inventory.mythrilSword += 1;
-      return "Mythril Sword acquired!";
-    },
+    msg: "Mythril Sword acquired!",
   },
   {
     name: "MYTHRIL SHIELD",
@@ -150,10 +44,7 @@ const SHOP_ITEMS: ShopItem[] = [
     invKey: "mythrilShield",
     key: "mythrilShield",
     unlocked: () => GameState.quest.bossDefeated,
-    buy: () => {
-      GameState.inventory.mythrilShield += 1;
-      return "Mythril Shield acquired!";
-    },
+    msg: "Mythril Shield acquired!",
   },
 ];
 
@@ -268,13 +159,13 @@ export class ShopUI {
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 34, "", retroStyle(6, "#f5f5f5"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 12, "TAB: BUY/SELL", retroStyle(4, "#666666"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "HJKL: MOVE   Z: BUY/SELL   TAB: SWITCH MODE   ESC: CLOSE", retroStyle(4, "#666666"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -400,23 +291,29 @@ export class ShopUI {
       return;
     }
     GameState.gold -= item.price;
-    const result = item.buy();
+    GameState.inventory[item.invKey] += 1;
     Sfx.buy();
     GameState.save();
-    this.showMsg(result);
+    this.showMsg(item.msg);
     this.refresh();
   }
 
   private sell(): void {
     const item = SHOP_ITEMS[this.index];
-    if (GameState.inventory[item.invKey] <= 0) {
+    const count = GameState.inventory[item.invKey];
+    if (count <= 0) {
       Sfx.error();
       this.showMsg("Nothing to sell!");
       return;
     }
-    // selling your last one while it's worn unequips it first, same as
-    // dropping it from the inventory screen would imply
-    if (item.key && GameState.isEquipped(item.key)) GameState.unequip(EQUIP_SLOT[item.key]);
+    if (GameState.gold >= MAX_GOLD) {
+      Sfx.error();
+      this.showMsg("Gold is full!");
+      return;
+    }
+    // only unequip when this was the last copy — a duplicate from a quest
+    // reward (e.g. a second MYTHRIL SWORD) should stay worn
+    if (item.key && count === 1 && GameState.isEquipped(item.key)) GameState.unequip(EQUIP_SLOT[item.key]);
     GameState.inventory[item.invKey] -= 1;
     const gold = GameState.gainGold(sellPrice(item.price));
     Sfx.buy();
@@ -441,8 +338,9 @@ export class ShopUI {
       const item = SHOP_ITEMS[i];
       if (this.mode === "sell") {
         const count = GameState.inventory[item.invKey];
-        const color = count > 0 ? "#ffffff" : "#666666";
-        this.items[i].setText(item.name + (count > 1 ? ` (x${count})` : "")).setColor(color);
+        const equipped = item.key ? GameState.isEquipped(item.key) : false;
+        const color = equipped ? "#ffd166" : count > 0 ? "#ffffff" : "#666666";
+        this.items[i].setText(count > 0 ? `${item.name} (x${count})${equipped ? " (E)" : ""}` : item.name).setColor(color);
         this.prices[i].setText(count > 0 ? `+${sellPrice(item.price)}G` : "NONE").setColor(color);
         continue;
       }
