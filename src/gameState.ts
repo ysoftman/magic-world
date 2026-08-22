@@ -178,8 +178,10 @@ export const GameState = {
   caught: [] as string[],
   seenMonsters: [] as string[],
   companion: null as string | null,
-  // battles fought alongside each companion species, by name — grows a
-  // small permanent ATK bonus for that companion (see companionBondBonus)
+  // combat rounds fought alongside each companion species, by name (one per
+  // companionAttack() call, so a long fight grows bond faster than a string
+  // of one-shot kills) — grows a small permanent ATK bonus, see
+  // companionBondBonus
   companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
   quest: {
@@ -244,8 +246,8 @@ export const GameState = {
     if (pct >= 0.5) return "HUNTER";
     return "";
   },
-  // +1 ATK per 10 battles fought alongside this companion, capped at +5 —
-  // companions have no DEF stat of their own (they never take damage
+  // +1 ATK per 10 combat rounds fought alongside this companion, capped at
+  // +5 — companions have no DEF stat of their own (they never take damage
   // individually), so unlike bestiaryBonus this only scales their attack
   companionBondBonus(name: string | null): number {
     if (!name) return 0;

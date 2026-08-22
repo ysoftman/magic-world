@@ -86,6 +86,7 @@ export class BestiaryUI {
     this.counter = scene.add
       .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 56, "", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5)
+      .setAlign("center")
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);

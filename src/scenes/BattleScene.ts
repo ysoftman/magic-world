@@ -884,8 +884,9 @@ export class BattleScene extends Phaser.Scene {
     const name = GameState.companion;
     const def = name ? Object.values(ENEMIES).find((e) => e.name === name) : undefined;
     if (!name || !def || !this.companionSprite) return;
-    // one more battle fought together — grows this companion's permanent
-    // bond bonus (see GameState.companionBondBonus)
+    // one more round fought together — grows this companion's permanent
+    // bond bonus (see GameState.companionBondBonus); this fires once per
+    // surviving round, so a long fight builds bond faster than a one-shot kill
     GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
     Sfx.attack();
     const sprite = this.companionSprite;
