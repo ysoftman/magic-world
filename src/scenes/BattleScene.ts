@@ -30,6 +30,10 @@ const STEAL_CHANCE = 0.35;
 const STEAL_GOLD_PCT = 0.4;
 
 type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
+// the top-level menu's 5 buttons — kept as an Extract of MenuAction instead
+// of its own hand-written union, so adding an action here can't silently
+// drift out of sync with MenuAction the way invKey/key once did in Shop.ts
+type MenuEntry = Extract<MenuAction, "fight" | "magic" | "run" | "steal"> | "item";
 
 interface ItemSlot {
   label: string;
@@ -81,7 +85,7 @@ export class BattleScene extends Phaser.Scene {
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private msgText!: Phaser.GameObjects.Text;
 
-  private menuItems: ("fight" | "magic" | "item" | "steal" | "run")[] = ["fight", "magic", "item", "steal", "run"];
+  private menuItems: MenuEntry[] = ["fight", "magic", "item", "steal", "run"];
   private menuTexts: Phaser.GameObjects.Text[] = [];
 
   private inItems = false;
@@ -222,7 +226,7 @@ export class BattleScene extends Phaser.Scene {
     this.msgText = this.add.text(64, GAME_HEIGHT - 104, "", retroStyle(8, "#f5f5f5")).setWordWrapWidth(GAME_WIDTH - 128);
 
     const menuY = GAME_HEIGHT - 184;
-    const labels: Record<string, string> = {
+    const labels: Record<MenuEntry, string> = {
       fight: "A:FIGHT",
       magic: "F:MAGIC",
       item: "I:ITEM",
@@ -435,8 +439,19 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (e.code === "KeyS") {
+      // reject at input time instead of burning the turn on an action that
+      // was never going to do anything — same guard shape as the uncastable
+      // spell (line ~406) and empty-item (line ~363) checks above
+      if (!this.stealAvailable()) {
+        Sfx.error();
+        return;
+      }
       this.resolveAction("steal");
     }
+  }
+
+  private stealAvailable(): boolean {
+    return !this.enemy.boss && !this.stolen;
   }
 
   private resolveAction(action: MenuAction): void {
@@ -496,6 +511,21 @@ export class BattleScene extends Phaser.Scene {
         this.hideMenu();
         this.renderItems();
         this.inItems = true;
+      } else if (action === "magic") {
+        // was falling into the resolveAction() branch below and casting
+        // this.pendingSpell directly — undefined on the first battle of a
+        // session (hard lock) or a stale spell on later ones (MP goes
+        // negative, bypasses canCast). Needs the submenu like KeyF does.
+        this.hideMenu();
+        this.spellIndex = 0;
+        this.renderSpells();
+        this.inSpells = true;
+      } else if (action === "steal") {
+        if (!this.stealAvailable()) {
+          Sfx.error();
+          return;
+        }
+        this.resolveAction(action);
       } else {
         this.resolveAction(action);
       }
@@ -513,6 +543,8 @@ export class BattleScene extends Phaser.Scene {
 
   private renderMenu(): void {
     for (const t of this.menuTexts) t.setVisible(true);
+    const stealIndex = this.menuItems.indexOf("steal");
+    if (stealIndex !== -1) this.menuTexts[stealIndex].setColor(this.stealAvailable() ? "#ffffff" : "#666666");
     this.hintText.setText(""); // the menu buttons above already show the hotkeys
   }
 
@@ -578,6 +610,9 @@ export class BattleScene extends Phaser.Scene {
               await this.say(`Win streak of ${GameState.streak} lost!`);
             }
             GameState.streak = 0;
+            // stolen gold (or anything else gained this fight) is otherwise
+            // unsaved on this path — victory()/defeat() both save, RUN didn't
+            GameState.save();
             return this.end();
           }
           await this.say("Can't escape!");
@@ -828,8 +863,11 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (Math.random() < STEAL_CHANCE) {
-      this.stolen = true;
       const stolenGold = GameState.gainGold(Math.floor(this.enemy.gold * STEAL_GOLD_PCT));
+      // only latch the once-per-battle flag if gold actually landed — at the
+      // gold cap gainGold() clamps to 0, and the roll shouldn't be spent on
+      // nothing (same MAX_GOLD edge the shop sell fix guards against)
+      if (stolenGold > 0) this.stolen = true;
       Sfx.pickup();
       this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
       this.coinBurst.explode(8);
