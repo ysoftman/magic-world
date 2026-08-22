@@ -975,60 +975,77 @@ export class WorldScene extends Phaser.Scene {
     this.hud.update();
   }
 
+  // NPCs on the main road sit 3 tiles (192px) apart, closer than 2x the 120px
+  // talk radius (240px) — their radii overlap in a ~24px band. Picking the
+  // nearest candidate (instead of the first one whose radius contains the
+  // player) makes standing in that band resolve to whichever NPC is actually
+  // closest, not whichever happens to be checked first.
   private tryTalk(): boolean {
-    const near = (x: number, y: number): boolean => {
+    const dist2 = (x: number, y: number): number => {
       const dx = this.player.x - x;
       const dy = this.player.y - y;
-      return dx * dx + dy * dy <= 120 * 120;
+      return dx * dx + dy * dy;
     };
-
-    if (near(NPC_POS.x, NPC_POS.y)) {
-      this.startElderDialogue();
-      return true;
+    const candidates: Array<{ x: number; y: number; run: () => void }> = [
+      { x: NPC_POS.x, y: NPC_POS.y, run: () => this.startElderDialogue() },
+      {
+        x: SHOP_POS.x,
+        y: SHOP_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.shop.open();
+        },
+      },
+      {
+        x: this.guardPos.x,
+        y: this.guardPos.y,
+        run: () => {
+          const q = GameState.quest;
+          this.dialogue.start(
+            q.bossDefeated
+              ? ["The path to the forest", "is open. Be wary of", "the MOSS GOLEM!"]
+              : ["The forest is sealed.", "Defeat the KING SLIME", "first!"],
+            "GUARD",
+          );
+        },
+      },
+      { x: HUNTER_POS.x, y: HUNTER_POS.y, run: () => this.startHunterDialogue() },
+      { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + 2 * TILE, run: () => this.rest() },
+      {
+        x: RANK_BOARD_POS.x,
+        y: RANK_BOARD_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.rankBoard.open();
+        },
+      },
+      { x: BOUNTY_BOARD_POS.x, y: BOUNTY_BOARD_POS.y, run: () => this.startBountyDialogue() },
+      {
+        x: FISH_POS.x,
+        y: FISH_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.fishing.open();
+        },
+      },
+      {
+        x: GAMBLER_POS.x,
+        y: GAMBLER_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.luckyWheel.open();
+        },
+      },
+    ];
+    const RADIUS2 = 120 * 120;
+    let best: { d: number; run: () => void } | null = null;
+    for (const c of candidates) {
+      const d = dist2(c.x, c.y);
+      if (d <= RADIUS2 && (!best || d < best.d)) best = { d, run: c.run };
     }
-    if (near(SHOP_POS.x, SHOP_POS.y)) {
-      Sfx.buy();
-      this.shop.open();
-      return true;
-    }
-    if (near(this.guardPos.x, this.guardPos.y)) {
-      const q = GameState.quest;
-      this.dialogue.start(
-        q.bossDefeated
-          ? ["The path to the forest", "is open. Be wary of", "the MOSS GOLEM!"]
-          : ["The forest is sealed.", "Defeat the KING SLIME", "first!"],
-        "GUARD",
-      );
-      return true;
-    }
-    if (near(HUNTER_POS.x, HUNTER_POS.y)) {
-      this.startHunterDialogue();
-      return true;
-    }
-    if (near(HOUSE_POS.x + TILE, HOUSE_POS.y + 2 * TILE)) {
-      this.rest();
-      return true;
-    }
-    if (near(RANK_BOARD_POS.x, RANK_BOARD_POS.y)) {
-      Sfx.buy();
-      this.rankBoard.open();
-      return true;
-    }
-    if (near(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y)) {
-      this.startBountyDialogue();
-      return true;
-    }
-    if (near(FISH_POS.x, FISH_POS.y)) {
-      Sfx.buy();
-      this.fishing.open();
-      return true;
-    }
-    if (near(GAMBLER_POS.x, GAMBLER_POS.y)) {
-      Sfx.buy();
-      this.luckyWheel.open();
-      return true;
-    }
-    return false;
+    if (!best) return false;
+    best.run();
+    return true;
   }
 
   private rest(): void {
