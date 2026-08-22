@@ -40,6 +40,14 @@ const ARCTIC_FISH_TABLE: FishDef[] = [
   { name: "AURORA KOI", min: 80, max: 120, chance: 0.08, bonusItem: "hiPotion" },
 ];
 
+// one entry per bonusItem value, so a new one is a compile error here
+// instead of a silently mislabeled toast — same shape as gameState.ts's
+// EQUIP_BONUS/EQUIP_TEXTURE tables
+const BONUS_LABEL: Record<NonNullable<FishDef["bonusItem"]>, string> = {
+  potion: "POTION",
+  hiPotion: "HI-POTION",
+};
+
 type FishState = "cast" | "bite" | "result";
 
 export class FishingUI {
@@ -109,7 +117,11 @@ export class FishingUI {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
-      .setVisible(false);
+      .setVisible(false)
+      // the arctic names run longer than the pond's — wrap instead of
+      // spilling past the panel's already-tight 380px width
+      .setWordWrapWidth(PANEL_W - 40, true)
+      .setAlign("center");
     this.count = scene.add
       .text(GAME_WIDTH / 2, PANEL_TOP + 190, "", retroStyle(5, "#8ecbff"))
       .setOrigin(0.5)
@@ -237,8 +249,7 @@ export class FishingUI {
     this.count.setText(`FISH CAUGHT: ${GameState.fishCaught}`);
     if (fish.bonusItem) {
       GameState.inventory[fish.bonusItem] += 1;
-      const label = fish.bonusItem === "hiPotion" ? "HI-POTION" : "POTION";
-      this.status.setText(`CAUGHT: ${fish.name}! +${gold}G +${label}`);
+      this.status.setText(`CAUGHT: ${fish.name}! +${gold}G +${BONUS_LABEL[fish.bonusItem]}`);
       Sfx.victory();
     } else {
       this.status.setText(`CAUGHT: ${fish.name}  +${gold}G`);
