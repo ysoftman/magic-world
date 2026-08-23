@@ -153,14 +153,16 @@ export class SettingsUI {
     if (!this.active || this.row >= LABELS.length - 2) return;
     if (this.row === 0) this.setVolume("bgmVolume", GameState.bgmVolume + dir * 0.1);
     else if (this.row === 1) this.setVolume("sfxVolume", GameState.sfxVolume + dir * 0.1);
-    else if (this.row === 2) {
-      const i = TEXT_SPEEDS.indexOf(GameState.textSpeed);
-      GameState.textSpeed = TEXT_SPEEDS[(i + dir + TEXT_SPEEDS.length) % TEXT_SPEEDS.length];
-      GameState.saveSettings();
-      Sfx.move();
-    } else {
-      const i = TIME_SPEEDS.indexOf(GameState.timeSpeed);
-      GameState.timeSpeed = TIME_SPEEDS[(i + dir + TIME_SPEEDS.length) % TIME_SPEEDS.length];
+    else {
+      // the speeds stop at their ends instead of wrapping, the way the volume
+      // bars already clamp — pressing left at SLOW should stay at SLOW rather
+      // than jump to FAST
+      const key = this.row === 2 ? "textSpeed" : "timeSpeed";
+      const speeds = this.row === 2 ? TEXT_SPEEDS : TIME_SPEEDS;
+      const i = Math.max(0, speeds.indexOf(GameState[key]));
+      const next = speeds[Phaser.Math.Clamp(i + dir, 0, speeds.length - 1)];
+      if (next === GameState[key]) return;
+      GameState[key] = next;
       GameState.saveSettings();
       Sfx.move();
     }
