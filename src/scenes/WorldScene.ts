@@ -50,7 +50,7 @@ import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { RankingUI } from "../ui/RankingUI";
 import { SettingsUI } from "../ui/SettingsUI";
 import { ShopUI } from "../ui/Shop";
-import { STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
+import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 
 const ENCOUNTER_RATE = 0.18;
@@ -633,6 +633,13 @@ export class WorldScene extends Phaser.Scene {
   // so what the player sees is exactly what they have to step on. Depth 9.5
   // keeps it over the CAVE's entrance art but under the hero and NPCs (10).
   // The x clamp keeps a long name on the map when the opening hugs an edge.
+  // A name tag above its marker hides under the status HUD when the marker is
+  // near the top of the map: the camera clamps there, so it can never scroll
+  // clear. Flip the tag below the marker in that band instead.
+  private labelY(y: number, offset: number): number {
+    return y - offset < STATUS_HUD_HEIGHT + 20 ? y + offset : y - offset;
+  }
+
   private track<T extends { x: number; y: number }>(landmark: string, obj: T): T {
     const pos = EDITABLE_POS[landmark];
     this.landmarkParts.push({ name: landmark, obj, dx: obj.x - pos.x, dy: obj.y - pos.y });
@@ -675,7 +682,7 @@ export class WorldScene extends Phaser.Scene {
     this.track(
       landmark,
       this.add
-        .text(pos.x, pos.y - 48, label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
+        .text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
         .setOrigin(0.5)
         .setDepth(11),
     );
@@ -684,13 +691,7 @@ export class WorldScene extends Phaser.Scene {
   // signpost + name tag, the shape every interactive spot shares
   private addSign(landmark: string, pos: { x: number; y: number }, label: string, color: string): void {
     this.track(landmark, this.add.image(pos.x, pos.y, "sign").setDepth(9));
-    this.track(
-      landmark,
-      this.add
-        .text(pos.x, pos.y - 48, label, retroStyle(5, color))
-        .setOrigin(0.5)
-        .setDepth(11),
-    );
+    this.track(landmark, this.add.text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, color)).setOrigin(0.5).setDepth(11));
   }
 
   private addMapExit(landmark: string, pos: { x: number; y: number }, name: string, artClearance = 0): void {
@@ -703,7 +704,7 @@ export class WorldScene extends Phaser.Scene {
     const label = this.add
       .text(
         Phaser.Math.Clamp(pos.x, halfWidth, MAP_W * TILE - halfWidth),
-        pos.y - TILE / 2 - artClearance - EXIT_LABEL_GAP,
+        this.labelY(pos.y, TILE / 2 + artClearance + EXIT_LABEL_GAP),
         name,
         retroStyle(6, EXIT_LABEL_COLOR),
       )
@@ -724,7 +725,11 @@ export class WorldScene extends Phaser.Scene {
       .triangle(0, h / 2 + 4, -24, 0, 24, 0, 0, 28, 0x0b0b2b)
       .setStrokeStyle(2, 0xffffff)
       .setOrigin(0.5);
-    return this.add.container(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - h / 2 - 32, [border, box, text, tail]).setDepth(12);
+    // the camera never scrolls past the map edge, so clamping the bubble to
+    // the map keeps it fully on screen even for a house in the far corner
+    const x = Phaser.Math.Clamp(HOUSE_POS.x + TILE, w / 2 + 8, MAP_W * TILE - w / 2 - 8);
+    const y = Phaser.Math.Clamp(HOUSE_POS.y + TILE - h / 2 - 32, STATUS_HUD_HEIGHT + h / 2, MAP_H * TILE - h / 2 - 8);
+    return this.add.container(x, y, [border, box, text, tail]).setDepth(12);
   }
 
   private nearHouse(): boolean {
