@@ -18,6 +18,7 @@ import {
   GAMBLER_POS,
   HOUSE_POS,
   HUNTER_POS,
+  hasMapOverride,
   LANDMARK_TILES,
   MAP_H,
   MAP_W,
@@ -593,6 +594,18 @@ export class WorldScene extends Phaser.Scene {
     this.night = new NightOverlay(this);
 
     this.hud = new StatusHud(this);
+
+    // An edited map silently outranks the code, which reads as "my changes
+    // didn't deploy" — say so on screen instead, and say how to undo it.
+    if (hasMapOverride()) {
+      this.add
+        // top right, under the HUD: the top left is where the HOME bubble
+        // opens and the bottom corners are the minimap and the key hints
+        .text(GAME_WIDTH - 12, STATUS_HUD_HEIGHT + 10, "MAP EDITED - F2 THEN R TO RESTORE", retroStyle(4, "#ffd166"))
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(120);
+    }
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
 
