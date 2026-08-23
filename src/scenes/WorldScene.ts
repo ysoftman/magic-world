@@ -11,6 +11,7 @@ import {
   FARM_PLOT_POS,
   FARM_POS,
   FISH_POS,
+  FISH_SIGN_POS,
   FOREST_POS,
   GAMBLER_POS,
   HOUSE_POS,
@@ -258,10 +259,10 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    // fishing dock on the pond's south bank: sign just west of the cast spot
-    this.add.image(FISH_POS.x - TILE, FISH_POS.y, "sign").setDepth(9);
+    // fishing dock: signpost on the pond's bank, one tile from the cast spot
+    this.add.image(FISH_SIGN_POS.x, FISH_SIGN_POS.y, "sign").setDepth(9);
     this.add
-      .text(FISH_POS.x - TILE, FISH_POS.y - 48, "FISHING", retroStyle(5, "#38bdf8"))
+      .text(FISH_SIGN_POS.x, FISH_SIGN_POS.y - 48, "FISHING", retroStyle(5, "#38bdf8"))
       .setOrigin(0.5)
       .setDepth(11);
 

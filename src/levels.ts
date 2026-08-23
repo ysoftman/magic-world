@@ -122,8 +122,7 @@ export function buildLevel(): number[][] {
   stamp(map, 18, 9, ["T.T", ".T."]);
   stamp(map, 12, 2, ["T"]);
 
-  // east: pond and the lane down to the forest gate at (25, 10)
-  stamp(map, 23, 3, ["WWW", "WWW"]);
+  // east: the lane down to the forest gate at (25, 10)
   stamp(map, 21, 10, ["PPPP"]);
   stamp(map, 25, 2, [".T.", "TTT"]);
   stamp(map, 22, 12, ["T.T", ".T."]);
@@ -133,6 +132,10 @@ export function buildLevel(): number[][] {
   // farm field: three tiles east of the north-south road, well south of the
   // ELDER — clear of every monster zone and of the bounty board's talk radius
   stamp(map, 10, 10, ["SSS", "SSS"]);
+
+  // pond, in the open ground between the farm and the forest lane: the whole
+  // block (13-18, 8-11) is empty, so the banks stay walkable on every side
+  stamp(map, 15, 9, ["WWW", "WWW"]);
 
   // south
   stamp(map, 7, 14, ["P", "P", "P", "P", "P"]);
@@ -173,12 +176,12 @@ export const GAMBLER_POS = { x: 20 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 // and of the slime zone further south (cx=4, cy=12)
 export const BOUNTY_BOARD_POS = { x: 7 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
 
-// Fishing spot on the pond's west bank at (22,4). It used to sit at (23,5),
-// wedged against the wolf zone (23-24, 6-7) and sharing a column with that
-// zone's warning sign, which stacked the two signposts on top of each other.
-// The west bank keeps the whole walk (22,7) -> (22,4) on plain grass, three
-// tiles clear of the wolves and of the goblin zone at (20-21, 2-3).
-export const FISH_POS = { x: 22 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 };
+// Fishing spot on the pond's west bank, with its signpost one tile north on
+// the same bank — both tiles touch the water, and the walk down from the main
+// road at (14,7) is plain grass the whole way. The pond used to sit in the
+// map's north-east corner, boxed in by trees, the wolf zone and the map edge.
+export const FISH_POS = { x: 14 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 };
+export const FISH_SIGN_POS = { x: 14 * TILE + TILE / 2, y: 9 * TILE + TILE / 2 };
 
 // Farm plot centre, on the tilled field itself — the sign sits two tiles west
 // on plain grass so it never covers the soil.
