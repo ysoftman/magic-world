@@ -77,6 +77,62 @@ const CHARS: Record<string, number> = {
   S: T_SOIL,
 };
 
+// index -> char, the reverse of CHARS, for the map editor's export/save
+const TILE_CHARS: Record<number, string> = Object.fromEntries(Object.entries(CHARS).map(([c, i]) => [i, c]));
+
+export const mapToRows = (map: number[][]): string[] => map.map((row) => row.map((t) => TILE_CHARS[t] ?? "G").join(""));
+
+const rowsToMap = (rows: string[]): number[][] =>
+  Array.from({ length: MAP_H }, (_, y) => Array.from({ length: MAP_W }, (_, x) => CHARS[rows[y]?.[x]] ?? T_GRASS));
+
+const MAP_KEY = "magic-world-map";
+
+export interface MapOverride {
+  tiles: string[];
+  landmarks: Record<string, { x: number; y: number }>;
+}
+
+let mapOverride: MapOverride | null = null;
+
+// Landmarks the in-game map editor (F2) can move. Every consumer reads .x/.y
+// when its scene is created, so an override only has to mutate these objects
+// before that — nothing copies the numbers at module load.
+export const EDITABLE_POS: Record<string, { x: number; y: number }> = {};
+
+export function saveMapOverride(override: MapOverride): void {
+  mapOverride = override;
+  localStorage.setItem(MAP_KEY, JSON.stringify(override));
+}
+
+export function clearMapOverride(): void {
+  mapOverride = null;
+  localStorage.removeItem(MAP_KEY);
+}
+
+export function hasMapOverride(): boolean {
+  return mapOverride !== null;
+}
+
+// Called once at boot, before any scene is created.
+export function loadMapOverride(): void {
+  try {
+    const raw = localStorage.getItem(MAP_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw) as MapOverride;
+    if (!Array.isArray(data.tiles)) return;
+    mapOverride = data;
+    for (const [name, pos] of Object.entries(data.landmarks ?? {})) {
+      const target = EDITABLE_POS[name];
+      if (target && typeof pos?.x === "number" && typeof pos?.y === "number") {
+        target.x = pos.x;
+        target.y = pos.y;
+      }
+    }
+  } catch {
+    clearMapOverride();
+  }
+}
+
 // Tall grass is how the map shows where monsters roam, so it is stamped from
 // MONSTER_ZONES rather than positioned by hand — the two drifted apart when the
 // map was resized and zones ended up marked in the wrong place, or not at all.
@@ -107,6 +163,10 @@ function stamp(map: number[][], x0: number, y0: number, rows: string[]): void {
 }
 
 export function buildLevel(): number[][] {
+  // a map edited in-game wins outright: it is already the finished grid,
+  // monster-zone grass and all, so none of the stamping below applies
+  if (mapOverride) return rowsToMap(mapOverride.tiles);
+
   const map: number[][] = Array.from({ length: MAP_H }, () => Array<number>(MAP_W).fill(T_GRASS));
 
   // No water border: the map edge is plain grass and the camera/physics world
@@ -194,12 +254,14 @@ export const FARM_POS = { x: 6 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
 export const FARM_SIGN_POS = { x: 4 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
 // The four tilled plots, on the corners of the 3x2 field so the middle column
-// stays clear for the hero to stand on FARM_POS. Index matches GameState.farm.
-export const FARM_PLOT_POS = [
-  { x: 5 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 },
-  { x: 7 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 },
-  { x: 5 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 },
-  { x: 7 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 },
+// stays clear for the hero to stand on FARM_POS. Derived from FARM_POS rather
+// than listed, so moving the farm in the editor moves its plots with it.
+// Index matches GameState.farm.
+export const farmPlots = (): Array<{ x: number; y: number }> => [
+  { x: FARM_POS.x - TILE, y: FARM_POS.y - TILE },
+  { x: FARM_POS.x + TILE, y: FARM_POS.y - TILE },
+  { x: FARM_POS.x - TILE, y: FARM_POS.y },
+  { x: FARM_POS.x + TILE, y: FARM_POS.y },
 ];
 
 export const DUNGEON_W = 24;
@@ -345,6 +407,63 @@ export const SNOW_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 // sit at (1,1), in the map's north-west corner; this keeps it in the same
 // quarter of the map while clearing both the map edge and the house door.
 export const SNOW_POS = { x: 3 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 };
+
+// Filled here rather than at the declaration because it needs every landmark
+// above to exist first. The map editor moves whatever is listed.
+// Terrain a landmark owns, as tile offsets from its own tile. The map editor
+// moves these with it, so dragging the house/pond/field takes its ground along
+// instead of leaving a hole behind and dropping the art on bare grass.
+export const LANDMARK_TILES: Record<string, { tile: number; cells: Array<[number, number]> }> = {
+  HOUSE_POS: {
+    tile: T_HOUSE,
+    cells: [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+    ],
+  },
+  FARM_POS: {
+    tile: T_SOIL,
+    cells: [
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  FISH_POS: {
+    tile: T_WATER_A,
+    cells: [
+      [1, -1],
+      [2, -1],
+      [3, -1],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+    ],
+  },
+};
+
+Object.assign(EDITABLE_POS, {
+  PLAYER_SPAWN,
+  NPC_POS,
+  HOUSE_POS,
+  SHOP_POS,
+  CAVE_POS,
+  RANK_BOARD_POS,
+  HUNTER_POS,
+  GAMBLER_POS,
+  BOUNTY_BOARD_POS,
+  FISH_POS,
+  FISH_SIGN_POS,
+  FARM_POS,
+  FARM_SIGN_POS,
+  FOREST_POS,
+  SNOW_POS,
+});
 
 export const SNOW_ZONES: Array<MonsterZone & { kind?: "frostMoth" | "yeti" }> = [
   { cx: 5 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },

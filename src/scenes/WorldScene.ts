@@ -7,16 +7,18 @@ import {
   BOUNTY_BOARD_POS,
   buildLevel,
   CAVE_POS,
+  EDITABLE_POS,
   escapeFromZones,
-  FARM_PLOT_POS,
   FARM_POS,
   FARM_SIGN_POS,
   FISH_POS,
   FISH_SIGN_POS,
   FOREST_POS,
+  farmPlots,
   GAMBLER_POS,
   HOUSE_POS,
   HUNTER_POS,
+  LANDMARK_TILES,
   MAP_H,
   MAP_W,
   MONSTER_ZONES,
@@ -26,6 +28,7 @@ import {
   SHOP_POS,
   SNOW_POS,
   SOLID,
+  T_GRASS,
   T_WATER_A,
   T_WATER_B,
   TALL_GRASS,
@@ -41,6 +44,7 @@ import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
 import { InventoryUI } from "../ui/InventoryUI";
 import { LuckyWheel } from "../ui/LuckyWheel";
+import { MapEditor } from "../ui/MapEditor";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { RankingUI } from "../ui/RankingUI";
@@ -104,6 +108,13 @@ export class WorldScene extends Phaser.Scene {
   private fishing!: FishingUI;
   private farm!: FarmUI;
   private cropSprites: Phaser.GameObjects.Sprite[] = [];
+  private mapEditor!: MapEditor;
+  // every object drawn relative to an editable landmark, with the offset it
+  // was drawn at, so the map editor can move a landmark and its whole set of
+  // sprites/labels together without waiting for a scene restart
+  private landmarkParts: Array<{ name: string; obj: { x: number; y: number }; dx: number; dy: number }> = [];
+  private level: number[][] = [];
+  private editorQueued = false;
   private luckyWheel!: LuckyWheel;
   private achievementsUI!: AchievementsUI;
   private settingsUI!: SettingsUI;
@@ -202,6 +213,7 @@ export class WorldScene extends Phaser.Scene {
     this.quitConfirm = false;
     this.quitting = false;
     this.wispRoamer = undefined;
+    this.landmarkParts = [];
     this.wasNight = isNight();
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
@@ -214,6 +226,7 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildLevel();
+    this.level = level;
     const map = this.make.tilemap({
       data: level,
       tileWidth: TILE,
@@ -225,64 +238,39 @@ export class WorldScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
 
-    this.add.image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house").setOrigin(0.5, 0.5);
-    this.homeLabel = this.add
-      .text(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - 80, "HOME", retroStyle(5, "#9f9fd0"))
-      .setOrigin(0.5)
-      .setDepth(11);
-    this.homeBubble = this.buildHomeBubble();
+    this.track("HOUSE_POS", this.add.image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house").setOrigin(0.5, 0.5));
+    this.homeLabel = this.track(
+      "HOUSE_POS",
+      this.add
+        .text(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - 80, "HOME", retroStyle(5, "#9f9fd0"))
+        .setOrigin(0.5)
+        .setDepth(11),
+    );
+    this.homeBubble = this.track("HOUSE_POS", this.buildHomeBubble());
     this.homeBubble.setVisible(false);
 
-    this.add.sprite(NPC_POS.x, NPC_POS.y, "npc").setDepth(10);
-    this.add.ellipse(NPC_POS.x, NPC_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
-    this.add
-      .text(NPC_POS.x, NPC_POS.y - 48, "ELDER", retroStyle(5, "#9f9fd0"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addNpc("NPC_POS", NPC_POS, "ELDER", 0xffffff, "#9f9fd0");
+    this.addNpc("SHOP_POS", SHOP_POS, "SHOP", 0xffd166);
 
-    this.add.sprite(SHOP_POS.x, SHOP_POS.y, "npc").setDepth(10).setTint(0xffd166);
-    this.add.ellipse(SHOP_POS.x, SHOP_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
-    this.add
-      .text(SHOP_POS.x, SHOP_POS.y - 48, "SHOP", retroStyle(5, "#ffd166"))
-      .setOrigin(0.5)
-      .setDepth(11);
-
-    this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9);
+    this.track("CAVE_POS", this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9));
     // the cave mouth is 128px tall and centred on the entrance tile, so its
     // name clears the art rather than the marker box
-    this.addMapExit(CAVE_POS, "CAVE", 48);
+    this.addMapExit("CAVE_POS", CAVE_POS, "CAVE", 48);
 
-    this.add.image(RANK_BOARD_POS.x, RANK_BOARD_POS.y, "sign").setDepth(9);
-    this.add
-      .text(RANK_BOARD_POS.x, RANK_BOARD_POS.y - 48, "RANK BOARD", retroStyle(5, "#c084fc"))
-      .setOrigin(0.5)
-      .setDepth(11);
-
-    this.add.image(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y, "sign").setDepth(9);
-    this.add
-      .text(BOUNTY_BOARD_POS.x, BOUNTY_BOARD_POS.y - 48, "BOUNTY BOARD", retroStyle(5, "#facc15"))
-      .setOrigin(0.5)
-      .setDepth(11);
-
+    this.addSign("RANK_BOARD_POS", RANK_BOARD_POS, "RANK BOARD", "#c084fc");
+    this.addSign("BOUNTY_BOARD_POS", BOUNTY_BOARD_POS, "BOUNTY BOARD", "#facc15");
     // fishing dock: signpost on the pond's bank, one tile from the cast spot
-    this.add.image(FISH_SIGN_POS.x, FISH_SIGN_POS.y, "sign").setDepth(9);
-    this.add
-      .text(FISH_SIGN_POS.x, FISH_SIGN_POS.y - 48, "FISHING", retroStyle(5, "#38bdf8"))
-      .setOrigin(0.5)
-      .setDepth(11);
-
+    this.addSign("FISH_SIGN_POS", FISH_SIGN_POS, "FISHING", "#38bdf8");
     // farm field: signpost on the grass beside the plots
-    this.add.image(FARM_SIGN_POS.x, FARM_SIGN_POS.y, "sign").setDepth(9);
-    this.add
-      .text(FARM_SIGN_POS.x, FARM_SIGN_POS.y - 48, "FARM", retroStyle(5, "#a3e635"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addSign("FARM_SIGN_POS", FARM_SIGN_POS, "FARM", "#a3e635");
 
-    this.cropSprites = FARM_PLOT_POS.map((pos) => this.add.sprite(pos.x, pos.y, "crop-sprout").setDepth(8).setVisible(false));
+    this.cropSprites = farmPlots().map((pos) =>
+      this.track("FARM_POS", this.add.sprite(pos.x, pos.y, "crop-sprout").setDepth(8).setVisible(false)),
+    );
 
     // eastern woods entrance: no signpost here, unlike the other exits — the
     // GUARD stands right beside it and already marks the opening
-    this.addMapExit(FOREST_POS, "FOREST");
+    this.addMapExit("FOREST_POS", FOREST_POS, "FOREST");
 
     // gatekeeper who lets nobody through until the KING SLIME falls; stands a
     // tile south of the entrance — beside it, where his name tag clears the
@@ -291,30 +279,14 @@ export class WorldScene extends Phaser.Scene {
       x: Phaser.Math.Clamp(FOREST_POS.x, TILE, (MAP_W - 1) * TILE),
       y: Phaser.Math.Clamp(FOREST_POS.y + TILE, TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
     };
-    this.add.sprite(this.guardPos.x, this.guardPos.y, "npc").setDepth(10).setTint(0x67e8f9);
-    this.add.ellipse(this.guardPos.x, this.guardPos.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
-    this.add
-      .text(this.guardPos.x, this.guardPos.y - 48, "GUARD", retroStyle(5, "#67e8f9"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addNpc("FOREST_POS", this.guardPos, "GUARD", 0x67e8f9);
 
     // north-west mountain pass to the snow field: no signpost, same as the
     // other two exits — every one of them is just its name above the opening
-    this.addMapExit(SNOW_POS, "SNOW PASS");
+    this.addMapExit("SNOW_POS", SNOW_POS, "SNOW PASS");
 
-    this.add.sprite(HUNTER_POS.x, HUNTER_POS.y, "npc").setDepth(10).setTint(0x86efac);
-    this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
-    this.add
-      .text(HUNTER_POS.x, HUNTER_POS.y - 48, "HUNTER", retroStyle(5, "#86efac"))
-      .setOrigin(0.5)
-      .setDepth(11);
-
-    this.add.sprite(GAMBLER_POS.x, GAMBLER_POS.y, "npc").setDepth(10).setTint(0xf472b6);
-    this.add.ellipse(GAMBLER_POS.x, GAMBLER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
-    this.add
-      .text(GAMBLER_POS.x, GAMBLER_POS.y - 48, "GAMBLER", retroStyle(5, "#f472b6"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addNpc("HUNTER_POS", HUNTER_POS, "HUNTER", 0x86efac);
+    this.addNpc("GAMBLER_POS", GAMBLER_POS, "GAMBLER", 0xf472b6);
 
     const respawn = GameState.pos ?? PLAYER_SPAWN;
     // Position-based fallback for old saves / any other path that lands here
@@ -337,7 +309,11 @@ export class WorldScene extends Phaser.Scene {
     // just walked out of the cave/forest/snow: hold off re-triggering it in
     // case the player is still holding the walk-in key
     if (fromDungeon || fromForest || fromSnow) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
-    this.player = this.physics.add.sprite(spawn.x, spawn.y, "hero-idle-down");
+    // the map editor can paint a tree (or water) over wherever the hero was
+    // standing — drop them back at the town spawn rather than inside a wall
+    const spawnTile = this.layer.getTileAtWorldXY(spawn.x, spawn.y);
+    const safeSpawn = spawnTile && SOLID.has(spawnTile.index) ? PLAYER_SPAWN : spawn;
+    this.player = this.physics.add.sprite(safeSpawn.x, safeSpawn.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
@@ -545,6 +521,15 @@ export class WorldScene extends Phaser.Scene {
     this.keyO.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.oQueued = true;
     });
+    // dev tool: paint tiles and drag landmarks around, then export the result.
+    // On a Mac this needs "F1, F2 as standard function keys" (or fn+F2); the
+    // ?edit URL below opens the editor without any key at all.
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.F2).on(
+      Phaser.Input.Keyboard.Events.DOWN,
+      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+        if (!e.repeat) this.editorQueued = true;
+      },
+    );
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (this.quitConfirm && !e.repeat) this.escQueued = true;
@@ -557,6 +542,11 @@ export class WorldScene extends Phaser.Scene {
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
     this.farm = new FarmUI(this);
+    this.mapEditor = new MapEditor(this, this.layer, level, (name, x, y) => this.moveLandmark(name, x, y));
+    // ?edit in the URL opens the editor without a keypress — a way in that
+    // survives whatever swallows the hotkey (a Mac's F-keys, an IME holding
+    // keydown, a stale tab from an older bundle)
+    if (new URLSearchParams(window.location.search).has("edit")) this.editorQueued = true;
     this.luckyWheel = new LuckyWheel(this);
     this.achievementsUI = new AchievementsUI(this);
     this.settingsUI = new SettingsUI(this);
@@ -565,7 +555,7 @@ export class WorldScene extends Phaser.Scene {
       .text(
         GAME_WIDTH - 8,
         GAME_HEIGHT - 6,
-        "HJKL:MOVE Z:TALK/OK I:ITEMS ESC:SKIP\nS:HUD M:MUTE B:BESTIARY A:ACHIEVE O:SETTINGS T:MAP Q:QUIT CTRL+S:SAVE ?:HELP",
+        "HJKL:MOVE Z:TALK/OK I:ITEMS ESC:SKIP F2:MAP EDIT\nS:HUD M:MUTE B:BESTIARY A:ACHIEVE O:SETTINGS T:MAP Q:QUIT CTRL+S:SAVE ?:HELP",
         retroStyle(6, "#9f9fd0"),
       )
       .setOrigin(1, 1)
@@ -623,6 +613,7 @@ export class WorldScene extends Phaser.Scene {
       this.rankBoard.destroy();
       this.fishing.destroy();
       this.farm.destroy();
+      this.mapEditor.destroy();
       this.luckyWheel.destroy();
       this.achievementsUI.destroy();
       this.settingsUI.destroy();
@@ -642,14 +633,74 @@ export class WorldScene extends Phaser.Scene {
   // so what the player sees is exactly what they have to step on. Depth 9.5
   // keeps it over the CAVE's entrance art but under the hero and NPCs (10).
   // The x clamp keeps a long name on the map when the opening hugs an edge.
-  private addMapExit(pos: { x: number; y: number }, name: string, artClearance = 0): void {
-    const marker = this.add
-      .rectangle(pos.x, pos.y, TILE, TILE, EXIT_AREA_COLOR, 0.25)
-      .setStrokeStyle(2, EXIT_AREA_COLOR, 0.9)
-      .setDepth(9.5);
+  private track<T extends { x: number; y: number }>(landmark: string, obj: T): T {
+    const pos = EDITABLE_POS[landmark];
+    this.landmarkParts.push({ name: landmark, obj, dx: obj.x - pos.x, dy: obj.y - pos.y });
+    return obj;
+  }
+
+  // called by the map editor: move the landmark, everything drawn from it, and
+  // the patch of ground it owns (the house block, the pond, the tilled field)
+  moveLandmark(landmark: string, x: number, y: number): void {
+    const pos = EDITABLE_POS[landmark];
+    const footprint = LANDMARK_TILES[landmark];
+    if (footprint) this.paintFootprint(footprint, pos, T_GRASS);
+    pos.x = x;
+    pos.y = y;
+    if (footprint) this.paintFootprint(footprint, pos, footprint.tile);
+    for (const part of this.landmarkParts) {
+      if (part.name !== landmark) continue;
+      part.obj.x = x + part.dx;
+      part.obj.y = y + part.dy;
+    }
+  }
+
+  private paintFootprint(footprint: { cells: Array<[number, number]> }, pos: { x: number; y: number }, tile: number): void {
+    const ox = Math.floor(pos.x / TILE);
+    const oy = Math.floor(pos.y / TILE);
+    for (const [dx, dy] of footprint.cells) {
+      const tx = ox + dx;
+      const ty = oy + dy;
+      if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) continue;
+      this.level[ty][tx] = tile;
+      this.layer.putTileAt(tile, tx, ty);
+    }
+    this.layer.setCollision(Array.from(SOLID));
+  }
+
+  // sprite + shadow + name tag, the shape every town NPC shares
+  private addNpc(landmark: string, pos: { x: number; y: number }, label: string, tint: number, labelColor?: string): void {
+    this.track(landmark, this.add.sprite(pos.x, pos.y, "npc").setDepth(10).setTint(tint));
+    this.track(landmark, this.add.ellipse(pos.x, pos.y + 28, 40, 16, 0x000000, 0.4).setDepth(5));
+    this.track(
+      landmark,
+      this.add
+        .text(pos.x, pos.y - 48, label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
+        .setOrigin(0.5)
+        .setDepth(11),
+    );
+  }
+
+  // signpost + name tag, the shape every interactive spot shares
+  private addSign(landmark: string, pos: { x: number; y: number }, label: string, color: string): void {
+    this.track(landmark, this.add.image(pos.x, pos.y, "sign").setDepth(9));
+    this.track(
+      landmark,
+      this.add
+        .text(pos.x, pos.y - 48, label, retroStyle(5, color))
+        .setOrigin(0.5)
+        .setDepth(11),
+    );
+  }
+
+  private addMapExit(landmark: string, pos: { x: number; y: number }, name: string, artClearance = 0): void {
+    const marker = this.track(
+      landmark,
+      this.add.rectangle(pos.x, pos.y, TILE, TILE, EXIT_AREA_COLOR, 0.25).setStrokeStyle(2, EXIT_AREA_COLOR, 0.9).setDepth(9.5),
+    );
     this.tweens.add({ targets: marker, alpha: 0.45, duration: 900, yoyo: true, repeat: -1, ease: "sine.inout" });
     const halfWidth = (name.length * 6 * PIXEL) / 2;
-    this.add
+    const label = this.add
       .text(
         Phaser.Math.Clamp(pos.x, halfWidth, MAP_W * TILE - halfWidth),
         pos.y - TILE / 2 - artClearance - EXIT_LABEL_GAP,
@@ -658,6 +709,7 @@ export class WorldScene extends Phaser.Scene {
       )
       .setOrigin(0.5)
       .setDepth(11);
+    this.track(landmark, label);
   }
 
   private buildHomeBubble(): Phaser.GameObjects.Container {
@@ -784,6 +836,7 @@ export class WorldScene extends Phaser.Scene {
       this.rankBoard.isActive() ||
       this.fishing.isActive() ||
       this.farm.isActive() ||
+      this.mapEditor.isActive() ||
       this.luckyWheel.isActive() ||
       this.achievementsUI.isActive() ||
       this.settingsUI.isActive()
@@ -805,6 +858,10 @@ export class WorldScene extends Phaser.Scene {
     this.updateForestGate();
     this.updateSnowGate();
     this.updateCrops();
+    if (this.editorQueued) {
+      this.editorQueued = false;
+      this.mapEditor.toggle();
+    }
     this.minimap.update();
 
     if (this.gCheatQueued) {
@@ -932,6 +989,7 @@ export class WorldScene extends Phaser.Scene {
       this.rankBoard.update();
       this.fishing.update();
       this.farm.update();
+      this.mapEditor.update();
       this.luckyWheel.update();
       this.achievementsUI.update();
       this.settingsUI.update();

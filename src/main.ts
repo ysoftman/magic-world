@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Sfx } from "./audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 import { GameState } from "./gameState";
+import { loadMapOverride } from "./levels";
 import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
 import { DungeonScene } from "./scenes/DungeonScene";
@@ -45,5 +46,6 @@ const fontReady = document.fonts.load('16px "Press Start 2P"').catch(() => undef
 const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
 Promise.race([fontReady, timeout]).finally(() => {
   GameState.loadSettings();
+  loadMapOverride();
   new Phaser.Game(config);
 });
