@@ -1,15 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT } from "../config";
-import {
-  TILE,
-  T_GRASS,
-  T_WATER_A,
-  T_WATER_B,
-  T_TREE,
-  T_PATH,
-  T_TALL,
-  T_HOUSE,
-} from "../levels";
+import { TILE, T_GRASS, T_WATER_A, T_WATER_B, T_TREE, T_PATH, T_TALL, T_HOUSE, T_SOIL } from "../levels";
 
 export interface MinimapMarker {
   x: number;
@@ -27,6 +18,7 @@ const TILE_COLORS: Record<number, number> = {
   [T_PATH]: 0xb08968,
   [T_TALL]: 0x3fae49,
   [T_HOUSE]: 0x94a3b8,
+  [T_SOIL]: 0x6b4a2f,
 };
 
 const MAX_W = 160;
@@ -49,12 +41,7 @@ export class Minimap {
   private dotY: number;
   private player: Phaser.GameObjects.Sprite;
 
-  constructor(
-    scene: Phaser.Scene,
-    mapData: number[][],
-    player: Phaser.GameObjects.Sprite,
-    markers: MinimapMarker[] = []
-  ) {
+  constructor(scene: Phaser.Scene, mapData: number[][], player: Phaser.GameObjects.Sprite, markers: MinimapMarker[] = []) {
     this.player = player;
     const mapW = mapData.length > 0 ? mapData[0].length : 0;
     const mapH = mapData.length;
@@ -106,10 +93,7 @@ export class Minimap {
   // Called every frame by the owning scene; cheap — just repositions the dot.
   update(): void {
     if (!this.container.visible) return;
-    this.playerDot.setPosition(
-      this.dotX + (this.player.x / TILE) * this.cell,
-      this.dotY + (this.player.y / TILE) * this.cell
-    );
+    this.playerDot.setPosition(this.dotX + (this.player.x / TILE) * this.cell, this.dotY + (this.player.y / TILE) * this.cell);
   }
 
   destroy(): void {

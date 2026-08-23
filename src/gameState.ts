@@ -76,6 +76,32 @@ export const EQUIP_TEXTURE: Record<EquipmentKey, string> = {
   amulet: "equip-sword", // accessory: never drawn as an overlay
 };
 
+export const FARM_PLOTS = 4;
+
+export interface CropDef {
+  name: string;
+  seed: number;
+  // in-game minutes from planting to harvest (GameState.minutes)
+  grow: number;
+  min: number;
+  max: number;
+}
+
+// Both crops pay out at roughly the same rate per in-game hour (~6G); CORN is
+// the bigger single payout for a full day's wait, BEAN the fast turnaround.
+// One entry per CropKey, same table-per-property convention as EQUIP_BONUS.
+export const CROPS = {
+  corn: { name: "CORN", seed: 20, grow: 480, min: 55, max: 80 },
+  bean: { name: "BEAN", seed: 8, grow: 180, min: 20, max: 30 },
+} satisfies Record<string, CropDef>;
+
+export type CropKey = keyof typeof CROPS;
+
+export interface FarmPlot {
+  crop: CropKey;
+  plantedAt: number; // GameState.minutes at planting
+}
+
 export interface QuestState {
   slimes: number;
   goldenSlimes: number;
@@ -188,6 +214,8 @@ export const GameState = {
   battles: 0,
   streak: 0,
   fishCaught: 0,
+  cropsHarvested: 0,
+  farm: Array.from({ length: FARM_PLOTS }, () => null) as Array<FarmPlot | null>,
   achievements: [] as string[],
   inventory: {
     potion: 2,
@@ -377,6 +405,8 @@ export const GameState = {
     this.battles = 0;
     this.streak = 0;
     this.fishCaught = 0;
+    this.cropsHarvested = 0;
+    this.farm = Array.from({ length: FARM_PLOTS }, () => null);
     this.achievements = [];
     this.inventory = {
       potion: 2,
@@ -442,6 +472,8 @@ export const GameState = {
         battles: this.battles,
         streak: this.streak,
         fishCaught: this.fishCaught,
+        cropsHarvested: this.cropsHarvested,
+        farm: this.farm,
         achievements: this.achievements,
         inventory: this.inventory,
         equipped: this.equipped,
@@ -477,6 +509,14 @@ export const GameState = {
       this.battles = data.battles ?? 0;
       this.streak = data.streak ?? 0;
       this.fishCaught = data.fishCaught ?? 0;
+      this.cropsHarvested = data.cropsHarvested ?? 0;
+      // rebuilt slot by slot so an old save (no farm), a shorter array or an
+      // unknown crop key can't leave a plot the farm panel would read as
+      // undefined
+      this.farm = Array.from({ length: FARM_PLOTS }, (_, i) => {
+        const plot = data.farm?.[i];
+        return plot && plot.crop in CROPS ? { crop: plot.crop as CropKey, plantedAt: plot.plantedAt ?? 0 } : null;
+      });
       this.achievements = data.achievements ?? [];
       Object.assign(this.inventory, data.inventory);
       // migrate old boolean equipment flags -> inventory counts + equipped

@@ -56,6 +56,18 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     check: () => GameState.fishCaught >= 10,
   },
   {
+    id: "farmer",
+    name: "FARMER",
+    desc: "Harvest your first crop",
+    check: () => GameState.cropsHarvested >= 1,
+  },
+  {
+    id: "harvester",
+    name: "HARVESTER",
+    desc: "Harvest 10 crops",
+    check: () => GameState.cropsHarvested >= 10,
+  },
+  {
     id: "goldbag",
     name: "GOLDBAG",
     desc: "Hold 100 gold at once",

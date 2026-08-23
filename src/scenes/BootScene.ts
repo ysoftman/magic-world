@@ -123,6 +123,27 @@ const TALL_TILE = [
   "gggggggggggggggg",
 ];
 
+// tilled farm soil: dark furrow rows across a brown field
+const SOIL_PALETTE = { s: 0x6b4a2f, d: 0x4b3320, l: 0x7d5738 };
+const SOIL_TILE = [
+  "ssssssssssssssss",
+  "sslsssssssssslss",
+  "ssssssssssssssss",
+  "dddddddddddddddd",
+  "ssssssssssssssss",
+  "sssssssslsssssss",
+  "ssssssssssssssss",
+  "dddddddddddddddd",
+  "ssssssssssssssss",
+  "sslsssssssssssss",
+  "ssssssssssssssss",
+  "dddddddddddddddd",
+  "ssssssssssssssss",
+  "sssssssssssslsss",
+  "ssssssssssssssss",
+  "dddddddddddddddd",
+];
+
 const HOUSE_TILE_PALETTE = { s: 0x3d3650, d: 0x322c42 };
 const HOUSE_TILE = [
   "ssssssssssssssss",
@@ -141,6 +162,68 @@ const HOUSE_TILE = [
   "ssdsssssssssssss",
   "sssssssssssssdss",
   "ssssssssssssssss",
+];
+
+// farm crops, drawn on the plots in the overworld: one shared sprout for the
+// early stage, then a ripe texture per crop (tinted green while unripe)
+const SPROUT_PALETTE = { g: 0x4ade80, d: 0x15803d };
+const SPROUT_TILE = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  ".....d....d.....",
+  "....dgg..ggd....",
+  ".....dggggd.....",
+  "......gggg......",
+  ".......gg.......",
+  ".......gg.......",
+  ".......gg.......",
+  "......dggd......",
+  "................",
+];
+
+const CORN_PALETTE = { s: 0x15803d, g: 0x4ade80, y: 0xfacc15, o: 0xca8a04 };
+const CORN_TILE = [
+  "................",
+  ".......ss.......",
+  "......sggs......",
+  ".....gg..gg.....",
+  "....gg.ss.gg....",
+  "...gg..ss..gg...",
+  "......yyyy......",
+  ".....yyoyyy.....",
+  ".....yoyyoy.....",
+  ".....yyoyyy.....",
+  ".....yoyyoy.....",
+  "......yyyy......",
+  "....gg.ss.gg....",
+  "...gg..ss..gg...",
+  ".......ss.......",
+  "................",
+];
+
+const BEAN_PALETTE = { d: 0x15803d, g: 0x4ade80, p: 0x84cc16 };
+const BEAN_TILE = [
+  "................",
+  "................",
+  "......dggd......",
+  ".....dggggd.....",
+  "....dgg..ggd....",
+  "....dg.dd.gd....",
+  ".....d.dd.d.....",
+  "...pp..dd..pp...",
+  "...pp..dd..pp...",
+  "...pp..dd..pp...",
+  "....p..dd..p....",
+  ".......dd.......",
+  "......ddgd......",
+  ".......dd.......",
+  "................",
+  "................",
 ];
 
 const HERO_PALETTE = {
@@ -900,6 +983,7 @@ export class BootScene extends Phaser.Scene {
         { rows: PATH_TILE, palette: PATH_PALETTE },
         { rows: TALL_TILE, palette: TALL_PALETTE },
         { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
       ],
       16,
     );
@@ -950,6 +1034,9 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "firefly", FIREFLY_TILE, FIREFLY_PALETTE);
     makeTexture(this, "snowflake", ["ww", "ww"], { w: 0xffffff });
     makeTexture(this, "leaf", ["gd", "dg"], { g: 0x4ade80, d: 0x15803d });
+    makeTexture(this, "crop-sprout", SPROUT_TILE, SPROUT_PALETTE);
+    makeTexture(this, "crop-corn", CORN_TILE, CORN_PALETTE);
+    makeTexture(this, "crop-bean", BEAN_TILE, BEAN_PALETTE);
     makeTexture(this, "chest", CHEST_TILE, CHEST_PALETTE);
     makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE);
 

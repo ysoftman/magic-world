@@ -1,13 +1,15 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { OVERWORLD_THEME, Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { GameState, isNight, onSaved } from "../gameState";
+import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
+import { CROPS, FARM_PLOTS, GameState, isNight, onSaved } from "../gameState";
 import {
   BOUNTY_BOARD_POS,
   buildLevel,
   CAVE_POS,
   escapeFromZones,
+  FARM_PLOT_POS,
+  FARM_POS,
   FISH_POS,
   FOREST_POS,
   GAMBLER_POS,
@@ -33,6 +35,7 @@ import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
+import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
 import { InventoryUI } from "../ui/InventoryUI";
 import { LuckyWheel } from "../ui/LuckyWheel";
@@ -51,6 +54,13 @@ const MAX_COOLDOWN_STEP = 50;
 // long enough for the SAVED confirmation to be readable before the title
 const QUIT_SAVE_DELAY = 700;
 const TROLL_KING_SPAWN_CHANCE = 0.35;
+// Exits to another map (CAVE, FOREST, SNOW PASS) all label themselves the same
+// way: this style, this far above the opening. The dy clears the CAVE's 128px
+// entrance art and the neighbouring GUARD label; the floor keeps the SNOW
+// PASS's label, one tile from the north edge, on the map.
+const EXIT_LABEL_COLOR = "#9f9fd0";
+const EXIT_LABEL_DY = 112;
+const EXIT_LABEL_MIN_Y = 40;
 const GOLDEN_SLIME_CHANCE = 0.08;
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -88,6 +98,8 @@ export class WorldScene extends Phaser.Scene {
   private bestiary!: BestiaryUI;
   private rankBoard!: RankingUI;
   private fishing!: FishingUI;
+  private farm!: FarmUI;
+  private cropSprites: Phaser.GameObjects.Sprite[] = [];
   private luckyWheel!: LuckyWheel;
   private achievementsUI!: AchievementsUI;
   private settingsUI!: SettingsUI;
@@ -232,10 +244,7 @@ export class WorldScene extends Phaser.Scene {
       .setDepth(11);
 
     this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9);
-    this.add
-      .text(CAVE_POS.x, CAVE_POS.y + 32, "CAVE", retroStyle(6, "#9f9fd0"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addExitLabel(CAVE_POS, "CAVE");
 
     this.add.image(RANK_BOARD_POS.x, RANK_BOARD_POS.y, "sign").setDepth(9);
     this.add
@@ -256,14 +265,22 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
+    // farm field: sign on the grass off the plot's north-west corner — a row
+    // higher than the plot itself so its label clears the BOUNTY BOARD's
+    const farmSignY = FARM_POS.y - TILE;
+    this.add.image(FARM_POS.x - 2 * TILE, farmSignY, "sign").setDepth(9);
+    this.add
+      .text(FARM_POS.x - 2 * TILE, farmSignY - 48, "FARM", retroStyle(5, "#a3e635"))
+      .setOrigin(0.5)
+      .setDepth(11);
+
+    this.cropSprites = FARM_PLOT_POS.map((pos) => this.add.sprite(pos.x, pos.y, "crop-sprout").setDepth(8).setVisible(false));
+
     // eastern woods entrance: the zone itself is created further down, this is
     // just its ground dressing — sign beside the opening, name above it
     const signX = Phaser.Math.Clamp(FOREST_POS.x + TILE, TILE, (MAP_W - 1) * TILE);
     this.add.image(signX, FOREST_POS.y, "sign").setDepth(9);
-    this.add
-      .text(FOREST_POS.x, FOREST_POS.y - 40, "FOREST", retroStyle(6, "#9f9fd0"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addExitLabel(FOREST_POS, "FOREST");
 
     // gatekeeper who lets nobody through until the KING SLIME falls; stands a
     // tile west of the entrance (clamped so a map-edge FOREST_POS keeps him
@@ -283,10 +300,7 @@ export class WorldScene extends Phaser.Scene {
     // name above it — same dressing pattern as the forest entrance
     const snowSignX = Phaser.Math.Clamp(SNOW_POS.x + TILE, TILE, (MAP_W - 1) * TILE);
     this.add.image(snowSignX, SNOW_POS.y, "sign").setDepth(9);
-    this.add
-      .text(SNOW_POS.x, SNOW_POS.y - 40, "SNOW PASS", retroStyle(6, "#a5f3fc"))
-      .setOrigin(0.5)
-      .setDepth(11);
+    this.addExitLabel(SNOW_POS, "SNOW PASS");
 
     this.add.sprite(HUNTER_POS.x, HUNTER_POS.y, "npc").setDepth(10).setTint(0x86efac);
     this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
@@ -542,6 +556,7 @@ export class WorldScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
+    this.farm = new FarmUI(this);
     this.luckyWheel = new LuckyWheel(this);
     this.achievementsUI = new AchievementsUI(this);
     this.settingsUI = new SettingsUI(this);
@@ -581,6 +596,7 @@ export class WorldScene extends Phaser.Scene {
       { x: FOREST_POS.x, y: FOREST_POS.y, color: 0x4ade80 },
       { x: SNOW_POS.x, y: SNOW_POS.y, color: 0xa5f3fc },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
+      { x: FARM_POS.x, y: FARM_POS.y, color: 0xa3e635 },
     ]);
 
     // open ground: no ambient shade, full night range
@@ -606,6 +622,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.destroy();
       this.rankBoard.destroy();
       this.fishing.destroy();
+      this.farm.destroy();
       this.luckyWheel.destroy();
       this.achievementsUI.destroy();
       this.settingsUI.destroy();
@@ -616,6 +633,23 @@ export class WorldScene extends Phaser.Scene {
       this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
+  }
+
+  // One place decides how an exit to another map is labelled, so the three
+  // openings can't drift apart again (they had three different offsets, two
+  // colours, and the CAVE's name sat below its entrance instead of above).
+  // The x clamp keeps a long name on the map when the opening hugs an edge.
+  private addExitLabel(pos: { x: number; y: number }, name: string): void {
+    const halfWidth = (name.length * 6 * PIXEL) / 2;
+    this.add
+      .text(
+        Phaser.Math.Clamp(pos.x, halfWidth, MAP_W * TILE - halfWidth),
+        Math.max(pos.y - EXIT_LABEL_DY, EXIT_LABEL_MIN_Y),
+        name,
+        retroStyle(6, EXIT_LABEL_COLOR),
+      )
+      .setOrigin(0.5)
+      .setDepth(11);
   }
 
   private buildHomeBubble(): Phaser.GameObjects.Container {
@@ -698,6 +732,29 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  // Growth is shown on the field itself: a sprout first, then the ripe plant
+  // tinted green until it can be harvested. Cheap enough to redo every frame —
+  // four sprites, and Phaser skips a setTexture to the texture already set.
+  private updateCrops(): void {
+    for (let i = 0; i < FARM_PLOTS; i++) {
+      const plot = GameState.farm[i];
+      const sprite = this.cropSprites[i];
+      if (!plot) {
+        sprite.setVisible(false);
+        continue;
+      }
+      const grown = (GameState.minutes - plot.plantedAt) / CROPS[plot.crop].grow;
+      sprite.setVisible(true);
+      if (grown < 0.4) {
+        sprite.setTexture("crop-sprout").setScale(0.7).clearTint();
+      } else if (grown < 1) {
+        sprite.setTexture(`crop-${plot.crop}`).setScale(0.85).setTint(0x86efac);
+      } else {
+        sprite.setTexture(`crop-${plot.crop}`).setScale(1).clearTint();
+      }
+    }
+  }
+
   // same fix as updateForestGate, for the snow pass's sealed-entrance dialogue
   private updateSnowGate(): void {
     if (!this.snowOverlapActive) return;
@@ -718,6 +775,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.isActive() ||
       this.rankBoard.isActive() ||
       this.fishing.isActive() ||
+      this.farm.isActive() ||
       this.luckyWheel.isActive() ||
       this.achievementsUI.isActive() ||
       this.settingsUI.isActive()
@@ -738,6 +796,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateHomeBubble();
     this.updateForestGate();
     this.updateSnowGate();
+    this.updateCrops();
     this.minimap.update();
 
     if (this.gCheatQueued) {
@@ -864,6 +923,7 @@ export class WorldScene extends Phaser.Scene {
       this.bestiary.update();
       this.rankBoard.update();
       this.fishing.update();
+      this.farm.update();
       this.luckyWheel.update();
       this.achievementsUI.update();
       this.settingsUI.update();
@@ -1026,6 +1086,14 @@ export class WorldScene extends Phaser.Scene {
         run: () => {
           Sfx.buy();
           this.fishing.open();
+        },
+      },
+      {
+        x: FARM_POS.x,
+        y: FARM_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.farm.open();
         },
       },
       {

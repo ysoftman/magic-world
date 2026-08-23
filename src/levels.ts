@@ -7,6 +7,7 @@ export const T_TREE = 3;
 export const T_PATH = 4;
 export const T_TALL = 5;
 export const T_HOUSE = 6;
+export const T_SOIL = 7;
 
 export const MAP_W = 28;
 export const MAP_H = 20;
@@ -72,6 +73,7 @@ const CHARS: Record<string, number> = {
   P: T_PATH,
   h: T_TALL,
   H: T_HOUSE,
+  S: T_SOIL,
 };
 
 // Tall grass is how the map shows where monsters roam, so it is stamped from
@@ -128,6 +130,10 @@ export function buildLevel(): number[][] {
   stamp(map, 26, 13, ["T"]);
   stamp(map, 25, 16, [".T.", "TTT"]);
 
+  // farm field: three tiles east of the north-south road, well south of the
+  // ELDER — clear of every monster zone and of the bounty board's talk radius
+  stamp(map, 10, 10, ["SSS", "SSS"]);
+
   // south
   stamp(map, 7, 14, ["P", "P", "P", "P", "P"]);
   stamp(map, 2, 16, ["T"]);
@@ -167,11 +173,25 @@ export const GAMBLER_POS = { x: 20 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 // and of the slime zone further south (cx=4, cy=12)
 export const BOUNTY_BOARD_POS = { x: 7 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
 
-// Fishing spot on the pond's south-west bank at (23,5). The pond's other
-// banks sit inside monster zones (slime west, wolf south-east, trees east),
-// but this corner is reached from the road at (22,7) via two grass tiles,
-// so the hero can walk there without crossing tall grass.
-export const FISH_POS = { x: 23 * TILE + TILE / 2, y: 5 * TILE + TILE / 2 };
+// Fishing spot on the pond's west bank at (22,4). It used to sit at (23,5),
+// wedged against the wolf zone (23-24, 6-7) and sharing a column with that
+// zone's warning sign, which stacked the two signposts on top of each other.
+// The west bank keeps the whole walk (22,7) -> (22,4) on plain grass, three
+// tiles clear of the wolves and of the goblin zone at (20-21, 2-3).
+export const FISH_POS = { x: 22 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 };
+
+// Farm plot centre, on the tilled field itself — the sign sits two tiles west
+// on plain grass so it never covers the soil.
+export const FARM_POS = { x: 11 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
+
+// The four tilled plots, on the corners of the 3x2 field so the middle column
+// stays clear for the hero to stand on FARM_POS. Index matches GameState.farm.
+export const FARM_PLOT_POS = [
+  { x: 10 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 },
+  { x: 12 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 },
+  { x: 10 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 },
+  { x: 12 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 },
+];
 
 export const DUNGEON_W = 24;
 export const DUNGEON_H = 16;
