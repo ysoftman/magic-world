@@ -30,7 +30,8 @@ export const MONSTER_ZONES: MonsterZone[] = [
   { cx: 10 * TILE, cy: 17 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3 },
   { cx: 24 * TILE, cy: 7 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wolf" },
   { cx: 23 * TILE, cy: 16 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wolf" },
-  { cx: 21 * TILE, cy: 3 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2 },
+  // no zone by the CAVE at (19,2): its tall grass and warning sign crowded the
+  // cave mouth, and three slime zones elsewhere already cover the overworld
 ];
 
 // Battle ends leave the hero standing where the fight started — inside the
@@ -120,22 +121,23 @@ export function buildLevel(): number[][] {
   stamp(map, 6, 4, [".T.", "TTT"]);
   stamp(map, 15, 5, [".T.", "TTT"]);
   stamp(map, 18, 9, ["T.T", ".T."]);
-  stamp(map, 12, 2, ["T"]);
 
-  // east: the lane down to the forest gate at (25, 10)
-  stamp(map, 21, 10, ["PPPP"]);
+  // east: the lane to the forest gate at (24, 9). It branches off the main
+  // road at (21, 7) and runs down x=21 first — the lane used to start away
+  // from the road with nothing joining it, so it read as a dead end, and the
+  // only straight way down (x=23-24) is the wolf zone.
+  stamp(map, 21, 8, ["P", "PPPP"]);
   stamp(map, 25, 2, [".T.", "TTT"]);
   stamp(map, 22, 12, ["T.T", ".T."]);
   stamp(map, 26, 13, ["T"]);
   stamp(map, 25, 16, [".T.", "TTT"]);
 
-  // farm field: three tiles east of the north-south road, well south of the
-  // ELDER — clear of every monster zone and of the bounty board's talk radius
-  stamp(map, 10, 10, ["SSS", "SSS"]);
-
-  // pond, in the open ground between the farm and the forest lane: the whole
-  // block (13-18, 8-11) is empty, so the banks stay walkable on every side
-  stamp(map, 15, 9, ["WWW", "WWW"]);
+  // the northern clearing beside the house: farm field first, pond three tiles
+  // east of it (where the clearing's lone tree used to stand). Rows 1-2 are
+  // empty all the way across, so every bank and plot stays walkable, and the
+  // x=7 road runs straight up into the field.
+  stamp(map, 5, 1, ["SSS", "SSS"]);
+  stamp(map, 10, 1, ["WWW", "WWW"]);
 
   // south
   stamp(map, 7, 14, ["P", "P", "P", "P", "P"]);
@@ -156,7 +158,11 @@ export const PLAYER_SPAWN = { x: 9 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 export const NPC_POS = { x: 11 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 export const HOUSE_POS = { x: 3 * TILE, y: 2 * TILE };
 export const SHOP_POS = { x: 5 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
-export const CAVE_POS = { x: 19 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
+// Exits to another map. None of them sits within three tiles of a map edge:
+// the camera clamps there, so an edge exit ends up half off-screen with its
+// name label clipped, and the two-tile nudge that keeps a returning hero off
+// the trigger (see WorldScene) needs room south of it.
+export const CAVE_POS = { x: 19 * TILE + TILE / 2, y: 3 * TILE + TILE / 2 };
 // hero record board, three tiles east of the ELDER on the main road — clear of
 // both his 120px talk radius and the ELDER name label, so nothing overlaps
 export const RANK_BOARD_POS = { x: 14 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
@@ -177,23 +183,23 @@ export const GAMBLER_POS = { x: 20 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
 export const BOUNTY_BOARD_POS = { x: 7 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
 
 // Fishing spot on the pond's west bank, with its signpost one tile north on
-// the same bank — both tiles touch the water, and the walk down from the main
-// road at (14,7) is plain grass the whole way. The pond used to sit in the
-// map's north-east corner, boxed in by trees, the wolf zone and the map edge.
-export const FISH_POS = { x: 14 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 };
-export const FISH_SIGN_POS = { x: 14 * TILE + TILE / 2, y: 9 * TILE + TILE / 2 };
+// the same bank — both tiles touch the water, and both are three tiles clear
+// of the farm so the two never fight over a Z press.
+export const FISH_POS = { x: 9 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
+export const FISH_SIGN_POS = { x: 9 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
-// Farm plot centre, on the tilled field itself — the sign sits two tiles west
-// on plain grass so it never covers the soil.
-export const FARM_POS = { x: 11 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
+// Farm plot centre, on the tilled field itself, with the signpost west of the
+// field on the grass above the house.
+export const FARM_POS = { x: 6 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
+export const FARM_SIGN_POS = { x: 4 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
 // The four tilled plots, on the corners of the 3x2 field so the middle column
 // stays clear for the hero to stand on FARM_POS. Index matches GameState.farm.
 export const FARM_PLOT_POS = [
-  { x: 10 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 },
-  { x: 12 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 },
-  { x: 10 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 },
-  { x: 12 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 },
+  { x: 5 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 },
+  { x: 7 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 },
+  { x: 5 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 },
+  { x: 7 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 },
 ];
 
 export const DUNGEON_W = 24;
@@ -263,8 +269,8 @@ export const FOREST_W = 26;
 export const FOREST_H = 18;
 export const FOREST_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
-// World-map position of the forest entrance (east side, far from CAVE/HOUSE)
-export const FOREST_POS = { x: 25 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 };
+// World-map position of the forest entrance, at the end of the eastern lane
+export const FOREST_POS = { x: 24 * TILE + TILE / 2, y: 9 * TILE + TILE / 2 };
 
 export const FOREST_ZONES: Array<MonsterZone & { kind?: "wasp" | "spider" | "orc" }> = [
   { cx: 4 * TILE, cy: 3 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wasp" },
@@ -335,10 +341,10 @@ export const SNOW_W = 24;
 export const SNOW_H = 16;
 export const SNOW_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
-// World-map position of the pass. Reachable on foot: road x=7 up to (7,2),
-// west along the empty row 1 — the house block starts at tile x=3 on row 2,
-// so row 1 stays clear all the way to (1,1).
-export const SNOW_POS = { x: 1 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+// World-map position of the pass, at the west end of the main road. It used to
+// sit at (1,1), in the map's north-west corner; this keeps it in the same
+// quarter of the map while clearing both the map edge and the house door.
+export const SNOW_POS = { x: 3 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 };
 
 export const SNOW_ZONES: Array<MonsterZone & { kind?: "frostMoth" | "yeti" }> = [
   { cx: 5 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },

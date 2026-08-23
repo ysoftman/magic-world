@@ -10,6 +10,7 @@ import {
   escapeFromZones,
   FARM_PLOT_POS,
   FARM_POS,
+  FARM_SIGN_POS,
   FISH_POS,
   FISH_SIGN_POS,
   FOREST_POS,
@@ -55,13 +56,15 @@ const MAX_COOLDOWN_STEP = 50;
 // long enough for the SAVED confirmation to be readable before the title
 const QUIT_SAVE_DELAY = 700;
 const TROLL_KING_SPAWN_CHANCE = 0.35;
-// Exits to another map (CAVE, FOREST, SNOW PASS) all label themselves the same
-// way: this style, this far above the opening. The dy clears the CAVE's 128px
-// entrance art and the neighbouring GUARD label; the floor keeps the SNOW
-// PASS's label, one tile from the north edge, on the map.
+// Exits to another map (CAVE, FOREST, SNOW PASS) are all marked the same way:
+// the tile that actually triggers the transition is outlined and pulsing, with
+// the destination name above it — no signposts. The dy clears the CAVE's 128px
+// entrance art and the neighbouring GUARD label.
 const EXIT_LABEL_COLOR = "#9f9fd0";
-const EXIT_LABEL_DY = 112;
-const EXIT_LABEL_MIN_Y = 40;
+const EXIT_AREA_COLOR = 0xffd166;
+// gap between the top of the marker box (or of whatever entrance art stands
+// above it) and the destination name, so the name reads as part of the box
+const EXIT_LABEL_GAP = 20;
 const GOLDEN_SLIME_CHANCE = 0.08;
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -245,7 +248,9 @@ export class WorldScene extends Phaser.Scene {
       .setDepth(11);
 
     this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9);
-    this.addExitLabel(CAVE_POS, "CAVE");
+    // the cave mouth is 128px tall and centred on the entrance tile, so its
+    // name clears the art rather than the marker box
+    this.addMapExit(CAVE_POS, "CAVE", 48);
 
     this.add.image(RANK_BOARD_POS.x, RANK_BOARD_POS.y, "sign").setDepth(9);
     this.add
@@ -266,29 +271,25 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    // farm field: sign on the grass off the plot's north-west corner — a row
-    // higher than the plot itself so its label clears the BOUNTY BOARD's
-    const farmSignY = FARM_POS.y - TILE;
-    this.add.image(FARM_POS.x - 2 * TILE, farmSignY, "sign").setDepth(9);
+    // farm field: signpost on the grass beside the plots
+    this.add.image(FARM_SIGN_POS.x, FARM_SIGN_POS.y, "sign").setDepth(9);
     this.add
-      .text(FARM_POS.x - 2 * TILE, farmSignY - 48, "FARM", retroStyle(5, "#a3e635"))
+      .text(FARM_SIGN_POS.x, FARM_SIGN_POS.y - 48, "FARM", retroStyle(5, "#a3e635"))
       .setOrigin(0.5)
       .setDepth(11);
 
     this.cropSprites = FARM_PLOT_POS.map((pos) => this.add.sprite(pos.x, pos.y, "crop-sprout").setDepth(8).setVisible(false));
 
-    // eastern woods entrance: the zone itself is created further down, this is
-    // just its ground dressing — sign beside the opening, name above it
-    const signX = Phaser.Math.Clamp(FOREST_POS.x + TILE, TILE, (MAP_W - 1) * TILE);
-    this.add.image(signX, FOREST_POS.y, "sign").setDepth(9);
-    this.addExitLabel(FOREST_POS, "FOREST");
+    // eastern woods entrance: no signpost here, unlike the other exits — the
+    // GUARD stands right beside it and already marks the opening
+    this.addMapExit(FOREST_POS, "FOREST");
 
     // gatekeeper who lets nobody through until the KING SLIME falls; stands a
-    // tile west of the entrance (clamped so a map-edge FOREST_POS keeps him
-    // on the tileset)
+    // tile south of the entrance — beside it, where his name tag clears the
+    // FOREST label now that the label hugs the marker box
     this.guardPos = {
-      x: Phaser.Math.Clamp(FOREST_POS.x - TILE, TILE, (MAP_W - 1) * TILE),
-      y: Phaser.Math.Clamp(FOREST_POS.y, TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
+      x: Phaser.Math.Clamp(FOREST_POS.x, TILE, (MAP_W - 1) * TILE),
+      y: Phaser.Math.Clamp(FOREST_POS.y + TILE, TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
     };
     this.add.sprite(this.guardPos.x, this.guardPos.y, "npc").setDepth(10).setTint(0x67e8f9);
     this.add.ellipse(this.guardPos.x, this.guardPos.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
@@ -297,11 +298,9 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    // north-west mountain pass to the snow field: sign beside the opening,
-    // name above it — same dressing pattern as the forest entrance
-    const snowSignX = Phaser.Math.Clamp(SNOW_POS.x + TILE, TILE, (MAP_W - 1) * TILE);
-    this.add.image(snowSignX, SNOW_POS.y, "sign").setDepth(9);
-    this.addExitLabel(SNOW_POS, "SNOW PASS");
+    // north-west mountain pass to the snow field: no signpost, same as the
+    // other two exits — every one of them is just its name above the opening
+    this.addMapExit(SNOW_POS, "SNOW PASS");
 
     this.add.sprite(HUNTER_POS.x, HUNTER_POS.y, "npc").setDepth(10).setTint(0x86efac);
     this.add.ellipse(HUNTER_POS.x, HUNTER_POS.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
@@ -636,16 +635,24 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  // One place decides how an exit to another map is labelled, so the three
+  // One place decides how an exit to another map is drawn, so the three
   // openings can't drift apart again (they had three different offsets, two
   // colours, and the CAVE's name sat below its entrance instead of above).
+  // The marker traces the TILE x TILE overlap zone that fires the transition,
+  // so what the player sees is exactly what they have to step on. Depth 9.5
+  // keeps it over the CAVE's entrance art but under the hero and NPCs (10).
   // The x clamp keeps a long name on the map when the opening hugs an edge.
-  private addExitLabel(pos: { x: number; y: number }, name: string): void {
+  private addMapExit(pos: { x: number; y: number }, name: string, artClearance = 0): void {
+    const marker = this.add
+      .rectangle(pos.x, pos.y, TILE, TILE, EXIT_AREA_COLOR, 0.25)
+      .setStrokeStyle(2, EXIT_AREA_COLOR, 0.9)
+      .setDepth(9.5);
+    this.tweens.add({ targets: marker, alpha: 0.45, duration: 900, yoyo: true, repeat: -1, ease: "sine.inout" });
     const halfWidth = (name.length * 6 * PIXEL) / 2;
     this.add
       .text(
         Phaser.Math.Clamp(pos.x, halfWidth, MAP_W * TILE - halfWidth),
-        Math.max(pos.y - EXIT_LABEL_DY, EXIT_LABEL_MIN_Y),
+        pos.y - TILE / 2 - artClearance - EXIT_LABEL_GAP,
         name,
         retroStyle(6, EXIT_LABEL_COLOR),
       )
