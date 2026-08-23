@@ -1,3 +1,4 @@
+import { OVERWORLD_MAP } from "./overworldMap";
 export const TILE = 64;
 
 export const T_GRASS = 0;
@@ -162,38 +163,12 @@ function stamp(map: number[][], x0: number, y0: number, rows: string[]): void {
   }
 }
 
-// The overworld as it stands, laid out with the in-game map editor (F2) and
-// exported from it. Legend: G grass, W water, T tree, P path, h tall grass,
-// H house, S farm soil — the same CHARS table the editor round-trips.
-const MAP_ROWS = [
-  "GGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-  "GGGGGSSSGGWWWGGGGGGGGGGGGGGG",
-  "GHHGGSSSGGWWWGGGGGGGGGGGGGTG",
-  "GHHGGGGPGGGGGGGGGGGGGGGGGTTT",
-  "GGGGGGGPGGGGGGGGGGGGGGGGGGGG",
-  "GGGGGGTPTGGGGGGGTGGGGGGGGGGG",
-  "GGGGGGGPGGGGGGGTTTGGGGGhhGGG",
-  "PPPPPPPPPPPPPPPPPPPPPPPhhPPP",
-  "GGGGGGGPGGGGGGGGGGGGGPGGGGGG",
-  "GGGGGGGPGGGGGGGGGGTGTPPPPPPP",
-  "GGGGGGGPGGGGGGGGGGGTGGGGGGGG",
-  "GGGhhGGPGGGGGGGGGGGGGGGGGGGG",
-  "GGGhhGGPGGGGGGGGhhGGGGTGTGGG",
-  "GGGGGGGPGGGTGGGGhhGGGGGTGGTG",
-  "GGGGGGGPGGGGGGGGGGGGGGGGGGGG",
-  "GGGGGGGPGGGGGGGGTGGGGGhhGGGG",
-  "PPPPPPPPGhhGGGGGGGGGTGhhGGTG",
-  "GGGGGGTPGhhGGTTTGGGTTTGGGTTT",
-  "GGGGGTTTGGGGGGTGGGGGGGGGGGGG",
-  "GGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-];
-
 export function buildLevel(): number[][] {
   // a map edited in-game wins outright: it is already the finished grid
   if (mapOverride) return rowsToMap(mapOverride.tiles);
-  const map = rowsToMap(MAP_ROWS);
-  // tall grass still comes from MONSTER_ZONES rather than the rows above, so
-  // moving a zone in code can never drift from the grass that marks it
+  const map = rowsToMap(OVERWORLD_MAP.rows);
+  // tall grass still comes from MONSTER_ZONES rather than the rows in the map
+  // file, so moving a zone in code can never drift from the grass marking it
   markZones(map, MONSTER_ZONES);
   return map;
 }
@@ -201,10 +176,13 @@ export function buildLevel(): number[][] {
 // on the doorstep, one tile below the house — a new hero starts at home. Not
 // on the house tiles themselves: those are solid, and the walk-out would start
 // inside a wall.
-export const PLAYER_SPAWN = { x: 2 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 };
-export const NPC_POS = { x: 8 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 };
-export const HOUSE_POS = { x: 1 * TILE, y: 2 * TILE };
-export const SHOP_POS = { x: 5 * TILE + TILE / 2, y: 8 * TILE + TILE / 2 };
+// mutable copies: the map editor moves these at runtime, the data file stays
+const LANDMARKS = OVERWORLD_MAP.landmarks;
+
+export const PLAYER_SPAWN = { ...LANDMARKS.PLAYER_SPAWN };
+export const NPC_POS = { ...LANDMARKS.NPC_POS };
+export const HOUSE_POS = { ...LANDMARKS.HOUSE_POS };
+export const SHOP_POS = { ...LANDMARKS.SHOP_POS };
 // Landmark positions, laid out in the map editor along with the grid above.
 // Two things each of them has to keep: a walkable tile (the editor will not
 // stop you dropping one on water), and 120px of clearance from the next
@@ -214,32 +192,32 @@ export const SHOP_POS = { x: 5 * TILE + TILE / 2, y: 8 * TILE + TILE / 2 };
 // south of them for the nudge that keeps a returning hero off the trigger, and
 // their name label has to survive the camera clamp at a map edge — the SNOW
 // PASS sits one tile from the west edge, so its label is clamped inward.
-export const CAVE_POS = { x: 23 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
+export const CAVE_POS = { ...LANDMARKS.CAVE_POS };
 // hero record board, west of the ELDER on the main road's north side
-export const RANK_BOARD_POS = { x: 3 * TILE + TILE / 2, y: 6 * TILE + TILE / 2 };
+export const RANK_BOARD_POS = { ...LANDMARKS.RANK_BOARD_POS };
 
 // monster hunter offering side bounties, out on the open ground south of the
 // road, four tiles east of the BOUNTY BOARD
-export const HUNTER_POS = { x: 11 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
+export const HUNTER_POS = { ...LANDMARKS.HUNTER_POS };
 
 // gambler offering the lucky wheel, on the road's south side, clear of the
 // wolf zone further east
-export const GAMBLER_POS = { x: 17 * TILE + TILE / 2, y: 8 * TILE + TILE / 2 };
+export const GAMBLER_POS = { ...LANDMARKS.GAMBLER_POS };
 
 // bounty board, on the town's other (north-south) road at x=7, clear of the
 // slime zone to its west (cx=4, cy=12)
-export const BOUNTY_BOARD_POS = { x: 7 * TILE + TILE / 2, y: 11 * TILE + TILE / 2 };
+export const BOUNTY_BOARD_POS = { ...LANDMARKS.BOUNTY_BOARD_POS };
 
 // Fishing spot on the pond's west bank, with its signpost one tile north on
 // the same bank — both tiles touch the water, and both are three tiles clear
 // of the farm so the two never fight over a Z press.
-export const FISH_POS = { x: 9 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
-export const FISH_SIGN_POS = { x: 9 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+export const FISH_POS = { ...LANDMARKS.FISH_POS };
+export const FISH_SIGN_POS = { ...LANDMARKS.FISH_SIGN_POS };
 
 // Farm plot centre, on the tilled field itself, with the signpost on the grass
 // west of the field.
-export const FARM_POS = { x: 6 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 };
-export const FARM_SIGN_POS = { x: 4 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+export const FARM_POS = { ...LANDMARKS.FARM_POS };
+export const FARM_SIGN_POS = { ...LANDMARKS.FARM_SIGN_POS };
 
 // The four tilled plots, on the corners of the 3x2 field so the middle column
 // stays clear for the hero to stand on FARM_POS. Derived from FARM_POS rather
@@ -320,7 +298,7 @@ export const FOREST_H = 18;
 export const FOREST_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
 // World-map position of the forest entrance, at the end of the eastern lane
-export const FOREST_POS = { x: 24 * TILE + TILE / 2, y: 9 * TILE + TILE / 2 };
+export const FOREST_POS = { ...LANDMARKS.FOREST_POS };
 
 export const FOREST_ZONES: Array<MonsterZone & { kind?: "wasp" | "spider" | "orc" }> = [
   { cx: 4 * TILE, cy: 3 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wasp" },
@@ -394,7 +372,7 @@ export const SNOW_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 // World-map position of the pass, at the west end of the main road. It used to
 // sit at (1,1), in the map's north-west corner; this keeps it in the same
 // quarter of the map while clearing both the map edge and the house door.
-export const SNOW_POS = { x: 1 * TILE + TILE / 2, y: 15 * TILE + TILE / 2 };
+export const SNOW_POS = { ...LANDMARKS.SNOW_POS };
 
 // Filled here rather than at the declaration because it needs every landmark
 // above to exist first. The map editor moves whatever is listed.

@@ -35,16 +35,26 @@ const PAN_SPEED = 12;
 const EDGE_MARGIN = 56;
 const CURSOR_SPEED = 10;
 
-// Prints a coordinate the way levels.ts writes them, keeping whatever offset
-// inside the tile the landmark started with (HOUSE_POS sits on a tile corner,
-// everything else on a centre).
+// Prints a coordinate the way overworldMap.ts writes them, keeping whatever
+// offset inside the tile the landmark started with (HOUSE_POS sits on a tile
+// corner, everything else on a centre).
 const coord = (v: number): string => {
   const tile = Math.floor(v / TILE);
   const off = v - tile * TILE;
-  if (off === 0) return `${tile} * TILE`;
-  if (off === TILE / 2) return `${tile} * TILE + TILE / 2`;
-  return `${tile} * TILE + ${off}`;
+  if (off === 0) return `${tile} * T`;
+  if (off === TILE / 2) return `${tile} * T + T / 2`;
+  return `${tile} * T + ${off}`;
 };
+
+const MAP_FILE_HEADER = `// Overworld map data — the one file that decides what the town looks like.
+// Written by the in-game map editor (F2, then X applies it straight back here)
+// and read by levels.ts, so swapping this file swaps the whole layout.
+//
+// Row legend: G grass, W water, T tree, P path, h tall grass, H house, S soil.
+// Landmark coordinates are in pixels; T is one tile, kept local so this file
+// imports nothing and can be replaced wholesale.
+const T = ${TILE};
+`;
 
 export class MapEditor {
   private scene: Phaser.Scene;
@@ -115,7 +125,7 @@ export class MapEditor {
       .text(
         16,
         GAME_HEIGHT - 44,
-        "HJKL/MOUSE: CURSOR (EDGE SCROLLS MAP)   Z/CLICK: PAINT, PICK UP, DROP\n1-7: BRUSH   TAB: TILE/LANDMARK   [ ]: PICK   X: EXPORT   R: RESET   F2: LEAVE",
+        "HJKL/MOUSE: CURSOR (EDGE SCROLLS MAP)   Z/CLICK: PAINT, PICK UP, DROP\n1-7: BRUSH   TAB: TILE/LANDMARK   X: APPLY TO MAP FILE   R: RESET   F2: LEAVE",
         retroStyle(4, "#9f9fd0"),
       )
       .setScrollFactor(0)
@@ -357,17 +367,35 @@ export class MapEditor {
     showToast(this.scene, `${name} -> (${tx}, ${ty})`, STATUS_HUD_TOAST_Y);
   }
 
-  private exportMap(): void {
+  // The whole of src/overworldMap.ts, ready to be written over the old one.
+  private mapFileSource(): string {
     const rows = mapToRows(this.level)
-      .map((r) => `  "${r}",`)
+      .map((r) => `    "${r}",`)
       .join("\n");
-    const landmarks = Object.entries(EDITABLE_POS)
-      .map(([name, p]) => `export const ${name} = { x: ${coord(p.x)}, y: ${coord(p.y)} };`)
-      .join("\n");
-    const text = `// paste into src/levels.ts\nconst MAP_ROWS = [\n${rows}\n];\n\n${landmarks}\n`;
-    console.log(text);
-    navigator.clipboard?.writeText(text).catch(() => undefined);
-    showToast(this.scene, "EXPORTED TO CONSOLE + CLIPBOARD", STATUS_HUD_TOAST_Y);
+    const landmarks = this.names.map((n) => `    ${n}: { x: ${coord(EDITABLE_POS[n].x)}, y: ${coord(EDITABLE_POS[n].y)} },`).join("\n");
+    return `${MAP_FILE_HEADER}\nexport const OVERWORLD_MAP = {\n  rows: [\n${rows}\n  ],\n  landmarks: {\n${landmarks}\n  },\n};\n`;
+  }
+
+  // Applying means writing the map file itself: the dev server takes the POST
+  // and saves it, Vite reloads, and the game comes back up on the new layout
+  // with no localStorage override in the way. Without the dev server (a built
+  // page) it falls back to the clipboard and the console.
+  private exportMap(): void {
+    const source = this.mapFileSource();
+    const stored = { tiles: mapToRows(this.level), landmarks: structuredClone(EDITABLE_POS) };
+    console.log(source);
+    navigator.clipboard?.writeText(source).catch(() => undefined);
+    clearMapOverride();
+    fetch("/__map", { method: "POST", body: source })
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        showToast(this.scene, "APPLIED TO src/overworldMap.ts", STATUS_HUD_TOAST_Y);
+      })
+      .catch(() => {
+        // no dev server to write it: keep the edit where it was
+        saveMapOverride(stored);
+        showToast(this.scene, "COPIED TO CLIPBOARD", STATUS_HUD_TOAST_Y);
+      });
   }
 
   destroy(): void {
