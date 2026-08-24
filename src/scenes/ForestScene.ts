@@ -3,21 +3,10 @@ import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
-import {
-  buildForest,
-  escapeFromZones,
-  FOREST_ENTRY,
-  FOREST_H,
-  FOREST_TREASURE_POS,
-  FOREST_W,
-  FOREST_ZONES,
-  SOLID,
-  T_WATER_A,
-  T_WATER_B,
-  TILE,
-} from "../levels";
+import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, SOLID, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
-import { retroStyle, showToast } from "../pixelart";
+import { addGroundShadow, retroStyle, showToast } from "../pixelart";
+import { applyTileVariations, buildTerrainOverlays, createWalkAnimations, isSolidTile, startWaterAnimation } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -27,6 +16,11 @@ import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
+
+// This area's terrain grading. The base tilemap and the transition overlays
+// drawn on top of it have to get the same value or the overlays sit on the
+// ground at full brightness.
+const TERRAIN_TINT = 0x88cc99;
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -155,7 +149,9 @@ export class ForestScene extends Phaser.Scene {
     const tileset = map.addTilesetImage("tiles16", "tiles16", TILE, TILE);
     this.layer = map.createLayer(0, tileset!, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
     this.layer.setCollision(Array.from(SOLID));
-    this.layer.setTint(0x88cc99);
+    applyTileVariations(this.layer, level);
+    this.layer.setTint(TERRAIN_TINT);
+    buildTerrainOverlays(this, level, TERRAIN_TINT);
 
     this.physics.world.setBounds(0, 0, FOREST_W * TILE, FOREST_H * TILE);
 
@@ -174,46 +170,13 @@ export class ForestScene extends Phaser.Scene {
     // Step clear of every monster zone on entry, the same as the cave.
     this.escapeMonsterZone();
 
-    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
+    this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
-    const walkFrames = (dir: string): Phaser.Types.Animations.AnimationFrame[] => [0, 1, 2, 3].map((i) => ({ key: `hero-${dir}-${i}` }));
-
-    if (!this.anims.exists("walk-down")) {
-      this.anims.create({
-        key: "walk-down",
-        frames: walkFrames("down"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-up")) {
-      this.anims.create({
-        key: "walk-up",
-        frames: walkFrames("up"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-right")) {
-      this.anims.create({
-        key: "walk-right",
-        frames: walkFrames("right"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-left")) {
-      this.anims.create({
-        key: "walk-left",
-        frames: walkFrames("left"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
+    createWalkAnimations(this);
 
     this.dust = this.add.particles(0, 0, "dust", {
       speed: { min: 16, max: 44 },
@@ -233,6 +196,9 @@ export class ForestScene extends Phaser.Scene {
       frequency: 700,
       emitting: false,
     });
+    // fireflies are lights, not motes: ADD makes them actually glow once the
+    // night overlay darkens the ground under them
+    this.fireflies.setBlendMode(Phaser.BlendModes.ADD);
     this.fireflies.startFollow(this.player, 0, 0);
 
     // constant drift of falling leaves under the canopy: screen-space, same
@@ -268,11 +234,7 @@ export class ForestScene extends Phaser.Scene {
       if (!this.exitingForest) this.exitForest();
     });
 
-    this.time.addEvent({
-      delay: 400,
-      loop: true,
-      callback: () => this.animateWater(),
-    });
+    startWaterAnimation(this, this.layer);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, FOREST_W * TILE, FOREST_H * TILE);
@@ -621,7 +583,7 @@ export class ForestScene extends Phaser.Scene {
   private escapeMonsterZone(): void {
     const spot = escapeFromZones(FOREST_ZONES, this.player.x, this.player.y, (tx, ty) => {
       const tile = this.layer.getTileAt(tx, ty);
-      return !!tile && !SOLID.has(tile.index);
+      return !!tile && !isSolidTile(tile.index);
     });
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
@@ -668,6 +630,7 @@ export class ForestScene extends Phaser.Scene {
   private spawnTreasures(): void {
     for (const t of FOREST_TREASURE_POS) {
       const opened = GameState.openedTreasures.includes(t.id);
+      addGroundShadow(this, t, { w: 40, h: 14, yOffset: 24 });
       const chest = this.add.image(t.x, t.y, opened ? "chest-open" : "chest").setDepth(9);
       if (opened) continue;
       const zone = this.add.zone(t.x, t.y, TILE, TILE);
@@ -742,13 +705,6 @@ export class ForestScene extends Phaser.Scene {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc");
       this.scene.start("Battle", { enemy: kind, from: "Forest" });
-    });
-  }
-
-  private animateWater(): void {
-    this.layer.forEachTile((tile) => {
-      if (tile.index === T_WATER_A) tile.index = T_WATER_B;
-      else if (tile.index === T_WATER_B) tile.index = T_WATER_A;
     });
   }
 }

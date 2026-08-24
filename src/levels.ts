@@ -164,7 +164,14 @@ function stamp(map: number[][], x0: number, y0: number, rows: string[]): void {
 }
 
 export function buildLevel(): number[][] {
-  // a map edited in-game wins outright: it is already the finished grid
+  // a map edited in-game wins outright: it is already the finished grid, so
+  // markZones below is deliberately skipped for it — an override is trusted
+  // as final and never has code-driven state re-stamped onto it (the same way
+  // MapEditor takes landmark positions straight from the override rather than
+  // recomputing them). Don't "fix" this without re-checking that. Anything
+  // that must apply to both paths belongs in the scene that owns the tilemap
+  // layer, not here — tile variation and autotile transitions both need the
+  // layer, which doesn't exist yet at this point.
   if (mapOverride) return rowsToMap(mapOverride.tiles);
   const map = rowsToMap(OVERWORLD_MAP.rows);
   // tall grass still comes from MONSTER_ZONES rather than the rows in the map

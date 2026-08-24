@@ -30,13 +30,12 @@ import {
   SNOW_POS,
   SOLID,
   T_GRASS,
-  T_WATER_A,
-  T_WATER_B,
   TALL_GRASS,
   TILE,
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
-import { retroStyle, showToast } from "../pixelart";
+import { addGroundShadow, retroStyle, showToast } from "../pixelart";
+import { applyTileVariations, buildTerrainOverlays, createWalkAnimations, isSolidTile, startWaterAnimation } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -236,9 +235,17 @@ export class WorldScene extends Phaser.Scene {
     const tileset = map.addTilesetImage("tiles16", "tiles16", TILE, TILE);
     this.layer = map.createLayer(0, tileset!, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
     this.layer.setCollision(Array.from(SOLID));
+    applyTileVariations(this.layer, level);
+    buildTerrainOverlays(this, level);
 
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
 
+    // depth 0 and added first so it sits under the house image (which has no
+    // depth of its own) but still over the ground layer
+    this.track(
+      "HOUSE_POS",
+      addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 118, h: 22, yOffset: 66, depth: 0 }),
+    );
     this.track("HOUSE_POS", this.add.image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house").setOrigin(0.5, 0.5));
     this.homeLabel = this.track(
       "HOUSE_POS",
@@ -253,6 +260,7 @@ export class WorldScene extends Phaser.Scene {
     this.addNpc("NPC_POS", NPC_POS, "ELDER", 0xffffff, "#9f9fd0");
     this.addNpc("SHOP_POS", SHOP_POS, "SHOP", 0xffd166);
 
+    this.track("CAVE_POS", addGroundShadow(this, CAVE_POS, { w: 104, h: 24, yOffset: 56 }));
     this.track("CAVE_POS", this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9));
     // the cave mouth is 128px tall and centred on the entrance tile, so its
     // name clears the art rather than the marker box
@@ -313,7 +321,7 @@ export class WorldScene extends Phaser.Scene {
     // the map editor can paint a tree (or water) over wherever the hero was
     // standing — drop them back at the town spawn rather than inside a wall
     const spawnTile = this.layer.getTileAtWorldXY(spawn.x, spawn.y);
-    const safeSpawn = spawnTile && SOLID.has(spawnTile.index) ? PLAYER_SPAWN : spawn;
+    const safeSpawn = spawnTile && isSolidTile(spawnTile.index) ? PLAYER_SPAWN : spawn;
     this.player = this.physics.add.sprite(safeSpawn.x, safeSpawn.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
@@ -325,46 +333,13 @@ export class WorldScene extends Phaser.Scene {
     // lock expiring here doesn't trigger another fight immediately.
     if (data?.fromBattle) this.escapeMonsterZone();
 
-    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 28, 40, 16, 0x000000, 0.4).setDepth(5);
+    this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
-    const walkFrames = (dir: string): Phaser.Types.Animations.AnimationFrame[] => [0, 1, 2, 3].map((i) => ({ key: `hero-${dir}-${i}` }));
-
-    if (!this.anims.exists("walk-down")) {
-      this.anims.create({
-        key: "walk-down",
-        frames: walkFrames("down"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-up")) {
-      this.anims.create({
-        key: "walk-up",
-        frames: walkFrames("up"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-right")) {
-      this.anims.create({
-        key: "walk-right",
-        frames: walkFrames("right"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("walk-left")) {
-      this.anims.create({
-        key: "walk-left",
-        frames: walkFrames("left"),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
+    createWalkAnimations(this);
 
     this.dust = this.add.particles(0, 0, "dust", {
       speed: { min: 16, max: 44 },
@@ -384,6 +359,9 @@ export class WorldScene extends Phaser.Scene {
       frequency: 700,
       emitting: false,
     });
+    // fireflies are lights, not motes: ADD makes them actually glow once the
+    // night overlay darkens the ground under them
+    this.fireflies.setBlendMode(Phaser.BlendModes.ADD);
     this.fireflies.startFollow(this.player, 0, 0);
 
     this.spawnMonsters();
@@ -449,11 +427,7 @@ export class WorldScene extends Phaser.Scene {
       this.enterSnow();
     });
 
-    this.time.addEvent({
-      delay: 400,
-      loop: true,
-      callback: () => this.animateWater(),
-    });
+    startWaterAnimation(this, this.layer);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
@@ -691,7 +665,7 @@ export class WorldScene extends Phaser.Scene {
   // sprite + shadow + name tag, the shape every town NPC shares
   private addNpc(landmark: string, pos: { x: number; y: number }, label: string, tint: number, labelColor?: string): void {
     this.track(landmark, this.add.sprite(pos.x, pos.y, "npc").setDepth(10).setTint(tint));
-    this.track(landmark, this.add.ellipse(pos.x, pos.y + 28, 40, 16, 0x000000, 0.4).setDepth(5));
+    this.track(landmark, addGroundShadow(this, pos));
     this.track(
       landmark,
       this.add
@@ -1409,7 +1383,7 @@ export class WorldScene extends Phaser.Scene {
   private escapeMonsterZone(): void {
     const spot = escapeFromZones(MONSTER_ZONES, this.player.x, this.player.y, (tx, ty) => {
       const tile = this.layer.getTileAt(tx, ty);
-      return !!tile && !SOLID.has(tile.index);
+      return !!tile && !isSolidTile(tile.index);
     });
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
@@ -1582,13 +1556,6 @@ export class WorldScene extends Phaser.Scene {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
       this.scene.start("Battle", { enemy: kind, from: "World" });
-    });
-  }
-
-  private animateWater(): void {
-    this.layer.forEachTile((tile) => {
-      if (tile.index === T_WATER_A) tile.index = T_WATER_B;
-      else if (tile.index === T_WATER_B) tile.index = T_WATER_A;
     });
   }
 }
