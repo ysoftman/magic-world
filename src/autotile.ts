@@ -1,17 +1,12 @@
 // Autotiling helpers: coastline/path-edge transition tiles (dual-grid corner
 // sampling) and deterministic per-cell tile variation (grass/water/path).
 //
-// Pure logic only — nothing here is wired into a scene yet. The next round
-// wires this into WorldScene (or whichever scene owns the tilemap):
-//   1. after `this.layer.setCollision(Array.from(SOLID))`,
-//   2. for variation: loop every cell, and where `level[y][x]` matches a
-//      base tile with variants (grass, waterA, waterB, path), call
-//      `layer.putTileAt(pickVariant(variants, x, y), x, y)` — safe to re-run
-//      on every scene (re)create (battle/dungeon return, F2 "R" reset)
-//      because it's deterministic, not random,
-//   3. for transitions: call `buildTransitionLayer(...)` once per terrain
-//      pair (shore, road) — it renders its own Container, already
-//      depth-ordered above the base tile layer and below every actor.
+// Wired in from sceneCommon.ts, which the four roaming scenes call after
+// setting up their tilemap layer: applyTileVariations paints variant indices
+// onto the render layer, then buildTerrainOverlays adds one transition
+// container per terrain pair. Both are safe to re-run on every scene
+// (re)create — variation is a deterministic hash rather than random, and the
+// overlay containers go away with the scene.
 //
 // Nothing here touches `level[][]`, `overworldMap.ts`, or the map editor's
 // export path: MapEditor reads `this.level` (the logical grid) to export,
@@ -19,7 +14,10 @@
 // the layer alone is invisible to the map file and the F2 editor.
 
 import type Phaser from "phaser";
-import { TILE } from "./levels";
+import { T_HOUSE, T_TREE, TILE } from "./levels";
+
+/** Tiles that draw an object, not ground — the overlay must not paint over these. */
+const OBJECT_TILES: ReadonlySet<number> = new Set([T_TREE, T_HOUSE]);
 
 /** Tile indices that count as "other" terrain for a corner sample (e.g. the water set, or the path set). */
 export type OtherIds = ReadonlySet<number>;
@@ -147,6 +145,7 @@ export function buildTransitionLayer(
   const container = scene.add.container(0, 0).setDepth(depth);
   for (let gy = 0; gy <= mapH; gy++) {
     for (let gx = 0; gx <= mapW; gx++) {
+      if (coversAnObject(level, gx, gy)) continue;
       const index = transitionTileIndex(cornerMask(level, gx, gy, otherIds));
       if (index === null) continue;
       const frameKey = ensureTileFrame(scene, textureKey, index, tileSize);
@@ -154,6 +153,30 @@ export function buildTransitionLayer(
     }
   }
   return container;
+}
+
+/**
+ * True when this dual-grid cell straddles a tile that draws an object rather
+ * than ground — a tree or a house.
+ *
+ * cornerMask only asks "is this corner the other terrain?", so a tree counts
+ * as base ground and the overlay happily draws over it. The overlay is fully
+ * opaque and sits above the tilemap, and a dual-grid cell covers the bottom
+ * half of one tile and the top half of the next, so a tree next to a path or
+ * shore lost its trunk to a patch of painted grass. Skipping the cell leaves
+ * that one corner square instead, which is far less visible than a tree cut
+ * in half.
+ */
+function coversAnObject(level: readonly (readonly number[])[], gx: number, gy: number): boolean {
+  for (const [x, y] of [
+    [gx - 1, gy - 1],
+    [gx, gy - 1],
+    [gx - 1, gy],
+    [gx, gy],
+  ]) {
+    if (OBJECT_TILES.has(level[y]?.[x] ?? -1)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
