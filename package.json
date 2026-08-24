@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:art": "bun scripts/check-art.mjs"
   },
   "dependencies": {
     "phaser": "^4.2.1"
