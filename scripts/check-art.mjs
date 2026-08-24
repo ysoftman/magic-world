@@ -30,11 +30,17 @@ const grids = new Map();
 for (const m of src.matchAll(/^const ([A-Z0-9_]+) = \[([\s\S]*?)\];$/gm)) {
   const body = m[2];
   if (!/^[\s"'.\w,]*$/.test(body) || !body.includes('"')) continue;
-  grids.set(m[1], [...body.matchAll(/"([^"]*)"/g)].map((r) => r[1]));
+  grids.set(
+    m[1],
+    [...body.matchAll(/"([^"]*)"/g)].map((r) => r[1]),
+  );
 }
 // single-line grids such as HERO_TORSO
 for (const m of src.matchAll(/^const ([A-Z0-9_]+) = (\["[^\]]*"\]);$/gm)) {
-  grids.set(m[1], [...m[2].matchAll(/"([^"]*)"/g)].map((r) => r[1]));
+  grids.set(
+    m[1],
+    [...m[2].matchAll(/"([^"]*)"/g)].map((r) => r[1]),
+  );
 }
 const palettes = new Map();
 for (const m of src.matchAll(/^const ([A-Z0-9_]+_PALETTE) = \{([\s\S]*?)\};$/gm)) {
@@ -50,7 +56,10 @@ for (const [name, rows] of grids) {
     fail(
       `${name}: rows are not all the same length (${lens.sort((a, b) => a - b).join("/")}); ` +
         `texture would be ${widest} wide: ` +
-        rows.map((r, i) => (r.length === widest && lens.length > 1 ? `row ${i}=${r.length}` : null)).filter(Boolean).join(", "),
+        rows
+          .map((r, i) => (r.length === widest && lens.length > 1 ? `row ${i}=${r.length}` : null))
+          .filter(Boolean)
+          .join(", "),
     );
   }
 }
@@ -116,15 +125,21 @@ for (const [, key, body, size] of bakes) {
   const entries = [...body.matchAll(/\{\s*rows:\s*([A-Z0-9_]+),\s*palette:\s*([A-Z0-9_]+)\s*\}/g)].map((m) => m[1]);
   const tileSize = Number(size);
   baked.set(key, entries);
-  console.log(`${key}: ${entries.length} tiles x ${tileSize}px x${PIXEL} = ${entries.length * tileSize * PIXEL}px wide, ${tileSize * PIXEL}px tall`);
+  console.log(
+    `${key}: ${entries.length} tiles x ${tileSize}px x${PIXEL} = ${entries.length * tileSize * PIXEL}px wide, ${tileSize * PIXEL}px tall`,
+  );
   if (tileSize * PIXEL !== TILE) fail(`${key}: tile pitch ${tileSize * PIXEL}px does not match the ${TILE}px the scenes read`);
   // 2048 is the GL_MAX_TEXTURE_SIZE floor on mobile GPUs; this game ships touch controls
   const width = entries.length * tileSize * PIXEL;
   if (width > 2048) fail(`${key} is ${width}px wide, past the 2048px GL_MAX_TEXTURE_SIZE floor on mobile -- split it`);
   for (const name of entries) {
     const rows = grids.get(name);
-    if (!rows) { fail(`${key} bakes unknown grid ${name}`); continue; }
-    if (rows.length !== tileSize || rows[0].length !== tileSize) fail(`${name} is ${rows[0].length}x${rows.length}, ${key} wants ${tileSize}x${tileSize}`);
+    if (!rows) {
+      fail(`${key} bakes unknown grid ${name}`);
+      continue;
+    }
+    if (rows.length !== tileSize || rows[0].length !== tileSize)
+      fail(`${name} is ${rows[0].length}x${rows.length}, ${key} wants ${tileSize}x${tileSize}`);
   }
 }
 
@@ -132,11 +147,36 @@ for (const [, key, body, size] of bakes) {
 const tiles = baked.get("tiles16");
 if (!tiles) fail('no "tiles16" bake found');
 else {
-  const declared = [...src.matchAll(/^\s*(grass|waterA|waterB|path): \[([\d, ]+)\],$/gm)].flatMap((m) => m[2].split(",").map(Number));
+  // read whatever sets TILE_VARIANTS declares rather than a list of names, so a
+  // set added later is covered without anyone remembering to update this
+  const block = src.match(/export const TILE_VARIANTS = \{([\s\S]*?)\} as const;/);
+  if (!block) fail("could not find the TILE_VARIANTS export");
+  const sets = [...(block?.[1] ?? "").matchAll(/^\s*(\w+): \[([\d, ]+)\],$/gm)].map((m) => [m[1], m[2].split(",").map(Number)]);
+  if (!sets.length) fail("TILE_VARIANTS declares no sets");
+  const declared = sets.flatMap(([, ids]) => ids);
   const over = declared.filter((i) => i >= tiles.length);
   if (over.length) fail(`TILE_VARIANTS points at tile ${over.join(", ")} but tiles16 only has ${tiles.length}`);
   const dupes = declared.filter((v, i) => declared.indexOf(v) !== i);
   if (dupes.length) fail(`TILE_VARIANTS lists tile ${dupes.join(", ")} twice`);
+  // a variation slot holding the same art as another in its set does nothing.
+  // Driven off TILE_VARIANTS (index -> the grid tiles16 bakes there) instead of
+  // the calm table below, which only lists the terrains that have a contrast cap
+  // and so silently skipped the tree set when it was added.
+  for (const [label, ids] of sets) {
+    const seen = new Map();
+    for (const i of ids) {
+      const name = tiles[i];
+      const key = (grids.get(name) ?? []).join("|");
+      if (!name || !key) {
+        fail(`TILE_VARIANTS.${label} index ${i} bakes no grid`);
+        continue;
+      }
+      if (seen.has(key))
+        fail(`TILE_VARIANTS.${label}: ${name} (index ${i}) is byte-identical to ${seen.get(key)} -- that variation slot does nothing`);
+      else seen.set(key, `${name} (index ${i})`);
+    }
+    console.log(`TILE_VARIANTS.${label}: ${ids.length} distinct tiles at ${ids.join(",")}`);
+  }
 }
 
 // ---- transition overlays: mask order, and that each tile draws a boundary ----
@@ -155,20 +195,28 @@ const FAMILY = {
 };
 for (const [key, cfg] of Object.entries(FAMILY)) {
   const entries = baked.get(key);
-  if (!entries) { console.log(`note  no "${key}" bake yet`); continue; }
+  if (!entries) {
+    console.log(`note  no "${key}" bake yet`);
+    continue;
+  }
   const want = Array.from({ length: 14 }, (_, i) => `${cfg.key}_TILE_${i + 1}`);
   const ordered = entries.join(",") === want.join(",");
   if (!ordered) fail(`${key} is not in corner-mask 1..14 order: ${entries.join(", ")}`);
-  let clear = 0, missing = 0;
   for (const name of entries) {
     const rows = grids.get(name);
     if (!rows) continue;
     const flat = rows.join("");
     const t = [...flat].filter((c) => c === TRANSPARENT).length;
-    if (t) { fail(`${name} has ${t} transparent px -- a placed overlay tile must cover its cell`); clear++; }
+    if (t) {
+      fail(`${name} has ${t} transparent px -- a placed overlay tile must cover its cell`);
+      clear++;
+    }
     const hasOther = [...flat].some((c) => cfg.other.includes(c));
     const hasGrass = [...flat].some((c) => cfg.grass.includes(c));
-    if (!hasOther || !hasGrass) { fail(`${name} holds only ${hasOther ? "water/path" : "grass"} -- it draws no boundary`); missing++; }
+    if (!hasOther || !hasGrass) {
+      fail(`${name} holds only ${hasOther ? "water/path" : "grass"} -- it draws no boundary`);
+      missing++;
+    }
   }
   const cover = entries.map((n) => Math.round(([...grids.get(n).join("")].filter((c) => cfg.other.includes(c)).length / 256) * 100));
   console.log(`${key}: ${ordered ? "mask 1..14 order ok" : "ORDER BROKEN"}, opaque, water/path share ${cover.join("/")}%`);
@@ -202,11 +250,32 @@ for (const [key, cfg] of Object.entries(FAMILY)) {
 // contrast, and the tree/monsters/chest/coin were signed off as-is.
 // Water is reported but not capped -- its foam is a shape, not scatter.
 const CALM_LIMITS = {
-  grass: { base: "g", palette: "GRASS_PALETTE", tiles: ["GRASS_TILE", "GRASS_TILE_2", "GRASS_TILE_3", "GRASS_TILE_4"], maxNonBasePct: 60, maxDarkPct: 30, maxLumaSpread: 20 },
-  path: { base: "p", palette: "PATH_PALETTE", tiles: ["PATH_TILE", "PATH_TILE_2", "PATH_TILE_3", "PATH_TILE_4"], maxNonBasePct: 60, maxDarkPct: 30, maxLumaSpread: 20 },
+  grass: {
+    base: "g",
+    palette: "GRASS_PALETTE",
+    tiles: ["GRASS_TILE", "GRASS_TILE_2", "GRASS_TILE_3", "GRASS_TILE_4"],
+    maxNonBasePct: 60,
+    maxDarkPct: 30,
+    maxLumaSpread: 20,
+  },
+  path: {
+    base: "p",
+    palette: "PATH_PALETTE",
+    tiles: ["PATH_TILE", "PATH_TILE_2", "PATH_TILE_3", "PATH_TILE_4"],
+    maxNonBasePct: 60,
+    maxDarkPct: 30,
+    maxLumaSpread: 20,
+  },
   tall: { base: "g", palette: "TALL_PALETTE", tiles: ["TALL_TILE"], maxNonBasePct: 60, maxDarkPct: 30, maxLumaSpread: 20 },
   soil: { base: "s", palette: "SOIL_PALETTE", tiles: ["SOIL_TILE"], maxNonBasePct: 60, maxDarkPct: 30, maxLumaSpread: 20 },
-  water: { base: "W", palette: "WATER_PALETTE", tiles: ["WATER_A", "WATER_A_2", "WATER_A_3", "WATER_A_4"], maxNonBasePct: null, maxDarkPct: null, maxLumaSpread: null },
+  water: {
+    base: "W",
+    palette: "WATER_PALETTE",
+    tiles: ["WATER_A", "WATER_A_2", "WATER_A_3", "WATER_A_4"],
+    maxNonBasePct: null,
+    maxDarkPct: null,
+    maxLumaSpread: null,
+  },
 };
 const luma = (c) => 0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255);
 const paletteColours = (name) => {
@@ -221,11 +290,15 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
   const perChar = {};
   for (const name of cfg.tiles) {
     const rows = grids.get(name);
-    if (!rows) { fail(`calm check: no grid ${name}`); continue; }
-    for (const row of rows) for (const ch of row) {
-      total++;
-      if (ch !== cfg.base) perChar[ch] = (perChar[ch] ?? 0) + 1;
+    if (!rows) {
+      fail(`calm check: no grid ${name}`);
+      continue;
     }
+    for (const row of rows)
+      for (const ch of row) {
+        total++;
+        if (ch !== cfg.base) perChar[ch] = (perChar[ch] ?? 0) + 1;
+      }
   }
   if (!total) continue;
   const pct = (n) => (n / total) * 100;
@@ -233,29 +306,30 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
   const spread = Math.max(0, ...Object.keys(perChar).map((ch) => Math.abs(luma(colours[ch]) - baseLuma)));
   // "dark" = every non-base char darker than the base; scattered dark cells read
   // as grit rather than texture, which is why they get their own limit
-  const dark = pct(Object.entries(perChar).filter(([ch]) => luma(colours[ch]) < baseLuma).reduce((a, [, n]) => a + n, 0));
+  const dark = pct(
+    Object.entries(perChar)
+      .filter(([ch]) => luma(colours[ch]) < baseLuma)
+      .reduce((a, [, n]) => a + n, 0),
+  );
   const detail = Object.entries(perChar)
     .sort((a, b) => b[1] - a[1])
-    .map(([ch, n]) => `${ch}(${luma(colours[ch]) - baseLuma >= 0 ? "+" : ""}${(luma(colours[ch]) - baseLuma).toFixed(0)}) ${pct(n).toFixed(1)}%`)
+    .map(
+      ([ch, n]) =>
+        `${ch}(${luma(colours[ch]) - baseLuma >= 0 ? "+" : ""}${(luma(colours[ch]) - baseLuma).toFixed(0)}) ${pct(n).toFixed(1)}%`,
+    )
     .join("  ");
   const limit = (v, cap, what) => {
     if (cap === null) return `${v.toFixed(1)}`;
-    if (v > cap) { fail(`${label} ${what} is ${v.toFixed(1)}, over the ${cap} limit -- terrain must stay calm under the sprites`); return `${v.toFixed(1)}>${cap}`; }
+    if (v > cap) {
+      fail(`${label} ${what} is ${v.toFixed(1)}, over the ${cap} limit -- terrain must stay calm under the sprites`);
+      return `${v.toFixed(1)}>${cap}`;
+    }
     return `${v.toFixed(1)}<=${cap}`;
   };
-  console.log(`  ${label.padEnd(6)} non-base ${limit(nonBase, cfg.maxNonBasePct, "non-base share")}%  dark ${limit(dark, cfg.maxDarkPct, "dark-cell share")}%  luma spread ${limit(spread, cfg.maxLumaSpread, "luma spread")}`);
+  console.log(
+    `  ${label.padEnd(6)} non-base ${limit(nonBase, cfg.maxNonBasePct, "non-base share")}%  dark ${limit(dark, cfg.maxDarkPct, "dark-cell share")}%  luma spread ${limit(spread, cfg.maxLumaSpread, "luma spread")}`,
+  );
   console.log(`         ${detail}`);
-}
-// variations must actually differ -- a phase offset that is a multiple of the
-// pattern period silently produces duplicate tiles
-for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
-  if (cfg.tiles.length < 2) continue;
-  const seen = new Map();
-  for (const n of cfg.tiles) {
-    const key = (grids.get(n) ?? []).join("|");
-    if (seen.has(key)) fail(`${label}: ${n} is byte-identical to ${seen.get(key)} -- that variation slot does nothing`);
-    else seen.set(key, n);
-  }
 }
 
 console.log(fails ? `\n${fails} problem(s)` : "\nall grid checks passed");

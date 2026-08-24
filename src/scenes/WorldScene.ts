@@ -1372,6 +1372,12 @@ export class WorldScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // Reads the *rendered* index, which applyTileVariations repaints. That is
+    // safe only because tall grass has no variation frames — every other
+    // terrain here can render as 8..22 instead of its base index. If tall grass
+    // ever gains variations this comparison starts silently returning early
+    // (encounters stop firing) with nothing to catch it: fold the index back to
+    // its base first, the way isSolidTile does.
     const tile = this.layer.getTileAtWorldXY(this.player.x, this.player.y);
     if (!tile || tile.index !== TALL_GRASS) return;
     const rate = ENCOUNTER_RATE * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);

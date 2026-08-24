@@ -12,11 +12,18 @@ const WALK_FRAME_RATE = 10;
 // Every variant set starts with the base index the map data actually stores
 // (TILE_VARIANTS.grass[0] === T_GRASS and so on), so the first entry doubles as
 // the set's key and as the "plain" look.
-const VARIANT_SETS: readonly (readonly number[])[] = [TILE_VARIANTS.grass, TILE_VARIANTS.waterA, TILE_VARIANTS.waterB, TILE_VARIANTS.path];
+const VARIANT_SETS: readonly (readonly number[])[] = [
+  TILE_VARIANTS.grass,
+  TILE_VARIANTS.waterA,
+  TILE_VARIANTS.waterB,
+  TILE_VARIANTS.path,
+  TILE_VARIANTS.tree,
+];
 const VARIANTS_BY_BASE = new Map<number, readonly number[]>(VARIANT_SETS.map((set) => [set[0], set]));
 const BASE_BY_VARIANT = new Map<number, number>(VARIANT_SETS.flatMap((set) => set.map((index): [number, number] => [index, set[0]])));
-// The variation frames of a solid base (the water sets) — they have to collide
-// exactly like the base tile they replace.
+// The variation frames of a solid base (water and trees) — they have to collide
+// exactly like the base tile they replace. Painting and collision both come off
+// VARIANT_SETS, so a set can never be painted without being made solid too.
 const SOLID_VARIANT_INDEXES: number[] = VARIANT_SETS.filter((set) => SOLID.has(set[0])).flatMap((set) => set.slice(1));
 
 /** Tile index pairs the water tick swaps. Add a pair per water variation. */

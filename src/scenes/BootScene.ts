@@ -287,6 +287,65 @@ const TREE_TILE = [
   "gghggbttTTbghggg",
   "hgggssssssssgggh",
 ];
+// Three more of the same species so a run of trees is not one stamp repeated.
+// Only the canopy's centre, radius and squash differ; the trunk and the ground
+// shadow are copied from TREE_TILE unchanged, because vertically adjacent trees
+// have to line up and the trunk is what marks where the tree stands. Each keeps
+// the same one-column margin, so they connect exactly where tile 3 does.
+const TREE_TILE_2 = [
+  "gggghgggghgggghg",
+  "gghgggbbbggghggg",
+  "hggbbbHHHbbbgggh",
+  "ggbbHHcHccDbbhgg",
+  "ghbHHHcccDDDbggg",
+  "gbHHHHcccDDSDbhg",
+  "gbHcHccDDDDSSbgg",
+  "hbHccDcDDDSSSbgh",
+  "gbccDcDSSSSSSbgg",
+  "ghbccDDSSSSSbggg",
+  "gggbSDSSSSSbgghg",
+  "gghgbbttTTbbhggg",
+  "hggggbttTTbggggh",
+  "ggghgbttTTbgghgg",
+  "ghgggbttTTbhgggg",
+  "ggggssssssssgghg",
+];
+const TREE_TILE_3 = [
+  "ggghgggbbbggghgg",
+  "ghgggbbHHHbbgggg",
+  "gggbbHHcHHccbbhg",
+  "gghbHHHHccDDDbgg",
+  "hgbHHHcccDcDDSbh",
+  "ggbHcHHcDDSDDSbg",
+  "ghbHHccDDDSSSSbg",
+  "ggbHcccDDDDSSSbg",
+  "ggbHcDDSSSSSSSbg",
+  "hggbcDDDDSSSSbgh",
+  "ggghbDDSDSSSbhgg",
+  "ghggbbttTTbbgggg",
+  "gggghbttTTbggghg",
+  "gghggbttTTbghggg",
+  "hggggbttTTbggggh",
+  "ggghssssssssghgg",
+];
+const TREE_TILE_4 = [
+  "gghgggbbbbgghggg",
+  "hgggbbHHHHbbgggh",
+  "gggbHHHHcccDbhgg",
+  "ghbHHHHccccDDbgg",
+  "ggbHHcHccDDSDbhg",
+  "ggbHcHcccDDSSbgg",
+  "hgbcHccDDSDSSbgh",
+  "ggbcHDDDSDDSSbgg",
+  "ghbHccDDDSSSSbgg",
+  "gggbDDDSSSSSbghg",
+  "gghbbSSSSSSbbggg",
+  "hgggbbttTTbbgggh",
+  "ggghgbttTTbgghgg",
+  "ghgggbttTTbhgggg",
+  "gggghbttTTbggghg",
+  "gghgsssssssshggg",
+];
 
 // P/m/S/D are kept for the road transition overlays (ROAD_TILE_*) even though
 // the path terrain tiles themselves only use p and h. An unused palette entry
@@ -1909,14 +1968,21 @@ function makeTitleBg(scene: Phaser.Scene): void {
 }
 
 // Interchangeable tile indices for one terrain, so callers never hardcode the
-// numbers. Same-position entries of waterA/waterB are the two animation frames
-// of one ripple layout: index i of waterA must be swapped with index i of
-// waterB.
+// numbers. Every set's first entry is the index the map data stores, so it works
+// as both the set's key and its plain look.
+//
+// Same-position entries of waterA/waterB are the two animation frames of one
+// ripple layout: index i of waterA must be swapped with index i of waterB.
+//
+// `tree` is a solid base, unlike grass and path. Whatever consumes these has to
+// register the variation indices as colliding too, or trees painted with a
+// variation become walkable.
 export const TILE_VARIANTS = {
   grass: [0, 8, 9, 10],
   waterA: [1, 11, 12, 13],
   waterB: [2, 14, 15, 16],
   path: [4, 17, 18, 19],
+  tree: [3, 20, 21, 22],
 } as const;
 
 export class BootScene extends Phaser.Scene {
@@ -1957,6 +2023,9 @@ export class BootScene extends Phaser.Scene {
         { rows: PATH_TILE_2, palette: PATH_PALETTE },
         { rows: PATH_TILE_3, palette: PATH_PALETTE },
         { rows: PATH_TILE_4, palette: PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: TREE_PALETTE },
       ],
       16,
     );
