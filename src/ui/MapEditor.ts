@@ -6,7 +6,6 @@ import {
   MAP_H,
   MAP_W,
   mapToRows,
-  SOLID,
   saveMapOverride,
   T_GRASS,
   T_HOUSE,
@@ -18,6 +17,7 @@ import {
   TILE,
 } from "../levels";
 import { retroStyle, showToast } from "../pixelart";
+import { paintTile, type TileLayers } from "../sceneCommon";
 import { STATUS_HUD_TOAST_Y } from "./StatusHud";
 
 const BRUSHES: Array<{ key: number; name: string }> = [
@@ -58,7 +58,7 @@ const T = ${TILE};
 
 export class MapEditor {
   private scene: Phaser.Scene;
-  private layer: Phaser.Tilemaps.TilemapLayer;
+  private layers: TileLayers;
   private level: number[][];
   private active = false;
   private mode: "tile" | "landmark" = "tile";
@@ -82,14 +82,9 @@ export class MapEditor {
   private info: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
 
-  constructor(
-    scene: Phaser.Scene,
-    layer: Phaser.Tilemaps.TilemapLayer,
-    level: number[][],
-    onMoveLandmark: (name: string, x: number, y: number) => void,
-  ) {
+  constructor(scene: Phaser.Scene, layers: TileLayers, level: number[][], onMoveLandmark: (name: string, x: number, y: number) => void) {
     this.scene = scene;
-    this.layer = layer;
+    this.layers = layers;
     this.level = level;
     this.onMoveLandmark = onMoveLandmark;
     this.names = Object.keys(EDITABLE_POS);
@@ -353,9 +348,9 @@ export class MapEditor {
     if (this.mode === "tile") {
       const index = BRUSHES[this.brush].key;
       this.level[ty][tx] = index;
-      this.layer.putTileAt(index, tx, ty);
-      // putTileAt drops the collision flag the layer was built with
-      this.layer.setCollision(Array.from(SOLID));
+      // Both render layers: a tree brush paints the object layer over ground,
+      // anything else paints the ground and clears the object above it.
+      paintTile(this.layers, tx, ty, index);
       return;
     }
     const name = this.names[this.landmark];

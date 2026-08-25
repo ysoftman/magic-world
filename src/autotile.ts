@@ -1,12 +1,17 @@
 // Autotiling helpers: coastline/path-edge transition tiles (dual-grid corner
 // sampling) and deterministic per-cell tile variation (grass/water/path).
 //
-// Wired in from sceneCommon.ts, which the four roaming scenes call after
-// setting up their tilemap layer: applyTileVariations paints variant indices
-// onto the render layer, then buildTerrainOverlays adds one transition
-// container per terrain pair. Both are safe to re-run on every scene
-// (re)create — variation is a deterministic hash rather than random, and the
-// overlay containers go away with the scene.
+// Wired in from sceneCommon.ts: buildTileLayers paints variant indices onto
+// the terrain layer and then adds one transition container per terrain pair.
+// Both are safe to re-run on every scene (re)create — variation is a
+// deterministic hash rather than random, and the overlay containers go away
+// with the scene.
+//
+// The grid handed to buildTransitionLayer is the *ground* grid, not `level`:
+// object tiles (tree, house) have already been swapped for the ground under
+// them, so a corner sample never has to know an object exists. The overlay is
+// free to run straight through an object's cell, because the object layer is
+// drawn above it (see TRANSITION_DEPTH below).
 //
 // Nothing here touches `level[][]`, `overworldMap.ts`, or the map editor's
 // export path: MapEditor reads `this.level` (the logical grid) to export,
@@ -14,10 +19,25 @@
 // the layer alone is invisible to the map file and the F2 editor.
 
 import type Phaser from "phaser";
-import { T_HOUSE, T_TREE, TILE } from "./levels";
+import { T_GRASS, TILE } from "./levels";
 
-/** Tiles that draw an object, not ground — the overlay must not paint over these. */
-const OBJECT_TILES: ReadonlySet<number> = new Set([T_TREE, T_HOUSE]);
+/**
+ * The terrain the transition art paints on its NON-`otherIds` half. Both
+ * "shore16" and "road16" draw grass there — `bun run check:art` asserts their
+ * grass tones match GRASS_PALETTE exactly, which is the same reason this
+ * constant exists. Re-point it (or split it per texture) the day either
+ * texture's base half stops being grass.
+ *
+ * This is the third bug of one shape, so the shape is worth naming: this file
+ * and applyTileVariations both work off tile *indexes* and used to quietly
+ * ASSUME what those indexes were. Water variation frames were painted without
+ * being registered as solid, so water became walkable. The overlay was painted
+ * over trees, so trees lost their trunks. The overlay was painted over soil, so
+ * a farm plot rendered as a square of grass. Every time the guard has to ask
+ * "does what I am about to draw actually match this tile?", never "everything
+ * that is not `otherIds` must be grass".
+ */
+const OVERLAY_BASE_ID = T_GRASS;
 
 /** Tile indices that count as "other" terrain for a corner sample (e.g. the water set, or the path set). */
 export type OtherIds = ReadonlySet<number>;
@@ -48,9 +68,10 @@ export const ROAD_TEXTURE_KEY = "road16";
 export const TRANSITION_TILE_COUNT = 14;
 
 /**
- * Depth for the transition overlay: above the base tile layer (depth 0 — the
- * ground/tree tilemap and the un-depth-set house image both sit there) but
- * below anything with a real "standing on the ground" depth: shadows (5),
+ * Depth for the transition overlay: above the terrain layer (depth 0) but
+ * below the object layer (depth 2), which is what lets an edge run through a
+ * tree's cell without cutting the tree in half — the tree is drawn again on
+ * top of it. Below every "standing on the ground" depth too: shadows (5),
  * farm crops (8), signs/cave art (9), the exit marker (9.5) and every actor
  * (10+). Matches WorldScene's depth scale as read for this task — re-check
  * that scale if it changes.
@@ -84,7 +105,7 @@ export function cornerMask(level: readonly (readonly number[])[], gx: number, gy
  * texture ("shore16" or "road16" — both use the same mask-to-frame mapping,
  * only the texture differs), or null when nothing should be drawn. Mask 0
  * (all 4 corners are base terrain) and mask 15 (all 4 are "other") both mean
- * this dual-grid cell sits entirely inside one terrain — the base tile layer
+ * this dual-grid cell sits entirely inside one terrain — the terrain layer
  * underneath already shows the right thing there, so there's nothing to
  * overlay.
  *
@@ -122,32 +143,34 @@ function ensureTileFrame(scene: Phaser.Scene, textureKey: string, index: number,
 }
 
 /**
- * Builds one terrain-pair's transition overlay as a Container of Images,
- * laid out on the dual (offset-by-half-tile) grid over `level`. Call once
- * per terrain pair after the base tilemap layer exists — e.g.:
- *   buildTransitionLayer(this, this.level, SHORE_TEXTURE_KEY, new Set([T_WATER_A, T_WATER_B]))
- *   buildTransitionLayer(this, this.level, ROAD_TEXTURE_KEY, new Set([T_PATH]))
+ * Builds one terrain-pair's transition overlay as a Container of Images, laid
+ * out on the dual (offset-by-half-tile) grid over `ground` — the grid of what
+ * the terrain layer actually painted, object tiles already resolved to the
+ * ground beneath them. Call once per terrain pair after the terrain layer
+ * exists — e.g.:
+ *   buildTransitionLayer(this, ground, SHORE_TEXTURE_KEY, new Set([T_WATER_A, T_WATER_B]))
+ *   buildTransitionLayer(this, ground, ROAD_TEXTURE_KEY, new Set([T_PATH]))
  *
- * Purely additive — never mutates `level` or any Tilemap layer. `textureKey`
+ * Purely additive — never mutates the grid or any Tilemap layer. `textureKey`
  * must already have 14 frames baked in at index 0..13 (mask 1..14 — see
  * transitionTileIndex above); currently "shore16"/"road16".
  */
 export function buildTransitionLayer(
   scene: Phaser.Scene,
-  level: readonly (readonly number[])[],
+  ground: readonly (readonly number[])[],
   textureKey: string,
   otherIds: OtherIds,
   tileSize = TILE,
   depth = TRANSITION_DEPTH,
 ): Phaser.GameObjects.Container {
-  const mapH = level.length;
-  const mapW = level[0]?.length ?? 0;
+  const mapH = ground.length;
+  const mapW = ground[0]?.length ?? 0;
   const container = scene.add.container(0, 0).setDepth(depth);
   for (let gy = 0; gy <= mapH; gy++) {
     for (let gx = 0; gx <= mapW; gx++) {
-      if (coversAnObject(level, gx, gy)) continue;
-      const index = transitionTileIndex(cornerMask(level, gx, gy, otherIds));
+      const index = transitionTileIndex(cornerMask(ground, gx, gy, otherIds));
       if (index === null) continue;
+      if (!coversOnlyPaintableGround(ground, gx, gy, otherIds)) continue;
       const frameKey = ensureTileFrame(scene, textureKey, index, tileSize);
       container.add(scene.add.image(gx * tileSize - tileSize / 2, gy * tileSize - tileSize / 2, textureKey, frameKey).setOrigin(0, 0));
     }
@@ -156,27 +179,35 @@ export function buildTransitionLayer(
 }
 
 /**
- * True when this dual-grid cell straddles a tile that draws an object rather
- * than ground — a tree or a house.
+ * True when every corner of this dual cell is ground the transition art can
+ * honestly cover: the base terrain it paints on one half (OVERLAY_BASE_ID), or
+ * the `otherIds` terrain it paints on the other. Soil and tall grass are
+ * neither, and the art is fully opaque, so an overlay tile straddling them
+ * wipes them out and leaves grass behind — the farm losing its bottom-right
+ * plot to the road below it, or a monster zone losing the tall grass that
+ * marks it, which is a gameplay signal and not just a smudge.
  *
- * cornerMask only asks "is this corner the other terrain?", so a tree counts
- * as base ground and the overlay happily draws over it. The overlay is fully
- * opaque and sits above the tilemap, and a dual-grid cell covers the bottom
- * half of one tile and the top half of the next, so a tree next to a path or
- * shore lost its trunk to a patch of painted grass. Skipping the cell leaves
- * that one corner square instead, which is far less visible than a tree cut
- * in half.
+ * cornerMask only asks "is this corner `otherIds`?", so it folds every other
+ * terrain into one "base" bucket and cannot make this call itself.
+ *
+ * Trees and houses need no guard here any more: they render on the object
+ * layer *above* this overlay (see TRANSITION_DEPTH), so an edge may run
+ * straight through their cell and they are simply drawn again on top. That is
+ * the whole point of the split — the boundary keeps its rounded corner.
+ *
+ * Out of bounds counts as base terrain, exactly as cornerMask treats it.
  */
-function coversAnObject(level: readonly (readonly number[])[], gx: number, gy: number): boolean {
+function coversOnlyPaintableGround(ground: readonly (readonly number[])[], gx: number, gy: number, otherIds: OtherIds): boolean {
   for (const [x, y] of [
     [gx - 1, gy - 1],
     [gx, gy - 1],
     [gx - 1, gy],
     [gx, gy],
   ]) {
-    if (OBJECT_TILES.has(level[y]?.[x] ?? -1)) return true;
+    const tile = ground[y]?.[x];
+    if (tile !== undefined && tile !== OVERLAY_BASE_ID && !otherIds.has(tile)) return false;
   }
-  return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------

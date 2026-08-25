@@ -14,6 +14,13 @@ export const MAP_W = 28;
 export const MAP_H = 20;
 
 export const SOLID = new Set<number>([T_WATER_A, T_WATER_B, T_TREE, T_HOUSE]);
+/**
+ * Tiles that draw a thing standing *on* the ground rather than the ground
+ * itself. Their art is cropped to the object with a transparent background, so
+ * they render on the scene's object layer (with ground painted underneath)
+ * instead of the terrain layer — see buildTileLayers in sceneCommon.ts.
+ */
+export const OBJECT_TILES = new Set<number>([T_TREE, T_HOUSE]);
 export const TALL_GRASS = T_TALL;
 
 export interface MonsterZone {

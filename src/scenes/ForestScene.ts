@@ -3,10 +3,10 @@ import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
-import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, SOLID, TILE } from "../levels";
+import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
-import { applyTileVariations, buildTerrainOverlays, createWalkAnimations, isSolidTile, startWaterAnimation } from "../sceneCommon";
+import { buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -17,9 +17,10 @@ import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 
-// This area's terrain grading. The base tilemap and the transition overlays
-// drawn on top of it have to get the same value or the overlays sit on the
-// ground at full brightness.
+// This area's terrain grading. Every piece of the map — the ground layer, the
+// object layer and the transition overlays drawn between them — has to get
+// this same value, or the ungraded piece sits on the rest at full brightness
+// (trees in their own summer green over a graded ground is the giveaway).
 const TERRAIN_TINT = 0x88cc99;
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -58,7 +59,9 @@ export class ForestScene extends Phaser.Scene {
   private companionFollower!: CompanionSprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
+  private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
+  private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private leaves!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -141,17 +144,10 @@ export class ForestScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildForest();
-    const map = this.make.tilemap({
-      data: level,
-      tileWidth: TILE,
-      tileHeight: TILE,
-    });
-    const tileset = map.addTilesetImage("tiles16", "tiles16", TILE, TILE);
-    this.layer = map.createLayer(0, tileset!, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
-    this.layer.setCollision(Array.from(SOLID));
-    applyTileVariations(this.layer, level);
-    this.layer.setTint(TERRAIN_TINT);
-    buildTerrainOverlays(this, level, TERRAIN_TINT);
+    this.level = level;
+    const layers = buildTileLayers(this, level, { tint: TERRAIN_TINT });
+    this.layer = layers.terrain;
+    this.objectLayer = layers.objects;
 
     this.physics.world.setBounds(0, 0, FOREST_W * TILE, FOREST_H * TILE);
 
@@ -165,7 +161,10 @@ export class ForestScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
+    // Both layers: every tree — the whole map border included — moved to the
+    // object layer and carries its collision there, not on the ground.
     this.physics.add.collider(this.player, this.layer);
+    this.physics.add.collider(this.player, this.objectLayer);
 
     // Step clear of every monster zone on entry, the same as the cave.
     this.escapeMonsterZone();
@@ -581,10 +580,7 @@ export class ForestScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(FOREST_ZONES, this.player.x, this.player.y, (tx, ty) => {
-      const tile = this.layer.getTileAt(tx, ty);
-      return !!tile && !isSolidTile(tile.index);
-    });
+    const spot = escapeFromZones(FOREST_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 

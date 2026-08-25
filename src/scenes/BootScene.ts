@@ -249,102 +249,111 @@ const WATER_B_4 = [
   "WWWWWWWWWWWWWWWW",
 ];
 
-// The tree is drawn straight onto a copy of the grass speckle pattern (g/G/L
-// shared with GRASS_TILE) so the tile merges into the map instead of reading
-// as a dark box; b outlines the canopy, c highlights it, t is the trunk.
+// The tree is an OBJECT tile: everything that is not the tree itself is '.',
+// which drawRows skips, so the tile is a cropped tree and whatever terrain the
+// object layer sits on shows through. It used to be painted onto a copy of the
+// grass speckle pattern, which only looked right over grass -- the moment the
+// same tile landed on a road or a tilled plot it dragged a square of lawn with
+// it. b outlines the canopy, c highlights it, t is the trunk.
+//
+// There is deliberately no ground shadow baked in here. This palette holds
+// opaque colours only, and a shadow's whole job is to darken WHATEVER is under
+// it; an opaque pixel can only be pre-mixed for one terrain. The old 's'
+// (0x123a28) was exactly GRASS 0x1f5c42 at 60% -- i.e. what addGroundShadow's
+// black-at-0.4 produces over grass -- so on a road or soil it read as a green
+// smear, not a shadow. If these trees want grounding, addGroundShadow() in
+// pixelart.ts is the terrain-independent way to do it (it alpha-blends), and
+// that belongs in the scene, not in the grid.
 const TREE_PALETTE = {
-  // grass base, identical to tile 0 so the tree tile still merges into the map
-  g: 0x1f5c42,
-  h: 0x216246,
   // canopy: outline + 4-step ramp lit from the top left
   b: 0x07281a,
   S: 0x0d3a26,
   D: 0x155235,
   c: 0x24734a,
   H: 0x53a05f,
-  // trunk lit / shadow side, then the shadow it drops on the grass
+  // trunk lit / shadow side
   t: 0x4a3620,
   T: 0x2f2113,
-  s: 0x123a28,
 };
 // Canopy is a shaded sphere lit from the top left rather than a flat blob:
-// outline, 4-step ramp, then a two-tone trunk and a shadow dropped on the grass.
+// outline, 4-step ramp, then a two-tone trunk.
 const TREE_TILE = [
-  "hgggghgbbghggggh",
-  "ggghbbHHHcbbghgg",
-  "ghgbHHHcHcccbggg",
-  "ggbHHHcHcDDcDbhg",
-  "gbHHHcccDcDcSDbg",
-  "hbHHHHccDDDDSSbh",
-  "gbHHcHDcDDDSSSbg",
-  "gbcHccDDDDSSSSbg",
-  "gbccccDDDSSSSSbg",
-  "ggbDDDDSSSSSSbgg",
-  "hggbDDSSSSSSbggh",
-  "ggghbbttTTbbghgg",
-  "ghgggbttTTbhgggg",
-  "gggghbttTTbggghg",
-  "gghggbttTTbghggg",
-  "hgggssssssssgggh",
+  ".......bb.......",
+  "....bbHHHcbb....",
+  "...bHHHcHcccb...",
+  "..bHHHcHcDDcDb..",
+  ".bHHHcccDcDcSDb.",
+  ".bHHHHccDDDDSSb.",
+  ".bHHcHDcDDDSSSb.",
+  ".bcHccDDDDSSSSb.",
+  ".bccccDDDSSSSSb.",
+  "..bDDDDSSSSSSb..",
+  "...bDDSSSSSSb...",
+  "....bbttTTbb....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  "................",
 ];
 // Three more of the same species so a run of trees is not one stamp repeated.
-// Only the canopy's centre, radius and squash differ; the trunk and the ground
-// shadow are copied from TREE_TILE unchanged, because vertically adjacent trees
-// have to line up and the trunk is what marks where the tree stands. Each keeps
-// the same one-column margin, so they connect exactly where tile 3 does.
+// Only the canopy's centre, radius and squash differ; the trunk is copied from
+// TREE_TILE unchanged, because vertically adjacent trees have to line up and
+// the trunk is what marks where the tree stands. Each keeps the same
+// one-column margin, so they connect exactly where tile 3 does. Background is
+// '.' here for the same reason it is in TREE_TILE.
 const TREE_TILE_2 = [
-  "gggghgggghgggghg",
-  "gghgggbbbggghggg",
-  "hggbbbHHHbbbgggh",
-  "ggbbHHcHccDbbhgg",
-  "ghbHHHcccDDDbggg",
-  "gbHHHHcccDDSDbhg",
-  "gbHcHccDDDDSSbgg",
-  "hbHccDcDDDSSSbgh",
-  "gbccDcDSSSSSSbgg",
-  "ghbccDDSSSSSbggg",
-  "gggbSDSSSSSbgghg",
-  "gghgbbttTTbbhggg",
-  "hggggbttTTbggggh",
-  "ggghgbttTTbgghgg",
-  "ghgggbttTTbhgggg",
-  "ggggssssssssgghg",
+  "................",
+  "......bbb.......",
+  "...bbbHHHbbb....",
+  "..bbHHcHccDbb...",
+  "..bHHHcccDDDb...",
+  ".bHHHHcccDDSDb..",
+  ".bHcHccDDDDSSb..",
+  ".bHccDcDDDSSSb..",
+  ".bccDcDSSSSSSb..",
+  "..bccDDSSSSSb...",
+  "...bSDSSSSSb....",
+  "....bbttTTbb....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  "................",
 ];
 const TREE_TILE_3 = [
-  "ggghgggbbbggghgg",
-  "ghgggbbHHHbbgggg",
-  "gggbbHHcHHccbbhg",
-  "gghbHHHHccDDDbgg",
-  "hgbHHHcccDcDDSbh",
-  "ggbHcHHcDDSDDSbg",
-  "ghbHHccDDDSSSSbg",
-  "ggbHcccDDDDSSSbg",
-  "ggbHcDDSSSSSSSbg",
-  "hggbcDDDDSSSSbgh",
-  "ggghbDDSDSSSbhgg",
-  "ghggbbttTTbbgggg",
-  "gggghbttTTbggghg",
-  "gghggbttTTbghggg",
-  "hggggbttTTbggggh",
-  "ggghssssssssghgg",
+  ".......bbb......",
+  ".....bbHHHbb....",
+  "...bbHHcHHccbb..",
+  "...bHHHHccDDDb..",
+  "..bHHHcccDcDDSb.",
+  "..bHcHHcDDSDDSb.",
+  "..bHHccDDDSSSSb.",
+  "..bHcccDDDDSSSb.",
+  "..bHcDDSSSSSSSb.",
+  "...bcDDDDSSSSb..",
+  "....bDDSDSSSb...",
+  "....bbttTTbb....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  "................",
 ];
 const TREE_TILE_4 = [
-  "gghgggbbbbgghggg",
-  "hgggbbHHHHbbgggh",
-  "gggbHHHHcccDbhgg",
-  "ghbHHHHccccDDbgg",
-  "ggbHHcHccDDSDbhg",
-  "ggbHcHcccDDSSbgg",
-  "hgbcHccDDSDSSbgh",
-  "ggbcHDDDSDDSSbgg",
-  "ghbHccDDDSSSSbgg",
-  "gggbDDDSSSSSbghg",
-  "gghbbSSSSSSbbggg",
-  "hgggbbttTTbbgggh",
-  "ggghgbttTTbgghgg",
-  "ghgggbttTTbhgggg",
-  "gggghbttTTbggghg",
-  "gghgsssssssshggg",
+  "......bbbb......",
+  "....bbHHHHbb....",
+  "...bHHHHcccDb...",
+  "..bHHHHccccDDb..",
+  "..bHHcHccDDSDb..",
+  "..bHcHcccDDSSb..",
+  "..bcHccDDSDSSb..",
+  "..bcHDDDSDDSSb..",
+  "..bHccDDDSSSSb..",
+  "...bDDDSSSSSb...",
+  "...bbSSSSSSbb...",
+  "....bbttTTbb....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  ".....bttTTb.....",
+  "................",
 ];
 
 // P/m/S/D are kept for the road transition overlays (ROAD_TILE_*) even though
@@ -1004,24 +1013,35 @@ const SOIL_TILE = [
   "ssssssssssssssss",
 ];
 
+// Tile 6 is the house FOOTPRINT, not the house: WorldScene draws the building
+// with add.image(..., "house") -- a 128x128 texture centred on the same 2x2
+// block -- plus an addGroundShadow ellipse under it. The tile used to fill that
+// block with a dark slab, and because the house image's top 24px band and its
+// 4px side margins are transparent, the slab showed as a purple box sticking
+// out above the roof and down both sides. Drawing nothing at all is what makes
+// the building read as a building on any terrain. The index still has to exist
+// (T_HOUSE = 6 is baked into saved map data) and it still collides via SOLID.
+//
+// The palette is kept, and holds the slab's old tones: makeTilesetTexture wants
+// a palette per entry, and an unused entry is harmless -- see PATH_PALETTE.
 const HOUSE_TILE_PALETTE = { s: 0x3d3650, d: 0x322c42 };
 const HOUSE_TILE = [
-  "ssssssssssssssss",
-  "ssssssssssssssss",
-  "ssdssssssssdssss",
-  "ssssssssssssssss",
-  "ssssssdsssssssss",
-  "ssssssssssssssss",
-  "ssdssssssssssdss",
-  "ssssssssssssssss",
-  "sssssssssdssssss",
-  "sssssdssssssssss",
-  "ssssssssssssssss",
-  "sssssssssdssssss",
-  "ssssssssssssssss",
-  "ssdsssssssssssss",
-  "sssssssssssssdss",
-  "ssssssssssssssss",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
 ];
 
 // farm crops, drawn on the plots in the overworld: one shared sprout for the

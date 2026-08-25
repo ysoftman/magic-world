@@ -28,14 +28,21 @@ import {
   RANK_BOARD_POS,
   SHOP_POS,
   SNOW_POS,
-  SOLID,
   T_GRASS,
   TALL_GRASS,
   TILE,
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
-import { applyTileVariations, buildTerrainOverlays, createWalkAnimations, isSolidTile, startWaterAnimation } from "../sceneCommon";
+import {
+  buildTileLayers,
+  createWalkAnimations,
+  isWalkableCell,
+  OBJECT_LAYER_DEPTH,
+  paintTile,
+  startWaterAnimation,
+  type TileLayers,
+} from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -70,6 +77,9 @@ const EXIT_AREA_COLOR = 0xffd166;
 // above it) and the destination name, so the name reads as part of the box
 const EXIT_LABEL_GAP = 20;
 const GOLDEN_SLIME_CHANCE = 0.08;
+// The house art and its shadow, one step above the object layer so neither the
+// transition overlay (1) nor the object layer (2) can paint over the building.
+const HOUSE_DEPTH = OBJECT_LAYER_DEPTH + 1;
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -99,7 +109,7 @@ export class WorldScene extends Phaser.Scene {
   private companionFollower!: CompanionSprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
-  private layer!: Phaser.Tilemaps.TilemapLayer;
+  private layers!: TileLayers;
   private dialogue!: DialogueBox;
   private shop!: ShopUI;
   private inventory!: InventoryUI;
@@ -227,26 +237,25 @@ export class WorldScene extends Phaser.Scene {
 
     const level = buildLevel();
     this.level = level;
-    const map = this.make.tilemap({
-      data: level,
-      tileWidth: TILE,
-      tileHeight: TILE,
-    });
-    const tileset = map.addTilesetImage("tiles16", "tiles16", TILE, TILE);
-    this.layer = map.createLayer(0, tileset!, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
-    this.layer.setCollision(Array.from(SOLID));
-    applyTileVariations(this.layer, level);
-    buildTerrainOverlays(this, level);
+    this.layers = buildTileLayers(this, level);
 
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
 
-    // depth 0 and added first so it sits under the house image (which has no
-    // depth of its own) but still over the ground layer
+    // The building covers its own tiles, so it has to clear both the
+    // transition overlay (depth 1) and the object layer (depth 2) — the map
+    // editor can drop the house on the road, and the overlay is opaque. The
+    // shadow shares the depth and is added first, so it stays under the house.
     this.track(
       "HOUSE_POS",
-      addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 118, h: 22, yOffset: 66, depth: 0 }),
+      addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 118, h: 22, yOffset: 66, depth: HOUSE_DEPTH }),
     );
-    this.track("HOUSE_POS", this.add.image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house").setOrigin(0.5, 0.5));
+    this.track(
+      "HOUSE_POS",
+      this.add
+        .image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house")
+        .setOrigin(0.5, 0.5)
+        .setDepth(HOUSE_DEPTH),
+    );
     this.homeLabel = this.track(
       "HOUSE_POS",
       this.add
@@ -320,13 +329,15 @@ export class WorldScene extends Phaser.Scene {
     if (fromDungeon || fromForest || fromSnow) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
     // the map editor can paint a tree (or water) over wherever the hero was
     // standing — drop them back at the town spawn rather than inside a wall
-    const spawnTile = this.layer.getTileAtWorldXY(spawn.x, spawn.y);
-    const safeSpawn = spawnTile && isSolidTile(spawnTile.index) ? PLAYER_SPAWN : spawn;
+    const safeSpawn = isWalkableCell(level, Math.floor(spawn.x / TILE), Math.floor(spawn.y / TILE)) ? spawn : PLAYER_SPAWN;
     this.player = this.physics.add.sprite(safeSpawn.x, safeSpawn.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
-    this.physics.add.collider(this.player, this.layer);
+    // Both layers: the trees and the house block moved off the terrain layer
+    // and carry their collision on the object layer now.
+    this.physics.add.collider(this.player, this.layers.terrain);
+    this.physics.add.collider(this.player, this.layers.objects);
 
     // A battle just ended on this spot, which is inside a monster zone —
     // step out to the nearest walkable tile outside it so the encounter
@@ -427,7 +438,7 @@ export class WorldScene extends Phaser.Scene {
       this.enterSnow();
     });
 
-    startWaterAnimation(this, this.layer);
+    startWaterAnimation(this, this.layers.terrain);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
@@ -517,7 +528,7 @@ export class WorldScene extends Phaser.Scene {
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
     this.farm = new FarmUI(this);
-    this.mapEditor = new MapEditor(this, this.layer, level, (name, x, y) => this.moveLandmark(name, x, y));
+    this.mapEditor = new MapEditor(this, this.layers, level, (name, x, y) => this.moveLandmark(name, x, y));
     // ?edit in the URL opens the editor without a keypress — a way in that
     // survives whatever swallows the hotkey (a Mac's F-keys, an IME holding
     // keydown, a stale tab from an older bundle)
@@ -657,9 +668,8 @@ export class WorldScene extends Phaser.Scene {
       const ty = oy + dy;
       if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) continue;
       this.level[ty][tx] = tile;
-      this.layer.putTileAt(tile, tx, ty);
+      paintTile(this.layers, tx, ty, tile);
     }
-    this.layer.setCollision(Array.from(SOLID));
   }
 
   // sprite + shadow + name tag, the shape every town NPC shares
@@ -1372,14 +1382,13 @@ export class WorldScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
-    // Reads the *rendered* index, which applyTileVariations repaints. That is
-    // safe only because tall grass has no variation frames — every other
-    // terrain here can render as 8..22 instead of its base index. If tall grass
-    // ever gains variations this comparison starts silently returning early
-    // (encounters stop firing) with nothing to catch it: fold the index back to
-    // its base first, the way isSolidTile does.
-    const tile = this.layer.getTileAtWorldXY(this.player.x, this.player.y);
-    if (!tile || tile.index !== TALL_GRASS) return;
+    // Off the logical grid, not the rendered index: the render layer paints a
+    // variation frame (8..22) wherever a terrain has one, so an index compare
+    // there only works while tall grass happens to have none — and it would
+    // start silently returning early (encounters just stop) the day it gains
+    // some. `level` only ever holds base indexes.
+    const cell = this.level[Math.floor(this.player.y / TILE)]?.[Math.floor(this.player.x / TILE)];
+    if (cell !== TALL_GRASS) return;
     const rate = ENCOUNTER_RATE * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);
     if (Math.random() < rate) {
       this.startBattle();
@@ -1387,10 +1396,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(MONSTER_ZONES, this.player.x, this.player.y, (tx, ty) => {
-      const tile = this.layer.getTileAt(tx, ty);
-      return !!tile && !isSolidTile(tile.index);
-    });
+    const spot = escapeFromZones(MONSTER_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 
