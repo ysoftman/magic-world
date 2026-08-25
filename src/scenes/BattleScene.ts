@@ -33,10 +33,14 @@ const LUNGE_OUT_MS = 90;
 const LUNGE_BACK_MS = 110;
 
 type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
-// the top-level menu's 5 buttons — kept as an Extract of MenuAction instead
-// of its own hand-written union, so adding an action here can't silently
-// drift out of sync with MenuAction the way invKey/key once did in Shop.ts
-type MenuEntry = Extract<MenuAction, "fight" | "magic" | "run" | "steal"> | "item";
+// one flat action row, spells included at the same level as everything else;
+// a spell button carries its Spell and resolves as a "magic" action
+interface MenuButton {
+  label: string;
+  action: MenuAction | "item";
+  spell?: Spell;
+  enabled?: () => boolean;
+}
 
 interface ItemSlot {
   label: string;
@@ -78,8 +82,6 @@ const SPELLS: Spell[] = [
   { name: "BOLT", cost: 10, learnLevel: 14, kind: "attack", power: 30, color: 0xfde047, element: "bolt" },
 ];
 
-const SPELLS_PER_ROW = 2;
-
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyDef & { curHp: number };
   private enemySprite!: Phaser.GameObjects.Sprite;
@@ -88,7 +90,7 @@ export class BattleScene extends Phaser.Scene {
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private msgText!: Phaser.GameObjects.Text;
 
-  private menuItems: MenuEntry[] = ["fight", "magic", "item", "steal", "run"];
+  private menuButtons: MenuButton[] = [];
   private menuTexts: Phaser.GameObjects.Text[] = [];
 
   private inItems = false;
@@ -96,11 +98,7 @@ export class BattleScene extends Phaser.Scene {
   private itemTexts: Phaser.GameObjects.Text[] = [];
   private itemCursor!: Phaser.GameObjects.Text;
 
-  private inSpells = false;
-  private spellIndex = 0;
   private pendingSpell!: Spell;
-  private spellTexts: Phaser.GameObjects.Text[] = [];
-  private spellCursor!: Phaser.GameObjects.Text;
   private companionSprite?: Phaser.GameObjects.Sprite;
   private hintText!: Phaser.GameObjects.Text;
 
@@ -160,7 +158,6 @@ export class BattleScene extends Phaser.Scene {
     Sfx.playBgm(BATTLE_THEME);
     this.menuTexts = [];
     this.itemTexts = [];
-    this.spellTexts = [];
     this.inItems = false;
     this.itemIndex = 0;
     this.waitingAction = null;
@@ -229,18 +226,25 @@ export class BattleScene extends Phaser.Scene {
     this.msgText = this.add.text(64, GAME_HEIGHT - 104, "", retroStyle(8, "#f5f5f5")).setWordWrapWidth(GAME_WIDTH - 128);
 
     const menuY = GAME_HEIGHT - 184;
-    const labels: Record<MenuEntry, string> = {
-      fight: "A:FIGHT",
-      magic: "F:MAGIC",
-      item: "I:ITEM",
-      steal: "S:STEAL",
-      run: "ESC:RUN",
-    };
-    let x = 128;
-    for (const item of this.menuItems) {
-      const t = this.add.text(x, menuY, labels[item], retroStyle(8, "#ffffff")).setOrigin(0.5);
-      this.menuTexts.push(t);
-      x += 256;
+    this.menuButtons = [
+      { label: "A:FIGHT", action: "fight" },
+      ...this.knownSpells().map(
+        (s): MenuButton => ({ label: `${s.name[0]}:${s.name}`, action: "magic", spell: s, enabled: () => this.canCast(s) }),
+      ),
+      { label: "E:ITEM", action: "item" },
+      { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
+      { label: "ESC:RUN", action: "run" },
+    ];
+    // spread the row evenly from measured text widths — up to 8 buttons once
+    // every spell is learned, so fixed 256px slots no longer fit
+    const margin = 48;
+    this.menuTexts = this.menuButtons.map((b) => this.add.text(0, menuY, b.label, retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
+    const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
+    const gap = (GAME_WIDTH - margin * 2 - total) / (this.menuTexts.length - 1);
+    let x = margin;
+    for (const t of this.menuTexts) {
+      t.setX(x);
+      x += t.width + gap;
     }
     this.hideMenu();
 
@@ -265,17 +269,6 @@ export class BattleScene extends Phaser.Scene {
       this.itemTexts.push(t);
     }
     this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
-
-    const spellY = GAME_HEIGHT - 232;
-    for (let i = 0; i < SPELLS.length; i++) {
-      const colX = ITEM_COL_X + (i % SPELLS_PER_ROW) * ITEM_COL_WIDTH;
-      const t = this.add
-        .text(colX + ITEM_TEXT_OFFSET, spellY + Math.floor(i / SPELLS_PER_ROW) * 40, "", retroStyle(6, "#ffffff"))
-        .setOrigin(0, 0.5)
-        .setVisible(false);
-      this.spellTexts.push(t);
-    }
-    this.spellCursor = this.add.text(0, spellY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
 
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
@@ -374,52 +367,6 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    if (this.inSpells) {
-      const known = this.knownSpells();
-      if (e.code === "ArrowLeft" || e.code === "KeyH") {
-        this.spellIndex = (this.spellIndex + known.length - 1) % known.length;
-        Sfx.move();
-        this.renderSpells();
-        return;
-      }
-      if (e.code === "ArrowRight" || e.code === "KeyL") {
-        this.spellIndex = (this.spellIndex + 1) % known.length;
-        Sfx.move();
-        this.renderSpells();
-        return;
-      }
-      if (e.code === "ArrowUp" || e.code === "KeyK") {
-        this.spellIndex = (this.spellIndex + known.length - SPELLS_PER_ROW) % known.length;
-        Sfx.move();
-        this.renderSpells();
-        return;
-      }
-      if (e.code === "ArrowDown" || e.code === "KeyJ") {
-        this.spellIndex = (this.spellIndex + SPELLS_PER_ROW) % known.length;
-        Sfx.move();
-        this.renderSpells();
-        return;
-      }
-      if (e.code === "Escape") {
-        this.inSpells = false;
-        this.hideSpells();
-        this.renderMenu();
-        return;
-      }
-      if (e.code === "KeyZ") {
-        const spell = known[this.spellIndex];
-        if (!spell || !this.canCast(spell)) {
-          Sfx.error();
-          return;
-        }
-        this.inSpells = false;
-        this.pendingSpell = spell;
-        this.hideSpells();
-        this.resolveAction("magic");
-      }
-      return;
-    }
-
     if (e.code === "Escape") {
       this.resolveAction("run");
       return;
@@ -428,17 +375,23 @@ export class BattleScene extends Phaser.Scene {
       this.resolveAction("fight");
       return;
     }
-    if (e.code === "KeyF") {
-      this.hideMenu();
-      this.spellIndex = 0;
-      this.renderSpells();
-      this.inSpells = true;
-      return;
-    }
-    if (e.code === "KeyI") {
+    if (e.code === "KeyE") {
       this.hideMenu();
       this.renderItems();
       this.inItems = true;
+      return;
+    }
+    // direct spell hotkeys — the first letter of each spell (F/H/I/B are all
+    // distinct); unlearned or unaffordable just beeps. The MAGIC submenu
+    // stays reachable by clicking the menu button.
+    if (e.code === "KeyF" || e.code === "KeyI" || e.code === "KeyB" || e.code === "KeyH") {
+      const spell = this.knownSpells().find((s) => s.name.startsWith(e.code[3]));
+      if (!spell || !this.canCast(spell)) {
+        Sfx.error();
+        return;
+      }
+      this.pendingSpell = spell;
+      this.resolveAction("magic");
       return;
     }
     if (e.code === "KeyS") {
@@ -487,51 +440,22 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    if (this.inSpells) {
-      const known = this.knownSpells();
-      for (let i = 0; i < this.spellTexts.length; i++) {
-        const t = this.spellTexts[i];
-        if (!t.visible || !t.getBounds().contains(pointer.x, pointer.y)) continue;
-        const spell = known[i];
-        if (!spell || !this.canCast(spell)) {
-          Sfx.error();
-          return;
-        }
-        this.inSpells = false;
-        this.pendingSpell = spell;
-        this.hideSpells();
-        this.resolveAction("magic");
-        return;
-      }
-      return;
-    }
-
-    for (let i = 0; i < this.menuItems.length; i++) {
+    for (let i = 0; i < this.menuButtons.length; i++) {
       const t = this.menuTexts[i];
       if (!t.visible || !t.getBounds().contains(pointer.x, pointer.y)) continue;
-      const action = this.menuItems[i];
-      if (action === "item") {
+      const btn = this.menuButtons[i];
+      if (btn.enabled && !btn.enabled()) {
+        Sfx.error();
+        return;
+      }
+      if (btn.action === "item") {
         this.hideMenu();
         this.renderItems();
         this.inItems = true;
-      } else if (action === "magic") {
-        // was falling into the resolveAction() branch below and casting
-        // this.pendingSpell directly — undefined on the first battle of a
-        // session (hard lock) or a stale spell on later ones (MP goes
-        // negative, bypasses canCast). Needs the submenu like KeyF does.
-        this.hideMenu();
-        this.spellIndex = 0;
-        this.renderSpells();
-        this.inSpells = true;
-      } else if (action === "steal") {
-        if (!this.stealAvailable()) {
-          Sfx.error();
-          return;
-        }
-        this.resolveAction(action);
-      } else {
-        this.resolveAction(action);
+        return;
       }
+      if (btn.spell) this.pendingSpell = btn.spell;
+      this.resolveAction(btn.action);
       return;
     }
   }
@@ -545,10 +469,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private renderMenu(): void {
-    for (const t of this.menuTexts) t.setVisible(true);
-    const stealIndex = this.menuItems.indexOf("steal");
-    if (stealIndex !== -1) this.menuTexts[stealIndex].setColor(this.stealAvailable() ? "#ffffff" : "#666666");
-    this.hintText.setText(""); // the menu buttons above already show the hotkeys
+    for (let i = 0; i < this.menuButtons.length; i++) {
+      this.menuTexts[i].setVisible(true);
+      // gray out whatever can't be picked right now (MP-starved spell,
+      // full-HP heal, spent steal)
+      this.menuTexts[i].setColor((this.menuButtons[i].enabled?.() ?? true) ? "#ffffff" : "#666666");
+    }
+    this.hintText.setText(""); // every action, spells included, has a button above
   }
 
   private hideItems(): void {
@@ -572,26 +499,6 @@ export class BattleScene extends Phaser.Scene {
 
   private knownSpells(): Spell[] {
     return SPELLS.filter((s) => GameState.player.level >= s.learnLevel);
-  }
-
-  private hideSpells(): void {
-    for (const t of this.spellTexts) t.setVisible(false);
-    this.spellCursor.setVisible(false);
-  }
-
-  private renderSpells(): void {
-    const known = this.knownSpells();
-    for (let i = 0; i < known.length; i++) {
-      const spell = known[i];
-      this.spellTexts[i].setVisible(true);
-      this.spellTexts[i].setText(`${spell.name}   MP${spell.cost}`);
-      this.spellTexts[i].setColor(GameState.player.mp >= spell.cost ? "#ffffff" : "#666666");
-    }
-    this.spellCursor.setVisible(true);
-    const target = this.spellTexts[this.spellIndex];
-    this.spellCursor.setX(target.x - ITEM_TEXT_OFFSET);
-    this.spellCursor.setY(target.y);
-    this.hintText.setText("H/L/J/K:NAV  Z:OK  ESC:BACK");
   }
 
   private async runBattle(): Promise<void> {
@@ -1253,26 +1160,18 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  // every battle action key also advances messages, so mashing your next
+  // action never stalls on a textbox
+  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "F", "I", "B", "H", "S", "ESC", "SPACE"];
+
   private awaitAdvance(resolve: () => void): void {
-    this.hintText.setText("Z/A/I/F/S/ESC:CONTINUE");
+    this.hintText.setText("Z:CONTINUE");
     const done = () => {
-      this.input.keyboard?.removeListener("keydown-Z", done);
-      this.input.keyboard?.removeListener("keydown-A", done);
-      this.input.keyboard?.removeListener("keydown-I", done);
-      this.input.keyboard?.removeListener("keydown-F", done);
-      this.input.keyboard?.removeListener("keydown-S", done);
-      this.input.keyboard?.removeListener("keydown-ESC", done);
-      this.input.keyboard?.removeListener("keydown-SPACE", done);
+      for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.removeListener(`keydown-${k}`, done);
       this.input.off("pointerdown", done);
       resolve();
     };
-    this.input.keyboard?.once("keydown-Z", done);
-    this.input.keyboard?.once("keydown-A", done);
-    this.input.keyboard?.once("keydown-I", done);
-    this.input.keyboard?.once("keydown-F", done);
-    this.input.keyboard?.once("keydown-S", done);
-    this.input.keyboard?.once("keydown-ESC", done);
-    this.input.keyboard?.once("keydown-SPACE", done);
+    for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.once(`keydown-${k}`, done);
     this.input.once("pointerdown", done);
   }
 
