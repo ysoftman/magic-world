@@ -1767,33 +1767,154 @@ function makeHouse(scene: Phaser.Scene): void {
   g.destroy();
 }
 
-function makeBattleBg(scene: Phaser.Scene): void {
+// One background per battle origin, so a fight visually continues the map it
+// started on. Each ground band is the terrain the player was just standing on:
+// the grass base for the overworld, and the scene TERRAIN_TINTs folded into
+// their base tile for forest (grass x 0x88cc99), snow (grass x 0xbfe3fc) and
+// dungeon (path x 0x8899bb). Horizon sits at y=440, same as the old single bg,
+// so the combat sprites keep standing where they always did.
+function makeBattleBgs(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
-  g.fillStyle(0x0133a9, 1);
-  g.fillRect(0, 0, GAME_WIDTH, 240);
-  g.fillStyle(0x0a38b8, 1);
-  g.fillRect(0, 240, GAME_WIDTH, 160);
-  g.fillStyle(0xe8eaf8, 0.18);
-  g.fillCircle(240, 176, 160);
-  g.fillStyle(0xf6f6ff, 0.4);
-  g.fillCircle(240, 176, 72);
-  g.fillStyle(0xffffff, 1);
+  const flecks = (color: number, count: number, y0: number, y1: number): void => {
+    for (let i = 0; i < count; i++) {
+      g.fillStyle(color, Math.random() * 0.6 + 0.2);
+      g.fillRect(Math.floor(Math.random() * GAME_WIDTH), y0 + Math.floor(Math.random() * (y1 - y0)), 4, 4);
+    }
+  };
+
+  // WORLD: open grassland under a day sky (night battles darken it with the
+  // scene-wide NIGHT_TINT overlay, so the bg itself stays daytime)
+  g.fillStyle(0x2e6fb8, 1);
+  g.fillRect(0, 0, GAME_WIDTH, 200);
+  g.fillStyle(0x4a8fd0, 1);
+  g.fillRect(0, 200, GAME_WIDTH, 140);
+  g.fillStyle(0x7fb8e8, 1);
+  g.fillRect(0, 340, GAME_WIDTH, 100);
+  g.fillStyle(0xfff3b0, 0.25);
+  g.fillCircle(240, 176, 120);
+  g.fillStyle(0xffe88a, 0.6);
+  g.fillCircle(240, 176, 60);
+  g.fillStyle(0xfff7c8, 1);
   g.fillCircle(240, 176, 32);
-  for (let i = 0; i < 30; i++) {
-    g.fillStyle(0xffffff, Math.random() * 0.7 + 0.2);
-    g.fillRect(Math.floor(Math.random() * GAME_WIDTH), Math.floor(Math.random() * 200), 4, 4);
-  }
-  g.fillStyle(0x261973, 1);
+  g.fillStyle(0xffffff, 0.5);
+  g.fillEllipse(520, 120, 220, 48);
+  g.fillEllipse(900, 200, 260, 56);
+  g.fillEllipse(1150, 90, 180, 40);
+  g.fillStyle(0x174a35, 1);
+  g.fillTriangle(0, 440, 240, 300, 520, 440);
+  g.fillTriangle(400, 440, 720, 260, 1060, 440);
+  g.fillTriangle(900, 440, 1180, 320, 1280, 440);
+  g.fillStyle(GRASS_PALETTE.g, 1);
+  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
+  g.fillStyle(0x27684e, 1);
+  g.fillRect(0, 440, GAME_WIDTH, 16);
+  flecks(0x2a7a58, 40, 470, GAME_HEIGHT - 10);
+  g.generateTexture("battle-bg-world", GAME_WIDTH, GAME_HEIGHT);
+  g.clear();
+
+  // FOREST: green gloom under a dense canopy
+  g.fillStyle(0x0c2e1f, 1);
+  g.fillRect(0, 0, GAME_WIDTH, 160);
+  g.fillStyle(0x14452e, 1);
+  g.fillRect(0, 160, GAME_WIDTH, 150);
+  g.fillStyle(0x1d5c3c, 1);
+  g.fillRect(0, 310, GAME_WIDTH, 130);
+  g.fillStyle(0xd9f2b8, 0.08);
+  g.fillTriangle(300, 0, 400, 0, 220, 440);
+  g.fillTriangle(700, 0, 820, 0, 640, 440);
+  g.fillTriangle(1060, 0, 1140, 0, 1010, 440);
+  g.fillStyle(0x0f3a27, 1);
+  g.fillTriangle(60, 440, 160, 200, 260, 440);
+  g.fillTriangle(420, 440, 520, 170, 620, 440);
+  g.fillTriangle(760, 440, 860, 210, 960, 440);
+  g.fillTriangle(1100, 440, 1200, 180, 1300, 440);
+  g.fillStyle(0x082418, 1);
+  g.fillTriangle(-40, 440, 90, 260, 220, 440);
+  g.fillTriangle(280, 440, 400, 230, 520, 440);
+  g.fillTriangle(600, 440, 730, 280, 860, 440);
+  g.fillTriangle(940, 440, 1070, 240, 1200, 440);
+  flecks(0xb8e986, 18, 160, 430);
+  g.fillStyle(0x104927, 1);
+  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
+  g.fillStyle(0x155a31, 1);
+  g.fillRect(0, 440, GAME_WIDTH, 16);
+  g.generateTexture("battle-bg-forest", GAME_WIDTH, GAME_HEIGHT);
+  g.clear();
+
+  // DUNGEON: torch-lit cavern; glow first so the stalactites silhouette on it
+  g.fillStyle(0x0e0c22, 1);
+  g.fillRect(0, 0, GAME_WIDTH, 440);
+  g.fillStyle(0x161230, 1);
+  g.fillRect(0, 300, GAME_WIDTH, 140);
+  g.fillStyle(0xffa54d, 0.1);
+  g.fillCircle(200, 250, 150);
+  g.fillCircle(1080, 250, 150);
+  g.fillStyle(0xffc97a, 0.22);
+  g.fillCircle(200, 250, 70);
+  g.fillCircle(1080, 250, 70);
+  g.fillStyle(0x5a4632, 1);
+  g.fillRect(192, 250, 16, 56);
+  g.fillRect(1072, 250, 16, 56);
+  g.fillStyle(0xffb84d, 1);
+  g.fillCircle(200, 238, 14);
+  g.fillCircle(1080, 238, 14);
+  g.fillStyle(0xffe3a8, 1);
+  g.fillCircle(200, 242, 7);
+  g.fillCircle(1080, 242, 7);
+  g.fillStyle(0x241d44, 1);
+  g.fillTriangle(20, 0, 120, 0, 70, 120);
+  g.fillTriangle(150, 0, 230, 0, 190, 80);
+  g.fillTriangle(320, 0, 440, 0, 380, 150);
+  g.fillTriangle(540, 0, 620, 0, 580, 90);
+  g.fillTriangle(700, 0, 820, 0, 760, 160);
+  g.fillTriangle(900, 0, 980, 0, 940, 100);
+  g.fillTriangle(1060, 0, 1180, 0, 1120, 140);
+  g.fillTriangle(1210, 0, 1290, 0, 1250, 90);
+  g.fillStyle(0x2a2350, 1);
+  g.fillEllipse(120, 430, 200, 90);
+  g.fillEllipse(660, 435, 260, 70);
+  g.fillEllipse(1170, 430, 220, 90);
+  g.fillStyle(0x3d3931, 1);
+  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
+  g.fillStyle(0x4a453c, 1);
+  g.fillRect(0, 440, GAME_WIDTH, 16);
+  flecks(0x191238, 24, 470, GAME_HEIGHT - 10);
+  g.generateTexture("battle-bg-dungeon", GAME_WIDTH, GAME_HEIGHT);
+  g.clear();
+
+  // SNOW: icy peaks under a pale sky, snowfall flecks in front of everything
+  g.fillStyle(0x6e9fc4, 1);
+  g.fillRect(0, 0, GAME_WIDTH, 200);
+  g.fillStyle(0x8fb9d8, 1);
+  g.fillRect(0, 200, GAME_WIDTH, 140);
+  g.fillStyle(0xb8d8ec, 1);
+  g.fillRect(0, 340, GAME_WIDTH, 100);
+  g.fillStyle(0xffffff, 0.25);
+  g.fillCircle(240, 176, 100);
+  g.fillStyle(0xffffff, 0.6);
+  g.fillCircle(240, 176, 48);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(240, 176, 26);
+  g.fillStyle(0x9fc0da, 1);
   g.fillTriangle(0, 440, 240, 240, 480, 440);
   g.fillTriangle(280, 440, 640, 160, 1000, 440);
   g.fillTriangle(800, 440, 1160, 260, 1280, 440);
-  g.fillStyle(0x1a1240, 1);
+  // summit caps clipped to the slopes above (same apexes, y solved per side)
+  g.fillStyle(0xeef7fd, 1);
+  g.fillTriangle(190, 282, 240, 240, 290, 282);
+  g.fillTriangle(560, 222, 640, 160, 720, 222);
+  g.fillTriangle(1080, 300, 1160, 260, 1187, 300);
+  flecks(0xffffff, 40, 0, 430);
+  g.fillStyle(0x175241, 1);
   g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
-  g.fillStyle(0x372a52, 1);
+  g.fillStyle(0x9fc9d8, 0.85);
   g.fillRect(0, 440, GAME_WIDTH, 16);
-  g.fillStyle(0x1f5c42, 1);
-  g.fillRect(0, 456, GAME_WIDTH, 24);
-  g.generateTexture("battle-bg", GAME_WIDTH, GAME_HEIGHT);
+  // frost patches so the icy-teal ground still reads as snowed-over grass
+  g.fillStyle(0xd8ecf5, 0.35);
+  g.fillEllipse(300, 560, 240, 40);
+  g.fillEllipse(880, 640, 300, 50);
+  g.fillEllipse(1150, 520, 200, 36);
+  g.generateTexture("battle-bg-snow", GAME_WIDTH, GAME_HEIGHT);
   g.destroy();
 }
 
@@ -2149,7 +2270,7 @@ export class BootScene extends Phaser.Scene {
     makeHouse(this);
     makeSign(this);
     makeCave(this);
-    makeBattleBg(this);
+    makeBattleBgs(this);
     makeTitleBg(this);
   }
 }

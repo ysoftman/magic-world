@@ -28,6 +28,9 @@ const COMBO_CAP = 8;
 // capture chance, so players can't game it by whittling the enemy down first
 const STEAL_CHANCE = 0.35;
 const STEAL_GOLD_PCT = 0.4;
+// snappy lunges (out/back) — slow enough to read, fast enough to feel quick
+const LUNGE_OUT_MS = 90;
+const LUNGE_BACK_MS = 110;
 
 type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
 // the top-level menu's 5 buttons — kept as an Extract of MenuAction instead
@@ -165,17 +168,17 @@ export class BattleScene extends Phaser.Scene {
     const unsubSaved = onSaved(() => showToast(this, "SAVED"));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubSaved);
 
-    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "battle-bg");
+    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, `battle-bg-${this.origin.toLowerCase()}`);
 
+    // STREAK/COMBO live on the free line inside each stat window (below the
+    // MP/HP rows) — at (16,24)/(GAME_WIDTH-16,24) they sat on top of the
+    // window borders and the player/enemy names
     if (GameState.streak >= STREAK_MIN) {
-      this.add.text(16, 24, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
+      this.add.text(64, 168, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
     }
 
     // live combo counter, filled in by updateCombo() on every fight/heal turn
-    this.comboText = this.add
-      .text(GAME_WIDTH - 16, 24, "", retroStyle(6, "#fbbf24"))
-      .setOrigin(1, 0)
-      .setDepth(120);
+    this.comboText = this.add.text(GAME_WIDTH - 464, 168, "", retroStyle(6, "#fbbf24")).setDepth(120);
 
     if (this.night) {
       this.add
@@ -677,6 +680,7 @@ export class BattleScene extends Phaser.Scene {
     const comboBonus = this.comboBonus();
     const { dmg, crit } = this.calcDamage(GameState.effAtk(), this.enemy.def);
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
+    Sfx.strike();
     if (crit) Sfx.critical();
     this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
     this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
@@ -897,12 +901,14 @@ export class BattleScene extends Phaser.Scene {
         targets: sprite,
         x: this.enemySprite.x - 90,
         y: this.enemySprite.y + 70,
-        duration: 200,
+        duration: 130,
         yoyo: true,
-        hold: 80,
+        hold: 50,
+        onUpdate: this.ghostTrail(sprite),
         onYoyo: () => {
           const atk = def.atk + Math.floor(GameState.player.level / 2) + GameState.companionBondBonus(name);
           ({ dmg, crit } = this.calcDamage(atk, this.enemy.def));
+          Sfx.strike();
           if (crit) Sfx.critical();
           this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
           this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
@@ -917,8 +923,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async enemyTurn(): Promise<void> {
-    Sfx.hit();
     await this.enemyLunge();
+    // impact thud lands with the damage, not at the wind-up
+    Sfx.hit();
     const { dmg, crit } = this.calcDamage(this.enemy.atk, GameState.effDef());
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
@@ -932,17 +939,36 @@ export class BattleScene extends Phaser.Scene {
     this.updatePlayerStats();
   }
 
+  // throttled afterimage spawner for a tween's onUpdate: faded copies trail
+  // the sprite along its dash, selling the sped-up lunges as speed
+  private ghostTrail(sprite: Phaser.GameObjects.Sprite): () => void {
+    let last = 0;
+    return () => {
+      if (this.time.now - last < 40) return;
+      last = this.time.now;
+      const ghost = this.add
+        .image(sprite.x, sprite.y, sprite.texture.key)
+        .setScale(sprite.scaleX, sprite.scaleY)
+        .setFlipX(sprite.flipX)
+        .setAlpha(0.35)
+        .setTint(0x9fd4ff);
+      this.tweens.add({ targets: ghost, alpha: 0, duration: 180, onComplete: () => ghost.destroy() });
+    };
+  }
+
   private async enemyLunge(): Promise<void> {
     const startX = this.enemySprite.x;
     const targetX = this.playerSprite.x + 80;
-    await this.tweenPromise(this.enemySprite, { x: targetX }, 140);
-    await this.tweenPromise(this.enemySprite, { x: startX }, 160);
+    const trail = this.ghostTrail(this.enemySprite);
+    await this.tweenPromise(this.enemySprite, { x: targetX }, LUNGE_OUT_MS, trail);
+    await this.tweenPromise(this.enemySprite, { x: startX }, LUNGE_BACK_MS);
   }
 
   private async lunge(): Promise<void> {
     const startX = this.playerSprite.x;
     const targetX = this.enemySprite.x - 80;
     const hasWeapon = !!GameState.equipped.weapon;
+    const trail = this.ghostTrail(this.playerSprite);
     const syncOverlays = () => {
       this.weaponOverlay.x = this.playerSprite.x + 28;
       this.shieldOverlay.x = this.playerSprite.x - 28;
@@ -952,14 +978,17 @@ export class BattleScene extends Phaser.Scene {
     if (hasWeapon) {
       // wind-up, then swing down through the lunge
       this.weaponOverlay.setAngle(-20);
-      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: 140, ease: "Sine.easeIn" });
+      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: LUNGE_OUT_MS, ease: "Sine.easeIn" });
     }
-    await this.tweenPromise(this.playerSprite, { x: targetX }, 140, syncOverlays);
+    await this.tweenPromise(this.playerSprite, { x: targetX }, LUNGE_OUT_MS, () => {
+      syncOverlays();
+      trail();
+    });
     syncOverlays();
     if (hasWeapon) {
-      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: 160, ease: "Sine.easeOut" });
+      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: LUNGE_BACK_MS, ease: "Sine.easeOut" });
     }
-    await this.tweenPromise(this.playerSprite, { x: startX }, 160, syncOverlays);
+    await this.tweenPromise(this.playerSprite, { x: startX }, LUNGE_BACK_MS, syncOverlays);
     syncOverlays();
   }
 

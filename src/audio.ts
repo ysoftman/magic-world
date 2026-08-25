@@ -453,6 +453,13 @@ export class Sfx {
     Sfx.tone(180, 0.12, "square", 0.08, 0.03);
   }
 
+  // impact crack for the moment a blow actually lands — attack() above is the
+  // swing, hit() below is the enemy's heavy thud
+  static strike(): void {
+    Sfx.tone(900, 0.03, "square", 0.08);
+    Sfx.tone(160, 0.09, "sawtooth", 0.1, 0.02);
+  }
+
   static critical(): void {
     Sfx.tone(150, 0.05, "square", 0.1);
     Sfx.tone(700, 0.1, "square", 0.09, 0.04);
