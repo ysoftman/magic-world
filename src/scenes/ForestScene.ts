@@ -6,7 +6,7 @@ import { GameState, isNight, onSaved } from "../gameState";
 import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
-import { buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
+import { addTownExitLabel, buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -95,7 +95,7 @@ export class ForestScene extends Phaser.Scene {
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second so earned-here achievements
   // (e.g. defeating a boss) toast immediately instead of waiting for the
-  // player to wander back to World, the only scene that used to poll this
+  // player to wander back to Town, the only scene that used to poll this
   private achievementCheckAccum = 0;
   // true while an achievement save is in flight, so the onSaved "SAVED" toast
   // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
@@ -232,6 +232,7 @@ export class ForestScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, exit, () => {
       if (!this.exitingForest) this.exitForest();
     });
+    addTownExitLabel(this, FOREST_ENTRY.x, FOREST_ENTRY.y);
 
     startWaterAnimation(this, this.layer);
 
@@ -558,7 +559,7 @@ export class ForestScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("World", { fromForest: true });
+      this.scene.start("Town", { fromForest: true });
     });
   }
 

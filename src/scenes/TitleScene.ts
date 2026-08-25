@@ -75,7 +75,7 @@ export class TitleScene extends Phaser.Scene {
         // instead of wherever the save happened, which can be mid-grass
         // next to a roamer and trigger an instant battle
         GameState.pos = undefined;
-        this.scene.start("World");
+        this.scene.start("Town");
         return;
       }
       GameState.reset();
@@ -83,7 +83,7 @@ export class TitleScene extends Phaser.Scene {
       GameState.clearSave();
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-        this.scene.start("World");
+        this.scene.start("Town");
       });
     };
 

@@ -3,7 +3,7 @@ import { CATCHABLE, type EnemyDef } from "./monsters";
 import { recordRank } from "./ranking";
 
 // bounty board eligibility: these only roam the forest/snow fields, which
-// stay locked behind the same quest flags WorldScene already gates them on
+// stay locked behind the same quest flags TownScene already gates them on
 const FOREST_BOUNTY_MONSTERS = new Set(["WASP", "SPIDER", "ORC"]);
 const SNOW_BOUNTY_MONSTERS = new Set(["FROST MOTH", "YETI"]);
 // bounty gold reward as a multiple of the target's own kill-gold value —
@@ -315,7 +315,7 @@ export const GameState = {
     return Math.min(5, Math.floor((this.companionBond[name] ?? 0) / 10));
   },
   // eligible bounty targets: every catchable species except the TROLL KING
-  // (a rare 35%-per-load World roamer — could make that day's bounty
+  // (a rare 35%-per-load Town roamer — could make that day's bounty
   // impossible), gated by the same quest flags that unlock their area
   bountyPool(): EnemyDef[] {
     return CATCHABLE.filter((e) => {

@@ -73,7 +73,7 @@ export const TRANSITION_TILE_COUNT = 14;
  * tree's cell without cutting the tree in half — the tree is drawn again on
  * top of it. Below every "standing on the ground" depth too: shadows (5),
  * farm crops (8), signs/cave art (9), the exit marker (9.5) and every actor
- * (10+). Matches WorldScene's depth scale as read for this task — re-check
+ * (10+). Matches TownScene's depth scale as read for this task — re-check
  * that scale if it changes.
  */
 export const TRANSITION_DEPTH = 1;

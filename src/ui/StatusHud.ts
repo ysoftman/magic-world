@@ -97,7 +97,7 @@ export class StatusHud {
   }
 
   private makeDayNightTextures(): void {
-    // World and Dungeon scenes both construct a StatusHud, so generate the
+    // Town and Dungeon scenes both construct a StatusHud, so generate the
     // icon textures only once per game.
     if (!this.scene.textures.exists("sun")) {
       makeTexture(this.scene, "sun", SUN_ROWS, SUN_PALETTE);

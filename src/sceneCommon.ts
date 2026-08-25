@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH } from "./autotile";
 import { OBJECT_TILES, SOLID, T_GRASS, T_PATH, T_WATER_A, T_WATER_B, TILE } from "./levels";
+import { retroStyle } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -42,7 +43,7 @@ const TERRAIN_LAYER_DEPTH = 0;
  * which is the whole point of splitting the tilemap: the overlay may run its
  * rounded coastline/road edge straight through a tree's cell and the tree is
  * still drawn on top of it, intact. Anything in a scene that has to cover an
- * object tile (WorldScene's house art) belongs above this.
+ * object tile (TownScene's house art) belongs above this.
  */
 export const OBJECT_LAYER_DEPTH = TRANSITION_DEPTH + 1;
 
@@ -139,7 +140,7 @@ export function buildTileLayers(
 
 /**
  * Repaints one logical cell across both layers — the map editor's brush and
- * WorldScene's landmark footprints are what call this. Keeps the pair
+ * TownScene's landmark footprints are what call this. Keeps the pair
  * consistent: an object tile draws on the object layer with its ground filled
  * in underneath, anything else draws on the terrain layer and clears whatever
  * object stood above it. Collision comes back off each layer's collide index
@@ -248,4 +249,17 @@ export function createWalkAnimations(scene: Phaser.Scene): void {
     }));
     scene.anims.create({ key, frames, frameRate: WALK_FRAME_RATE, repeat: -1 });
   }
+}
+
+/**
+ * Floating "TOWN" marker over a sub-map's exit zone, so the way back home is
+ * visible from a distance. Sits under the player (depth 10) but over terrain.
+ */
+export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number): void {
+  const label = scene.add
+    .text(x, y - TILE, "TOWN", retroStyle(5, "#ffd166"))
+    .setOrigin(0.5, 1)
+    .setStroke("#1a1028", 4)
+    .setDepth(9);
+  scene.tweens.add({ targets: label, y: label.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 }

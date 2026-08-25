@@ -10,7 +10,7 @@ import { EndingScene } from "./scenes/EndingScene";
 import { ForestScene } from "./scenes/ForestScene";
 import { SnowScene } from "./scenes/SnowScene";
 import { TitleScene } from "./scenes/TitleScene";
-import { WorldScene } from "./scenes/WorldScene";
+import { TownScene } from "./scenes/TownScene";
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) Sfx.suspendBgmForHiddenTab();
@@ -35,7 +35,7 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, WorldScene, DungeonScene, ForestScene, SnowScene, BattleScene, EndingScene],
+  scene: [BootScene, TitleScene, TownScene, DungeonScene, ForestScene, SnowScene, BattleScene, EndingScene],
 };
 
 // Canvas text bakes in whatever font is available at draw time; unlike DOM

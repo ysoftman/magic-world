@@ -5,7 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
 import { buildDungeon, DUNGEON_ENTRY, DUNGEON_H, DUNGEON_W, DUNGEON_ZONES, escapeFromZones, T_PATH, TILE, TREASURE_POS } from "../levels";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
-import { buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
+import { addTownExitLabel, buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -31,7 +31,7 @@ const MAX_COOLDOWN_STEP = 50;
 const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
-// same per-roll rarity as WorldScene's GOLDEN_SLIME_CHANCE, applied to
+// same per-roll rarity as TownScene's GOLDEN_SLIME_CHANCE, applied to
 // goblin rolls only — a dungeon-exclusive jackpot, tint-only reskin
 const CURSED_GOBLIN_CHANCE = 0.08;
 
@@ -95,7 +95,7 @@ export class DungeonScene extends Phaser.Scene {
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second so earned-here achievements
   // (e.g. defeating a boss) toast immediately instead of waiting for the
-  // player to wander back to World, the only scene that used to poll this
+  // player to wander back to Town, the only scene that used to poll this
   private achievementCheckAccum = 0;
   // true while an achievement save is in flight, so the onSaved "SAVED" toast
   // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
@@ -204,7 +204,7 @@ export class DungeonScene extends Phaser.Scene {
       // cramped zones can overlap the player with more than one roamer on
       // the same tick; always let the rare one win the tie instead of
       // whichever roamer the physics engine happened to report first
-      // (same fix as WorldScene's troll/goldSlime tie-break). Filtered on
+      // (same fix as TownScene's troll/goldSlime tie-break). Filtered on
       // overlap too, not just kind — more than one cursed goblin can spawn,
       // and a non-overlapping one shouldn't shadow the real match below.
       const cursed = this.roamers.find((r) => r.kind === "cursedGoblin" && this.physics.overlap(this.player, r.sprite));
@@ -219,6 +219,7 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, exit, () => {
       if (!this.exitingDungeon) this.exitDungeon();
     });
+    addTownExitLabel(this, DUNGEON_ENTRY.x, DUNGEON_ENTRY.y);
 
     startWaterAnimation(this, this.layer);
 
@@ -543,7 +544,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("World", { fromDungeon: true });
+      this.scene.start("Town", { fromDungeon: true });
     });
   }
 
@@ -583,7 +584,7 @@ export class DungeonScene extends Phaser.Scene {
             : Math.random() < 0.5
               ? "slime"
               : "goblin";
-        // rare tinted reskin, same pattern as WorldScene's GOLDEN SLIME —
+        // rare tinted reskin, same pattern as TownScene's GOLDEN SLIME —
         // texture stays the base kind, only the sprite tint + bookkeeping
         // "kind" used for battle dispatch changes
         const cursed = kind === "goblin" && Math.random() < CURSED_GOBLIN_CHANCE;

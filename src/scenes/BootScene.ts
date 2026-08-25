@@ -1013,7 +1013,7 @@ const SOIL_TILE = [
   "ssssssssssssssss",
 ];
 
-// Tile 6 is the house FOOTPRINT, not the house: WorldScene draws the building
+// Tile 6 is the house FOOTPRINT, not the house: TownScene draws the building
 // with add.image(..., "house") -- a 128x128 texture centred on the same 2x2
 // block -- plus an addGroundShadow ellipse under it. The tile used to fill that
 // block with a dark slab, and because the house image's top 24px band and its
@@ -1782,7 +1782,7 @@ function makeBattleBgs(scene: Phaser.Scene): void {
     }
   };
 
-  // WORLD: open grassland under a day sky (night battles darken it with the
+  // TOWN: open grassland under a day sky (night battles darken it with the
   // scene-wide NIGHT_TINT overlay, so the bg itself stays daytime)
   g.fillStyle(0x2e6fb8, 1);
   g.fillRect(0, 0, GAME_WIDTH, 200);
@@ -1809,7 +1809,7 @@ function makeBattleBgs(scene: Phaser.Scene): void {
   g.fillStyle(0x27684e, 1);
   g.fillRect(0, 440, GAME_WIDTH, 16);
   flecks(0x2a7a58, 40, 470, GAME_HEIGHT - 10);
-  g.generateTexture("battle-bg-world", GAME_WIDTH, GAME_HEIGHT);
+  g.generateTexture("battle-bg-town", GAME_WIDTH, GAME_HEIGHT);
   g.clear();
 
   // FOREST: green gloom under a dense canopy

@@ -103,7 +103,7 @@ const IDLE_TEXTURE: Record<LastMove, string> = {
   left: "hero-idle-left",
 };
 
-export class WorldScene extends Phaser.Scene {
+export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private companionFollower!: CompanionSprite;
@@ -203,7 +203,7 @@ export class WorldScene extends Phaser.Scene {
   private guardPos = { x: 0, y: 0 };
 
   constructor() {
-    super("World");
+    super("Town");
   }
 
   create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean; fromSnow?: boolean }): void {
@@ -1567,7 +1567,7 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
-      this.scene.start("Battle", { enemy: kind, from: "World" });
+      this.scene.start("Battle", { enemy: kind, from: "Town" });
     });
   }
 }
