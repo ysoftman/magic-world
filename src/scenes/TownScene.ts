@@ -49,6 +49,7 @@ import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
+import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { LuckyWheel } from "../ui/LuckyWheel";
 import { MapEditor } from "../ui/MapEditor";
@@ -537,28 +538,22 @@ export class TownScene extends Phaser.Scene {
     this.achievementsUI = new AchievementsUI(this);
     this.settingsUI = new SettingsUI(this);
 
-    const hint = this.add
-      .text(
-        GAME_WIDTH - 8,
-        GAME_HEIGHT - 6,
-        "HJKL:MOVE Z:TALK/OK I:ITEMS ESC:SKIP F2:MAP EDIT\nS:HUD M:MUTE B:BESTIARY A:ACHIEVE O:SETTINGS T:MAP Q:QUIT CTRL+S:SAVE ?:HELP",
-        retroStyle(6, "#9f9fd0"),
-      )
-      .setOrigin(1, 1)
-      .setAlign("right")
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setVisible(false)
-      // the key list outgrew one line per row (O:SETTINGS, ?:HELP) and, being
-      // right-anchored, was running off the left edge instead of wrapping
-      .setWordWrapWidth(GAME_WIDTH - 16, true);
-    // key hints are a popup now, not a permanent fixture — "?" toggles them
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (!e.repeat) hint.setVisible(!hint.visible);
-      },
-    );
+    const help = addHelpPopup(this, [
+      ["HJKL", "MOVE"],
+      ["Z", "TALK/OK"],
+      ["I", "ITEMS"],
+      ["B", "BESTIARY"],
+      ["A", "ACHIEVE"],
+      ["O", "SETTINGS"],
+      ["T", "MAP"],
+      ["S", "HUD"],
+      ["M", "MUTE"],
+      ["ESC", "SKIP"],
+      ["F2", "MAP EDIT"],
+      ["CTRL+S", "SAVE"],
+      ["Q", "QUIT"],
+      ["?", "HELP"],
+    ]);
 
     // key landmarks in world px, drawn as colored dots over the tile map
     this.minimap = new Minimap(this, level, this.player, [
@@ -618,7 +613,7 @@ export class TownScene extends Phaser.Scene {
       this.minimap.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
-      hint.destroy();
+      help.destroy();
       this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
