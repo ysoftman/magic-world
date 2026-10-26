@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { retroStyle } from "../pixelart";
+import { isTouchDevice } from "./TouchControls";
 
 const PANEL_W = 900;
 const PANEL_H = 440;
@@ -8,14 +9,58 @@ const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const KEY_W = 7;
 const COL_W = 18;
 
-// "?" toggles a key-list panel. Non-modal: the scene keeps running under it,
-// so it needs no hooks into each scene's isPanelOpen/update loop
-export function addHelpPopup(scene: Phaser.Scene, keys: [string, string][], goal = ""): Phaser.GameObjects.Container {
-  const half = Math.ceil(keys.length / 2);
+// On touch the list names the on-screen buttons instead of keys: the d-pad
+// for HJKL, O for SETTINGS and its QUIT chip (SettingsUI, standing in for Q),
+// a tap on the HOME bubble for C (the bubble's own "HOME  TAP: NEW LOOK"),
+// and nothing for the keys no button sends. The longest touch cell, "O" +
+// "SETUP/QUIT", is 17 glyphs, inside COL_W.
+// Widest rows (retroStyle(6), 24px a glyph; the panel's sides less 20px leave
+// 860px): the Town's keyboard list, 16 keys in 8 rows, is 18 + "F2     MAP
+// EDIT" = 33 glyphs (792px); its touch list, 11 in 6 rows, 18 + "O      SETUP/
+// QUIT" = 35 (840px).
+const TOUCH_KEYS: Record<string, [string, string] | null> = {
+  HJKL: ["D-PAD", "MOVE"],
+  C: ["HOME", "TAP: LOOK"],
+  O: ["O", "SETUP/QUIT"],
+  Q: null,
+  S: null,
+  M: null,
+  F2: null,
+  "CTRL+S": null,
+};
+
+// the popup each scene added, so the scene's uiBlocking() can ask about it
+const popups = new WeakMap<Phaser.Scene, Phaser.GameObjects.Container>();
+
+export function helpOpen(scene: Phaser.Scene): boolean {
+  return popups.get(scene)?.visible === true;
+}
+
+export function closeHelp(scene: Phaser.Scene): void {
+  popups.get(scene)?.setVisible(false);
+}
+
+// "?" toggles a key-list panel. Modal: the scene lists it in uiBlocking()
+// (helpOpen), so nothing walks, talks or opens under it, and `blocked` (the
+// scene's other panels and prompts) keeps it from opening over one of them —
+// it sits below the panels' depth and would only show through them.
+export function addHelpPopup(
+  scene: Phaser.Scene,
+  keys: [string, string][],
+  goal = "",
+  blocked: () => boolean = () => false,
+): Phaser.GameObjects.Container {
+  const shown = isTouchDevice()
+    ? keys.flatMap(([k, d]): [string, string][] => {
+        const t: [string, string] | null = k in TOUCH_KEYS ? TOUCH_KEYS[k] : [k, d];
+        return t ? [t] : [];
+      })
+    : keys;
+  const half = Math.ceil(shown.length / 2);
   const cell = ([k, d]: [string, string]) => k.padEnd(KEY_W) + d;
-  const body = keys
+  const body = shown
     .slice(0, half)
-    .map((e, i) => cell(e).padEnd(COL_W) + (keys[half + i] ? cell(keys[half + i]) : ""))
+    .map((e, i) => cell(e).padEnd(COL_W) + (shown[half + i] ? cell(shown[half + i]) : ""))
     .join("\n");
 
   const popup = scene.add
@@ -32,11 +77,14 @@ export function addHelpPopup(scene: Phaser.Scene, keys: [string, string][], goal
     .setScrollFactor(0)
     .setDepth(140)
     .setVisible(false);
+  popups.set(scene, popup);
 
   scene.input
     .keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH)
     .on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) popup.setVisible(!popup.visible);
+      if (e.repeat) return;
+      if (popup.visible) popup.setVisible(false);
+      else if (!blocked()) popup.setVisible(true);
     });
   scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on(Phaser.Input.Keyboard.Events.DOWN, () => popup.setVisible(false));
   return popup;

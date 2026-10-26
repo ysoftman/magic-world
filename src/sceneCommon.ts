@@ -1,8 +1,11 @@
-import type Phaser from "phaser";
-import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH } from "./autotile";
-import { OBJECT_TILES, SOLID, T_GRASS, T_PATH, T_WATER_A, T_WATER_B, TILE } from "./levels";
-import { retroStyle } from "./pixelart";
+import Phaser from "phaser";
+import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
+import { PIXEL } from "./config";
+import { GameState } from "./gameState";
+import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
+import { holdToastsWhile, makeTexture, pumpToasts, retroStyle } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
+import { STATUS_HUD_HEIGHT } from "./ui/StatusHud";
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -57,6 +60,19 @@ export interface TileLayers {
   ground: number;
 }
 
+/**
+ * Texture keys a map is drawn from. A scene can swap in a palette-swapped set
+ * (BootScene's SNOW_SKIN) baked from the same grids in the same order, so
+ * every tile index, variation and transition mask keeps its meaning.
+ */
+export interface TileSkin {
+  tiles: string;
+  shore: string;
+  road: string;
+}
+
+const DEFAULT_SKIN: TileSkin = { tiles: "tiles16", shore: SHORE_TEXTURE_KEY, road: ROAD_TEXTURE_KEY };
+
 /** Tile index pairs the water tick swaps. Add a pair per water variation. */
 export type TileSwapPair = readonly [number, number];
 
@@ -102,15 +118,16 @@ function terrainGrid(level: readonly (readonly number[])[], ground: number): num
  * the scene would have passed layer.setTint: a Phaser 4 TilemapLayer has no
  * readable tint to copy off, so it is threaded through here instead and every
  * piece of the map — ground, objects and transition art — gets graded together.
+ * `skin` picks the textures all three are drawn from (see TileSkin).
  */
 export function buildTileLayers(
   scene: Phaser.Scene,
   level: readonly (readonly number[])[],
-  { ground = T_GRASS, tint }: { ground?: number; tint?: number } = {},
+  { ground = T_GRASS, tint, skin = DEFAULT_SKIN }: { ground?: number; tint?: number; skin?: TileSkin } = {},
 ): TileLayers {
   const groundGrid = terrainGrid(level, ground);
   const map = scene.make.tilemap({ data: groundGrid, tileWidth: TILE, tileHeight: TILE });
-  const tileset = map.addTilesetImage("tiles16", "tiles16", TILE, TILE)!;
+  const tileset = map.addTilesetImage(skin.tiles, skin.tiles, TILE, TILE)!;
 
   const terrain = map.createLayer(0, tileset, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
   terrain.setDepth(TERRAIN_LAYER_DEPTH);
@@ -134,7 +151,7 @@ export function buildTileLayers(
     terrain.setTint(tint);
     objects.setTint(tint);
   }
-  buildTerrainOverlays(scene, groundGrid, tint);
+  buildTerrainOverlays(scene, groundGrid, skin, ground, tint);
   return layers;
 }
 
@@ -221,10 +238,20 @@ const ROAD_IDS: ReadonlySet<number> = new Set([T_PATH]);
  * tilemap layers alone. The scene owns them — a restart tears the old ones
  * down with the rest of the display list.
  */
-function buildTerrainOverlays(scene: Phaser.Scene, groundGrid: readonly (readonly number[])[], tint?: number): void {
+function buildTerrainOverlays(
+  scene: Phaser.Scene,
+  groundGrid: readonly (readonly number[])[],
+  skin: TileSkin,
+  ground: number,
+  tint?: number,
+): void {
   const overlays = [
-    buildTransitionLayer(scene, groundGrid, SHORE_TEXTURE_KEY, SHORE_IDS),
-    buildTransitionLayer(scene, groundGrid, ROAD_TEXTURE_KEY, ROAD_IDS),
+    buildTransitionLayer(scene, groundGrid, skin.shore, SHORE_IDS),
+    buildTransitionLayer(scene, groundGrid, skin.road, ROAD_IDS),
+    // monster zones fray into the open ground round them, and the ground
+    // crusts over a lava pool's edge (the volcano's ash)
+    buildFrayedEdges(scene, groundGrid, skin.tiles, ZONE_MARKERS, new Set([ground]), FRINGE_BLADES, "blades"),
+    buildFrayedEdges(scene, groundGrid, skin.tiles, new Set([ground]), LAVA_IDS, CRUST_LUMPS, "crust"),
   ];
   // The cave/forest/snow grade their whole terrain with a tint, and a Phaser 4
   // TilemapLayer has no readable tint to copy — so the caller hands over the
@@ -233,6 +260,167 @@ function buildTerrainOverlays(scene: Phaser.Scene, groundGrid: readonly (readonl
   if (tint === undefined) return;
   for (const overlay of overlays) {
     for (const child of overlay.list) (child as Phaser.GameObjects.Image).setTint(tint);
+  }
+}
+
+// Monster-zone markings: the town's, forest's and snow's tall grass, the
+// volcano's scorch. Each gets a frayed edge (buildFrayedEdges).
+const ZONE_MARKERS: ReadonlySet<number> = new Set([T_TALL, T_SCORCH]);
+const LAVA_IDS: ReadonlySet<number> = new Set([T_LAVA_A, T_LAVA_B]);
+// Heights in art pixels, one per column along a tile edge, low at both ends
+// so the two sides of a corner don't run into each other. Blades for grass,
+// rounder lumps for the ash crusting over lava.
+const FRINGE_BLADES = [
+  [0, 2, 1, 3, 2, 0, 1, 3, 2, 1, 3, 1, 0, 2, 1, 0],
+  [1, 0, 2, 3, 1, 2, 0, 2, 3, 1, 2, 3, 1, 0, 2, 0],
+  [0, 1, 3, 1, 0, 2, 3, 2, 1, 0, 3, 2, 1, 3, 1, 0],
+];
+const CRUST_LUMPS = [
+  [0, 1, 2, 2, 3, 3, 2, 1, 1, 2, 3, 3, 2, 2, 1, 0],
+  [0, 2, 2, 1, 1, 2, 3, 3, 3, 2, 1, 1, 2, 2, 1, 0],
+  [1, 1, 2, 3, 3, 2, 2, 1, 2, 2, 3, 2, 1, 1, 1, 0],
+];
+
+// A tile cut down to the shape `heights` rises from its bottom edge, taken
+// from the skin's own baked tile so every season and region frays in its own
+// colours. Baked once per skin, tile and shape; textures outlive a restart.
+function fringeTexture(scene: Phaser.Scene, tilesKey: string, tile: number, heights: readonly number[], key: string): string {
+  if (scene.textures.exists(key)) return key;
+  const src = scene.textures.get(tilesKey).getSourceImage() as HTMLCanvasElement;
+  const tex = scene.textures.createCanvas(key, TILE, TILE);
+  if (!tex) return key;
+  const ctx = tex.getContext();
+  ctx.drawImage(src, tile * TILE, 0, TILE, TILE, 0, 0, TILE, TILE);
+  heights.forEach((h, col) => {
+    ctx.clearRect(col * PIXEL, 0, PIXEL, TILE - h * PIXEL);
+  });
+  tex.refresh();
+  return key;
+}
+
+/**
+ * A ragged edge between two terrains with no transition art: on every `into`
+ * cell beside a `from` one, the `from` tile reaches in from the shared edge
+ * (turned to face it) in one of `shapes`, so the boundary stops being a ruled
+ * line — a monster zone's grass fraying into the meadow, ash crusting over a
+ * lava pool. Over the road and shore overlays, under the object layer.
+ */
+function buildFrayedEdges(
+  scene: Phaser.Scene,
+  groundGrid: readonly (readonly number[])[],
+  tilesKey: string,
+  from: ReadonlySet<number>,
+  into: ReadonlySet<number>,
+  shapes: readonly (readonly number[])[],
+  name: string,
+): Phaser.GameObjects.Container {
+  const container = scene.add.container(0, 0).setDepth(TRANSITION_DEPTH);
+  const sides = [
+    [0, -1, 0],
+    [1, 0, 90],
+    [0, 1, 180],
+    [-1, 0, 270],
+  ] as const;
+  const variants = shapes.map((_, i) => i);
+  for (let y = 0; y < groundGrid.length; y++) {
+    for (let x = 0; x < groundGrid[y].length; x++) {
+      const tile = groundGrid[y][x];
+      if (!from.has(tile)) continue;
+      for (const [dx, dy, angle] of sides) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const next = groundGrid[ny]?.[nx];
+        if (next === undefined || !into.has(next)) continue;
+        const v = pickVariant(variants, x * 2 + dx, y * 2 + dy);
+        const key = fringeTexture(scene, tilesKey, tile, shapes[v], `${tilesKey}-${name}-${tile}-${v}`);
+        container.add(scene.add.image(nx * TILE + TILE / 2, ny * TILE + TILE / 2, key).setAngle(angle));
+      }
+    }
+  }
+  return container;
+}
+
+// Border dressing (addBorderDressing): a darker filler between neighbouring
+// wall objects, a hair outward, behind them; and in front, now and then, a
+// full one or a small one (a shrub, a stone) set in toward the field.
+const BORDER_BACK_DEPTH = OBJECT_LAYER_DEPTH - 0.2;
+const BORDER_FRONT_DEPTH = OBJECT_LAYER_DEPTH + 0.2;
+const BORDER_BACK_SHADE = 0.72;
+// how far the near-side clumps reach toward the walkable ground, in tiles
+const BORDER_FRONT_REACH = 0.45;
+
+const shade = (f: number): number => {
+  const c = (shift: number): number => Math.round(0xff * f) << shift;
+  return c(16) | c(8) | c(0);
+};
+
+// one tile of a baked tileset as an image frame, named the way autotile names
+// its transition frames so the two never register the same tile twice
+function tileFrame(scene: Phaser.Scene, textureKey: string, index: number): string {
+  const key = `${textureKey}#${index}`;
+  const texture = scene.textures.get(textureKey);
+  if (!texture.has(key)) texture.add(key, 0, index * TILE, 0, TILE, TILE);
+  return key;
+}
+
+/**
+ * Dresses a field's outer wall — the ring of trees or rocks round its edge —
+ * so it reads as a wood or a rock face instead of one object stamped every
+ * tile: behind the ring, a darker, larger one between each pair; in front,
+ * here and there a second rank or a shrub or stone, set in toward the field
+ * on the north, west and east (never the south, where it would be drawn
+ * under a hero standing behind it). Drawn from the skin's own wall tile, so
+ * seasons follow; picked by coordinate hash, so a cell always dresses the
+ * same. Nothing collides — the walkable ground is exactly what it was — and
+ * nothing is put within two tiles of `clear` (the exit gap and its sign, the
+ * cave mouth).
+ */
+export function addBorderDressing(
+  scene: Phaser.Scene,
+  level: readonly (readonly number[])[],
+  skin: TileSkin = DEFAULT_SKIN,
+  clear: ReadonlyArray<{ x: number; y: number }> = [],
+): void {
+  const h = level.length;
+  const w = level[0]?.length ?? 0;
+  const near = (x: number, y: number): boolean =>
+    clear.some((p) => Math.abs(Math.floor(p.x / TILE) - x) <= 2 && Math.abs(Math.floor(p.y / TILE) - y) <= 2);
+  const frameOf = (tile: number, hash: number): string =>
+    tileFrame(scene, skin.tiles, renderIndexes(tile)[hash % renderIndexes(tile).length]);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x > 0 && y > 0 && x < w - 1 && y < h - 1) continue;
+      const tile = level[y][x];
+      if (!OBJECT_TILES.has(tile) || near(x, y)) continue;
+      const hash = tileHash(x, y);
+      // along the edge, and in toward the field
+      const [ax, ay] = y === 0 || y === h - 1 ? [1, 0] : [0, 1];
+      const [ix, iy] = y === 0 ? [0, 1] : y === h - 1 ? [0, -1] : x === 0 ? [1, 0] : [-1, 0];
+      const cx = x * TILE + TILE / 2;
+      const cy = y * TILE + TILE / 2;
+      const nx = x + ax;
+      const ny = y + ay;
+      if (hash % 3 !== 0 && OBJECT_TILES.has(level[ny]?.[nx] ?? -1) && !near(nx, ny)) {
+        scene.add
+          .image(cx + (ax * TILE) / 2 - ix * 12, cy + (ay * TILE) / 2 - iy * 12, skin.tiles, frameOf(tile, hash >>> 3))
+          .setScale(1 + ((hash >>> 6) % 20) / 100)
+          .setTint(shade(BORDER_BACK_SHADE))
+          .setFlipX(((hash >>> 9) & 1) === 1)
+          .setDepth(BORDER_BACK_DEPTH);
+      }
+      const front = (hash >>> 12) % 5;
+      const corner = (x === 0 || x === w - 1) && (y === 0 || y === h - 1);
+      if (iy === -1 || corner || front > 2) continue;
+      const small = front > 0;
+      const jitter = ((hash >>> 15) % 25) - 12;
+      const reach = small ? BORDER_FRONT_REACH + 0.1 : BORDER_FRONT_REACH;
+      scene.add
+        .image(cx + ix * TILE * reach + ax * jitter, cy + iy * TILE * reach + ay * jitter, skin.tiles, frameOf(tile, hash >>> 18))
+        .setScale(small ? 0.55 + ((hash >>> 20) % 20) / 100 : 0.9 + ((hash >>> 20) % 15) / 100)
+        .setTint(shade(small ? 0.85 : 0.95))
+        .setFlipX(((hash >>> 23) & 1) === 1)
+        .setDepth(BORDER_FRONT_DEPTH);
+    }
   }
 }
 
@@ -251,15 +439,170 @@ export function createWalkAnimations(scene: Phaser.Scene): void {
   }
 }
 
+// How long an area's title (scrollFactor 0, just under the HUD) stays up after
+// entry: it covers the map's rows 0-1 while the camera sits at the top.
+const AREA_TITLE_HOLD_MS = 2600;
+const AREA_TITLE_FADE_MS = 600;
+
 /**
  * Floating "TOWN" marker over a sub-map's exit zone, so the way back home is
  * visible from a distance. Sits under the player (depth 10) but over terrain.
+ * Every exit is on row 1, so the label is set 8px lower than a tile above the
+ * exit: at the top of its 8px bob it used to touch the map's top edge (y=0),
+ * past the label-inside-the-map rule now that row 0 can scroll into view.
+ * It fades in as the area title fades out: on entry the camera is at the top
+ * and the two would print over each other, while the hero is standing right
+ * by the exit anyway.
  */
 export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number): void {
   const label = scene.add
-    .text(x, y - TILE, "TOWN", retroStyle(5, "#ffd166"))
+    .text(x, y - TILE + 8, "TOWN", retroStyle(5, "#ffd166"))
     .setOrigin(0.5, 1)
     .setStroke("#1a1028", 4)
-    .setDepth(9);
+    .setDepth(9)
+    .setAlpha(0);
   scene.tweens.add({ targets: label, y: label.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+  scene.tweens.add({ targets: label, alpha: 1, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+}
+
+/**
+ * While `up()` holds — a panel, the help or a talk up — the map's name tags
+ * go and the scene's toasts wait (pixelart.holdToastsWhile).
+ *
+ * Tags: panels are translucent, so a tag behind one showed through as ghost
+ * letters among its lines ("HUNT 5 SLIMES" over SLIMES), and a talk's name
+ * plate sat right on them; neither needs a tag. They are every world-space
+ * text the scene holds when it first updates, and every world-space
+ * container with text in it (the town's HOME bubble) — notes made later,
+ * like a chest's "+GOLD", aren't — put back to full when `up()` ends.
+ * Hidden again every frame: the TOWN sign's fade-in tween, still running
+ * when a panel opened just after arriving, brought it back under the panel.
+ * `shown` runs each frame they're up, after that, for a scene's own fades.
+ *
+ * Toasts: an unlock tip or achievement printed over a panel's title hid
+ * both; news now comes out once the panel closes (pixelart's toastHolds).
+ */
+type MapTag = Phaser.GameObjects.Text | Phaser.GameObjects.Container;
+const isMapTag = (o: Phaser.GameObjects.GameObject): o is MapTag =>
+  (o instanceof Phaser.GameObjects.Text && o.scrollFactorX === 1) ||
+  (o instanceof Phaser.GameObjects.Container && o.scrollFactorX === 1 && o.list.some((c) => c instanceof Phaser.GameObjects.Text));
+
+export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () => void): void {
+  holdToastsWhile(scene, up);
+  let tags: MapTag[] | null = null;
+  let off = false;
+  const step = (): void => {
+    tags ??= scene.children.list.filter(isMapTag);
+    const hide = up();
+    if (hide || off) {
+      off = hide;
+      for (const t of tags) t.setAlpha(hide ? 0 : 1);
+    }
+    if (!hide) shown?.();
+    pumpToasts(scene);
+  };
+  // after the physics step has moved the hero, whatever else update() did
+  scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step));
+}
+
+/**
+ * The way back to town from a field (forest, snow, volcano): the entry path
+ * runs out through a gap in the top border, a signpost two tiles west of the
+ * entry names it, and addExitArrow marks the gap once the hero is close. The
+ * tag fades in as the area title fades out, for the same reason as above.
+ */
+export function addTownExitSign(scene: Phaser.Scene, hero: { x: number; y: number }, x: number, y: number): void {
+  const signX = x - 2 * TILE;
+  scene.add.image(signX, y, "sign").setDepth(9);
+  const tag = scene.add
+    .text(signX, y - 48, "TOWN", retroStyle(5, "#ffd166"))
+    .setOrigin(0.5)
+    .setStroke("#1a1028", 4)
+    .setDepth(11)
+    .setAlpha(0);
+  scene.tweens.add({ targets: tag, alpha: 1, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+  // the gap is the two path tiles left of the entry's centre, on row 0
+  addExitArrow(scene, hero, x - TILE / 2, TILE / 2, -90);
+}
+
+const EXIT_ARROW_KEY = "exit-arrow";
+const EXIT_ARROW_PALETTE = { o: 0x3b2a1a, f: 0xfff3c4 };
+// pointing east; turned with setAngle a quarter at a time, so square
+// biome-ignore format: one row per line so the art reads as a grid
+const EXIT_ARROW = [
+  "...........",
+  "..oo.......",
+  "..ofo......",
+  "..offo.....",
+  "...offo....",
+  "....offo...",
+  "...offo....",
+  "..offo.....",
+  "..ofo......",
+  "..oo.......",
+  "...........",
+];
+// full strength within a tile of the exit, gone by two and a half
+const EXIT_ARROW_NEAR = TILE;
+const EXIT_ARROW_FAR = 2.5 * TILE;
+const EXIT_ARROW_ALPHA = 0.8;
+
+/**
+ * A chevron painted on a map exit's last tile, pointing off the map. It
+ * shows only as the hero walks up to it and never pulses, so reduced motion
+ * needs no case of its own. Ground level (under the hero and NPCs at 10), and
+ * cream rather than the GUIDE ARROW's magenta — which is gone by then anyway,
+ * since it hides once its goal is in view. Returned for the town's map
+ * editor to carry along with the exit.
+ */
+export function addExitArrow(
+  scene: Phaser.Scene,
+  hero: { x: number; y: number },
+  x: number,
+  y: number,
+  angle: number,
+): Phaser.GameObjects.Image {
+  if (!scene.textures.exists(EXIT_ARROW_KEY)) makeTexture(scene, EXIT_ARROW_KEY, EXIT_ARROW, EXIT_ARROW_PALETTE);
+  const arrow = scene.add.image(x, y, EXIT_ARROW_KEY).setAngle(angle).setDepth(9).setAlpha(0);
+  const onUpdate = (): void => {
+    const d = Phaser.Math.Distance.Between(hero.x, hero.y, arrow.x, arrow.y);
+    arrow.setAlpha(EXIT_ARROW_ALPHA * Phaser.Math.Clamp((EXIT_ARROW_FAR - d) / (EXIT_ARROW_FAR - EXIT_ARROW_NEAR), 0, 1));
+  };
+  scene.events.on(Phaser.Scenes.Events.POST_UPDATE, onUpdate);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, onUpdate));
+  return arrow;
+}
+
+/**
+ * Bounds the main camera to a w x h map plus, while the status HUD is up, a
+ * STATUS_HUD_HEIGHT strip above it. The HUD covers the top 88px of the screen,
+ * so with the map alone as bounds the first row could never scroll out from
+ * under it -- the TOWN exit marker on row 1 lived behind the HUD. The strip is
+ * empty, and it is behind the HUD whenever the camera can reach it. Tracks
+ * the HUD toggle (S), so a hidden HUD doesn't leave a bare band at the top.
+ * Physics bounds are the caller's and stay the map itself.
+ */
+export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): void {
+  const cam = scene.cameras.main;
+  let inset = -1;
+  const apply = (): void => {
+    const next = GameState.hudVisible ? STATUS_HUD_HEIGHT : 0;
+    if (next === inset) return;
+    inset = next;
+    cam.setBounds(0, -inset, w, h + inset);
+  };
+  apply();
+  scene.events.on(Phaser.Scenes.Events.UPDATE, apply);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, apply));
+}
+
+/**
+ * Fades an area's title out a few seconds after entry. With the camera able
+ * to rise above the map, the title would otherwise sit over rows 0-1 for good.
+ * Timed to leave with Ambient's weather caption beneath it (0.3s in, 2.6s
+ * held, 0.3s out) and with the TOWN marker coming in.
+ */
+export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text): void {
+  scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
 }

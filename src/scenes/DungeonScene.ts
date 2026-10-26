@@ -1,27 +1,56 @@
 import Phaser from "phaser";
+import { abyssOpen, abyssResume } from "../abyss";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
-import { buildDungeon, DUNGEON_ENTRY, DUNGEON_H, DUNGEON_W, DUNGEON_ZONES, escapeFromZones, T_PATH, TILE, TREASURE_POS } from "../levels";
-import { addGroundShadow, retroStyle, showToast } from "../pixelart";
-import { addTownExitLabel, buildTileLayers, createWalkAnimations, isWalkableCell, startWaterAnimation } from "../sceneCommon";
+import {
+  ABYSS_STAIRS_POS,
+  buildDungeon,
+  DUNGEON_ENTRY,
+  DUNGEON_H,
+  DUNGEON_W,
+  DUNGEON_ZONES,
+  escapeFromZones,
+  T_GRASS,
+  T_PATH,
+  T_WATER_A,
+  T_WATER_B,
+  TILE,
+  TREASURE_POS,
+} from "../levels";
+import { ENEMIES } from "../monsters";
+import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
+import {
+  addBorderDressing,
+  addTownExitLabel,
+  boundCameraToMap,
+  buildTileLayers,
+  createWalkAnimations,
+  fadeAreaTitle,
+  isWalkableCell,
+  startWaterAnimation,
+  whilePanelUp,
+} from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
+import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
-import { addHelpPopup } from "../ui/HelpPopup";
+import { DialogueBox } from "../ui/DialogueBox";
+import { addFootsteps } from "../ui/Footsteps";
+import { addGuideArrow } from "../ui/GuideArrow";
+import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
-import { Minimap } from "../ui/Minimap";
-import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
+import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
-import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
+import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
-
-// This area's terrain grading. Every piece of the map — the ground layer, the
-// object layer and the transition overlays drawn between them — has to get
-// this same value, or the ungraded piece sits on the rest at full brightness
-// (trees in their own summer green over a graded ground is the giveaway).
-const TERRAIN_TINT = 0x8899bb;
+import { TreasureDigger } from "../ui/TreasureDig";
+import { bakeAbyssStairs, STAIRS_DOWN_KEY } from "./AbyssScene";
+import { CAVE_SKIN } from "./BootScene";
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -65,7 +94,6 @@ export class DungeonScene extends Phaser.Scene {
   private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
-  private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer[] = [];
   private encounterCooldown = 0;
@@ -89,6 +117,7 @@ export class DungeonScene extends Phaser.Scene {
   private iQueued = false;
   private bQueued = false;
   private aQueued = false;
+  private uQueued = false;
   private oQueued = false;
   private qQueued = false;
   private quitConfirm = false;
@@ -115,7 +144,10 @@ export class DungeonScene extends Phaser.Scene {
   private inventory!: InventoryUI;
   private bestiary!: BestiaryUI;
   private achievementsUI!: AchievementsUI;
+  private questLog!: QuestLog;
   private settingsUI!: SettingsUI;
+  // the ABYSS stair's question (checkpoint or B1); nothing else talks here
+  private dialogue!: DialogueBox;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -139,27 +171,38 @@ export class DungeonScene extends Phaser.Scene {
     // — SHUTDOWN listeners fire in registration order, so this unsubscribes
     // before that save happens and no toast gets created on a scene that's
     // already tearing down. Keep this the first SHUTDOWN listener.
+    // Not over an open panel: an equip, a potion or a companion picked there
+    // is already reported on the panel's own message line, and this toast
+    // (y 176..200) landed on the bag's MATERIALS header or its first rows.
     this.unsubSaved = onSaved(() => {
-      if (!this.suppressSavedToast) showToast(this, "SAVED", STATUS_HUD_TOAST_Y);
+      if (!this.suppressSavedToast && !this.uiBlocking()) showToast(this, "SAVED", FIELD_TOAST_Y);
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildDungeon();
     this.level = level;
-    // The cave's walls are tree tiles; what shows under them once they draw on
-    // their own transparent layer is cave floor, not the grass every outdoor
-    // scene defaults to.
-    const layers = buildTileLayers(this, level, { ground: T_PATH, tint: TERRAIN_TINT });
+    // Drawn from the cave's own palettes (BootScene's CAVE_SKIN) rather than a
+    // tint over the town's, which left green trees. The floor is T_PATH in the
+    // level, but is drawn as T_GRASS, which CAVE_SKIN paints as that same floor:
+    // the shore transitions only run between water and grass, so this is what
+    // rounds the pools' edges off instead of leaving hard rectangles. Under
+    // the rock walls the ground is that floor too. Walkability and the minimap
+    // keep reading `level` itself.
+    const floorView = level.map((row) => row.map((tile) => (tile === T_PATH ? T_GRASS : tile)));
+    const layers = buildTileLayers(this, floorView, { ground: T_GRASS, skin: CAVE_SKIN });
+    // the rock walls, thickened; clear of the cave mouth
+    addBorderDressing(this, floorView, CAVE_SKIN, [DUNGEON_ENTRY]);
     this.layer = layers.terrain;
     this.objectLayer = layers.objects;
 
     this.physics.world.setBounds(0, 0, DUNGEON_W * TILE, DUNGEON_H * TILE);
 
-    this.add
-      .text((DUNGEON_W * TILE) / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
+    const title = this.add
+      .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(95);
+    fadeAreaTitle(this, title);
 
     addGroundShadow(this, DUNGEON_ENTRY, { w: 104, h: 24, yOffset: 56 });
     this.add.image(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y, "cave").setDepth(9);
@@ -180,28 +223,35 @@ export class DungeonScene extends Phaser.Scene {
 
     this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
+    // treasure maps to this region: the glint over each X, and Z to dig
+    new TreasureDigger(this, "dungeon", this.player, {
+      toastY: FIELD_TOAST_Y,
+      ownKey: true,
+      blocked: () => this.quitConfirm || this.uiBlocking(),
+    });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
     createWalkAnimations(this);
 
-    this.dust = this.add.particles(0, 0, "dust", {
-      speed: { min: 16, max: 44 },
-      lifespan: { min: 180, max: 320 },
-      scale: { start: 1, end: 0 },
-      alpha: { start: 0.45, end: 0 },
-      frequency: 70,
-      emitting: false,
-    });
-    this.dust.startFollow(this.player, 0, 28);
+    addFootsteps(this, this.player, level, "dungeon");
+    addGuideArrow(this, this.player, "dungeon", () => this.quitConfirm || this.uiBlocking());
+
+    // floating dust motes and the odd drip from the ceiling
+    addAmbient(this, "dungeon");
 
     this.spawnMonsters();
 
     this.spawnTreasures();
 
+    // the stair down to the ABYSS (abyss.ts), once the FLAME DRAKE has fallen
+    const abyss = abyssOpen(GameState.quest, GameState.ngPlus);
+    if (abyss) this.addAbyssStairs();
+
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      if (this.encounterCooldown > 0 || this.uiBlocking()) return;
+      // nor under the quit prompt, whose Y would then race the battle's fade
+      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitConfirm) return;
       // cramped zones can overlap the player with more than one roamer on
       // the same tick; always let the rare one win the tie instead of
       // whichever roamer the physics engine happened to report first
@@ -225,7 +275,7 @@ export class DungeonScene extends Phaser.Scene {
     startWaterAnimation(this, this.layer);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.setBounds(0, 0, DUNGEON_W * TILE, DUNGEON_H * TILE);
+    boundCameraToMap(this, DUNGEON_W * TILE, DUNGEON_H * TILE);
 
     const kb = this.input.keyboard!;
     this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
@@ -257,23 +307,29 @@ export class DungeonScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.aQueued = true;
     });
+    // registered before TouchControls is built, so touch gets a U button too
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.uQueued = true;
+    });
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.O).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.oQueued = true;
     });
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
+    // only while the quit prompt is up: a Y pressed earlier would otherwise
+    // sit queued and answer the next prompt the moment it opens
     this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
     this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.yQueued = true;
+      if (this.quitConfirm && !e.repeat) this.yQueued = true;
     });
     this.keyN = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N);
     this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.nQueued = true;
+      if (this.quitConfirm && !e.repeat) this.nQueued = true;
     });
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.escQueued = true;
+      if (this.quitConfirm && !e.repeat) this.escQueued = true;
     });
 
     const help = addHelpPopup(
@@ -283,6 +339,7 @@ export class DungeonScene extends Phaser.Scene {
         ["I", "ITEMS"],
         ["B", "BESTIARY"],
         ["A", "ACHIEVE"],
+        ["U", "JOURNAL"],
         ["O", "SETTINGS"],
         ["T", "MAP"],
         ["S", "HUD"],
@@ -292,25 +349,47 @@ export class DungeonScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "FIND THE KING!",
+      () => this.uiBlocking() || this.quitConfirm,
     );
 
-    // exit + unopened chests; the king's lair is deliberately not marked
-    this.minimap = new Minimap(this, level, this.player, [
-      { x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y, color: 0xffd166 },
-      ...TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
-        x: t.x,
-        y: t.y,
-        color: 0xfde047,
-      })),
-    ]);
+    // exit + unopened chests (+ the ABYSS stair); the king's lair is
+    // deliberately not marked
+    this.minimap = new Minimap(
+      this,
+      level,
+      this.player,
+      [
+        { x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y, color: 0xffd166 },
+        ...TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
+          x: t.x,
+          y: t.y,
+          color: 0xfde047,
+        })),
+        ...(abyss ? [{ ...ABYSS_STAIRS_POS, color: 0xc084fc }] : []),
+      ],
+      CAVE_TILE_COLORS,
+    );
 
     // the cave is dim whatever the hour; night just deepens it
     this.night = new NightOverlay(this, 0.35, 0.25);
+    // a faint blue light off the pools, shimmering slower than the lava's
+    this.night.addLights(
+      lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), { radius: 112, color: 0x3b82f6, strength: 0.18, pulseMs: 4200 }),
+    );
 
     this.inventory = new InventoryUI(this);
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
-    this.settingsUI = new SettingsUI(this);
+    this.questLog = new QuestLog(this);
+    this.dialogue = new DialogueBox(this, []);
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
+    this.settingsUI = new SettingsUI(this, () => {
+      this.quitConfirm = this.yQueued = true;
+      this.quitConfirmText.setVisible(true);
+    });
+
+    // under a panel or the help the map's tags (TOWN, ABYSS) go, toasts wait
+    whilePanelUp(this, () => this.uiBlocking());
 
     this.hud = new StatusHud(this);
 
@@ -329,7 +408,9 @@ export class DungeonScene extends Phaser.Scene {
       this.inventory.destroy();
       this.bestiary.destroy();
       this.achievementsUI.destroy();
+      this.questLog.destroy();
       this.settingsUI.destroy();
+      this.dialogue.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
@@ -343,7 +424,9 @@ export class DungeonScene extends Phaser.Scene {
     this.updateStatus();
 
     this.achievementCheckAccum += delta;
-    if (this.achievementCheckAccum >= 1000) {
+    // only with no panel up: a trophy toast drawn over an open panel covered
+    // its top rows. Nothing is lost: the check just waits for it to close.
+    if (this.achievementCheckAccum >= 1000 && !this.uiBlocking()) {
       this.achievementCheckAccum = 0;
       const earned = claimAchievements();
       if (earned.length > 0) {
@@ -356,7 +439,7 @@ export class DungeonScene extends Phaser.Scene {
       // one ever visible — batch every name earned this tick into one toast.
       const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
       if (names.length > 0) {
-        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`);
+        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, FIELD_TOAST_Y);
       }
     }
 
@@ -373,7 +456,7 @@ export class DungeonScene extends Phaser.Scene {
     if (this.mQueued) {
       this.mQueued = false;
       const muted = Sfx.toggleMuted();
-      showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", STATUS_HUD_TOAST_Y);
+      showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", FIELD_TOAST_Y);
     }
 
     if (this.tQueued) {
@@ -383,17 +466,24 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.qQueued) {
       this.qQueued = false;
-      this.quitConfirm = true;
-      this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-      Sfx.error();
+      // never over an open panel: the prompt's ESC would close that panel too
+      if (!this.uiBlocking()) {
+        this.quitConfirm = true;
+        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
+        Sfx.error();
+      }
     }
 
     if (this.quitConfirm) {
+      // kept to their boxes, as under a panel: left on their last velocity
+      // they walked off across the map until the prompt closed
+      this.updateRoamers(delta);
       if (this.quitting) return;
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.dust.emitting = false;
-      this.ctrlSQueued = this.mQueued = false;
+      // a panel key pressed while the prompt is up would otherwise open
+      // that panel the moment the prompt is dismissed
+      this.ctrlSQueued = this.mQueued = this.iQueued = this.bQueued = this.aQueued = this.uQueued = this.oQueued = this.tQueued = false;
       if (this.yQueued) {
         this.yQueued = false;
         // Save here rather than leaning on the SHUTDOWN handler: that one runs
@@ -433,17 +523,22 @@ export class DungeonScene extends Phaser.Scene {
         this.aQueued = false;
         if (this.achievementsUI.isActive()) this.achievementsUI.close();
       }
+      if (this.uQueued) {
+        this.uQueued = false;
+        if (this.questLog.isActive()) this.questLog.close();
+      }
       if (this.oQueued) {
         this.oQueued = false;
         if (this.settingsUI.isActive()) this.settingsUI.close();
       }
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.dust.emitting = false;
       this.inventory.update();
       this.bestiary.update();
       this.achievementsUI.update();
+      this.questLog.update();
       this.settingsUI.update();
+      this.dialogue.update();
       this.updateRoamers(delta);
       return;
     }
@@ -463,6 +558,12 @@ export class DungeonScene extends Phaser.Scene {
     if (this.aQueued) {
       this.aQueued = false;
       this.achievementsUI.open();
+      return;
+    }
+
+    if (this.uQueued) {
+      this.uQueued = false;
+      this.questLog.open();
       return;
     }
 
@@ -498,7 +599,6 @@ export class DungeonScene extends Phaser.Scene {
 
     this.playerShadow.setPosition(this.player.x, this.player.y + 28);
     this.companionFollower.update(this.player.x, this.player.y);
-    this.dust.emitting = moving;
     this.updateEquipOverlays();
     this.updateRoamers(delta);
     this.night.update();
@@ -507,19 +607,19 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private updateEquipOverlays(): void {
-    this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
-    this.shieldOverlay.setVisible(!!GameState.equipped.armor);
-    this.weaponOverlay.setTexture(GameState.weaponTexture());
-    this.shieldOverlay.setTexture(GameState.armorTexture());
-    const flip = this.lastMove === "left";
-    this.weaponOverlay.setFlipX(flip);
-    this.shieldOverlay.setFlipX(flip);
-    this.weaponOverlay.setPosition(this.player.x + 14, this.player.y + 4);
-    this.shieldOverlay.setPosition(this.player.x - 14, this.player.y + 8);
+    placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
   }
 
   private uiBlocking(): boolean {
-    return this.inventory.isActive() || this.bestiary.isActive() || this.achievementsUI.isActive() || this.settingsUI.isActive();
+    return (
+      this.inventory.isActive() ||
+      this.bestiary.isActive() ||
+      this.achievementsUI.isActive() ||
+      this.questLog.isActive() ||
+      this.settingsUI.isActive() ||
+      this.dialogue.isActive() ||
+      helpOpen(this)
+    );
   }
 
   private toggleStatus(): void {
@@ -544,6 +644,54 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  // The ABYSS's stair (abyss.ts) under an "ABYSS" tag in the TOWN marker's
+  // look; walking onto it starts a dive at B1, or — once a GUARDIAN has
+  // fallen, or a dive was left by its stair up — asks whether to start at the
+  // checkpoint or the portal instead, the deeper (abyssResume). The dive's
+  // own stair up comes out at the town's cave mouth, not back here.
+  private addAbyssStairs(): void {
+    const { x, y } = ABYSS_STAIRS_POS;
+    bakeAbyssStairs(this);
+    this.add.image(x, y, STAIRS_DOWN_KEY).setDepth(3);
+    const label = this.add
+      .text(x, y - TILE + 8, "ABYSS", retroStyle(5, "#c084fc"))
+      .setOrigin(0.5, 1)
+      .setStroke("#1a1028", 4)
+      .setDepth(9);
+    this.tweens.add({ targets: label, y: label.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    const stair = this.add.zone(x, y, TILE, TILE);
+    this.physics.add.existing(stair);
+    this.physics.add.overlap(this.player, stair, () => {
+      if (this.exitingDungeon || this.uiBlocking()) return;
+      this.player.setVelocity(0, 0);
+      const resume = abyssResume(GameState.abyssPortal, GameState.abyssCheckpoint);
+      if (!resume) {
+        this.enterAbyss(1);
+        return;
+      }
+      // Y or the first choice dives from there; N, ESC (the last choice, as
+      // on any question) or the second from B1, as ever, which leaves a
+      // portal waiting. Two lines of at most 27 glyphs ("A CHECKPOINT WAITS
+      // AT B996.", "A PORTAL WAITS AT B999." 23) and two choices: all a touch
+      // question holds (DialogueBox).
+      const what = resume.portal ? "A PORTAL" : "A CHECKPOINT";
+      this.dialogue.ask([`${what} WAITS AT B${resume.floor}.`, "START THERE?"], "ABYSS", [`B${resume.floor}`, "B1"], (i) =>
+        this.enterAbyss(i === 0 ? resume.floor : 1),
+      );
+    });
+  }
+
+  private enterAbyss(start: number): void {
+    this.exitingDungeon = true;
+    Sfx.night();
+    this.player.setVelocity(0, 0);
+    this.cameras.main.fadeOut(200, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      // a new dive, never a stale { fromBattle } replayed by Phaser
+      this.scene.start("Abyss", { start });
+    });
+  }
+
   private checkEncounter(delta: number): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
@@ -555,6 +703,10 @@ export class DungeonScene extends Phaser.Scene {
     const nearExit =
       Math.abs(this.player.x - DUNGEON_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - DUNGEON_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
+    // 0.06/s, a third of the town's tall grass (0.18/s), on purpose: the cave
+    // is the road to the KING SLIME, not a hunting ground, and three times the
+    // fights would only drag the walk. A fight pays about the same (7.3 G to
+    // 8.9), so hunting here makes ~0.45x the town's gold an hour, as meant.
     const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);
     if (Math.random() < rate) {
       this.startBattle();
@@ -580,18 +732,16 @@ export class DungeonScene extends Phaser.Scene {
             : Math.random() < 0.5
               ? "slime"
               : "goblin";
-        // rare tinted reskin, same pattern as TownScene's GOLDEN SLIME —
-        // texture stays the base kind, only the sprite tint + bookkeeping
-        // "kind" used for battle dispatch changes
+        // rare palette reskin, same pattern as TownScene's GOLDEN SLIME: its
+        // own texture plus the bookkeeping "kind" used for battle dispatch
         const cursed = kind === "goblin" && Math.random() < CURSED_GOBLIN_CHANCE;
         const roamerKind: Roamer["kind"] = cursed ? "cursedGoblin" : kind;
-        const sprite = this.roamerGroup.create(x, y, kind) as Phaser.Physics.Arcade.Sprite;
+        const sprite = this.roamerGroup.create(x, y, ENEMIES[roamerKind].texture) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
         if (kind === "king") {
           sprite.setScale(1.5);
         }
-        if (cursed) sprite.setTint(0x9333ea);
         this.roamers.push({
           sprite,
           minX: zone.cx - zone.w / 2 + 8,
@@ -687,9 +837,13 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private startBattle(enemy?: Roamer["kind"]): void {
-    if (this.encounterCooldown > 0) return; // already fading into a battle
+    // A fade out either way is a scene change: a battle rolled while the exit
+    // or the ABYSS stair fades (no safe radius round the stair), or that stair
+    // reached while a battle fades, started both scenes at once.
+    if (this.encounterCooldown > 0 || this.exitingDungeon) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.exitingDungeon = true;
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();

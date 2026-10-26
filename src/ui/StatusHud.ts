@@ -1,21 +1,20 @@
 import type Phaser from "phaser";
 import { GAME_WIDTH } from "../config";
+import { MEALS } from "../cooking";
 import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
-import { makeTexture, type PixelMap, retroStyle } from "../pixelart";
+import { currentObjective } from "../objective";
+import { keepBlocky, makeTexture, type PixelMap, retroStyle } from "../pixelart";
+import { type Region, type Weather, weatherToday } from "../weather";
 
 export const STATUS_HUD_HEIGHT = 88;
 export const STATUS_HUD_TOAST_Y = STATUS_HUD_HEIGHT + 12;
 
-// The single quest slot shows whichever chapter is currently open; once the
-// main chain is done it tracks the HUNTER's side bounties instead.
-function questLabel(q: QuestState): string {
-  if (!q.bossDefeated) return `SLIMES ${q.slimes}/5`;
-  if (!q.forestBoss) return "FIND GOLEM";
-  if (!q.forestReward) return "SEE ELDER";
-  if (q.hunterBatsAccepted && !q.hunterBatsReward) return `BATS ${Math.min(q.batsSlain, 4)}/4`;
-  if (q.hunterCatchAccepted && !q.hunterCatchReward) return `CATCH ${Math.min(GameState.caught.length - q.caughtAtAccept, 3)}/3`;
-  if (q.hunterYetiAccepted && !q.hunterYetiReward) return `YETIS ${Math.min(q.yetisSlain, 3)}/3`;
-  return "QUEST DONE";
+// The single quest slot shows whichever chapter is currently open: the label
+// of objective.ts's current step, the same walk of the chain the minimap's
+// marker follows. Exported for the title screen's save card, which passes the
+// save's own caught list rather than the live one.
+export function questLabel(q: QuestState, caught: readonly string[] = GameState.caught): string {
+  return currentObjective(q, caught).label;
 }
 
 const COLORS = {
@@ -28,7 +27,16 @@ const COLORS = {
   quest: "#fb923c",
   caught: "#67e8f9",
   exp: "#86efac",
+  meal: "#fdba74",
 };
+
+// The EXP bar runs x 516..1256 on row 2; while a meal (cooking.ts) is on,
+// its tag and battles left take the bar's right end instead: "GRILL 5" is
+// 140px right-aligned at 1256 (from 1116), the bar stops 16px short of it.
+const EXP_BAR_X = 516;
+const EXP_BAR_W = 740;
+const MEAL_TAG_RIGHT = 1256;
+const EXP_BAR_W_MEAL = MEAL_TAG_RIGHT - 140 - 16 - EXP_BAR_X;
 
 // Day/night indicator icons (8x8 rows = 32x32px at PIXEL=4): a yellow sun with
 // a circle-ish core and corner/edge rays, and a pale crescent moon. Drawn as a
@@ -38,6 +46,56 @@ const SUN_PALETTE: PixelMap = { X: 0xfde047 };
 
 const MOON_ROWS = ["..XXXX..", ".XXXXXX.", "XXXXXX..", "XXXX....", "XXXX....", "XXXXXX..", ".XXXXXX.", "..XXXX.."];
 const MOON_PALETTE: PixelMap = { X: 0xcbd5e1 };
+
+// Weather takes the sun/moon's slot (same 8x8 = 32px, same spot) whenever the
+// sky isn't clear: a cloud with rain, a storm cloud with a bolt, a snowflake,
+// a cloud shedding snow for a blizzard, an ash cloud with an ember. The same
+// art day and night — on a rainy night the cloud is the sky, not the moon, and
+// the clock beside it already says which half of the day it is.
+const WEATHER_ICONS: Partial<Record<Weather, { key: string; rows: string[]; palette: PixelMap }>> = {
+  rain: {
+    key: "wx-rain",
+    rows: ["...WW...", ".WWWWW..", "WWWWWWW.", "WWWWWWWW", ".GGGGGG.", "..B..B..", ".B..B..B", "B..B..B."],
+    palette: { W: 0xe2e8f0, G: 0x94a3b8, B: 0x60a5fa },
+  },
+  storm: {
+    key: "wx-storm",
+    rows: ["...DD...", ".DDDDD..", "DDDDDDD.", "DDDDDDDD", ".DDYYDD.", "...YY...", "..YY....", "..Y....."],
+    palette: { D: 0x64748b, Y: 0xfde047 },
+  },
+  snow: {
+    key: "wx-snow",
+    rows: ["...C....", ".C.C.C..", "..CCC...", "CCCWCCC.", "..CCC...", ".C.C.C..", "...C....", "........"],
+    palette: { C: 0xbae6fd, W: 0xffffff },
+  },
+  blizzard: {
+    key: "wx-blizzard",
+    rows: ["...WW...", ".WWWWW..", "WWWWWWW.", ".GGGGGG.", "S..S..S.", "..S..S..", ".S..S..S", "S..S..S."],
+    palette: { W: 0xe2e8f0, G: 0x94a3b8, S: 0xffffff },
+  },
+  ashfall: {
+    key: "wx-ash",
+    rows: ["...AA...", ".AAAAA..", "AAAAAAA.", ".KKKKKK.", "..g..e..", "g...g...", "..e...g.", ".g..g..."],
+    palette: { A: 0x78716c, K: 0x44403c, g: 0xa8a29e, e: 0xf97316 },
+  },
+};
+// blocky, not Scale2x (pixelart.ts): it turned the sun's rays into an X and
+// the blizzard's scattered flakes into solid slashes
+keepBlocky(SUN_ROWS, WEATHER_ICONS.blizzard?.rows ?? []);
+
+// Scene key -> weather region. Scenes without a sky (or a HUD that isn't in
+// this list) keep the plain sun/moon, which is also what the cave's "none" is.
+const SCENE_REGION: Record<string, Region> = {
+  Town: "town",
+  Forest: "forest",
+  Snow: "snow",
+  Dungeon: "dungeon",
+  Volcano: "volcano",
+};
+
+function skyIcon(weather: Weather | null, night: boolean): string {
+  return (weather && WEATHER_ICONS[weather]?.key) ?? (night ? "moon" : "sun");
+}
 
 // Compact top-of-screen overlay: colored stat segments on row 1, quest/caught
 // and the EXP bar on row 2, HP/MP thin bars under the values. Everything is
@@ -51,15 +109,20 @@ export class StatusHud {
   private mpBar!: Phaser.GameObjects.Rectangle;
   private expBar!: Phaser.GameObjects.Rectangle;
   private dayNightIcon!: Phaser.GameObjects.Image;
-  private lastNight = false;
+  private region: Region | null;
+  private lastIcon = "";
   private segments: Phaser.GameObjects.Text[] = [];
   private lastTexts: string[] = [];
   private lastColors: string[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.region = SCENE_REGION[scene.scene.key] ?? null;
+    // opaque: at 0.6 the map's name tags under it ("HOME", "FARM",
+    // "FISHING") read as part of the HUD — "QA HOME" beside the hero's name —
+    // and even at 0.92 they still showed through
     this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, STATUS_HUD_HEIGHT / 2, GAME_WIDTH - 2, STATUS_HUD_HEIGHT, 0x0b0b2b, 0.6)
+      .rectangle(GAME_WIDTH / 2, STATUS_HUD_HEIGHT / 2, GAME_WIDTH - 2, STATUS_HUD_HEIGHT, 0x0b0b2b, 1)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setStrokeStyle(1, 0xffffff)
@@ -87,10 +150,11 @@ export class StatusHud {
     this.addSegment(24, 58, 5, COLORS.quest);
     this.addSegment(248, 58, 5, COLORS.caught);
     this.addSegment(452, 58, 5, COLORS.exp);
+    this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.meal, 1);
 
     this.hpBar = scene.add.rectangle(444, 46, 192, 5, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
     this.mpBar = scene.add.rectangle(684, 46, 192, 5, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
-    this.expBar = scene.add.rectangle(516, 68, 740, 8, 0x22c55e, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.expBar = scene.add.rectangle(EXP_BAR_X, 68, EXP_BAR_W, 8, 0x22c55e, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
 
     this.setVisible(GameState.hudVisible);
     this.update();
@@ -104,6 +168,9 @@ export class StatusHud {
     }
     if (!this.scene.textures.exists("moon")) {
       makeTexture(this.scene, "moon", MOON_ROWS, MOON_PALETTE);
+    }
+    for (const icon of Object.values(WEATHER_ICONS)) {
+      if (!this.scene.textures.exists(icon.key)) makeTexture(this.scene, icon.key, icon.rows, icon.palette);
     }
   }
 
@@ -150,17 +217,22 @@ export class StatusHud {
     this.setSegment(6, questLabel(q), COLORS.quest);
     this.setSegment(7, `CAUGHT ${GameState.caught.length}`, COLORS.caught);
     this.setSegment(8, "EXP", COLORS.exp);
+    const meal = GameState.meal;
+    this.setSegment(9, meal ? `${MEALS[meal.key].tag} ${meal.left}` : "", COLORS.meal);
 
-    // Swap sun/moon only when the night state flips, to avoid per-frame churn.
-    const night = isNight();
-    if (night !== this.lastNight) {
-      this.lastNight = night;
-      this.dayNightIcon.setTexture(night ? "moon" : "sun");
+    // Re-read every frame, swapped only on a change: weatherToday() is a hash
+    // of the day number, so the icon follows the weather over midnight (and
+    // a rest() that jumps to the next dawn) with nothing to subscribe to.
+    const icon = skyIcon(this.region ? weatherToday(this.region) : null, isNight());
+    if (icon !== this.lastIcon) {
+      this.lastIcon = icon;
+      this.dayNightIcon.setTexture(icon);
     }
 
     this.hpBar.setScale(Math.max(0, hpRatio), 1);
     this.mpBar.setScale(Math.max(0, mpRatio), 1);
-    this.expBar.setScale(Math.min(1, Math.max(0, p.exp / expToNext(p.level))), 1);
+    const barW = meal ? EXP_BAR_W_MEAL : EXP_BAR_W;
+    this.expBar.setScale((Math.min(1, Math.max(0, p.exp / expToNext(p.level))) * barW) / EXP_BAR_W, 1);
   }
 
   private setSegment(index: number, text: string, color: string): void {

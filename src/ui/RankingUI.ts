@@ -1,24 +1,37 @@
 import Phaser from "phaser";
-import { GAME_WIDTH, GAME_HEIGHT } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
-import { retroStyle } from "../pixelart";
+import { DIM_TEXT, retroStyle } from "../pixelart";
 import { getRanks, MAX_RANKS } from "../ranking";
+import { hideTouchButtons, isTouchDevice } from "./TouchControls";
 
-const PANEL_W = 960;
+// Cells are retroStyle(6) (24px a glyph), headers retroStyle(5) (20px). The
+// ARENA and NG+ columns widened the panel (960 -> 1040), and the ABYSS one
+// to the widest any panel goes (1160, x 60..1220, like the quest journal:
+// it ends where the touch menu column starts, x>=1222), rather than
+// shrinking the text: RK "10." 100..172, NAME (12 glyphs) 196..484, LV "30"
+// 516..564, ARENA (header) 604..704, NG+ "+12" 724..796, ABYSS (header)
+// 820..920 over "B999" 820..916, DATE "2026-10-25" 940..1180 — 40px inside
+// the right edge, at least 20px between columns.
+const PANEL_W = 1160;
 const PANEL_H = 640;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const PANEL_LEFT = GAME_WIDTH / 2 - PANEL_W / 2;
 const ROW_H = 46;
 const ROWS_START = PANEL_TOP + 140;
-const COL_RANK = PANEL_LEFT + 56;
-const COL_NAME = PANEL_LEFT + 140;
-const COL_LEVEL = PANEL_LEFT + 520;
-const COL_DATE = PANEL_LEFT + 680;
+const COL_RANK = PANEL_LEFT + 40;
+const COL_NAME = PANEL_LEFT + 136;
+const COL_LEVEL = PANEL_LEFT + 456;
+const COL_ARENA = PANEL_LEFT + 544;
+const COL_NG = PANEL_LEFT + 664;
+const COL_ABYSS = PANEL_LEFT + 760;
+const COL_DATE = PANEL_LEFT + 880;
 
 // Top-10 level leaderboard shown by the RANK BOARD sign in the village.
 // Follows the BestiaryUI modal pattern: dim + panel, ESC (or Z, since Z is
 // the key that opens it) closes, and it re-reads the board on every open.
 export class RankingUI {
+  private scene: Phaser.Scene;
   private active = false;
 
   private dim: Phaser.GameObjects.Rectangle;
@@ -29,6 +42,9 @@ export class RankingUI {
   private rankCells: Phaser.GameObjects.Text[] = [];
   private nameCells: Phaser.GameObjects.Text[] = [];
   private levelCells: Phaser.GameObjects.Text[] = [];
+  private arenaCells: Phaser.GameObjects.Text[] = [];
+  private ngCells: Phaser.GameObjects.Text[] = [];
+  private abyssCells: Phaser.GameObjects.Text[] = [];
   private dateCells: Phaser.GameObjects.Text[] = [];
 
   private keyEsc: Phaser.Input.Keyboard.Key;
@@ -36,13 +52,15 @@ export class RankingUI {
   private closeQueued = false;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
+    // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
     this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1)
       .setScrollFactor(0)
       .setDepth(151)
       .setStrokeStyle(2, 0xffffff)
@@ -59,6 +77,9 @@ export class RankingUI {
       { x: COL_RANK, label: "RK" },
       { x: COL_NAME, label: "NAME" },
       { x: COL_LEVEL, label: "LV" },
+      { x: COL_ARENA, label: "ARENA" },
+      { x: COL_NG, label: "NG+" },
+      { x: COL_ABYSS, label: "ABYSS" },
       { x: COL_DATE, label: "DATE" },
     ];
     for (const h of headers) {
@@ -68,11 +89,17 @@ export class RankingUI {
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
-          .setVisible(false)
+          .setVisible(false),
       );
     }
+    // touch hides Z while the board is up (see open()), leaving ESC to close
     this.footer = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "TOP 10 BY LEVEL   ESC/Z: CLOSE", retroStyle(5, "#9f9fd0"))
+      .text(
+        GAME_WIDTH / 2,
+        PANEL_TOP + PANEL_H - 36,
+        isTouchDevice() ? "TOP 10 BY LEVEL   ESC: CLOSE" : "TOP 10 BY LEVEL   ESC/Z: CLOSE",
+        retroStyle(5, "#9f9fd0"),
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -86,31 +113,25 @@ export class RankingUI {
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
-          .setVisible(false)
+          .setVisible(false),
       );
       this.nameCells.push(
-        scene.add
-          .text(COL_NAME, y, "", retroStyle(6, "#ffffff"))
-          .setOrigin(0, 0.5)
-          .setScrollFactor(0)
-          .setDepth(152)
-          .setVisible(false)
+        scene.add.text(COL_NAME, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.levelCells.push(
-        scene.add
-          .text(COL_LEVEL, y, "", retroStyle(6, "#ffffff"))
-          .setOrigin(0, 0.5)
-          .setScrollFactor(0)
-          .setDepth(152)
-          .setVisible(false)
+        scene.add.text(COL_LEVEL, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+      );
+      this.arenaCells.push(
+        scene.add.text(COL_ARENA, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+      );
+      this.ngCells.push(
+        scene.add.text(COL_NG, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+      );
+      this.abyssCells.push(
+        scene.add.text(COL_ABYSS, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.dateCells.push(
-        scene.add
-          .text(COL_DATE, y, "", retroStyle(6, "#ffffff"))
-          .setOrigin(0, 0.5)
-          .setScrollFactor(0)
-          .setDepth(152)
-          .setVisible(false)
+        scene.add.text(COL_DATE, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
     }
 
@@ -134,20 +155,26 @@ export class RankingUI {
     this.title.setVisible(true);
     this.footer.setVisible(true);
     for (const t of this.headers) t.setVisible(true);
-    for (const arr of [this.rankCells, this.nameCells, this.levelCells, this.dateCells]) {
+    for (const arr of this.cells()) {
       for (const t of arr) t.setVisible(true);
     }
+    // The 10th row sits under the touch d-pad's arrows ("10." at x 100..172)
+    // and Z (its date reaches x=1180). The board takes
+    // no arrows, and ESC closes it as well as Z, so both go while it's up;
+    // on a keyboard device nothing listens for this
+    hideTouchButtons(this.scene, ["dpad", "z"]);
     this.refresh();
   }
 
   close(): void {
     this.active = false;
+    hideTouchButtons(this.scene, []);
     this.dim.setVisible(false);
     this.panel.setVisible(false);
     this.title.setVisible(false);
     this.footer.setVisible(false);
     for (const t of this.headers) t.setVisible(false);
-    for (const arr of [this.rankCells, this.nameCells, this.levelCells, this.dateCells]) {
+    for (const arr of this.cells()) {
       for (const t of arr) t.setVisible(false);
     }
   }
@@ -162,22 +189,32 @@ export class RankingUI {
     this.close();
   }
 
+  private cells(): Phaser.GameObjects.Text[][] {
+    return [this.rankCells, this.nameCells, this.levelCells, this.arenaCells, this.ngCells, this.abyssCells, this.dateCells];
+  }
+
   private refresh(): void {
     const ranks = getRanks();
     for (let i = 0; i < MAX_RANKS; i++) {
       const e = ranks[i];
       const isMe = !!e && e.name === GameState.player.name;
-      this.rankCells[i].setColor(
-        i === 0 && e ? "#ffd166" : isMe ? "#8ecbff" : e ? "#9f9fd0" : "#666666"
-      );
+      this.rankCells[i].setColor(i === 0 && e ? "#ffd166" : isMe ? "#8ecbff" : e ? "#9f9fd0" : DIM_TEXT);
       if (e) {
-        this.nameCells[i].setText(e.name).setColor(isMe ? "#8ecbff" : "#ffffff");
-        this.levelCells[i].setText(`LV ${e.level}`).setColor(isMe ? "#8ecbff" : "#ffffff");
-        this.dateCells[i].setText(e.date).setColor(isMe ? "#8ecbff" : "#ffffff");
+        const color = isMe ? "#8ecbff" : "#ffffff";
+        // the NAME column holds 12 glyphs (196..484); a row recorded from a
+        // save code before load() cut names to 12 can carry a longer one
+        this.nameCells[i].setText(e.name.slice(0, 12)).setColor(color);
+        this.levelCells[i].setText(String(e.level)).setColor(color);
+        // "-" for none yet, and for rows written before the board kept these
+        this.arenaCells[i].setText(e.arena ? String(e.arena) : "-").setColor(e.arena ? color : DIM_TEXT);
+        this.ngCells[i].setText(e.ng ? `+${e.ng}` : "-").setColor(e.ng ? color : DIM_TEXT);
+        // the deepest floor, as the ABYSS names it (B1 is 1)
+        this.abyssCells[i].setText(e.abyss ? `B${e.abyss}` : "-").setColor(e.abyss ? color : DIM_TEXT);
+        this.dateCells[i].setText(e.date).setColor(color);
       } else {
-        this.nameCells[i].setText("---").setColor("#666666");
-        this.levelCells[i].setText("").setColor("#666666");
-        this.dateCells[i].setText("").setColor("#666666");
+        this.nameCells[i].setText("---").setColor(DIM_TEXT);
+        for (const arr of [this.levelCells, this.arenaCells, this.ngCells, this.abyssCells, this.dateCells])
+          arr[i].setText("").setColor(DIM_TEXT);
       }
     }
   }
@@ -188,7 +225,7 @@ export class RankingUI {
     this.title.destroy();
     this.footer.destroy();
     for (const t of this.headers) t.destroy();
-    for (const arr of [this.rankCells, this.nameCells, this.levelCells, this.dateCells]) {
+    for (const arr of this.cells()) {
       for (const t of arr) t.destroy();
     }
     // keys are shared instances from kb.addKey (same keycode → same object);

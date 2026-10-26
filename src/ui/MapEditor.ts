@@ -18,6 +18,7 @@ import {
 } from "../levels";
 import { retroStyle, showToast } from "../pixelart";
 import { paintTile, type TileLayers } from "../sceneCommon";
+import { closeHelp } from "./HelpPopup";
 import { STATUS_HUD_TOAST_Y } from "./StatusHud";
 
 const BRUSHES: Array<{ key: number; name: string }> = [
@@ -78,6 +79,10 @@ export class MapEditor {
   private pick: Phaser.GameObjects.Graphics;
   private spots: Phaser.GameObjects.Rectangle[] = [];
   private carrying = false;
+  // anything painted or moved since the editor opened; leaving without it
+  // writes no override, so a look round doesn't freeze the town to a copy
+  // (and show "MAP EDITED") that later map-file changes never reach
+  private dirty = false;
   private panel: Phaser.GameObjects.Rectangle;
   private info: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
@@ -206,7 +211,7 @@ export class MapEditor {
     kb.addKey(K.R).on(DOWN, () => {
       if (!this.active) return;
       clearMapOverride();
-      this.scene.scene.restart();
+      this.scene.scene.restart({});
     });
   }
 
@@ -220,6 +225,10 @@ export class MapEditor {
       return;
     }
     this.active = true;
+    this.dirty = false;
+    // F2 runs ahead of the scene's uiBlocking() gate, so the help popup would
+    // otherwise stay up over the editor with Z painting under it
+    closeHelp(this.scene);
     this.scene.cameras.main.stopFollow();
     this.cursor.setVisible(true);
     this.panel.setVisible(true);
@@ -239,8 +248,11 @@ export class MapEditor {
     this.panel.setVisible(false);
     this.info.setVisible(false);
     this.hint.setVisible(false);
-    saveMapOverride({ tiles: mapToRows(this.level), landmarks: structuredClone(EDITABLE_POS) });
-    this.scene.scene.restart();
+    if (this.dirty) saveMapOverride({ tiles: mapToRows(this.level), landmarks: structuredClone(EDITABLE_POS) });
+    // {}: a restart with no data replays the scene's last one, and a Town
+    // entered { fromDungeon } would put the hero back at the cave mouth
+    // instead of where it stood (GameState.pos, saved on shutdown)
+    this.scene.scene.restart({});
   }
 
   update(): void {
@@ -347,6 +359,8 @@ export class MapEditor {
     const { tx, ty } = this.cursorTile();
     if (this.mode === "tile") {
       const index = BRUSHES[this.brush].key;
+      if (this.level[ty][tx] === index) return;
+      this.dirty = true;
       this.level[ty][tx] = index;
       // Both render layers: a tree brush paints the object layer over ground,
       // anything else paints the ground and clears the object above it.
@@ -355,10 +369,15 @@ export class MapEditor {
     }
     const name = this.names[this.landmark];
     const pos = EDITABLE_POS[name];
+    const x = tx * TILE + (pos.x % TILE);
+    const y = ty * TILE + (pos.y % TILE);
+    // a held landmark is re-applied every frame; only a real move counts
+    if (x === pos.x && y === pos.y) return;
+    this.dirty = true;
     // keep the landmark's offset inside its tile: HOUSE_POS anchors on a
     // corner, every other landmark on a tile centre. The scene moves its
     // sprites and labels with it, so the change shows immediately.
-    this.onMoveLandmark(name, tx * TILE + (pos.x % TILE), ty * TILE + (pos.y % TILE));
+    this.onMoveLandmark(name, x, y);
     showToast(this.scene, `${name} -> (${tx}, ${ty})`, STATUS_HUD_TOAST_Y);
   }
 
@@ -381,7 +400,11 @@ export class MapEditor {
     console.log(source);
     navigator.clipboard?.writeText(source).catch(() => undefined);
     clearMapOverride();
-    fetch("/__map", { method: "POST", body: source })
+    // written to the file, or kept as the override below: either way leaving
+    // the editor has nothing left to save over it
+    this.dirty = false;
+    // the header vite.config.ts asks for before it writes the file
+    fetch("/__map", { method: "POST", headers: { "X-Map-Editor": "1" }, body: source })
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
         showToast(this.scene, "APPLIED TO src/overworldMap.ts", STATUS_HUD_TOAST_Y);

@@ -2,10 +2,44 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { retroStyle } from "../pixelart";
+import { hideTouchButtons, isTouchDevice } from "./TouchControls";
 
 const FONT_SIZE = 32;
 const CHARS_PER_ROW = Math.floor((GAME_WIDTH - 128) / FONT_SIZE);
+// On touch the text stops at x=944, short of the ESC (x>=960) and Z (x>=1076)
+// buttons over the box's right end; the d-pad over its left end is hidden
+// while the box is up (bar < and > under a question's choices, see below).
+// Keyboard play keeps the full 36-glyph row.
+const TOUCH_CHARS_PER_ROW = 28;
 const ROWS_PER_PAGE = 5;
+// ask(): the choices sit on the page's fifth row (y 624..656, inside the box's
+// 488..680), so a question's last page packs at most four rows of text above
+// them. Each choice is "> " plus its label at retroStyle(8), CHOICE_PITCH
+// apart from x=48: three five-glyph labels end at 48 + 2 x 256 + 7 x 32 =
+// 784, short of the keyboard box's right edge.
+const CHOICE_Y = GAME_HEIGHT - 224 + (ROWS_PER_PAGE - 1) * FONT_SIZE;
+const CHOICE_PITCH = 256;
+// On touch the choices bring back the d-pad's < and > (hiding only its ^ and
+// v, TouchControls' "updown") so they can step between them. Those two sit at
+// x 42..258, y 572..660, over the box's left end, so a question's last page
+// keeps to two rows of text (y 496..560, 12px above them) and the choices
+// start at x=288, 30px right of them. Two end at 288 + 256 + 7 x 32 = 768; a
+// third would end at 1024, into the ESC button (x>=960), so touch questions
+// keep to two.
+const TOUCH_QUESTION_ROWS = 2;
+const TOUCH_CHOICE_X = 288;
+// A confirm (Z/ENTER/SPACE, or a tap on a choice) within this long of the
+// choices showing is dropped, and restarts the wait. The Z meant to skip the
+// last page's typing can land just as the typing ends on its own, and Z
+// mashed through a talk ran straight on into the first choice: a delivery
+// handed in, a favor taken, an ARENA bout started. 250ms is under a
+// deliberate first press (seeing the choices and deciding takes longer than
+// the ~200-250ms of a bare reaction) and over the ~100-170ms between mashed
+// presses, so a mash keeps the choices waiting until it stops. Moving the
+// marker, Y/N (a choice by name) and ESC (the last, as on any page) stay live.
+const CHOICE_GUARD_MS = 250;
+const MAX_CHOICES = 3;
+const PICKED_COLOR = "#ffd166";
 
 export class DialogueBox {
   private scene: Phaser.Scene;
@@ -16,6 +50,8 @@ export class DialogueBox {
   private active = false;
   private pageSize = 1;
   private pageText = "";
+  private touch = isTouchDevice();
+  private charsPerRow = this.touch ? TOUCH_CHARS_PER_ROW : CHARS_PER_ROW;
 
   private border: Phaser.GameObjects.Rectangle;
   private box: Phaser.GameObjects.Rectangle;
@@ -29,6 +65,21 @@ export class DialogueBox {
   private esc: Phaser.Input.Keyboard.Key;
   private advanceQueued = false;
   private escQueued = false;
+
+  // ask(): the choices, the picked one, and whether they're showing yet (only
+  // once the last page has finished typing)
+  private choices: string[] = [];
+  private onPick: ((index: number) => void) | null = null;
+  // the choice ESC takes: the last, unless ask() names another
+  private escPick = 0;
+  private choice = 0;
+  private choosing = false;
+  private choiceTexts: Phaser.GameObjects.Text[] = [];
+  private choiceStep = 0;
+  private pickQueued: number | null = null;
+  private tapQueued: number | null = null;
+  // scene time before which a confirm is dropped (CHOICE_GUARD_MS)
+  private confirmAfter = 0;
 
   constructor(scene: Phaser.Scene, lines: string[]) {
     this.scene = scene;
@@ -46,9 +97,15 @@ export class DialogueBox {
       .text(48, GAME_HEIGHT - 224, "", retroStyle(8, "#f5f5f5"))
       .setScrollFactor(0)
       .setDepth(202)
-      .setWordWrapWidth(GAME_WIDTH - 128);
+      .setWordWrapWidth(this.charsPerRow * FONT_SIZE);
+    // On a plate of the box's colour, a tab on the box's top edge: bare, it
+    // sat on the map and ran into the name tags behind it (ELDER over
+    // BLACKSMITH). The padding (8 a side, 4 on top) keeps the glyphs at
+    // 48,456 and the plate's foot on the border at y=480.
     this.nameText = scene.add
-      .text(48, GAME_HEIGHT - 264, "", retroStyle(6, "#ffd166"))
+      .text(40, GAME_HEIGHT - 268, "", retroStyle(6, "#ffd166"))
+      .setBackgroundColor("#0b0b2b")
+      .setPadding(8, 4, 8, 0)
       .setScrollFactor(0)
       .setDepth(202);
 
@@ -71,9 +128,69 @@ export class DialogueBox {
     this.esc.on(Phaser.Input.Keyboard.Events.DOWN, () => {
       this.escQueued = true;
     });
+    // choice keys only count while the choices show; they are the scene's
+    // move keys too, but the scene stands still while the box is up
+    const step = (dir: number) => () => {
+      if (this.choosing) this.choiceStep += dir;
+    };
+    for (const code of ["LEFT", "UP", "H", "K"] as const) {
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes[code]).on(Phaser.Input.Keyboard.Events.DOWN, step(-1));
+    }
+    for (const code of ["RIGHT", "DOWN", "L", "J"] as const) {
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes[code]).on(Phaser.Input.Keyboard.Events.DOWN, step(1));
+    }
+    // Y takes the first choice and N the last, as the old Y/N prompts did
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y).on(Phaser.Input.Keyboard.Events.DOWN, () => {
+      if (this.choosing) this.pickQueued = 0;
+    });
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.N).on(Phaser.Input.Keyboard.Events.DOWN, () => {
+      if (this.choosing) this.pickQueued = this.choices.length - 1;
+    });
+    const choiceX = this.touch ? TOUCH_CHOICE_X : 48;
+    for (let i = 0; i < MAX_CHOICES; i++) {
+      const t = scene.add
+        .text(choiceX + i * CHOICE_PITCH, CHOICE_Y, "", retroStyle(8, "#f5f5f5"))
+        .setScrollFactor(0)
+        .setDepth(202)
+        .setVisible(false);
+      // a tap takes that choice outright; < and > only move the marker
+      t.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+        if (this.choosing) this.tapQueued = i;
+      });
+      this.choiceTexts.push(t);
+    }
   }
 
   start(lines?: string[], name?: string): void {
+    this.open(lines, name, [], null);
+  }
+
+  /**
+   * Like start(), then a row of 2-3 choices under the last page: LEFT/RIGHT
+   * (or UP/DOWN, H/J/K/L) moves, Z/ENTER/SPACE takes the marked one, Y the
+   * first and N the last; ESC, on any page, takes the last, so put the "no"
+   * there — or `escPick`, when the safe answer must also be the marked one
+   * (the first) and so can't be last. On touch the d-pad's < and > move and
+   * a tap on a choice takes it. A Z or tap in the first CHOICE_GUARD_MS is
+   * dropped. `onPick` runs after the box has closed, so it can open the next
+   * talk. Picked in update(), like an ordinary advance, so the Z that picks
+   * can't also reach the scene.
+   */
+  ask(lines: string[], name: string, choices: string[], onPick: (index: number) => void, escPick?: number): void {
+    this.open(lines, name, choices.slice(0, MAX_CHOICES), onPick);
+    if (escPick !== undefined) this.escPick = escPick;
+  }
+
+  private open(lines: string[] | undefined, name: string | undefined, choices: string[], onPick: ((index: number) => void) | null): void {
+    this.choices = choices;
+    this.onPick = onPick;
+    this.escPick = choices.length - 1;
+    this.choice = 0;
+    this.choosing = false;
+    this.choiceStep = 0;
+    this.pickQueued = null;
+    this.tapQueued = null;
+    for (const t of this.choiceTexts) t.setVisible(false);
     if (lines) this.lines = lines;
     this.index = 0;
     this.charIndex = 0;
@@ -86,6 +203,7 @@ export class DialogueBox {
     this.text.setVisible(true);
     this.nameText.setVisible(name ? true : false);
     this.nameText.setText(name ?? "");
+    hideTouchButtons(this.scene, ["dpad"]);
 
     this.typeLine();
   }
@@ -97,10 +215,23 @@ export class DialogueBox {
     let rows = 0;
     while (this.index + page.length < this.lines.length) {
       const line = this.lines[this.index + page.length];
-      const needed = Math.max(1, Math.ceil(line.length / CHARS_PER_ROW));
+      const needed = Math.max(1, Math.ceil(line.length / this.charsPerRow));
       if (page.length > 0 && rows + needed > ROWS_PER_PAGE) break;
       page.push(line);
       rows += needed;
+    }
+    // a question's last page keeps the fifth row for its choices (on touch,
+    // the d-pad's rows too): what doesn't fit moves on to a page of its own.
+    // Counted as wrapped, not estimated: joined lines can wrap into more rows
+    // than the estimate above, and a "\n" takes a row of its own.
+    const questionRows = this.touch ? TOUCH_QUESTION_ROWS : ROWS_PER_PAGE - 1;
+    while (
+      this.choices.length > 0 &&
+      this.index + page.length === this.lines.length &&
+      page.length > 1 &&
+      this.text.getWrappedText(page.join(" ")).length > questionRows
+    ) {
+      page.pop();
     }
     if (page.length === 0) {
       this.close();
@@ -122,6 +253,7 @@ export class DialogueBox {
         if (this.charIndex >= this.pageText.length) {
           this.typing = false;
           this.timer?.remove();
+          this.showChoicesIfLast();
         }
       },
     });
@@ -131,7 +263,26 @@ export class DialogueBox {
     if (!this.active) return;
     if (this.escQueued) {
       this.escQueued = false;
-      this.close();
+      if (this.choices.length > 0) this.pick(this.escPick);
+      else this.close();
+      return;
+    }
+    if (this.choosing) {
+      if (this.choiceStep !== 0) {
+        const n = this.choices.length;
+        this.choice = (((this.choice + this.choiceStep) % n) + n) % n;
+        this.choiceStep = 0;
+        this.renderChoices();
+      }
+      if (this.pickQueued !== null) this.pick(this.pickQueued);
+      else if (this.advanceQueued || this.tapQueued !== null) {
+        const now = this.scene.time.now;
+        // too soon after the choices showed to be meant (CHOICE_GUARD_MS)
+        if (now < this.confirmAfter) this.confirmAfter = now + CHOICE_GUARD_MS;
+        else this.pick(this.tapQueued ?? this.choice);
+      }
+      this.advanceQueued = false;
+      this.tapQueued = null;
       return;
     }
     if (!this.advanceQueued) return;
@@ -141,6 +292,7 @@ export class DialogueBox {
       this.typing = false;
       this.timer?.remove();
       this.text.setText(this.pageText);
+      this.showChoicesIfLast();
       return;
     }
     this.index += this.pageSize;
@@ -151,12 +303,45 @@ export class DialogueBox {
     }
   }
 
+  // the last page of a question has finished typing: show its choices
+  private showChoicesIfLast(): void {
+    if (this.choices.length === 0 || this.index + this.pageSize < this.lines.length) return;
+    this.choosing = true;
+    this.choiceStep = 0;
+    this.pickQueued = null;
+    this.tapQueued = null;
+    this.confirmAfter = this.scene.time.now + CHOICE_GUARD_MS;
+    // < and > back for the choices (close() brings back the rest)
+    if (this.touch) hideTouchButtons(this.scene, ["updown"]);
+    this.renderChoices();
+  }
+
+  private renderChoices(): void {
+    this.choiceTexts.forEach((t, i) => {
+      const label = this.choices[i];
+      const picked = i === this.choice;
+      t.setVisible(label !== undefined);
+      if (label !== undefined) t.setText(`${picked ? ">" : " "} ${label}`).setColor(picked ? PICKED_COLOR : "#f5f5f5");
+    });
+  }
+
+  private pick(index: number): void {
+    const onPick = this.onPick;
+    this.close();
+    onPick?.(index);
+  }
+
   private close(): void {
     this.active = false;
+    this.choosing = false;
+    this.choices = [];
+    this.onPick = null;
+    for (const t of this.choiceTexts) t.setVisible(false);
     this.border.setVisible(false);
     this.box.setVisible(false);
     this.text.setVisible(false);
     this.nameText.setVisible(false);
+    hideTouchButtons(this.scene, []);
   }
 
   isActive(): boolean {
@@ -169,6 +354,7 @@ export class DialogueBox {
     this.box.destroy();
     this.text.destroy();
     this.nameText.destroy();
+    for (const t of this.choiceTexts) t.destroy();
     // keys are shared instances from kb.addKey (same keycode → same object);
     // destroying them would wipe other panels' listeners. Scene shutdown
     // already tears every Key down via KeyboardPlugin.removeAllKeys(true).

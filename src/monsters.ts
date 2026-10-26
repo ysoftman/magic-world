@@ -1,6 +1,14 @@
 // attack spell elements a species may be weak against
 export type Element = "fire" | "ice" | "bolt";
 
+// Per-turn special move. poison/freeze ride on a normal hit, regen spends the
+// whole turn healing. Boss enrage isn't listed here: every boss/giant gets it
+// (see BattleScene.enemyTurn).
+export interface EnemySpecial {
+  kind: "poison" | "freeze" | "regen";
+  chance: number; // kept low (0.2-0.3) so plain attacks still dominate a fight
+}
+
 export interface EnemyDef {
   name: string;
   texture: string;
@@ -11,17 +19,17 @@ export interface EnemyDef {
   gold: number;
   boss?: boolean; // story boss (KING SLIME, MOSS GOLEM): quest flag, uncatchable, boss dialogue
   giant?: boolean; // just a bigger sprite + boss fanfare, no quest/story hooks
-  rare?: boolean; // rare world jackpot (GOLDEN SLIME): tinted, big payout, not required for collection
-  tint?: number; // sprite tint applied in the world and in battle (e.g. gold for GOLDEN SLIME)
+  rare?: boolean; // rare world jackpot (GOLDEN SLIME): own palette, big payout, not required for collection
+  tint?: number; // sprite tint applied in the world and in battle (none now: the rare ones have their own textures)
   weakness?: Element; // attack spell element that deals bonus damage (bestiary shows the hint)
+  special?: EnemySpecial;
 }
 
 export const ENEMIES: Record<string, EnemyDef> = {
   slime: { name: "SLIME", texture: "slime", hp: 16, atk: 5, def: 0, exp: 8, gold: 5 },
   goldSlime: {
     name: "GOLDEN SLIME",
-    texture: "slime",
-    tint: 0xffd700,
+    texture: "goldSlime",
     hp: 28,
     atk: 6,
     def: 1,
@@ -33,14 +41,16 @@ export const ENEMIES: Record<string, EnemyDef> = {
   goblin: { name: "GOBLIN", texture: "goblin", hp: 22, atk: 7, def: 1, exp: 14, gold: 9, weakness: "bolt" },
   cursedGoblin: {
     name: "CURSED GOBLIN",
-    texture: "goblin",
-    tint: 0x9333ea,
+    // a light violet palette (BootScene CURSED_GOBLIN_PALETTE): an old darker
+    // purple took the goblin down to the cave floor's luma (mean 57 vs 54) and
+    // it vanished there
+    texture: "cursedGoblin",
     hp: 38,
     atk: 8,
     def: 2,
     exp: 70,
     gold: 108,
-    rare: true, // dungeon-exclusive jackpot: same tint-only reskin as GOLDEN SLIME
+    rare: true, // dungeon-exclusive jackpot: a palette reskin, as GOLDEN SLIME is
     weakness: "bolt",
   },
   bat: { name: "BAT", texture: "bat", hp: 18, atk: 6, def: 0, exp: 12, gold: 8, weakness: "ice" },
@@ -48,8 +58,14 @@ export const ENEMIES: Record<string, EnemyDef> = {
   king: {
     name: "KING SLIME",
     texture: "king",
-    hp: 60,
-    atk: 9,
+    // Once 60, which a Lv6 hero with a companion finished in 2-3 rounds,
+    // before a BODY SLAM could even land; then 120, which kept a solo hero
+    // on it 9 rounds. With companions cut to x0.8 (BattleScene
+    // COMPANION_ATK_MULT) 100 takes 8 rounds alone and 5 with a WOLF, and
+    // ATK 9 -> 10 keeps the threat the shorter fight lost: ~62% of max HP
+    // gone solo, as at 120 / 9 (Lv6, SWORD + SHIELD).
+    hp: 100,
+    atk: 10,
     def: 2,
     exp: 80,
     gold: 120,
@@ -59,16 +75,40 @@ export const ENEMIES: Record<string, EnemyDef> = {
   troll: {
     name: "TROLL KING",
     texture: "troll",
-    hp: 90,
-    atk: 13,
+    // 90 -> 150 for the same reason as the KING SLIME, then 110 with it: at
+    // Lv8 (SWORD + IRON SHIELD) 7-8 rounds alone instead of 9-11, 4-5 with a
+    // WOLF at x0.8 (never under 3), and ATK 13 -> 14 for the threat: 57% of
+    // max HP lost solo where 74% was, 39% with the WOLF where 35% was
+    hp: 110,
+    atk: 14,
     def: 3,
     exp: 150,
     gold: 200,
     giant: true,
     weakness: "fire",
   },
-  wasp: { name: "WASP", texture: "wasp", hp: 28, atk: 9, def: 1, exp: 22, gold: 14, weakness: "bolt" },
-  spider: { name: "SPIDER", texture: "spider", hp: 40, atk: 11, def: 2, exp: 34, gold: 22, weakness: "fire" },
+  wasp: {
+    name: "WASP",
+    texture: "wasp",
+    hp: 28,
+    atk: 9,
+    def: 1,
+    exp: 22,
+    gold: 14,
+    weakness: "bolt",
+    special: { kind: "poison", chance: 0.2 },
+  },
+  spider: {
+    name: "SPIDER",
+    texture: "spider",
+    hp: 40,
+    atk: 11,
+    def: 2,
+    exp: 34,
+    gold: 22,
+    weakness: "fire",
+    special: { kind: "poison", chance: 0.3 },
+  },
   orc: { name: "ORC", texture: "orc", hp: 52, atk: 13, def: 3, exp: 50, gold: 34, weakness: "ice" },
   mossGolem: {
     name: "MOSS GOLEM",
@@ -80,6 +120,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 300,
     boss: true, // FOREST story boss: same flag/uncatchable path as KING SLIME
     weakness: "fire", // a mossy plant body burns
+    special: { kind: "regen", chance: 0.25 }, // regrows its moss: rewards bursting it down
   },
   wisp: {
     name: "NIGHT WISP",
@@ -92,8 +133,28 @@ export const ENEMIES: Record<string, EnemyDef> = {
     rare: true, // night-only world jackpot: big payout, not required for collection
     weakness: "ice", // cold snuffs out its ghost-flame
   },
-  frostMoth: { name: "FROST MOTH", texture: "frostMoth", hp: 44, atk: 14, def: 2, exp: 58, gold: 38, weakness: "fire" },
-  yeti: { name: "YETI", texture: "yeti", hp: 72, atk: 17, def: 4, exp: 95, gold: 60, weakness: "bolt" },
+  frostMoth: {
+    name: "FROST MOTH",
+    texture: "frostMoth",
+    hp: 44,
+    atk: 14,
+    def: 2,
+    exp: 58,
+    gold: 38,
+    weakness: "fire",
+    special: { kind: "freeze", chance: 0.2 },
+  },
+  yeti: {
+    name: "YETI",
+    texture: "yeti",
+    hp: 72,
+    atk: 17,
+    def: 4,
+    exp: 95,
+    gold: 60,
+    weakness: "bolt",
+    special: { kind: "freeze", chance: 0.2 },
+  },
   iceGolem: {
     name: "GLACIER GOLEM",
     texture: "iceGolem",
@@ -104,6 +165,26 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 500,
     boss: true, // SNOW FIELD superboss: post-game challenge past the MOSS GOLEM
     weakness: "fire", // glacial body shatters under heat
+    special: { kind: "freeze", chance: 0.25 },
+  },
+  // VOLCANO roster, one step past the snow field's (FROST MOTH/YETI/GLACIER
+  // GOLEM). Ice is the obvious answer to fire, so most are weak to it; the
+  // salamander's scales shrug ice off, so it falls to bolt instead. No
+  // specials: poison and freeze don't fit fire, and regen's line is the MOSS
+  // GOLEM's ("regrows its moss") — the drake still enrages like every boss.
+  magmaSlime: { name: "MAGMA SLIME", texture: "magmaSlime", hp: 60, atk: 17, def: 3, exp: 80, gold: 48, weakness: "ice" },
+  fireImp: { name: "FIRE IMP", texture: "fireImp", hp: 66, atk: 20, def: 3, exp: 105, gold: 66, weakness: "ice" },
+  salamander: { name: "SALAMANDER", texture: "salamander", hp: 90, atk: 21, def: 5, exp: 130, gold: 80, weakness: "bolt" },
+  flameDrake: {
+    name: "FLAME DRAKE",
+    texture: "flameDrake",
+    hp: 280,
+    atk: 25,
+    def: 8,
+    exp: 600,
+    gold: 700,
+    boss: true, // VOLCANO superboss: the last region, past the GLACIER GOLEM
+    weakness: "ice",
   },
 };
 

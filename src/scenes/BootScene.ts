@@ -1,6 +1,9 @@
 import Phaser from "phaser";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { makeTexture, makeTilesetTexture } from "../pixelart";
+import { makeBattleBgs, makeTitleBg } from "../backdrops";
+import { ART_PX, buildRamp, keepBlocky, makeTexture, makeTilesetTexture, smoothBoundaryOnly } from "../pixelart";
+import type { TileSkin } from "../sceneCommon";
+import { type Season, seasonLook, seasonToday } from "../season";
+import { bakeCraftedGear } from "../ui/Blacksmith";
 
 // Terrain is a regular diagonal pattern, two tones, deliberately low contrast.
 //
@@ -1044,6 +1047,114 @@ const HOUSE_TILE = [
   "................",
 ];
 
+// Volcano terrain (tiles16 23..27). The region grades nothing with a tint --
+// green grass can't be multiplied into grey ash -- so it carries its own floor.
+// Ash follows the grass rules: two tones, a diagonal period coprime with 16
+// (7 here), luma spread ~6. Scorched ground is TALL_TILE's blade lattice in
+// char-for-char swap, so a monster zone reads by the same quantity-not-contrast
+// cue as tall grass, its embers kept to a hue shift (~8 luma) rather than glow.
+const ASH_PALETTE = { a: 0x3b3537, h: 0x423b3d };
+const ASH_TILE = [
+  "haaaaaahaaaaaaha",
+  "aaaahaaaaaahaaaa",
+  "ahaaaaaahaaaaaah",
+  "aaaaahaaaaaahaaa",
+  "aahaaaaaahaaaaaa",
+  "aaaaaahaaaaaahaa",
+  "aaahaaaaaahaaaaa",
+  "haaaaaahaaaaaaha",
+  "aaaahaaaaaahaaaa",
+  "ahaaaaaahaaaaaah",
+  "aaaaahaaaaaahaaa",
+  "aahaaaaaahaaaaaa",
+  "aaaaaahaaaaaahaa",
+  "aaahaaaaaahaaaaa",
+  "haaaaaahaaaaaaha",
+  "aaaahaaaaaahaaaa",
+];
+const SCORCH_PALETTE = { s: 0x2c2527, e: 0x47291f };
+const SCORCH_TILE = [
+  "eeseeseeseeseese",
+  "essessessessesse",
+  "ssssssssssssssss",
+  "ssessessessesses",
+  "ssessessessesses",
+  "ssssssssssssssss",
+  "sessessessessess",
+  "sessessessessess",
+  "ssssssssssssssss",
+  "essessessessesse",
+  "essessessessesse",
+  "ssssssssssssssss",
+  "ssessessessesses",
+  "ssessessessesses",
+  "ssssssssssssssss",
+  "sessessessessess",
+];
+// Lava is WATER_A's crest layout recoloured (W->L, B->R, l->o, h->y, d->k), and
+// B is A scrolled one row up exactly as WATER_B is, so the swap reads as a slow
+// churn instead of a jump. Solid like water; nobody stands on it, so it is not
+// held to the terrain calm limits.
+const LAVA_PALETTE = { k: 0x7c2d12, R: 0x9a3412, L: 0xc2410c, o: 0xea580c, y: 0xfdba74 };
+const LAVA_A = [
+  "ooLLLLLLLLLLLRRL",
+  "RRoyLLLLLLLLLLLL",
+  "LLLLLLLLLLLLLLLL",
+  "LLLLLLLLLLLLLLLL",
+  "LLLLLLLLLLLooLLL",
+  "LLLLLRRLLLLRRoyL",
+  "LLLLLLLLLLooLLLL",
+  "LLLLLLLLLLRRoyLL",
+  "LLLLLkLLLLLLLLRR",
+  "LLLLLLLLLooLLLLL",
+  "LLLLLLLLLRRoyLLL",
+  "LLLLLLLLLLLLRRLL",
+  "LLLLLkLLLLLLLLLL",
+  "LLLLLRRLLLoyLLLL",
+  "LLLLLLLLooLLLLLL",
+  "LLLLLLLLRRLLkLLL",
+];
+const LAVA_B = [
+  "RRoyLLLLLLLLLLLL",
+  "LLLLLLLLLLLLLLLL",
+  "LLLLLLLLLLLLLLLL",
+  "LLLLLLLLLLLooLLL",
+  "LLLLLRRLLLLRRoyL",
+  "LLLLLLLLLLooLLLL",
+  "LLLLLLLLLLRRoyLL",
+  "LLLLLkLLLLLLLLRR",
+  "LLLLLLLLLooLLLLL",
+  "LLLLLLLLLRRoyLLL",
+  "LLLLLLLLLLLLRRLL",
+  "LLLLLkLLLLLLLLLL",
+  "LLLLLRRLLLoyLLLL",
+  "LLLLLLLLooLLLLLL",
+  "LLLLLLLLRRLLkLLL",
+  "ooLLLLLLLLLLLRRL",
+];
+// Basalt boulder: the volcano's tree. An object tile like TREE_TILE, so '.' is
+// its background and the ash shows through around it; lit from the top left,
+// with one ember crack so the walls belong to this region and not the cave.
+const ROCK_PALETTE = { b: 0x0f0b0c, S: 0x1f1a1c, D: 0x2e2729, c: 0x433a3d, H: 0x5e5356, e: 0xea580c };
+const ROCK_TILE = [
+  "................",
+  ".....bbbbbb.....",
+  "...bbHHHccDbb...",
+  "..bHHHccccDDSb..",
+  ".bHHccccDDDDSSb.",
+  ".bHcccDDDDDSSSb.",
+  "bHcccDDDDDSSSSSb",
+  "bccccDDDeDSSSSSb",
+  "bcccDDDDSeSSSSSb",
+  "bccDDDDSSSeSSSSb",
+  "bcDDDDSSSSSSSSSb",
+  "bDDDDSSSSSSSSSSb",
+  ".bDDSSSSSSSSSSb.",
+  "..bbSSSSSSSSbb..",
+  "....bbbbbbbb....",
+  "................",
+];
+
 // farm crops, drawn on the plots in the overworld: one shared sprout for the
 // early stage, then a ripe texture per crop (tinted green while unripe)
 const SPROUT_PALETTE = { D: 0x14532d, d: 0x15803d, l: 0x22c55e, g: 0x4ade80, h: 0x86efac };
@@ -1106,6 +1217,12 @@ const BEAN_TILE = [
   "................",
 ];
 
+// The base colours, then the light and shade the 32-cell hero is drawn with:
+// hair shine (H) and contour (d), the tunic's lit (T) and shaded (u) sides,
+// the trousers' shadow (P), off buildRamp() of each base colour (heroShades
+// below, which bakeHero applies to every look; these literals are BLUE's,
+// and check:art holds them to it). Then the skin's shadow (S), the boots'
+// shine (O), the eyes' glint (w) and the belt buckle (y), the same in every look.
 const HERO_PALETTE = {
   h: 0x6b4226,
   s: 0xf8c896,
@@ -1114,95 +1231,333 @@ const HERO_PALETTE = {
   b: 0x8a5a2b,
   p: 0x2f3a56,
   o: 0x4a2f1a,
+  H: 0x916838,
+  d: 0x402319,
+  T: 0x75a7ee,
+  u: 0x1b37d8,
+  P: 0x1b1f31,
+  S: 0xe3ac80,
+  O: 0x71532b,
+  w: 0xffffff,
+  y: 0xffd166,
 };
 
-const HERO_HEAD = [
-  "................",
-  "................",
-  ".....hhhhhh.....",
-  "....hhhhhhhh....",
-  "...hhhhhhhhhh...",
-  "...hssssssssh...",
-  "...hseesseesh...",
-  "...hssssssssh...",
-  "....hhhhhhhh....",
-];
-const HERO_TORSO = [".....tttttt.....", "....tttttttt....", "...ttbbbbbbtt..."];
-
-const HERO_UP_HEAD = [
-  "................",
-  "................",
-  ".....hhhhhh.....",
-  "....hhhhhhhh....",
-  "...hhhhhhhhhh...",
-  "...hhhhhhhhhh...",
-  "...hhhhhhhhhh...",
-  "...hhhhhhhhhh...",
-  "....hhhhhhhh....",
-];
-
-const HERO_SIDE_HEAD = [
-  "................",
-  "................",
-  ".....hhhhhh.....",
-  "....hhhhhhhh....",
-  "...hhhhhhhhhh...",
-  "...hssssssssss..",
-  "...hsssssseess..",
-  "...hssssssssss..",
-  "....hhhhhhhh....",
+// The hero on a 32-cell grid, drawn at ART_PX (2px), so its texture is the
+// same 64px as every other sprite's. The draft was Scale2x of the old 16-cell
+// hero (same silhouette, so the equipment overlays and the shadow still sit
+// where they did), then shaded by hand: a contour round the hair and a shine
+// along its crown, a glint in each eye, the face shaded on its right, the
+// tunic lit on its left and shaded on its right, a buckle in front, the
+// trousers' inner edges and the boots' tops. Head, torso and legs stack as
+// before (18 + 6 + 8 rows); the back and the side view wear the torso
+// without the buckle.
+const HERO_HEAD_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd...........",
+  ".........ddhhhhhhhhhhdd.........",
+  ".........dhHHHHHhhhhhhd.........",
+  ".......ddHHHHHHHhhhhhhhdd.......",
+  ".......dhHHhhhhhhhhhhhhhd.......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhssssssssssssSShhd......",
+  "......dhssssssssssssssSShd......",
+  "......dhssweeessssweeeSShd......",
+  "......dhsseeeesssseeeeSShd......",
+  "......dhssssssssssssssSShd......",
+  ".......dhssssssssssssSShd.......",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".........dddddddddddddd.........",
 ];
 
-const HERO_LEGS_STRIDE_A = ["..s..pp..pp..s..", "...spp....pps...", "....ooo..ooo....", "................"];
-const HERO_LEGS_PASS_A = ["..s..pppppp..s..", "...spppppppps...", "....oooooooo....", "................"];
-const HERO_LEGS_STRIDE_B = ["..s..pp..pp..s..", "....ppp..ppp....", "....ooo..ooo....", "................"];
-const HERO_LEGS_PASS_B = ["....pppppppp....", "...spppppppps...", "....oooooooo....", "................"];
-const HERO_LEGS_IDLE = ["..s..pppppp..s..", "..s..pppppp..s..", "..oo.oooooo.oo..", "................"];
-
-const EQUIP_SWORD_PALETTE = { w: 0xd1d5db, d: 0x64748b, g: 0xf59e0b, b: 0x6b4226 };
-const EQUIP_SWORD_TILE = [
-  "................",
-  "................",
-  "................",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....wwww.......",
-  ".....gggg.......",
-  ".....bbbb.......",
-  ".....bb.........",
-  "................",
+const HERO_UP_HEAD_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd...........",
+  ".........ddhhhhhhhhhhdd.........",
+  ".........dhHHHHHhhhhhhd.........",
+  ".......ddHHHHHHHhhhhhhhdd.......",
+  ".......dhHHhhhhhhhhhhhhhd.......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  ".......dhhhhhhhhhhhhhhhhd.......",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".........dddddddddddddd.........",
 ];
 
-const EQUIP_SHIELD_PALETTE = { s: 0x94a3b8, S: 0x64748b, d: 0x475569 };
-const EQUIP_SHIELD_TILE = [
-  "................",
-  "................",
-  "................",
-  "................",
-  "....ssssssss....",
-  "...ssssssssss...",
-  "...sSSSSSSSSs...",
-  "...sSSddddSSs...",
-  "...sSSddddSSs...",
-  "...sSSSSSSSSs...",
-  "...ssssssssss...",
-  "....ssssssss....",
-  "................",
-  "................",
-  "................",
-  "................",
+const HERO_SIDE_HEAD_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd...........",
+  ".........ddhhhhhhhhhhdd.........",
+  ".........dhHHHHHhhhhhhd.........",
+  ".......ddHHHHHHHhhhhhhhdd.......",
+  ".......dhHHhhhhhhhhhhhhhd.......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhssssssssssssssssss.....",
+  "......dhssssssssssssssssssss....",
+  "......dhssssssssssssweeessss....",
+  "......dhsssssssssssseeeessss....",
+  "......dhssssssssssssssssssss....",
+  ".......dhssssssssssssssssss.....",
+  ".......ddhhhhhhhhhhhhhhd........",
+  ".........dddddddddddddd.........",
 ];
 
-const EQUIP_IRON_SWORD_PALETTE = { w: 0xe2e8f0, d: 0x334155, g: 0x60a5fa, b: 0x1e3a8a };
-const EQUIP_IRON_SHIELD_PALETTE = { s: 0x60a5fa, S: 0x3b82f6, d: 0x1e3a8a };
-const EQUIP_MYTHRIL_SWORD_PALETTE = { w: 0xe0f2fe, d: 0x38bdf8, g: 0xa5f3fc, b: 0x1e3a8a };
-const EQUIP_MYTHRIL_SHIELD_PALETTE = { s: 0x7dd3fc, S: 0x38bdf8, d: 0x0ea5e9 };
+const HERO_TORSO_32 = [
+  "..........TTttttttttuu..........",
+  ".........TTttttttttttuu.........",
+  ".........TTttttttttttuu.........",
+  ".......TTttttttttttttttuu.......",
+  "......TTtttbbbbyybbbbtttuu......",
+  "......TTttbbbbbyybbbbbttuu......",
+];
+
+const HERO_TORSO_BACK_32 = [
+  "..........TTttttttttuu..........",
+  ".........TTttttttttttuu.........",
+  ".........TTttttttttttuu.........",
+  ".......TTttttttttttttttuu.......",
+  "......TTtttbbbbbbbbbbtttuu......",
+  "......TTttbbbbbbbbbbbbttuu......",
+];
+
+// the walk cycle's legs (the villagers keep the 16-cell legs below)
+const HERO_LEGS_STRIDE_A_32 = [
+  "....ss....pppP....pppP....ss....",
+  "....sss..pppP......pppP..sss....",
+  ".....sssppppP......ppppPsss.....",
+  "......sspppP........pppPss......",
+  "........OOOOOO....OOOOOO........",
+  ".........ooooo....ooooo.........",
+  "................................",
+  "................................",
+];
+
+const HERO_LEGS_PASS_A_32 = [
+  "....ss....pppppppppppP....ss....",
+  "....sss..pppppppppppppP..sss....",
+  ".....ssspppppppppppppppPsss.....",
+  "......sspppppppppppppppPss......",
+  "........OOOOOOOOOOOOOOOO........",
+  ".........oooooooooooooo.........",
+  "................................",
+  "................................",
+];
+
+const HERO_LEGS_STRIDE_B_32 = [
+  "....ss....pppP....pppP....ss....",
+  "....ss...ppppP....ppppP...ss....",
+  ".........ppppP....ppppP.........",
+  "........pppppP....pppppP........",
+  "........OOOOOO....OOOOOO........",
+  ".........oooo......oooo.........",
+  "................................",
+  "................................",
+];
+
+const HERO_LEGS_PASS_B_32 = [
+  "........pppppppppppppppP........",
+  "........pppppppppppppppP........",
+  "......sspppppppppppppppPss......",
+  "......sspppppppppppppppPss......",
+  "........OOOOOOOOOOOOOOOO........",
+  ".........oooooooooooooo.........",
+  "................................",
+  "................................",
+];
+
+const HERO_LEGS_IDLE_32 = [
+  "....ss....pppppppppppP....ss....",
+  "....ss....pppppppppppP....ss....",
+  "....ss....pppppppppppP....ss....",
+  "....ss....pppppppppppP....ss....",
+  "....OOOO..OOOOOOOOOOOO..OOOO....",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// The looks a hero can wear: hair (h), tunic (t), belt (b) and trousers (p)
+// over the same skin, eyes and boots. BLUE restates HERO_PALETTE's own slots,
+// so picking it again restores the original. Each tunic keeps at least the
+// default blue's contrast against every ground (grass 1.7-3.0:1, cave/ash
+// 2.5-4.5:1); where one fades (GREEN on snow, 1.4:1) its dark trousers
+// (5.8:1) and hair still outline the hero.
+export const HERO_LOOKS = [
+  { name: "BLUE", h: 0x6b4226, t: 0x3b6ef0, b: 0x8a5a2b, p: 0x2f3a56 },
+  { name: "RED", h: 0xe0b354, t: 0xd23c3c, b: 0x5a3a20, p: 0x3d2b2b },
+  { name: "GREEN", h: 0x9c4a1e, t: 0x34b55e, b: 0x7a5530, p: 0x34402a },
+  { name: "VIOLET", h: 0xcfd2dc, t: 0x9258dc, b: 0x5b3a6e, p: 0x2c2645 },
+] as const;
+
+// a look's hair, tunic and trouser shading, off its own colours
+const heroShades = ({ h, t, p }: { h: number; t: number; p: number }) => {
+  const [hair, tunic, trousers] = [buildRamp(h), buildRamp(t), buildRamp(p)];
+  return { H: hair[3], d: hair[1], T: tunic[3], u: tunic[1], P: trousers[1] };
+};
+
+const heroLookPalette = (look: number) => {
+  const { name: _name, ...slots } = HERO_LOOKS[look] ?? HERO_LOOKS[0];
+  return { ...HERO_PALETTE, ...slots, ...heroShades(slots) };
+};
+
+const flipRows = (rows: string[]): string[] => rows.map((r) => [...r].reverse().join(""));
+
+// Every hero frame, drawn with HERO_PALETTE as it stands. A `this` function
+// rather than a scene method so bakeHero() can redraw from any scene, and
+// still `makeTexture(this, ..., HERO_PALETTE)` so check:art pairs these grids
+// with their palette like every other bake.
+function drawHero(this: Phaser.Scene): void {
+  const walkFrames = [HERO_LEGS_STRIDE_A_32, HERO_LEGS_PASS_A_32, HERO_LEGS_STRIDE_B_32, HERO_LEGS_PASS_B_32];
+  for (let i = 0; i < walkFrames.length; i++) {
+    const legs = walkFrames[i];
+    makeTexture(this, `hero-down-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...legs], HERO_PALETTE, ART_PX);
+    makeTexture(this, `hero-up-${i}`, [...HERO_UP_HEAD_32, ...HERO_TORSO_BACK_32, ...legs], HERO_PALETTE, ART_PX);
+    makeTexture(this, `hero-right-${i}`, [...HERO_SIDE_HEAD_32, ...HERO_TORSO_BACK_32, ...legs], HERO_PALETTE, ART_PX);
+    makeTexture(this, `hero-left-${i}`, [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...legs], HERO_PALETTE, ART_PX);
+  }
+
+  makeTexture(this, "hero-idle-down", [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+}
+
+// One idle frame per look for the pickers (ui/LookPicker.ts), under keys of
+// their own, so showing all four at once never touches the hero-* textures.
+// Drawn through `scene`, not `this`: check:art reads `makeTexture(this, ...)`
+// calls with a named palette, and a computed one would throw its pairing off.
+function drawLookPreviews(scene: Phaser.Scene): void {
+  HERO_LOOKS.forEach((_, i) => {
+    makeTexture(scene, `hero-look-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_LEGS_IDLE_32], heroLookPalette(i), ART_PX);
+  });
+}
+
+// the look the hero-* textures currently show; BootScene bakes BLUE
+let bakedLook = 0;
+
+/**
+ * Redraws the hero-* textures in `look` (an index into HERO_LOOKS; anything
+ * else is BLUE), under the same keys, so every scene, the walk animations
+ * and the battle sprite pick it up with no change of their own. Phaser's
+ * generateTexture draws onto an existing canvas texture without clearing it,
+ * so each one is cleared first; the Texture and Frame objects stay the same,
+ * which keeps the walk animations' frame references valid. The villagers
+ * share the leg rows but have textures of their own, so they're untouched.
+ * A no-op when that look is already baked.
+ */
+export function bakeHero(scene: Phaser.Scene, look: number): void {
+  const index = HERO_LOOKS[look] ? look : 0;
+  if (index === bakedLook) return;
+  Object.assign(HERO_PALETTE, heroLookPalette(index));
+  for (const key of scene.textures.getTextureKeys()) {
+    if (!key.startsWith("hero-") || key.startsWith("hero-look-")) continue;
+    const tex = scene.textures.get(key);
+    if (tex instanceof Phaser.Textures.CanvasTexture) tex.clear();
+  }
+  drawHero.call(scene);
+  bakedLook = index;
+}
+
+// The gear in the hero's hands, on the hero's own 32-cell grid at ART_PX,
+// each with the hand's grip at the centre cell (16,16): ui/HeroGear.ts puts
+// that cell on the hero's hand. The blade rises from the hand up and out at
+// 45 degrees, lit along its upper edge (W) and shaded along its lower (v),
+// past a cross-guard, with the pommel below the grip; the shield is a small
+// heater (8x10 cells, about a third of the hero's width) with a lit rim (h)
+// and a glint on the boss (w), hung from the hand beside the body.
+const EQUIP_SWORD_PALETTE = { w: 0xd1d5db, d: 0x64748b, g: 0xf59e0b, b: 0x6b4226, W: 0xf8fafc, v: 0xa3aab5 };
+const EQUIP_SWORD_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "............................W...",
+  "...........................WW...",
+  "..........................Wwv...",
+  ".........................Wwv....",
+  "........................Wwv.....",
+  ".......................Wwv......",
+  "......................Wwv.......",
+  ".....................Wwv........",
+  "....................Wwv.........",
+  "...................Wwv..........",
+  "...............g..Wwv...........",
+  "................gWwv............",
+  ".................g..............",
+  "...............bb.g.............",
+  "..............bb...g............",
+  ".............bb.................",
+  "............gg..................",
+  "............gg..................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+
+// the starting shield is wood: a dark rim, a knot for a boss
+const EQUIP_SHIELD_PALETTE = { s: 0x5c3a1e, S: 0x9a6a3a, d: 0x6b4423, h: 0xc08a52, w: 0xd6cbb5 };
+const EQUIP_SHIELD_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "............ssssssss............",
+  "............shhSSSSs............",
+  "............shSSSSSs............",
+  "............sSSddSSs............",
+  "............sSSdwSSs............",
+  "............sSSSSSds............",
+  ".............sSSSSs.............",
+  ".............sSSSds.............",
+  "..............sSSs..............",
+  "...............ss...............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+
+// The tiers read by colour: a wooden shield and a plain blade with a gold
+// guard, then IRON in a low-saturation blue-grey steel (a bright rim round a
+// dark face), then MYTHRIL in bright cyan. IRON was once blue too and sat
+// beside MYTHRIL, and the grey starting shield sat beside IRON.
+const EQUIP_IRON_SWORD_PALETTE = { w: 0xb3c0cf, d: 0x334155, g: 0x8a9ab0, b: 0x3a4150, W: 0xe8edf3, v: 0x7a899d };
+const EQUIP_IRON_SHIELD_PALETTE = { s: 0xb4c1d0, S: 0x4b6080, d: 0x2e3b4e, h: 0xdbe3ec, w: 0xf4f7fa };
+const EQUIP_MYTHRIL_SWORD_PALETTE = { w: 0xe0f2fe, d: 0x38bdf8, g: 0xa5f3fc, b: 0x1e3a8a, W: 0xffffff, v: 0xa9d8f2 };
+const EQUIP_MYTHRIL_SHIELD_PALETTE = { s: 0x7dd3fc, S: 0x38bdf8, d: 0x0ea5e9, h: 0xbae6fd, w: 0xf0f9ff };
 
 const NPC_PALETTE = {
   h: 0xf59e0b,
@@ -1238,367 +1593,1362 @@ const NPC_TILE = [
   "................",
 ];
 
-// Both slime palettes walk the same 6 chars (outline / shadow / base ramp /
-// specular) so the one grid can be recoloured into the king slime.
+// Town villagers on the hero's 32-cell grid: a 24-row head and torso each
+// (Scale2x of the old 16-cell art, shaded as the hero is: a contour and shine
+// on the hat or hood, lit and shaded sides on the clothes, the face's right
+// edge in shadow, the eyes kept as flat 4x2 blocks with a glint), on the
+// hero's own 32-cell legs (HERO_LEGS_*_32), so they walk with the same
+// stride. Every palette therefore carries the legs' s (hands), p and P
+// (trousers) and o and O (boots).
+// straw hat with a wide brim, red shirt under blue overalls
+const FARMER_PALETTE = {
+  y: 0xfacc15,
+  Y: 0xca8a04,
+  h: 0x78350f,
+  s: 0xf8c896,
+  e: 0x141414,
+  g: 0xdc2626,
+  b: 0x2563eb,
+  p: 0x1e40af,
+  o: 0x422006,
+  Z: 0x8a5a04,
+  H: 0x9a5a2a,
+  d: 0x4a2008,
+  B: 0x5b8cf5,
+  n: 0x1e3a8a,
+  R: 0xf87171,
+  P: 0x172f80,
+  O: 0x6b3a12,
+  S: 0xe3ac80,
+  i: 0xffffff,
+};
+// old angler: peaked cap, white beard, work vest
+const FISHER_PALETTE = {
+  c: 0x0e7490,
+  C: 0x164e63,
+  h: 0x9ca3af,
+  s: 0xf1c27d,
+  e: 0x141414,
+  w: 0xe5e7eb,
+  v: 0xb45309,
+  t: 0xf1f5f9,
+  p: 0x334155,
+  o: 0x1f2937,
+  D: 0x22a5c4,
+  H: 0xc5cad3,
+  d: 0x6b7280,
+  T: 0xffffff,
+  u: 0xcbd5e1,
+  V: 0xd97706,
+  x: 0x7c3a06,
+  P: 0x1f2937,
+  O: 0x374151,
+  S: 0xd9a46a,
+  i: 0xffffff,
+};
+// hooded wanderer with a bright scarf; a rust cloak rather than green: a
+// green hood vanished against the grass
+const TRAVELER_PALETTE = {
+  k: 0x92400e,
+  K: 0x78350f,
+  a: 0x22d3ee,
+  s: 0xd6a77a,
+  e: 0x141414,
+  p: 0x57534e,
+  o: 0x292524,
+  A: 0x67e8f9,
+  n: 0x0e7490,
+  P: 0x44403c,
+  O: 0x44403c,
+  S: 0xbf8f62,
+  i: 0xffffff,
+};
+
+const FARMER_TOP_32 = [
+  "................................",
+  "................................",
+  ".............ZZZZZZ.............",
+  "...........ZZyyyyyyZZ...........",
+  "...........ZyyyyyyyyZ...........",
+  "..........ZyyyyyyyyyyZ..........",
+  "....YYYYYYYYYYYYYYYYYYYYYYZZ....",
+  "....YYYYYYYYYYYYYYYYYYYYYYZZ....",
+  "......HHssssssssssssssSSdd......",
+  "......HHssssssssssssssSSdd......",
+  "......HHssieeessssieeeSSdd......",
+  "......HHsseeeesssseeeeSSdd......",
+  "......HHssssssssssssssSSdd......",
+  ".......HHssssssssssssSSdd.......",
+  ".......HHssssssssssssSSdd.......",
+  ".........HssssssssssSSd.........",
+  "..........ssssssssssSS..........",
+  "..........ssssssssssSS..........",
+  "..........RRBBbbbbnngg..........",
+  ".........RRgBBbbbbnnggg.........",
+  ".........RRgBBbbbbnnggg.........",
+  ".......RRggBBbbbbbbnngggg.......",
+  "......RRgggBBbbbbbbnnggggg......",
+  "......RRggBBbbbbbbbbnngggg......",
+];
+
+const FISHER_TOP_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........CCCCCCCCCC...........",
+  ".........CCDDDDDcccccCC.........",
+  ".........CDcccccccccccC.........",
+  "........CccccccccccccccC........",
+  "........CccccccccccccccCCCCC....",
+  "........CcccccccccccccCCCCCC....",
+  ".......HssssssssssssssSSdd......",
+  "......HHssssssssssssssSSdd......",
+  "......HHssieeessssieeeSSdd......",
+  "......HHsseeeesssseeeeSSdd......",
+  "......HHsswwwwwwwwwwwwssdd......",
+  ".......Hswwwwwwwwwwwwwwsd.......",
+  "........wwwwwwwwwwwwwwww........",
+  ".........wwwwwwwwwwwwww.........",
+  "..........VVTTttttuuxx..........",
+  ".........VVvTTttttuuvxx.........",
+  ".........VVvTTttttuuvxx.........",
+  ".......VVvvvTTttttuuvvvxx.......",
+  "......VVvvvvTTttttuuvvvvxx......",
+  "......VVvvvvTTttttuuvvvvxx......",
+];
+
+const TRAVELER_TOP_32 = [
+  "................................",
+  "................................",
+  ".............KKKKKK.............",
+  "...........KKkkkkkkKK...........",
+  "...........KkkkkkkkkK...........",
+  ".........KKkkkkkkkkkkKK.........",
+  ".........KkkkkkkkkkkkkK.........",
+  ".......KKkkkkkkkkkkkkkkKK.......",
+  ".......KkKssssssssssSSKkK.......",
+  "......KkKKssssssssssSSKKkK......",
+  "......KkKKssieeessSSieKKkK......",
+  "......KkKKsseeeessSSeeKKkK......",
+  "......KkKKssssssssssSSKKkK......",
+  ".......KkKssssssssssSSKkK.......",
+  ".......KkkAAaaaaaaaannkkK.......",
+  "........KkkAAaaaaaannkkK........",
+  "........KkkAAaaaaaannkkK........",
+  "........KkkkkAAaannkkkkK........",
+  "........KkkkkkkkkkkkkkkK........",
+  ".......KkkkkkkkkkkkkkkkkK.......",
+  ".......KkkkkkkkkkkkkkkkkK.......",
+  "......KkkkkkkkkkkkkkkkkkkK......",
+  "......KkkkKKkkkkkkkkKKkkkK......",
+  ".......KKKKKKKKKKKKKKKKKK.......",
+];
+
+// The town's fixed NPCs, one figure each on the hero's 32-cell body (same
+// head, height and feet, so the shadow and the name tag sit as they did for
+// the shared robed "npc"), each with what says its trade at a glance. Drawn
+// at ART_PX as they stand; TownScene.addNpc uses npc-<label> when it exists.
+// ELDER: white hair and a long beard, a purple robe to the boots, a staff
+const NPC_ELDER_PALETTE = {
+  h: 0xd6d3d1,
+  H: 0xf5f5f4,
+  d: 0x8f8a85,
+  s: 0xf1c8a0,
+  S: 0xd9a983,
+  e: 0x141414,
+  i: 0xffffff,
+  t: 0x7c3aed,
+  T: 0xa171f2,
+  u: 0x48248c,
+  g: 0xfacc15,
+  o: 0x3b2a1a,
+  w: 0x8b5a2b,
+  W: 0xb07a40,
+  k: 0x3e2414,
+};
+const NPC_ELDER_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd.....kk....",
+  ".........ddHHHHHhhhhhdd..kWwk...",
+  ".........dHhhhhhhhhhhhd..kwwk...",
+  ".......ddhhhhhhhhhhhhhhdd.kk....",
+  ".......dHhhhhhhhhhhhhhhhd.Ww....",
+  "......dhhhhhhhhhhhhhhhhhhdWw....",
+  "......dhhssssssssssssSShhhWw....",
+  "......dhssssssssssssssSShhWw....",
+  "......dhssieeessssieeeSShhWw....",
+  "......dhsseeeesssseeeeSShhWw....",
+  "......dhssssssssssssssSShdWw....",
+  ".......dhshhhhhhhhhhhhShd.Ww....",
+  ".......ddhHHHHHHhhhhhhhdd.Ww....",
+  ".........dhhhhhhhhhhhhd...Ww....",
+  "..........dhhhhhhhhhhd....Ww....",
+  ".........Thhhhhhhhhhhhu...Ww....",
+  ".........TThhhhhhhhhhuu...Ww....",
+  ".......TTttthhhhhhhhttuusssss...",
+  "......TTtttggghhhhgggtuusssss...",
+  "......TTttggggggggggggttuuWw....",
+  "......TTttttttttttttttuu..Ww....",
+  "......TTttttttttttttttuu..Ww....",
+  "......ssTTttttttttttttuu..Ww....",
+  "......ssTTttttttttttttuu..Ww....",
+  "....oooTTtttttttttttttuu..Ww....",
+  ".....ooo...oooooooooo...ooWw....",
+  "................................",
+  "................................",
+];
+
+// SHOP: a mustache and a cream apron over a yellow shirt
+const NPC_SHOP_PALETTE = {
+  h: 0x7c4a26,
+  H: 0xa36a3c,
+  d: 0x4a2a14,
+  m: 0x4a2a14,
+  s: 0xf8c896,
+  S: 0xe3ac80,
+  e: 0x141414,
+  i: 0xffffff,
+  t: 0xf2b134,
+  T: 0xffd166,
+  u: 0xc98a1c,
+  b: 0x8a5a2b,
+  a: 0xf5efe0,
+  A: 0xd8cfb8,
+  p: 0x5a4030,
+  o: 0x3b2a1a,
+};
+const NPC_SHOP_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd...........",
+  ".........ddHHHHHhhhhhdd.........",
+  ".........dHhhhhhhhhhhhd.........",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".......dHhhhhhhhhhhhhhhhd.......",
+  "......dhhhhhhhhhhhhhhhhhhd......",
+  "......dhhssssssssssssSShhd......",
+  "......dhssssssssssssssSShd......",
+  "......dhssieeessssieeeSShd......",
+  "......dhsseeeesssseeeeSShd......",
+  "......dhssssssssssssssSShd......",
+  ".......dhssmmmmmmmmmmSShd.......",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".........dHHHHHHhhhhhhd.........",
+  "..........TTaattttAAuu..........",
+  ".........TaaaaaaaaaaAAu.........",
+  ".........TaaaaaaaaaaAAu.........",
+  ".......TTtaaaaaaaaaaAAtuu.......",
+  "......TTttaaaaaaaaaaAAttuu......",
+  "......TTttaaaaaaaaaaAAttuu......",
+  "....ss....aaaaAAAAaaAA....ss....",
+  "....ss....aaaaaaaaaaAA....ss....",
+  "....ss....aaaaaaaaaaAA....ss....",
+  "....ss....aaaaaaaaaaAA....ss....",
+  "....oooo..oooooooooooo..oooo....",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// GUARD: a steel helmet with a cyan crest, a cyan tabard, a spear
+const NPC_GUARD_PALETTE = {
+  m: 0x9aa5b4,
+  M: 0xd5dde6,
+  n: 0x4b5563,
+  c: 0x22d3ee,
+  C: 0x0e7490,
+  s: 0xf8c896,
+  S: 0xe3ac80,
+  e: 0x141414,
+  i: 0xffffff,
+  p: 0x334155,
+  o: 0x1f2937,
+  w: 0x8b5a2b,
+  W: 0xb07a40,
+  b: 0x4b5563,
+};
+const NPC_GUARD_32 = [
+  "............................M...",
+  "..............cccc.........MMn..",
+  ".............cccccc........MMn..",
+  "..............cCCc........MMMMn.",
+  "...........nnnmmmmnnn......nnn..",
+  ".........nnMMMMMmmmmmnn....Ww...",
+  ".........nMmmmmmmmmmmnn....Ww...",
+  ".......nnmmmmmmmmmmmmmmnn..Ww...",
+  ".......nMmmmmmmmmmmmmmmnn..Ww...",
+  "......nMmmmmmmmmmmmmmmmmnn.Ww...",
+  "......nnnnnnnnnnnnnnnnnnnn.Ww...",
+  "......nMsssssssnnsssssSSnn.Ww...",
+  "......nMssieeesnnsieeeSSnn.Ww...",
+  "......nMsseeeesnnseeeeSSnn.Ww...",
+  "......nMssssssssssssssSSnn.Ww...",
+  ".......nMssssssssssssSSnn..Ww...",
+  ".......nnmmmmmmmmmmmmmmnn..Ww...",
+  ".........nMMMMMMmmmmmnn....Ww...",
+  "..........nMmccccccmnn.....Ww...",
+  ".........nMmmccccccmmnn....Ww...",
+  ".........nMmmccccccmmnn....Ww...",
+  ".......nnmmmmccccccmmmmnnsssss..",
+  "......nMMmmbbCCCCCCbbmmnnsssss..",
+  "......nnnnbbbCCCCCCbbbnnnn.Ww...",
+  "....ss....pppccccccppp.....Ww...",
+  "....ss....pppccccccppp.....Ww...",
+  "....ss....pppccccccppp.....Ww...",
+  "....ss....pppccccccppp.....Ww...",
+  "....oooo..oooooooooooo.....Ww...",
+  ".....ooo...oooooooooo...oooWw...",
+  "................................",
+  "................................",
+];
+
+// HUNTER: a feathered green cap, a quiver strap, a bow in the left hand
+const NPC_HUNTER_PALETTE = {
+  c: 0x3f8f3a,
+  G: 0x6cc04a,
+  C: 0x1f4f22,
+  f: 0xe0503a,
+  F: 0x8a2a1a,
+  h: 0x6b4226,
+  H: 0x916838,
+  d: 0x402319,
+  s: 0xf1c27d,
+  S: 0xd9a46a,
+  e: 0x141414,
+  i: 0xffffff,
+  t: 0x4ca64a,
+  T: 0x86d97a,
+  u: 0x2e6e2c,
+  b: 0x6b4226,
+  p: 0x5a4030,
+  o: 0x3b2a1a,
+  w: 0x8b5a2b,
+  q: 0xf5efe0,
+};
+const NPC_HUNTER_32 = [
+  ".........................ff.....",
+  "........................fF......",
+  ".......................fF.......",
+  "......................fF........",
+  "...........CCCCCCCCCC.F.........",
+  ".........CCGGGGGcccccCC.........",
+  ".........CGcccccccccccC.........",
+  ".......CCccccccccccccccCC.......",
+  ".....wwGGcccccccccccccccC.......",
+  "....wwqCCCCCCCCCCCCCCCCCCC......",
+  "...wwwqhhssssssssssssSShhd......",
+  "...ww.qhssssssssssssssSShd......",
+  "..ww..qhssieeessssieeeSShd......",
+  "..ww..qhsseeeesssseeeeSShd......",
+  "..ww..qhssssssssssssssSShd......",
+  "..ww..qhhssssssssssssSShd.......",
+  "..ww..qhdhhhhhhhhhhhhhhdd.......",
+  "..wwssss.dhhhhhhhhhhhhd.........",
+  "..wwssss..bbTTttttttuu..........",
+  "..ww..q..TTtbbtttttttuu.........",
+  "..ww..q..TTtttbbtttttuu.........",
+  "..ww..qTTtttttttbbtttttuu.......",
+  "...ww.qTTttbbbbbbbbbbtttuu......",
+  "...ww.qTTtbbbbbbbbbbbbttuu......",
+  "....wwq...pppppppppppp....ss....",
+  "....wwq...pppppppppppp....ss....",
+  ".....ww...pppppppppppp....ss....",
+  "..........pppppppppppp....ss....",
+  "..........oooooooooooo..oooo....",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// GAMBLER: a black top hat with a pink band, a pink vest, a bow tie
+const NPC_GAMBLER_PALETTE = {
+  k: 0x1c1626,
+  K: 0x3c3450,
+  r: 0xec4899,
+  R: 0xf9a8d4,
+  u: 0x9d174d,
+  x: 0xf5f5f5,
+  g: 0xfacc15,
+  h: 0x2b1b12,
+  H: 0x4a3020,
+  d: 0x140c08,
+  s: 0xf8c896,
+  S: 0xe3ac80,
+  e: 0x141414,
+  i: 0xffffff,
+  p: 0x1f1b2e,
+  o: 0x14101c,
+};
+const NPC_GAMBLER_32 = [
+  "..........kkkkkkkkkkkk..........",
+  "..........KKKKKKkkkkkk..........",
+  "..........kkkkkkkkkkkk..........",
+  "..........kkkkkkkkkkkk..........",
+  "..........kkkkkkkkkkkk..........",
+  ".........kkkkkkkkkkkkkk.........",
+  ".........KRRrrrrrrrruuk.........",
+  ".......kkkRRrrrrrrrruukkk.......",
+  ".......KKkkkkkkkkkkkkkkkk.......",
+  "......dkkkKKKKKKkkkkkkkkkd......",
+  "......dhhssssssssssssSShhd......",
+  "......dhssssssssssssssSShd......",
+  "......dhssieeessssieeeSShd......",
+  "......dhsseeeesssseeeeSShd......",
+  "......dhssssssssssssssSShd......",
+  ".......dhssssssssssssSShd.......",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".........dhhhhhhhhhhhhd.........",
+  "........RRrrrkkxxkkrrruu........",
+  "........RRrrrxKkkkxrrruu........",
+  "........RRrrrkkxxkkrrruu........",
+  ".......xRRrrrxxggxxrrruux.......",
+  "......xxRRrrrxxxxxxrrruuxx......",
+  "......xxRRrrrxxxxxxrrruuxx......",
+  "....ss....pppppppppppp....ss....",
+  "....ss....pppppppppppp....ss....",
+  "....ss....pppppppppppp....ss....",
+  "....ss....pppppppppppp....ss....",
+  "....oooo..oooooooooooo..oooo....",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// ARENA: a crested gold helmet, a gold breastplate, a red war-skirt
+const NPC_ARENA_PALETTE = {
+  m: 0xe0a82e,
+  M: 0xfde68a,
+  n: 0x8a5a12,
+  r: 0xdc2626,
+  R: 0xf87171,
+  u: 0x7f1d1d,
+  s: 0xd9a06a,
+  S: 0xbf8754,
+  e: 0x141414,
+  i: 0xffffff,
+  p: 0x5a3a20,
+  o: 0x3b2a1a,
+};
+const NPC_ARENA_32 = [
+  ".............rrrrrr.............",
+  "............rrRRrrrr............",
+  "............rrrrrrrr............",
+  ".............rrrrrr.............",
+  "...........nnmmmmmmnn...........",
+  ".........nnMMMMMmmmmmnn.........",
+  ".........nMmmmmmmmmmmnn.........",
+  ".......nnmmmmmmmmmmmmmmnn.......",
+  ".......nMmmmmmmmmmmmmmmnn.......",
+  "......nMmmmmmmmmmmmmmmmmnn......",
+  "......nnnnnnnnnnnnnnnnnnnn......",
+  "......nMssssssssssssssSSnn......",
+  "......nMssieeessssieeeSSnn......",
+  "......nMsseeeesssseeeeSSnn......",
+  "......nMssssssssssssssSSnn......",
+  ".......nMssssssssssssSSnn.......",
+  ".......nnmmmmmmmmmmmmmmnn.......",
+  ".........nMMMMMMmmmmmnn.........",
+  "......MMMMMMmmmmmmmmnnnnnn......",
+  "......MMMMMMmmmmmmmmnnnnnn......",
+  "......MMMMMMmmmmmmmmnnnnnn......",
+  ".......nMmmmmmmmmmmmmmmnn.......",
+  "......nMMMmnnnnnnnnnnmmmnn......",
+  "......nnnnnnnnnnnnnnnnnnnn......",
+  "....ss....rprprprprprp....ss....",
+  "....ss....rprprprprprp....ss....",
+  "....ss....rprprprprprp....ss....",
+  "....ss....rprprprprprp....ss....",
+  "....oooo..oooooooooooo..oooo....",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// BLACKSMITH: a red headband, bare forearms, a leather apron, a hammer
+const NPC_BLACKSMITH_PALETTE = {
+  h: 0x2b1b12,
+  H: 0x4a3020,
+  d: 0x140c08,
+  r: 0xdc2626,
+  s: 0xd9a06a,
+  S: 0xbf8754,
+  e: 0x141414,
+  i: 0xffffff,
+  x: 0x94a3b8,
+  X: 0xcbd5e1,
+  y: 0x64748b,
+  a: 0x7a4a24,
+  A: 0x9a6a3a,
+  b: 0x4a2a14,
+  p: 0x3b3b46,
+  o: 0x1f1f26,
+  m: 0x6b7280,
+  M: 0x9ca3af,
+  n: 0x374151,
+  w: 0x6b4226,
+  W: 0x8b5a2b,
+};
+const NPC_BLACKSMITH_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........dddddddddd...........",
+  ".........ddHHHHHhhhhhdd.........",
+  ".........dHhhhhhhhhhhhd.........",
+  ".......ddhhhhhhhhhhhhhhdd.......",
+  ".......dHhhhhhhhhhhhhhhhd.......",
+  "......drrrrrrrrrrrrrrrrnmmmmmn..",
+  "......dhhssssssssssssSSmMMMMmn..",
+  "......dhsssssssssssssSSmmmmmmn..",
+  "......dhssieeessssieeeSnnnnnnn..",
+  "......dhsseeeesssseeeeSShhWw....",
+  "......dhssssssssssssssSShdWw....",
+  ".......dhssssssssssssSShd.Ww....",
+  ".......ddhhhhhhhhhhhhhhdd.Ww....",
+  ".........dHHHHHHhhhhhhd...Ww....",
+  "..........XXAAxxxxbbyy....Ww....",
+  ".........XAAaaaaaaaabby...Ww....",
+  ".........XAAaaaaaaaabby..ssss...",
+  "......sssXAAaaaaaaaabbyssssss...",
+  "......sssXAAaaaaaaaabbysssWw....",
+  "......sssXAAaaaaaaaabbysssWw....",
+  "....ss....AAaaaaaaaabb....Ww....",
+  "....ss....AAaaaaaaaabb....Ww....",
+  "....ss....AAaaaaaaaabb....Ww....",
+  "....ss....AAaaaaaaaabb..........",
+  "....oooo..oooooooooooo..........",
+  ".....ooo...oooooooooo...ooo.....",
+  "................................",
+  "................................",
+];
+
+// The slimes on a 32-cell grid at ART_PX: one dome lit from the top left
+// (shadow / base / light / highlight bands off an ellipsoid), a specular blob
+// and glint, eyes with a glint each and a small smile. Every slime palette
+// walks the same 6 chars (outline / shadow / base ramp / specular), so the
+// one grid recolours into the golden, king and magma slimes. The golden slime
+// is its own texture rather than the green one tinted: a multiply tint over
+// green came out olive.
 const SLIME_PALETTE = { o: 0x11543c, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
+const GOLD_SLIME_PALETTE = { o: 0x6b4508, s: 0xb7791f, g: 0xe8b923, m: 0xfad643, h: 0xfdeea0, w: 0xfffdf0 };
 const KING_SLIME_PALETTE = { o: 0x631028, s: 0x99182f, g: 0xcf2130, m: 0xef4444, h: 0xf98a72, w: 0xfde3cf };
-const SLIME_TILE = [
-  "................",
-  "................",
-  "................",
-  "......oooo......",
-  "....oohhhhoo....",
-  "...owwwhhhhmo...",
-  "..owwwwhhhmmmo..",
-  "..ohwwhhhhmmgo..",
-  "..hhwohhhmwogs..",
-  ".ohhoohhmmoogso.",
-  ".ohhhmmmmmggsso.",
-  "..mmmmmmgggsss..",
-  "..ommgoggossso..",
-  "...ogggoossso...",
-  "....osssssso....",
-  ".....oooooo.....",
+const SLIME_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........oooooooooo...........",
+  ".........oohhhhmmmmmmoo.........",
+  ".......oohhhhhhmmmmmmmgoo.......",
+  "......ohhhhhwhhmmmmmmmgggo......",
+  ".....ohhwwhhhhhmmmmmmmggggo.....",
+  ".....ohwwwwhhhhmmmmmmmggggo.....",
+  "....ohhwwhhhhhmmmmmmmggggggo....",
+  "....ohhwhhhhhmmmmmmmmggggggo....",
+  "...ohhhhhhhhhmmmmmmmmggggggso...",
+  "...ohhhhhhhhmmmmmmmmggggggsso...",
+  "..ohhhhhhhoommmmmmmgooggggssso..",
+  "..ohhhhhhowoommmmmmowoogggssso..",
+  "..omhhmmmoooommmmmgooooggsssso..",
+  "..ommmmmmmoommmmmgggoogggsssso..",
+  "..ommmmmmmmmmmmmggggggggssssso..",
+  "..ommmmmmmmmmmmgggggggggssssso..",
+  "..ommmmmmmmmmmgggggggggsssssso..",
+  "..ommmmmmmmmgoggggogggssssssso..",
+  "..ommmmmmmggggoooogggsssssssso..",
+  "..ogmmggggggggggggggssssssssso..",
+  "..oggggggggggggggggsssssssssso..",
+  "..ogggggggggggggggssssssssssso..",
+  "...oggggggggggggsssssssssssso...",
+  "...ogggggggggggssssssssssssso...",
+  "....ooggggggssssssssssssssoo....",
+  "......oooooooooooooooooooo......",
 ];
 
+// The goblin on a 32-cell grid: pointed ears, angry brows over eyes (e) with
+// a glint (w), a fanged grin (f), arms outlined against the flanks and a
+// loincloth (r/R). K is the outline, S s L H the skin lit from the top left.
+// The cursed goblin is its own violet palette, as the golden slime is; at a
+// mean luma of ~104 it keeps the old violet tint's lift off the cave floor
+// (54). The TROLL KING and the MOSS GOLEM wore this grid too, scaled up, and
+// read as big goblins; they have their own grids below.
 const GOBLIN_PALETTE = {
-  s: 0x86efac,
-  S: 0x5bb97e,
+  K: 0x173d2a,
+  S: 0x4fae72,
+  s: 0x7fdc9c,
+  L: 0xa8f0c0,
+  H: 0xd8fbe4,
   e: 0xff5555,
-  h: 0x4ade80,
+  w: 0xffffff,
   r: 0x8b5a2b,
-  v: 0x4b8366,
-  x: 0x6cbe8c,
-  z: 0xbbf6d1,
-  q: 0xf1fdf5,
-  u: 0xe4fbed,
+  R: 0x5c3a1a,
+  f: 0xf1fdf5,
 };
+const CURSED_GOBLIN_PALETTE = {
+  K: 0x3b0d4f,
+  S: 0x8a3fb5,
+  s: 0xc06ee8,
+  L: 0xdc9ff7,
+  H: 0xf3d9ff,
+  e: 0xfde047,
+  w: 0xffffff,
+  r: 0x4a2a5c,
+  R: 0x2c1838,
+  f: 0xf5ecff,
+};
+const GOBLIN_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "..........KK........KK..........",
+  ".........KLK........KsK.........",
+  ".........KSLKKKKKKKKsSK.........",
+  "........KLSHHHHHLLLssSsK........",
+  ".......KsSHHHHLLLLLsssSSK.......",
+  "......KssKKHHLLLLLssssKKSK......",
+  "......KssHLKKLLLLsssKKSSSK......",
+  "......KSSLLweeLssssweeSSSK......",
+  ".......KSLLeeessssseeeSSK.......",
+  "........KssssssSSsSSSSSK........",
+  "........KsssKKKKKKKKSSSK........",
+  ".........KKKKfKKKKfKKKK.........",
+  ".......KKLLLLLLLssssSSSKKK......",
+  "......KLLLLLLLssssssSSssSK......",
+  "......KLLKLLLssssssSSSKSSK......",
+  "......KssKsssssssSSSSSKSSK......",
+  "......KssKssssssSSSSSSKSSK......",
+  "......KssKrrrrrKKrrrRRKSSK......",
+  "......KKK.KrrrrrrRRRRK.KKK......",
+  "..........RRRRKRRKRRRR..........",
+  ".........KLLLK.KK.KsSSK.........",
+  ".........KsssK....KSSSK.........",
+  ".........KsssK....KSSSK.........",
+  "........KKKKKK....KKKKKK........",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+
+// TROLL KING on a 32-cell grid: a hulking hunched body, long arms with the
+// knuckles near the ground, a small head sunk between the shoulders under a
+// gold crown (y Y o, a gem g), heavy brows over small yellow eyes, an
+// underbite with tusks (t), a lit gut and a loincloth. The crown starts four
+// rows down: battle draws giants at 3x with their top under the enemy panel.
 const TROLL_PALETTE = {
-  s: 0x4d5d4d,
-  S: 0x2f3a2f,
+  K: 0x141c14,
+  S: 0x4a584c,
+  s: 0x6f7f70,
+  L: 0x98a598,
+  H: 0xc5cdc5,
   e: 0xffd166,
-  h: 0x1f2e1f,
   r: 0x7c2d12,
-  v: 0x0a0a18,
-  x: 0x2e3735,
-  z: 0x808b80,
-  q: 0xb3b9b3,
-  u: 0xd8dbd8,
+  R: 0x4a1a0a,
+  t: 0xe5e0c8,
+  o: 0xb45309,
+  y: 0xfacc15,
+  Y: 0xfde68a,
+  g: 0xdc2626,
 };
-const GOBLIN_TILE = [
-  "................",
-  "................",
-  ".....hh..hh.....",
-  "....huqzzzzsh...",
-  "...hquuzzqzzh...",
-  "...hqSqeezSsh...",
-  "...hqqqqzzzsh...",
-  "....hzzzzzsh....",
-  "....szzzzzsx....",
-  "...szzzzsssxv...",
-  "...ssrrrrrrxv...",
-  "...ssrrrrrrvv...",
-  "....xxxvvvvv....",
-  "....xv....vv....",
-  "................",
-  "................",
+const TROLL_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........KY..YY..YK...........",
+  "...........Kyy.yy.yyK...........",
+  "...........KYyyggyyyK...........",
+  "...........KooooooooK...........",
+  "...........KKKKKKKKKK...........",
+  "...........KHHLLLLssK...........",
+  "...........KKKKLLKKKK...........",
+  "......KKKKKKLeLLsseSKKKKKK......",
+  ".....KHHHHHKLssssssSKLssssK.....",
+  "....KHHHHHHKtssssSStKsssssSK....",
+  "...KLHHHHHHLtKKKKKKtLssssSSsK...",
+  "..KLLLHHHHLLLLLLLLLLsssssSsssK..",
+  "..KLLLLLLLLLLLLLLLLsssssSSsssK..",
+  "..KLLKKLLLLLHHLLLsssssssSKKssK..",
+  "..KLLK.KLLLHLLLLsssssssSK.KssK..",
+  "..KLLK.KLLHLLLssssssssSSK.KsSK..",
+  "..KssK.KsssssssSsSSSSSSSK.KSSK..",
+  "..KssK.KsssssssSSSSSSSSSK.KSSK..",
+  ".KssssKsssssSSSSSSSSSSSSSKSSSSK.",
+  ".KssssKrrrrrrrrrrrrrrrrRRKSSSSK.",
+  ".KSsSSKrrrrrrrrrrrrrrRRRRKSSSSK.",
+  "..KKKK.KrrrrrrrrRRRRRRRRK.KKKK..",
+  ".......RRRRRRKKKKRRRRRRRK.......",
+  "......KLLLLLK....KsssSSK........",
+  "......KSSsssK....KSSSSSK........",
+  ".....KssssssK....KsssSSSK.......",
+  ".....KKKKKKKK....KKKKKKKK.......",
+  "................................",
 ];
 
+// head-on wolf on a 32-cell grid: tall ears with pink insides, a cheek ruff, a
+// dark mask on the brow, red eyes, a pale muzzle tapering to the nose, fangs
+// and two front legs
 const WOLF_PALETTE = {
-  g: 0x94a3b8,
-  G: 0x64748b,
-  d: 0x475569,
+  K: 0x1e2433,
+  D: 0x56647a,
+  G: 0x75849a,
+  g: 0xa0aec0,
+  l: 0xd0d7e2,
+  W: 0xf1f5f9,
   e: 0xef4444,
-  n: 0x334155,
-  v: 0x3d4253,
-  x: 0x6d778a,
-  z: 0xc7cfda,
-  q: 0xf9fafb,
-  u: 0x282f40,
-  j: 0x7f8997,
-  a: 0xe7ebef,
+  w: 0xffffff,
+  p: 0xa8788a,
+  f: 0xf8fafc,
 };
-const WOLF_TILE = [
-  "................",
-  "..qq.......gg...",
-  "..qaz.....gzg...",
-  "..qaazzzggzzgg..",
-  "..zqGGGGGGGGgx..",
-  ".zqGddddjjjjGgx.",
-  ".zqGdddjjjjjGgx.",
-  ".zzGdjeeejjGxx..",
-  ".zzGjjeeejdGxv..",
-  "..gzGjjjdddGxv..",
-  "..ggGGGGGGGGxv..",
-  "..ggxxgggxvvxv..",
-  "..xx..xxxv..vv..",
-  "..xx..vvvv..vv..",
-  "................",
-  "................",
+const WOLF_32 = [
+  "................................",
+  "................................",
+  ".....K....................K.....",
+  ".....KK..................KK.....",
+  ".....KpK................KpK.....",
+  ".....KppK..............KppK.....",
+  ".....KpppK............KpppK.....",
+  ".....KGpppKKKKKKKKKKKKpppDK.....",
+  ".....KGGDDDlllDDDDgggDDDDDK.....",
+  ".....KlllllllDDDDDDgggGGGGK.....",
+  "....KllKKKllggDDDDggggKKKGGK....",
+  "...KlllllKKgggggggggGKKGGGGDK...",
+  "..KgggggweegggggggGGGweeGGDDDK..",
+  "...KgggggeKgggWWWWGGGKeGGDDDK...",
+  "..KKgggggggggWWWWWWGGGGGDDDDKK..",
+  "....KKGGGGGGWWWWWWllGGDDDDKK....",
+  "......KKGGGGWWKKKKllDDDDKK......",
+  "........KKGGWWWKKlllDDKK........",
+  ".......KggKKfKKKKKKfKKDDK.......",
+  "......KgggggKKKKKKKKGGDDDK......",
+  "......KgggggWWWWWWWlGDDDDK......",
+  "......KggggGWWWWWWllDDDDDK......",
+  "......KGDDDDDWWWlllDDDDDDK......",
+  ".......KDggGDKKKKKKDDDDDK.......",
+  "........KGGGK......KDDDK........",
+  "........KGGGK......KDDDK........",
+  ".......KllllK......KGDDDK.......",
+  ".......KKKKKK......KKKKKK.......",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
 ];
 
+// will-o'-wisp on a 32-cell grid: a teardrop of light drawn up into one flame
+// tip, lit from within (white core out to a dark rim), two hollow eyes either
+// side of the core and a curling tail. The 16-cell wisp stayed blocky because
+// Scale2x pulled its eyes lopsided; this one is drawn at ART_PX as it stands.
 const WISP_PALETTE = { k: 0x082f49, d: 0x0c4a6e, c: 0x1d7fb8, C: 0x38bdf8, l: 0x8fd7fa, w: 0xe8f7ff };
-const WISP_TILE = [
-  ".....kkkkk......",
-  "...kkddddddk....",
-  "..kddcccccddk...",
-  "..ddccCCCCccdk..",
-  ".kdcCClllCCcdd..",
-  ".ddcCllwwlCCcdk.",
-  ".dccCkkwwkkCcdk.",
-  ".dccCkkwwkkCcdk.",
-  ".kdcCllwllCccdk.",
-  ".kdccCCllCCcdk..",
-  "..kdccCCCccddk..",
-  "..kkddccccddk...",
-  "....kdddddkk....",
-  "......kkk.......",
-  ".......cc.......",
-  ".......dd.......",
+const WISP_32 = [
+  ".................kk.............",
+  ".................kk.............",
+  "................kcck............",
+  "...............kccck............",
+  ".............kkccccck...........",
+  "............kCCCCCccck..........",
+  "...........kCCCCCCCCcck.........",
+  ".........kkCCCCCCCCCCCck........",
+  "........kCCCllllllCCCCCk........",
+  ".......kCCClllllllllCCCck.......",
+  "......kCCCllllllllllCCCCck......",
+  ".....kCCCllllwwwwllllCCCcck.....",
+  ".....kCCClllwwwwwwlllCCCcck.....",
+  ".....kCCClkkwwwwwwwlkkCCCck.....",
+  ".....kCCCkkkkwwwwwwkkkkCCck.....",
+  ".....kCCCkkkkwwwwwlkkkkCcck.....",
+  ".....kCCCkkkkwwwwllkkkkCcck.....",
+  ".....kcCCCkkllllllllkkCCcck.....",
+  ".....kcCCCClllllllllCCCccck.....",
+  "......kdCCCCllllllCCCCCddk......",
+  "......kddCCCCCCCCCCCCCdddk......",
+  ".......kddCCCCCCCCCCddddk.......",
+  "........kkddCCCCCCddddkk........",
+  "..........kkddddddddkk..........",
+  "............kkdddddk............",
+  "..............kdddk.............",
+  "...............kkdk.............",
+  ".................kk.............",
+  ".................kk.............",
+  "................kk..............",
+  "................kk..............",
+  "..............kkk...............",
 ];
 
+// frost moth on a 32-cell grid: four frosted wings with an eye-spot each, a
+// furred body, feathered antennae and red eyes
 const FROST_MOTH_PALETTE = {
-  w: 0xe0f2fe,
-  W: 0xbae6fd,
-  b: 0x38bdf8,
+  K: 0x1c4f6e,
   d: 0x0369a1,
-  e: 0xef4444,
-  v: 0x1c4f6e,
-  x: 0x2b8bba,
-  z: 0x96dcfb,
+  b: 0x38bdf8,
+  W: 0xbae6fd,
+  w: 0xe0f2fe,
   q: 0xf4fbff,
-  u: 0x92b5ca,
-  j: 0xdaf2fe,
-  n: 0xd3f0fd,
+  F: 0x92b5ca,
+  f: 0xdaf2fe,
+  e: 0xef4444,
+  i: 0xffffff,
 };
-const FROST_MOTH_TILE = [
-  "................",
-  "..ww........ww..",
-  ".wWWw......wjWw.",
-  ".wWWWzzbbbbWjWw.",
-  ".wWWWjzzzzWjjWw.",
-  "..wjWWnneezjWWw.",
-  "..wjWWnzzzjWuw..",
-  "...wjzzzzzbuw...",
-  "...wjzdzdbdxW...",
-  "....wbzbbbbxw...",
-  "....wbdbdbdv....",
-  ".....wxbbxv.....",
-  "......wxxv......",
-  ".......wv.......",
-  "................",
-  "................",
+const FROST_MOTH_32 = [
+  "................................",
+  "................................",
+  "...........F........F...........",
+  ".....KKKKKKKF......FKKKKKKK.....",
+  "...KKqqqqqqFKF....FKFwwwWWWKK...",
+  "..KqqqqqqqqqqKKKKKKwwwwWWWWWWK..",
+  "..KqqqqqqqqwwKffffKwwwwWWWWWWK..",
+  ".KwwqqqbbbwwwKiefiewwwWbbbWWWWK.",
+  ".KwwwwbdddbwwKFFFFKwwWbdddbWWWK.",
+  ".KwwwwbdddbwwwFFFFwWWWbdddbWWbK.",
+  ".KwwwwbdddbwwKffffKWWWbdddbWbbK.",
+  ".KwwwwwbbbwwwKffffKWWWWbbbWbbbK.",
+  "..KwwwwwwwwwwKfFFfKWWWWWWWWbbK..",
+  "...KwwwwwwwWKKFFFFKKWWWWWbbbK...",
+  "....KKWWWWWK.FFFFFF.KWWWbbKK....",
+  "......KWWWWWK.KFFK.KWWWbbK......",
+  "......KWWWWWWKKfFKKWWbbbbK......",
+  ".....KWWWWWWWWKfFKWbbbbbbbK.....",
+  ".....KWWWWWWWKfFFFKbbbbbbbK.....",
+  ".....KWbbbbbbKFFFFKbbbbbbbK.....",
+  ".....KbbbbbbbKFFFFKbbbbbbbK.....",
+  ".....KbbbbbbbbKFFKbbbbbbbbK.....",
+  "......KbbbbbbKKFFKKbbbbbbK......",
+  ".......KKKKKK.KFFK.KKKKKK.......",
+  "..............KFFK..............",
+  "...............KK...............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
 ];
 
+// yeti on a 32-cell grid: a shaggy hunched body (S F f q lit from the top
+// left), long arms, a blue face (a/s) with brows, a glint in each eye and the
+// flat grumpy mouth it always had -- Scale2x had turned that mouth down, so
+// the 16-cell yeti stayed blocky
 const YETI_PALETTE = {
-  f: 0xf1f5f9,
+  K: 0x334155,
+  S: 0x94a3b8,
   F: 0xcbd5e1,
+  f: 0xf1f5f9,
+  q: 0xffffff,
+  a: 0x60a5fa,
   s: 0x93c5fd,
   e: 0x1e3a8a,
-  m: 0x64748b,
-  v: 0x93959d,
-  x: 0xc7cad0,
-  z: 0xf5f8fb,
-  q: 0xf8fafc,
-  u: 0x9da5b1,
-  j: 0xe4e9f0,
-  n: 0xfcfdfe,
+  i: 0xffffff,
+  m: 0x475569,
 };
-const YETI_TILE = [
-  "................",
-  "................",
-  "....qzzzzzzf....",
-  "...qnqqFjjjjFf..",
-  "..qnnFssssssFfx.",
-  "..zqFsssssssjfx.",
-  "..zqFseessejfx..",
-  "..zzFssssssjfx..",
-  "..zzFsmmmmsFxx..",
-  "..fzzzzzzzffxv..",
-  ".fzzzzzzfffffxv.",
-  ".fzjjFFFFuuFuxv.",
-  ".ffjFuuuuFFuxvv.",
-  "..xfx..vv..vvv..",
-  "..xxx..vv..vvv..",
-  "................",
+const YETI_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  ".............KKKKKKK............",
+  ".........KKKKqqqqqqfKKKK........",
+  ".........KqqqqqqqqffffK.........",
+  ".......KKqqqqqqqqqfffffKK.......",
+  "......KqqqqqqqssssfffffffK......",
+  "......KqqqqqssssssssfffffK......",
+  ".....KqqqqqFFFFssFFFFffffFK.....",
+  ".....KqqqqssiessssieaafffFK.....",
+  "....KqqqqqsseesssseeaafffFFK....",
+  "....KqqqqqsssssssssaaaffFFFK....",
+  "...KqqqqqfsssssssaaaaafFFFFFK...",
+  "...KffffffsssmmmmmmaaafFFFFFK...",
+  "...KfffffffaaaaaaaaaafFFFFFFK...",
+  "...KfffffffffaaaaaaffFFFFFFFK...",
+  "...KfffffffffffffffFFFFFSSSFK...",
+  "...KffffffffffffffFFFFFSSSSSK...",
+  "...KffffffffffffFFFFFFSSSSSSK...",
+  "...KffffffffffFFFFFFSSSSSSSSK...",
+  "...KfffSFFFFFFFFFFFSSSSSSSSSK...",
+  "...KffFSSSFFFFFFFSSSSSSSSSSSK...",
+  "...KffFSSFFFFFKKKKSSSSSSSSSSK...",
+  "...KKKK.KFFFFK....KSSSSK.KKKK...",
+  "........KFFFFK....KSSSSK........",
+  "........KFFFFK....KSSSSK........",
+  "........KFFFFK....KSSSSK........",
+  ".......KKKKKKK....KKKKKKK.......",
+  "................................",
+  "................................",
 ];
 
+// GLACIER GOLEM on a 32-cell grid: a faceted ice body (d c I i z) with lit
+// facet edges (q), a dark crack at its core, crystal shoulders, glowing eyes
+// in a dark visor and cracked stone fists (J j H)
 const ICE_GOLEM_PALETTE = {
-  i: 0xa5f3fc,
-  I: 0x67e8f9,
-  c: 0x22d3ee,
+  K: 0x0c3440,
   d: 0x0e7490,
-  k: 0x334155,
-  e: 0xffffff,
-  v: 0x618d98,
-  x: 0x86c5cf,
+  c: 0x22d3ee,
+  I: 0x67e8f9,
+  i: 0xa5f3fc,
   z: 0xcaf8fd,
   q: 0xeffdfe,
-  u: 0x1e2536,
+  J: 0x334155,
   j: 0x6b7583,
-  n: 0xebfcfe,
+  H: 0x94a0ae,
+  e: 0xffffff,
 };
-const ICE_GOLEM_TILE = [
-  "................",
-  ".....qqzzzz.....",
-  "....qInqqzIi....",
-  "....zIeeeeIi....",
-  "....zqnqqqzi....",
-  "...jqIqqqzIiu...",
-  "..jknIcqzcIzku..",
-  ".j.jzIczzcIiu.k.",
-  ".jj.iIIIIIIx.kk.",
-  ".kk.iiIddIxx.kk.",
-  ".k.kizzddiixk.k.",
-  "....uiixxiixk...",
-  "....uixIIxxvk...",
-  "....uxI..Ivk....",
-  "....uvv..vvk....",
-  "................",
-];
-const BAT_PALETTE = {
-  b: 0x7c3aed,
-  B: 0x5b21b6,
-  d: 0x3b0764,
-  w: 0xffffff,
-  e: 0xf87171,
-  v: 0x0a0a18,
-  x: 0x48248c,
-  z: 0xa171f2,
-  q: 0xc5a8f7,
-  u: 0x321565,
-  j: 0x865bc9,
-  n: 0xe2d4fb,
-};
-const BAT_TILE = [
-  "nq............bb",
-  "nqzz........bxbz",
-  "qnqqzzbbbbbbbbzb",
-  "zBBBjjjjjBBBjBBx",
-  ".zjddddddddddBx.",
-  ".zjdwwwwwwwwduv.",
-  ".bjdweeeeeewduv.",
-  ".bjdwwwwwwwwduv.",
-  "..bBdddddddduv..",
-  "...xxxxxxvvvv...",
-  "................",
-  "................",
-  "................",
-  "................",
-  "................",
-  "................",
+const ICE_GOLEM_32 = [
+  "................................",
+  "................................",
+  "...............KK...............",
+  "..............KiiK..............",
+  "...........KKKiiiIKKK...........",
+  "...........KeKKKKKKeK...........",
+  "...........KKeeKKeeKK...........",
+  "......KK....KKKKKKKK....KK......",
+  ".....KziK.KKzziiiiIIKK.KIIK.....",
+  "....KiiicKzqzziiiiIIIcKccccK....",
+  "...KKIIKczzzqiiiiiIIIccccccKK...",
+  "..KHHKK.KzziiqiiiIIIIccK.KKjjK..",
+  "..KJHHK.KziiiiqiIIIIIccK.KjjJK..",
+  "..KHJHK.KiiiiiiddIIIccdK.KjJjK..",
+  "..KHHJK..KiiiiIdKIIcccK..KJjJK..",
+  "..KHHJK..KiiiIIKdIIczcK..KjJJK..",
+  "..KjjHK...KIIIIIdIczcK...KJJJK..",
+  ".KjjJjjK..KIIIIIIczcdK..KJJJJJK.",
+  ".KjjjJJK...KIIIcczcdK...KJJJJJK.",
+  ".KJjJjJK...KIcccccddK...KJJJJJK.",
+  "..KKKKK...KcccccdddddK...KKKKK..",
+  "..........KcccKKKKdddK..........",
+  ".........KiiiK....KIIIK.........",
+  ".........KiiiK....KIIcK.........",
+  ".........KIIIK....KcccK.........",
+  ".........KIIIK....KcccK.........",
+  "........KIIIIK....KcdddK........",
+  "........KccccK....KddddK........",
+  "........KKKKKK....KKKKKK........",
+  "................................",
+  "................................",
+  "................................",
 ];
 
+// Volcano roster. The magma slime is SLIME_32 again in a molten ramp, the
+// same one-grid-many-palettes trick as the king slime; the rest are new shapes.
+const MAGMA_SLIME_PALETTE = { o: 0x3b0d06, s: 0x7c2d12, g: 0xc2410c, m: 0xf97316, h: 0xfdba74, w: 0xfef3c7 };
+// fire imp on a 32-cell grid: bone horns (pale on their lit side, so they read
+// on the ash), slanted glowing eyes, a fanged grin, flame-orange wings on
+// their bones and a lit tail tip
+const FIRE_IMP_PALETTE = {
+  K: 0x1c0a0a,
+  R: 0x991b1b,
+  r: 0xdc2626,
+  l: 0xef4444,
+  h: 0xf87171,
+  O: 0xc2410c,
+  o: 0xf97316,
+  a: 0xfb923c,
+  y: 0xfde047,
+  Y: 0xfef9c3,
+  n: 0x78716c,
+  N: 0xd6d3d1,
+};
+const FIRE_IMP_32 = [
+  "................................",
+  "................................",
+  "........Nn............Nn........",
+  "........Nn............Nn........",
+  "........Nn............Nn........",
+  ".........Nn..........Nn.........",
+  "..........Nn.KKKKKK.Nn..........",
+  "...........NKhhllllKN...........",
+  "...........KhhhlllrrK...........",
+  "..........KKKllllrrrKK..........",
+  "..........KlYyylrYyyKK..........",
+  "..........KllyyrryyrRK..........",
+  "..........KrrrrrrrrRRK..........",
+  ".KKK......KrKrrrrrRKRK......KKK.",
+  "KaaaKK.....KKKKKKKKKK.....KKoooK",
+  "KOaaaaKK.....YKKKKY.....KKooooOK",
+  "KaOaaOaaKK...KllllK...KKooOoOOOK",
+  "KooOooOoooK.KllllrrK.KoooOOOOOOK",
+  ".KKooooOoolKlllllrrrKRoOOOOOOKK.",
+  ".K.KooooolllllllrrrrRRROOOOOK.K.",
+  ".K..KKoorroKllrrrrrrKORROOKK..K.",
+  "....K.KOrKK.KrrrrrrK.KKROK.K....",
+  "....K..KK...KrrrrrrK...KK..Ky...",
+  "............KrrrrrRRK......yyy..",
+  "............KrrKKRRRKK.....yYYy.",
+  "............KrK..KRK.KK....yYyy.",
+  "............KRK..KRK..KKK.KKKy..",
+  "............KRK..KRK....KKK.....",
+  "...........KKKK..KKKK...........",
+  "................................",
+  "................................",
+  "................................",
+];
+// side-on fire lizard on a 32-cell grid: flame tongues along its spine (a
+// white-hot root, yellow, orange tips), dark spots, a pale belly, an eye with
+// a pupil and a tail hooked under it
+const SALAMANDER_PALETTE = {
+  K: 0x1c0a0a,
+  d: 0x7c2d12,
+  O: 0xc2410c,
+  o: 0xf97316,
+  l: 0xfb923c,
+  h: 0xfdba74,
+  b: 0xfcd34d,
+  y: 0xfde047,
+  Y: 0xfef9c3,
+  w: 0xfef3c7,
+};
+const SALAMANDER_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "..............o.................",
+  "...........o..y..o..............",
+  "...........y.oyo.y..............",
+  "........o.oyooyooyo.o...........",
+  "........Y.yYyyYyyYy.Y...........",
+  ".......yYyyYyyYyyYyyYy..........",
+  "..KKKKKKK.KKKKKKKKK.............",
+  ".KhhwKlooKhllllddooKKK..........",
+  "KKllwwoooOddllooooooOOKK........",
+  "KlllloooOOllooooooOddOOOKKK.....",
+  "KKKKKooOOOoooooooOOOOOdddoOKK...",
+  ".KKoOObOOooooddOOOOOddbKKKKKOK..",
+  "...KKKObbbbOOOOOOObbbbK.....KdK.",
+  "......dddKKbbbbbbbdddK......KdK.",
+  "......Kdd..KKKKKKKddd.......KdK.",
+  "......KoK.........KOK.......KdK.",
+  "......KOK.........KOK........KK.",
+  ".....KKKKK.......KKKKK......KK..",
+  "............................KK..",
+  "..........................KKK...",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+// the volcano's boss on a 32-cell grid, head-on with its wings spread on
+// their bones, bone horns, yellow eyes under heavy brows, a glowing belly of
+// plates and a spaded tail; drawn at 1.5x in the field like the GLACIER GOLEM
+const FLAME_DRAKE_PALETTE = {
+  K: 0x1c0a0a,
+  R: 0x7f1d1d,
+  r: 0xb91c1c,
+  l: 0xdc2626,
+  h: 0xf87171,
+  O: 0xc2410c,
+  o: 0xf97316,
+  a: 0xfb923c,
+  y: 0xfde047,
+  Y: 0xfef08a,
+  n: 0x78716c,
+  N: 0xd6d3d1,
+};
+const FLAME_DRAKE_32 = [
+  ".........Nn..........Nn.........",
+  ".........Nn..........Nn.........",
+  "..........Nn..KKKK..Nn..........",
+  "KK.........NKKhhllKKN.........KK",
+  "KRKK.......KKKhlllKKKK......KKRK",
+  "KaaRK......KYyllllyYK......KRooK",
+  "KaaaaK....KllyllllyrrK....KooooK",
+  "KaaaaaK...KlllllrrrrrK...KooooOK",
+  "KaaaaaaK...KlllrrrrrK...KooooOOK",
+  "KKaaaaaaK..KlrrrrrrRK..KooooOOKK",
+  "K.KoRRoooK..KrKrrKRK..KoooRROK.K",
+  "K.KKooRRRoK.KrrrRRRK.KoRRROOKK.K",
+  "..K.KooooRK.KYRRRRYK.KROOOOK.K..",
+  "..K.KooooRK..RRRRRR..KROOOOK.K..",
+  "....KKRRRoK.KRRRRRRK.KORRRKK....",
+  "....K.KooooKllYYyyrrKOOOOK.K....",
+  "....K.KOOOlllYYYyyyrrrOOOK.K....",
+  "......KOOOllloooooorrrOOOK......",
+  ".......KOOlllYYYyyyrrrOOK.......",
+  "........KllllYYYyyyrrRRK........",
+  "........KlllloooooorrRRK........",
+  "........KlKrryyyyyyrRKRK........",
+  "........KK.KrryyyyrRK.KK........",
+  "...........KrrooooRRK...........",
+  "..........KKKKryyRKKKK..........",
+  "..........KrKKKKKKKKRK..........",
+  "..........KrRK....KRRRK......K..",
+  "..........KRRK....KRRRKK....KrK.",
+  "..........KRRK....KRRK.KKK.KrrrK",
+  ".........KKKKK....KKKKK..KKKKKK.",
+  "................................",
+  "................................",
+];
+// bat on a 32-cell grid: wings spread to the top corners on finger bones (b),
+// scalloped membranes (d/B), a furred body (B b z q), red eyes and an open
+// screech with fangs. The membrane sits a step lighter than the old bat's so
+// it still stands off the cave floor without the old white mouth.
+const BAT_PALETTE = {
+  K: 0x1e0b3d,
+  d: 0x5b21b6,
+  B: 0x7c3aed,
+  b: 0x9d6cf7,
+  z: 0xb99cfa,
+  q: 0xd8c8fd,
+  e: 0xf87171,
+  w: 0xffffff,
+  m: 0x7f1d1d,
+  f: 0xffffff,
+};
+const BAT_32 = [
+  "KK............................KK",
+  "KBKK........................KKdK",
+  "KBBBKK.....K........K.....KKBddK",
+  "KBBBbBKK...KK......KK...KKBbdddK",
+  "KBBbbBBBKK.KeK....KeK.KKBBBbbddK",
+  "KbbBbbBBBBKqqzKKKKbbbKBBBBbbdbbK",
+  "KKBBbbBBBBBBzzzzzbbbBBBBddbbddKK",
+  "K.KBbbBBBBBBzzzzbbbBBBBdddbbdK.K",
+  "...KbBbBBBBzweebbweeBddddbdbK...",
+  "...KbBbBBBBqbeebbeeBbddddbdbK...",
+  "....KKBbBBBqbbbBBBBBBdddbdKK....",
+  "....K.KbBBBqqBKKKKBbBdddbK.K....",
+  "....K..KdddqzzKmmKbBBdddK..K....",
+  ".......KbKdzzzfmmfbBBdKbK.......",
+  "........K.KdzzbKKbBBdK.K........",
+  "........K..KbbbbbBBBK..K........",
+  "............KbbbBBBK............",
+  ".............KBKKBK.............",
+  ".............KK..KK.............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+
+// wasp on a 32-cell grid: a big yellow head with black visor eyes (a glint
+// each) and mandibles, glassy wings (v w W) and a striped abdomen whose black
+// bands catch a sheen (j) on the lit side
 const WASP_PALETTE = {
-  y: 0xffdd44,
+  K: 0x2a1c05,
+  O: 0xb06f06,
   Y: 0xe8a20c,
-  k: 0x141414,
-  e: 0x141414,
-  w: 0xc7d4ee,
-  v: 0x8e7c30,
-  x: 0xccb13b,
+  y: 0xffdd44,
   z: 0xffec95,
   q: 0xfffbe6,
-  u: 0xfff8d6,
+  k: 0x141414,
+  j: 0x3d3d3d,
+  i: 0xffffff,
+  v: 0x8ea2c6,
+  w: 0xc7d4ee,
+  W: 0xeef3fb,
 };
-const WASP_TILE = [
-  "................",
-  "................",
-  "................",
-  ".....qqzzzz.....",
-  "....quuqzzzy....",
-  "....zekkqeky....",
-  "....zquqqzyx....",
-  "....zzqqzzyx....",
-  ".ww.yzzzzzyx.ww.",
-  ".ww.yzzzzyyx.ww.",
-  "...ykkkkkkkkv...",
-  "...ykYYYYYYkv...",
-  "...xkkkkkkkkv...",
-  "....xYYYYYYv....",
-  ".....v....v.....",
-  "................",
+const WASP_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "..........kk........kk..........",
+  "...........k.KKKKKK.k...........",
+  "...........KKqqzzzzKK...........",
+  "..........KqqqzzzzyyyK..........",
+  ".........KkkkzzzzykkkyK.........",
+  ".........kkkkkzzyykkkkk.........",
+  ".....vv.kikkkkzyyykikkkk.vv.....",
+  "...vvWWvkkkkkzyyyyykkkkkvwwvv...",
+  "..vWWWWvKkkkyyyyyyyYkkkKvwwwwv..",
+  "..vWWWWWvKyyyyyyyYYYYOKvwwwwvv..",
+  "..vWWWWWvKyyyyyYYYYYOOKvwwvvvv..",
+  "...vwwwWWvKyYKYYYYKOOKvwwvvvv...",
+  "....vwwwwv.KKYKYYKOKK.vvvvvv....",
+  "....vwwwwwv.KKKKKKKK.vvvvvvv....",
+  "....vvwwwvvKzzzyyyyYKvvvvvvv....",
+  "......vvv.KzzzyyyyYYOK.vvv......",
+  "..........KjjjkkkkkkkK..........",
+  "..........KkkkkkkkkkkK..........",
+  "..........KyyyYYYOOOOK..........",
+  "..........KYYYYOOOOOOK..........",
+  "...........KkkkkkkkkK...........",
+  "...........kKKkkkkKKk...........",
+  "...........k..KkKK..k...........",
+  "..........kk...K....kk..........",
+  "................................",
+  "................................",
 ];
 
+// spider on a 32-cell grid: legs arched up and out (two cells wide, lit along
+// one), a big pair of red eyes over a small pair, fangs and an hourglass on
+// its back
 const SPIDER_PALETTE = {
-  b: 0x7c3aed,
-  B: 0x5b21b6,
-  d: 0x3b0764,
+  K: 0x1e0b3d,
+  d: 0x5b21b6,
+  B: 0x7c3aed,
+  b: 0x9d6cf7,
+  z: 0xb99cfa,
+  q: 0xd8c8fd,
   e: 0xef4444,
   E: 0xb91c1c,
-  v: 0x0a0a18,
-  x: 0x36166d,
-  z: 0x8256c7,
-  q: 0xa98bd9,
-  u: 0x422281,
-  j: 0xa477f3,
-  n: 0xdbceef,
+  i: 0xffffff,
+  n: 0xf0abfc,
+  f: 0xf5f3ff,
 };
-const SPIDER_TILE = [
-  "................",
-  "...bb......bb...",
-  "..bbbj....bjjb..",
-  "..bbbz....Bjbu..",
-  "..jbnqjbbbzzbu..",
-  "..jqnnzzzBzzBu..",
-  "..jzqeqzzzzeBu..",
-  "..jzqzddddBBxb..",
-  "...BzzzzzBBxv...",
-  "...bBzzzBBBxb...",
-  "....xBBBBBxv....",
-  "....uBBBBBxb....",
-  ".....xxBBxv.....",
-  "......vxxv......",
-  ".......vv.......",
-  "................",
+const SPIDER_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "........bd............dd........",
+  ".......bbd............ddb.......",
+  ".......bdbd..........ddbd.......",
+  ".....bbd.bd..........dd.ddb.....",
+  ".....bbd..bd.KKKKKK.dd..ddb.....",
+  "....bd.bd.bdKqzzzbbKdd.dd.dd....",
+  "....bd..bd.KieezbieeK.dd..dd....",
+  "....bd...bdKeeebbeeeKbd...dd....",
+  "....bd....KzbbbbbBBBdK....dd....",
+  "...bd.bd...KbEbBBBEdK...dd.dd...",
+  "...bd.bbbd.KBBBBBBddK.ddbb.dd...",
+  ".....bd..bbdKKKBdKKKddb..dd.....",
+  ".....bd...KKzKfKKfKbKK...dd.....",
+  ".....bd...KzzzzbbbbBBK...dd.....",
+  ".....bd..KzzzzbbbbbBBBK..dd.....",
+  "....bd.bbKzzznnnnnnBBBKbb.dd....",
+  "....bd.bdKzzbbnnnnBBBBKdd.dd....",
+  "....bd.bKbbbbbbnnBBBBBdKd.dd....",
+  ".......bKbbbbbnnnnBBBddKd.......",
+  ".......bdKbbbnnnnnnBddKdd.......",
+  "......bd.KbbBBBBBBBdddK.dd......",
+  "......bd.KBBBBBBBBddddK.dd......",
+  "......bd..KBBBBBBddddK..dd......",
+  "......bd..KKBBBdddddKK..dd......",
+  "......bd....KddddddK....dd......",
+  ".............KKKKKK.............",
+  "................................",
+  "................................",
+  "................................",
 ];
 
+// orc on a 32-cell grid: olive skin (a step off the goblin's mint and the
+// forest floor's blue-green), a topknot, a heavy brow over red eyes, tusks, a
+// bandolier and a club in its right hand
 const ORC_PALETTE = {
-  s: 0x4ade80,
-  S: 0x2d9d5c,
+  K: 0x1f2a0c,
+  S: 0x5a7a2a,
+  s: 0x7fa23a,
+  L: 0xa6c65a,
+  H: 0xd2e69a,
+  h: 0x1f2e24,
+  j: 0x3a4d3f,
   e: 0xff5555,
-  h: 0x3b7d4a,
+  w: 0xffffff,
+  t: 0xf1f5e0,
   r: 0x8b5a2b,
-  t: 0xd1d5db,
-  v: 0x276947,
-  x: 0x3aaa66,
-  z: 0x9eedbb,
-  q: 0xf2fdf6,
-  u: 0x234431,
-  j: 0x80ab8a,
-  n: 0xd7f8e3,
+  R: 0x5c3a1a,
+  c: 0x9a6b3c,
+  C: 0x6b4423,
 };
-const ORC_TILE = [
-  "................",
-  "................",
-  ".....hhjjjj.....",
-  "....hhhhhjjh....",
-  "...hhhhhhhhjh...",
-  "...jhnnqqqzsu...",
-  "...jqnqezzesu...",
-  "....jzqzzzsu....",
-  "....hzzzzzsu....",
-  "...hzzzzzssxvh..",
-  "...hstzzssstxh..",
-  "...hszzssssxxh..",
-  "...uhssrrxxvhh..",
-  "....xxrrrrvv....",
-  "....xv....vv....",
-  "................",
+const ORC_32 = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "..............KKKK..............",
+  ".............KjjjjK.............",
+  "...........KKjhhhhhKK...........",
+  "..........KKKKKKKKKKKK..........",
+  ".........KHHHHHHLLLLssKK........",
+  ".........KHHHHHLLLLssssK........",
+  "........KHKKKKKLLLsKKKKKK.......",
+  "........KLLweeLLLssweeSSK.......",
+  "........KLLLeeLSSsseeSSSK.......",
+  "........KLLstsssssstSSSSK.......",
+  ".........KsstKKKKKKtSSSK...KKK..",
+  "..........KKKKKKKKKKKKK...KccCK.",
+  ".......KKKLrRLLLsssssSsKK.KccCK.",
+  "......KLLLLLrrRssssssSSssKKccK..",
+  "......KLLKLLLLrrRsssSSSKSK.KK...",
+  "......KssKLsssssrrRSSSSKSK.KK...",
+  "......KssKsssssssSrRSSSKssKK....",
+  "......KssKsssssSSSSSSSSKsSCK....",
+  "......KSK.KrrrrrrrrrrRK.KSCK....",
+  "......KKK.KrrrrrrrrRRRK..KKK....",
+  "..........KRrRRKKKRRRRK.........",
+  "..........KLLLK...KsSSK.........",
+  "..........KsssK...KSSSK.........",
+  "..........KsssK...KSSSK.........",
+  ".........KKKKKK...KKKKKK........",
+  "................................",
+  "................................",
+  "................................",
 ];
 
+// MOSS GOLEM on a 32-cell grid: chamfered boulders (head, chest, shoulders,
+// forearms, legs) shaded as flat faces lit from the top left -- top H, left
+// L, front s, right and underside S -- under moss (M m n) that drips off
+// every top face, vines with leaves down the chest and an arm, eyes glowing
+// in a dark recess and a glowing crack at its core (it regenerates)
 const MOSS_GOLEM_PALETTE = {
-  s: 0x7d8f7d,
-  S: 0x5c6f5c,
+  K: 0x1e2620,
+  S: 0x5b6b5c,
+  s: 0x7f8f80,
+  L: 0xa3b2a4,
+  H: 0xc9d3c9,
   e: 0x8ce99a,
-  h: 0x4a5a4a,
-  r: 0x2f3a2f,
-  v: 0x272b31,
-  x: 0x56625b,
-  z: 0xb2bcb2,
-  q: 0xe6eae6,
-  u: 0xe2e6e2,
+  n: 0x2a4a1f,
+  m: 0x4d7a35,
+  M: 0x7fb04a,
+  c: 0x37433a,
 };
+const MOSS_GOLEM_32 = [
+  "................................",
+  "................................",
+  "................................",
+  ".............KKKKKK.............",
+  "............KMMMMMMK............",
+  "...........KMmmmmmmMK...........",
+  "...........KKKKKKKKKK...........",
+  "...........KKeeKKeeKK...........",
+  "....KKKK..KMKnnssnSKMK..KKKK....",
+  "...KMMMMKKMmMKKKKKKMmMKKMMMMK...",
+  "..KMmmmnKMnnmMMMMMMmmmnKnmmmMK..",
+  "..KnnmmKMnmnmmmmmmmnmmnMKmnmnK..",
+  "...KLnnKnmmnnmmnmmmsnnnnKnsnK...",
+  "...KKKKKnnnsnMmsnmnssMsmKKKKK...",
+  "..KHnHHKLsssnmnssnssnssnKHHHHK..",
+  ".KHsnMHKLsssnnsscsssnssSKHHHsHK.",
+  ".KLsnsSKLssnssscesssnssSKLsssSK.",
+  ".KLsnsSKLsMnsssecssMsnsSKLsssSK.",
+  ".KMnssSKLssnssscsssssnsSKLsssSK.",
+  ".KLnssSKLsssnssssssssnsSKLsssSK.",
+  ".KLnssSKLsssnssssssssssSKLsssSK.",
+  ".KLsssSKKLsssnssssssssSKKLsssSK.",
+  "..KLsSK..KLssnsssssssSK..KLsSK..",
+  "...KKK...KLLSSKKKKSSSSK...KKK...",
+  "........KHKKKK....KKKKHK........",
+  "........KLHHHK....KHHHSK........",
+  "........KLssSK....KLssSK........",
+  "........KLssSK....KLssSK........",
+  "........KLssSK....KLssSK........",
+  ".........KKKK......KKKK.........",
+  "................................",
+  "................................",
+];
 
 const SPARK_PALETTE = { y: 0xffdd44 };
 // The cross sat at x=2 with its vertical arm stopping a row short, so its mass
@@ -1709,22 +3059,785 @@ const CHEST_OPEN_TILE = [
   "................",
 ];
 
-function makeCave(scene: Phaser.Scene): void {
-  const g = scene.add.graphics();
-  g.fillStyle(0x2a2a3a, 1);
-  g.fillRect(0, 0, 128, 128);
-  g.fillStyle(0x3d3650, 1);
-  g.fillRect(0, 0, 128, 12);
-  g.fillRect(0, 0, 12, 128);
-  g.fillRect(116, 0, 12, 128);
-  g.fillStyle(0x141418, 1);
-  g.fillTriangle(16, 12, 64, 80, 112, 12);
-  g.fillRect(20, 12, 88, 80);
-  g.fillStyle(0x0b0b0e, 1);
-  g.fillRect(20, 60, 88, 68);
-  g.generateTexture("cave", 128, 128);
-  g.destroy();
-}
+// Town props (TownScene): the SHOP's produce crate and the BLACKSMITH's anvil
+// beside their keepers, so the two read as places, and the flower patches and
+// stones scattered over the southern meadow. Lit from the top left like the
+// chest; '.' is the grass showing through.
+const PRODUCE_CRATE_PALETTE = { b: 0x2b1a0c, d: 0x4a2f1a, w: 0x8a5a2b, W: 0xa9743a, r: 0xdc2626, R: 0xf87171, g: 0x65a30d, G: 0xa3e635 };
+const PRODUCE_CRATE_TILE = [
+  "................",
+  "................",
+  "................",
+  ".....rR..gG.....",
+  "...rRrRrgGgGg...",
+  "..rrRrrrgggGgg..",
+  ".bbbbbbbbbbbbbb.",
+  ".bWWWWWWWWWWWWb.",
+  ".bwwwwwwwwwwwdb.",
+  ".bddddddddddddb.",
+  ".bWWWWWWWWWWWWb.",
+  ".bwwwwwwwwwwwdb.",
+  ".bddddddddddddb.",
+  ".bbbbbbbbbbbbbb.",
+  "..bb........bb..",
+  "................",
+];
+const ANVIL_PALETTE = { b: 0x111827, s: 0x374151, S: 0x6b7280, H: 0xd1d5db, t: 0x6b4423, T: 0x3f2a14, r: 0x8a5a2b };
+// horn to the left, on a sawn stump
+const ANVIL_TILE = [
+  "................",
+  "................",
+  "................",
+  "bbbbbbbbbbbbbb..",
+  "bHHHHHHHHHHHSSb.",
+  ".bbSSSSSSSSSSsb.",
+  "...bbbSSSSsbbb..",
+  ".....bSSSsb.....",
+  "....bSSSSSsb....",
+  "...bbbbbbbbbb...",
+  "...btttttttTb...",
+  "...brrrrrrrrb...",
+  "...bttttttTTb...",
+  "...bttttttTTb...",
+  "....bbbbbbbb....",
+  "................",
+];
+const FLOWERS_PALETTE = { p: 0xf9a8d4, w: 0xf8fafc, y: 0xfde047, c: 0xf59e0b, s: 0x14532d, l: 0x15803d };
+const FLOWERS_TILE = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "..........w.....",
+  "....p....wcw....",
+  "...pcp....w.....",
+  "....p.....s.....",
+  "....s....ls.....",
+  "....sl....s..y..",
+  "..........s.ycy.",
+  "......y......y..",
+  ".....ycy.....s..",
+  "......y.....ls..",
+  "......sl........",
+  "......s.........",
+];
+const STONES_PALETTE = { b: 0x1f2937, d: 0x4b5563, m: 0x6b7280, h: 0x9ca3af };
+const STONES_TILE = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "......bbbb......",
+  ".....bhhmmb.....",
+  "....bhmmmmdb....",
+  "....bmmmmddb.bb.",
+  "..bbbmmdddb.bhmb",
+  ".bhhmbbbbbb.bmdb",
+  ".bmmddb......bb.",
+  "..bbbb..........",
+  "................",
+];
+
+// The cave mouth (TownScene's CAVE, and the way out inside the cave): a
+// boulder outcrop lit from the top left with an arched opening, dark only
+// inside, on a dim floor where the road runs in. 128px, two tiles each way.
+const CAVE_PALETTE = { b: 0x1a1714, d: 0x3b3631, m: 0x5c554d, l: 0x80776b, h: 0xa89d8c, k: 0x060508, K: 0x110f14, n: 0x231d1a };
+const CAVE_TILE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...........b...bb.bb............",
+  "...........bbbbhlblmb...........",
+  "..........bmmdddllmmb...........",
+  ".........bmmddlddmmmdbb.........",
+  "........bmmddllldddddddb........",
+  ".......bmmddlllmmdhhlddhb.......",
+  "......bddddlllmmmdhllldhlb......",
+  "......bhlddllmmmdhlllmdlllbb....",
+  "....bbhlllddmmbbbbllmmddlmmb....",
+  "...bmdlllmmdbbkkkkbbmmdddddb....",
+  "...bddllmmmbkkkkkkkkbdddhlllb...",
+  "..bdddlmmmbkkkkkkkkkkbdhlllmb...",
+  "..bdhdddmdbkkkkkkkkkkbdlllmmmb..",
+  "..bhlllddbkkkkkkkkkkkkbllmmmdb..",
+  ".bhlllmmdbkkkkkkkkkkkkbddmmddhb.",
+  "bdlllmmmdbkkkkkkkkkkkkbhddddhllb",
+  "bddlmmmddbkkkkkkkkkkkkbllldhlllb",
+  "bldddmdddbkkkkkkkkkkkkbllmddllmb",
+  "bllmddddhbkkkkkkkkkkkkblmmmdlmmb",
+  "blmmmdhhlbkkkkkkkkkkkkbmmmdddddb",
+  "bmmmddhllbkkkkkkkkkkkkbmmdddhhlb",
+  "bmmdddlllbKKKKKKKKKKKKbdddddhllb",
+  "bmdddddlmbKKKKKKKKKKKKbhhlldlllb",
+  "bdddhlddmbKKKKKKKKKKKKbhlllddlmb",
+  "bdhhlllddbKKKKKKKKKKKKblllmmdmmb",
+  ".bhlllmmmbnnnnnnnnnnnnbllmmmddb.",
+  "..bllmmmdbnnnnnnnnnnnnblmmmddb..",
+  "...bbbbbbbnnnnnnnnnnnnbbbbbbb...",
+];
+// The farm's tilled field laid over its 3x2 soil tiles: ridge and furrow
+// rows inside a low rail fence, open to the south where the road comes in.
+const FARM_FIELD_PALETTE = { r: 0x7a5536, R: 0x8a6340, f: 0x553a24, F: 0x46301e, e: 0x3f2a19, W: 0xc08a4e, w: 0x8a5a2b, P: 0x4a2f1a };
+const FARM_FIELD_TILE = [
+  "WW......WW......WW......WW......WW......WW....WW",
+  "wPWWWWWWwPWWWWWWwPWWWWWWwPWWWWWWwPWWWWWWwPWWWWwP",
+  "wPwwwwwwwPwwwwwwwPwwwwwwwPwwwwwwwPwwwwwwwPwwwwwP",
+  "wPFFFFFFwPFFFFFFwPFFFFFFwPFFFFFFwPFFFFFFwPFFFFwP",
+  "wPfffffFwPffffffwPffFfffwPffffffwPffffffwPffffwP",
+  "wFffffffffffFffffffffffffFffffffffffffFfffffffFw",
+  "wFrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrFw",
+  "wFrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrFw",
+  "WWffffffffffffFffffffffffffFffffffffffffFfffffWW",
+  "wPffffFffffffffffffFffffffffffffFffffffffffffFwP",
+  "wPRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrwP",
+  "wPrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrwP",
+  "wPffffffFffffffffffffFffffffffffffFfffffffffffwP",
+  "wFfffffffffffFffffffffffffFffffffffffffFffffffFw",
+  "wFrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrFw",
+  "wFrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrFw",
+  "WWFffffffffffffFffffffffffffFffffffffffffFffffWW",
+  "wPfffffFffffffffffffFffffffffffffFffffffffffffwP",
+  "wPrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrwP",
+  "wPrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrwP",
+  "wPfffffffFffffffffffffFffffffffffffFffffffffffwP",
+  "wFffffffffffffFffffffffffffFffffffffffffFfffffFw",
+  "wFrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrFw",
+  "wFrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrFw",
+  "WWfFffffffffffffFffffffffffffFffffffffffffFfffWW",
+  "wPffffffFffffffffffffFffffffffffffFfffffffffffwP",
+  "wPrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrwP",
+  "wPrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRwP",
+  "wPffffffffFffffffffffffFffffffffffffFfffffffffwP",
+  "wFFffffffffffffFffffffffffffFffffffffffffFffffFw",
+  "wFrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrrrrrRrrrrrrFw",
+  "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+];
+
+// Item icons: one per thing a panel lists (InventoryUI, Shop, the BLACKSMITH,
+// HOME's KITCHEN), as "icon-<key>" for the inventory, material, ingredient
+// or dish key, and "icon-map" for a treasure map. 16-cell grids baked through
+// Scale2x like the props, so 64px, and drawn at half that: 32px beside a
+// 24px name, each Scale2x cell one screen pixel. Outline b, lit from the top
+// left. A grid is shared where only the colours change: the flask by POTION
+// and MPOTION, the sword and the shield by every tier -- in the very colours
+// of the hero's gear (EQUIP_*_PALETTE above), the wooden shield included --
+// and the two scales, the two bowls. Each sits in the middle 14 cells, so
+// the needs lines' 28px pitch never puts two icons' art on top of each other.
+
+const ICON_FLASK = [
+  "................",
+  "......bbbb......",
+  "......bkKb......",
+  ".....bbkKbb.....",
+  "......bgsb......",
+  "......bgsb......",
+  "....bbgsssbb....",
+  "...bglLLLLLLb...",
+  "..bglLLLLLLLDb..",
+  "..bglLLLLLLLDb..",
+  "..bgLLLLLLLLDb..",
+  "..blLLLLLLLDDb..",
+  "...bLLLLLLDDb...",
+  "....bbDDDDbb....",
+  "......bbbb......",
+  "................",
+];
+const ICON_TALL = [
+  "................",
+  ".....bbbbbb.....",
+  ".....bkkkKb.....",
+  ".....bbbbbb.....",
+  "......bgsb......",
+  ".....bbgsbb.....",
+  "....bglLLLLb....",
+  "....bglLLLLb....",
+  "....bglLLLDb....",
+  "....bwwwwwwb....",
+  "....bglLLLDb....",
+  "....bgLLLLDb....",
+  "....blLLLDDb....",
+  "....bLLLDDDb....",
+  ".....bbbbbb.....",
+  "................",
+];
+const ICON_ELIXIR = [
+  "................",
+  ".......bb.......",
+  "......bkKb......",
+  "......bbbb......",
+  "......bgsb......",
+  ".....bgllLb.....",
+  "....bglLLLLb....",
+  "...bglLLLLLDb...",
+  "..bglLLwwLLLDb..",
+  "...bLLLwwLLDb...",
+  "....bLLLLLDb....",
+  ".....bLLLDb.....",
+  "......bLDb......",
+  ".......bb.......",
+  "................",
+  "................",
+];
+const ICON_BOMB = [
+  "................",
+  "..........y.....",
+  ".........yYy....",
+  "........ff......",
+  ".......f........",
+  ".....bbKbb......",
+  "...bbgsssSbb....",
+  "..bgssSSSSSSb...",
+  "..bgsSSSSSSSb...",
+  ".bgsSSSSSSSSDb..",
+  ".bsSSSSSSSSSDb..",
+  ".bSSSSSSSSSDDb..",
+  "..bSSSSSSSDDb...",
+  "..bbSSSSSDDbb...",
+  "....bbbbbbb.....",
+  "................",
+];
+const ICON_CANDY = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "bb....bbbb....bb",
+  "bWb..bwppPb..bWb",
+  "bwWbbwppppPbbWwb",
+  "bwWWbppwppPbWWwb",
+  "bwWWbpPpwpPbWWwb",
+  "bwWbbpPPpPPbbWwb",
+  "bWb..bPPPPb..bWb",
+  "bb....bbbb....bb",
+  "................",
+  "................",
+  "................",
+  "................",
+];
+const ICON_SWORD = [
+  "................",
+  "............bbb.",
+  "...........bWwb.",
+  "..........bWwvb.",
+  ".........bWwvb..",
+  "........bWwvb...",
+  ".......bWwvb....",
+  "..bb..bWwvb.....",
+  "..bgbbWwvb......",
+  "...bgbwvb.......",
+  "....bgbb........",
+  "...bbbgb........",
+  "..bbbb.bgb......",
+  ".bgbb...bb......",
+  ".bgb............",
+  "..b.............",
+];
+const ICON_SHIELD = [
+  "................",
+  "..bbbbbbbbbbbb..",
+  "..bhhssssssssb..",
+  "..bhSSSSSSSSsb..",
+  "..bhSSSSSSSSsb..",
+  "..bsSSSddSSSsb..",
+  "..bsSSdwddSSsb..",
+  "..bsSSdddSSSsb..",
+  "..bsSSSddSSSsb..",
+  "...bsSSSSSSsb...",
+  "...bsSSSSSSsb...",
+  "....bsSSSSsb....",
+  ".....bsSSsb.....",
+  "......bssb......",
+  ".......bb.......",
+  "................",
+];
+const ICON_AMULET = [
+  "................",
+  "....bb....bb....",
+  "...bcb....bcb...",
+  "...bcb....bcb...",
+  "....bcb..bcb....",
+  ".....bcbbcb.....",
+  "......bccb......",
+  ".....bbyybb.....",
+  "....byYYyyyb....",
+  "...byYwrryyYb...",
+  "...byYrrRryyb...",
+  "...byyrRRryyb...",
+  "....byyrryyb....",
+  ".....byyyyb.....",
+  "......bbbb......",
+  "................",
+];
+const ICON_CHARM = [
+  "................",
+  "......bbbb......",
+  "......byyb......",
+  ".....bbyybb.....",
+  "....byybbyyb....",
+  "...byb.bb.byb...",
+  "..byb.bllb.byb..",
+  "..byb.blLLbbyb..",
+  "..byb.blLLLbyb..",
+  "..byb..bLLDbyb..",
+  "..byb...bDbbyb..",
+  "...byb...bbyb...",
+  "....byybbyyb....",
+  ".....bbyybb.....",
+  "......bbbb......",
+  "................",
+];
+const ICON_RING = [
+  "................",
+  "................",
+  "......bbbb......",
+  ".....brrRRb.....",
+  "....bbwrRRbb....",
+  "....bybbbbyb....",
+  "...byYbbbbyyb...",
+  "..byYb....byyb..",
+  "..byb......byb..",
+  "..byb......byb..",
+  "..byyb....byyb..",
+  "...byyb..byyb...",
+  "....byyyyyyb....",
+  ".....bbbbbb.....",
+  "................",
+  "................",
+];
+const ICON_HEART = [
+  "................",
+  "......bbbb......",
+  ".....bcbbcb.....",
+  "....bcb..bcb....",
+  "....bcb..bcb....",
+  "..bbbbbbbbbbbb..",
+  ".brrwrbbrrrRRb..",
+  ".brwrrrrrrrRRb..",
+  ".brrrrrrrrrRRb..",
+  "..brrrrrrrRRb...",
+  "...brrrrrRRb....",
+  "....brrrRRb.....",
+  ".....brRRb......",
+  "......bRb.......",
+  ".......b........",
+  "................",
+];
+const ICON_TALISMAN = [
+  "................",
+  "....bbbbbbbb....",
+  "....bwwwwwWb....",
+  "....bwrrrrWb....",
+  "....bwrwwrWb....",
+  "....bwrrrrWb....",
+  "....bwwwwwWb....",
+  "....bwkkkkWb....",
+  "....bwwwwwWb....",
+  "....bwkkkkWb....",
+  "....bwwwwwWb....",
+  "....bbbbbbbb....",
+  "......brrb......",
+  ".....brrrRb.....",
+  ".....brRRRb.....",
+  "......bbbb......",
+];
+const ICON_GEL = [
+  "................",
+  "................",
+  "................",
+  "......bbbb......",
+  ".....bwlllb.....",
+  "....bwlLLLLb....",
+  "...bwlLLLLLLb...",
+  "...blLLLLLLLb...",
+  "..blLLLLLLLLDb..",
+  "..blLLLLLLLLDb..",
+  "..bLLLLLLLLDDb..",
+  "...bLLLLLLDDb...",
+  "....bbbbbbbb....",
+  "................",
+  "................",
+  "................",
+];
+const ICON_WING = [
+  "................",
+  ".bb.............",
+  ".bzbb...........",
+  ".bzzzbb.........",
+  "..bzBBzbb.......",
+  "..bzBBBBzbb.....",
+  "...bzBBBBBBzbb..",
+  "...bzBBBBBBBBzb.",
+  "....bzBBBBBBBBb.",
+  "....bzBBBdBBdb..",
+  ".....bzBBdbBdb..",
+  ".....bzBdbbdb...",
+  "......bzdb.bb...",
+  "......bbb.......",
+  "................",
+  "................",
+];
+const ICON_FANG = [
+  "................",
+  "...bbbbbb.......",
+  "..bwwwwWWb......",
+  "..bwWWWWWb......",
+  "...bwWWWWb......",
+  "...bwWWWWb......",
+  "....bwWWWWb.....",
+  "....bwWWWWb.....",
+  ".....bwWWWWb....",
+  ".....bwWWWWb....",
+  "......bwWWWb....",
+  ".......bwWWb....",
+  "........bwWb....",
+  ".........bWb....",
+  "..........b.....",
+  "................",
+];
+const ICON_SILK = [
+  "................",
+  "...bbbbbbbbbb...",
+  "...btttttttTb...",
+  "....bbbbbbbb....",
+  "....bwwwwwWb....",
+  "....bwWWWWWb....",
+  "....bwwwwwWb....",
+  "....bwWWWWWb....",
+  "....bwwwwwWb....",
+  "....bwWWWWWb....",
+  "....bwwwwwWb....",
+  "....bbbbbbbb....",
+  "...btttttttTb...",
+  "...bbbbbbbbbb...",
+  "......bwb.......",
+  ".......bwb......",
+];
+const ICON_FUR = [
+  "................",
+  "................",
+  "....bb..bb......",
+  "...bwwbbwwb.bb..",
+  "..bwWWwwWWwbwwb.",
+  "..bwWWWWWWWwWWb.",
+  ".bwWWWWWWWWWWWb.",
+  ".bwWWWWWWWWWWFb.",
+  ".bwWWWWWWWWWWFb.",
+  ".bwWWWWWWWWWFFb.",
+  "..bWWWWWWWWWFFb.",
+  "..bWFWWFWWFFFb..",
+  "...bFbbFbbFFb...",
+  "....b..b..bb....",
+  "................",
+  "................",
+];
+const ICON_SCALE = [
+  "................",
+  "......bbbb......",
+  ".....bwlllb.....",
+  "....bwlLLLLb....",
+  "...bwlLLLLLLb...",
+  "...blLLLLLLLb...",
+  "..blLLLLLLLLDb..",
+  "..blLLLLLLLLDb..",
+  "..bLLLLLLLLLDb..",
+  "..bLLLLLLLLDDb..",
+  "...bLLLLLLDDb...",
+  "...bLLLLLDDDb...",
+  "....bLLLDDDb....",
+  ".....bbDDbb.....",
+  ".......bb.......",
+  "................",
+];
+const ICON_CORE = [
+  "................",
+  ".....bbbbbb.....",
+  "...bbkkkkKKbb...",
+  "..bkkyyYYoKKKb..",
+  "..bkyYYYYyoKKb..",
+  ".bkyYwYYYyooKKb.",
+  ".bkyYYYYYyooKKb.",
+  ".bkyYYYYyyooKKb.",
+  ".bkoyyyyyooKKKb.",
+  ".bKkooooooKKKKb.",
+  "..bKKkkkkKKKKb..",
+  "..bKKKKKKKKKKb..",
+  "...bbKKKKKKbb...",
+  ".....bbbbbb.....",
+  "................",
+  "................",
+];
+const ICON_CORN = [
+  "................",
+  "..........gg....",
+  ".........gG.....",
+  "......bbbbG.....",
+  ".....byyYYbG....",
+  "....byYyYyYb....",
+  "....byyYyYyb.g..",
+  "...byYyYyYybgG..",
+  "...byyYyYyYbG...",
+  "..byYyYyYyYbG...",
+  "..byyYyYyYbgG...",
+  ".gbyYyYyYbgG....",
+  ".gGbbYyYbgG.....",
+  "..gGGbbbgG......",
+  "....gGGGG.......",
+  "................",
+];
+const ICON_BEAN = [
+  "................",
+  "............bb..",
+  "...........bgb..",
+  ".........bbgb...",
+  "......bbbGGb....",
+  "....bbgGllGb....",
+  "...bgGlLLlGb....",
+  "..bgGlLLGlLb....",
+  "..bgllGlLLGb....",
+  ".bgGlLLGlLb.....",
+  ".bgGlLLGllb.....",
+  ".bgGGlLGGb......",
+  "..bGGGGGb.......",
+  "...bbbbb........",
+  "................",
+  "................",
+];
+const ICON_PUMPKIN = [
+  "................",
+  ".......bb.......",
+  "......bgGb......",
+  "....bbbgbbbb....",
+  "...boooOOoooOb..",
+  "..boYoOooOoOOOb.",
+  "..bYoooOoooOOOb.",
+  ".bYoooOooOooOOOb",
+  ".bYoooOooOooOOOb",
+  ".boooOoooOooOOOb",
+  ".boooOoooOoOOOOb",
+  "..booOoooOoOOOb.",
+  "..bOoOooOOOOOb..",
+  "...bbbbbbbbbb...",
+  "................",
+  "................",
+];
+const ICON_FLOWER = [
+  "................",
+  "......bbbb......",
+  ".....bwwWWb.....",
+  "..bbbbwWWbbbb...",
+  ".bwwWbbWbbwWWb..",
+  ".bwWWWbyybWWWb..",
+  "..bbWbyYYybWbb..",
+  "..bwbbyYYybbWb..",
+  ".bwWWWbyybWWWb..",
+  ".bwWWbbWbbWWWb..",
+  "..bbbbwWWbbbb...",
+  ".....bwWWb.gg...",
+  "......bbbbgG....",
+  "........gGG.....",
+  ".......gG.......",
+  "................",
+];
+const ICON_FISH = [
+  "................",
+  "................",
+  "................",
+  "...........bb...",
+  "......bbbbbbsb..",
+  "....bbllLLLLbsb.",
+  "...blwlLLLLLLbsb",
+  "..bllkLLLLLLLLbb",
+  "..bLLLLLLLLLLLbb",
+  "...bLLLLLLLLDbsb",
+  "....bbDDDDDDbsb.",
+  "......bbbbbbsb..",
+  "...........bb...",
+  "................",
+  "................",
+  "................",
+];
+const ICON_PLATE_FISH = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "...........bb...",
+  "......bbbbbbsb..",
+  "....bbllkLkLbsb.",
+  "...blwlLkLkLLbsb",
+  "...bLLkLkLkLLbbb",
+  "....bbDDDDDDbsb.",
+  "..bbbbbbbbbbbbbb",
+  ".bwwwwwwwwwwwwWb",
+  "..bWWWWWWWWWWWb.",
+  "...bbbbbbbbbbb..",
+  "................",
+  "................",
+];
+const ICON_BOWL = [
+  "................",
+  ".....w...w......",
+  "....w...w.......",
+  ".....w...w......",
+  "....w...w.......",
+  "..bbbbbbbbbbbb..",
+  ".bLLlLLGLLlLLLb.",
+  ".bLGLLLLLGLLLLb.",
+  ".bccccccccccCCb.",
+  "..bcccccccCCCb..",
+  "..bccccccccCCb..",
+  "...bccccccCCb...",
+  "....bbccCCbb....",
+  "....bbbbbbbb....",
+  "................",
+  "................",
+];
+const ICON_PIE = [
+  "................",
+  "................",
+  "................",
+  "..........bb....",
+  "........bbwwb...",
+  "......bbwwWWb...",
+  "....bbooooooWb..",
+  "..bbooooooooOWb.",
+  ".bwooooooooOOOb.",
+  ".bWWWWWWWWWWWWb.",
+  ".bccccccccccCCb.",
+  ".bcCcCcCcCcCCCb.",
+  "..bbbbbbbbbbbbb.",
+  "................",
+  "................",
+  "................",
+];
+const ICON_CUP = [
+  "................",
+  ".......w..w.....",
+  "......w..w......",
+  ".......w..w.....",
+  "................",
+  "..bbbbbbbbbb....",
+  "..bllLLLLLLbbbb.",
+  "..bwwwwwwwWbbWb.",
+  "..bwwwwwwwWb.bb.",
+  "..bwwwwwwWWbbWb.",
+  "...bwwwwWWbbbb..",
+  "...bwwwwWWb.....",
+  "..bbbbbbbbbbb...",
+  ".bWWWWWWWWWWWb..",
+  "..bbbbbbbbbbb...",
+  "................",
+];
+const ICON_MAP = [
+  "................",
+  "................",
+  "..bbbbbbbbbbbb..",
+  ".bwWbppppppPPbb.",
+  ".bWbpppppppppPb.",
+  "..bpppGGppppppb.",
+  "..bppGGGpprpRpb.",
+  "..bpppGppppRppb.",
+  "..bppppppprpRpb.",
+  "..bpppGGpppppPb.",
+  "..bppGGGppppPPb.",
+  "..bpppppppppPPb.",
+  ".bbbbbbbbbbbPbb.",
+  ".bwWWWWWWWWWbb..",
+  "..bbbbbbbbbbb...",
+  "................",
+];
+const ICON_POTION_PALETTE = { b: 0x1d1424, k: 0xa8743f, K: 0x6b4423, g: 0xe8f6ff, s: 0xb8d8e8, l: 0xff8a8a, L: 0xe0454a, D: 0x9a1c2a };
+const ICON_M_POTION_PALETTE = { b: 0x1d1424, k: 0xa8743f, K: 0x6b4423, g: 0xe8f6ff, s: 0xb8d8e8, l: 0x93c5fd, L: 0x3b82f6, D: 0x1e3a8a };
+const ICON_HI_POTION_PALETTE = {
+  b: 0x1d1424,
+  k: 0xa8743f,
+  K: 0x6b4423,
+  g: 0xe8f6ff,
+  s: 0xb8d8e8,
+  l: 0xff8a8a,
+  L: 0xe0454a,
+  D: 0x9a1c2a,
+  w: 0xf3e2c6,
+};
+const ICON_ETHER_PALETTE = {
+  b: 0x1d1424,
+  k: 0xa8743f,
+  K: 0x6b4423,
+  g: 0xe8f6ff,
+  s: 0xb8d8e8,
+  l: 0xc4b5fd,
+  L: 0x8b5cf6,
+  D: 0x4c1d95,
+  w: 0xf3e2c6,
+};
+const ICON_ELIXIR_PALETTE = {
+  b: 0x1d1424,
+  k: 0xa8743f,
+  K: 0x6b4423,
+  g: 0xe8f6ff,
+  s: 0xb8d8e8,
+  l: 0xfef3c7,
+  L: 0xfbbf24,
+  D: 0xb45309,
+  w: 0xffffff,
+};
+const ICON_BOMB_PALETTE = {
+  b: 0x1d1424,
+  s: 0x6b7280,
+  S: 0x374151,
+  D: 0x1f2937,
+  g: 0xd1d5db,
+  K: 0x6b4423,
+  f: 0xa8743f,
+  y: 0xfde047,
+  Y: 0xfff3c4,
+};
+const ICON_CANDY_PALETTE = { b: 0x1d1424, w: 0xfdf2f8, W: 0xf9a8d4, p: 0xec4899, P: 0xbe185d };
+const ICON_SWORD_PALETTE = { b: 0x1d1424, W: 0xf8fafc, w: 0xd1d5db, v: 0xa3aab5, g: 0xf59e0b };
+const ICON_IRON_SWORD_PALETTE = { b: 0x1d1424, W: 0xe8edf3, w: 0xb3c0cf, v: 0x7a899d, g: 0x8a9ab0 };
+const ICON_MYTHRIL_SWORD_PALETTE = { b: 0x1d1424, W: 0xffffff, w: 0xe0f2fe, v: 0xa9d8f2, g: 0xa5f3fc };
+const ICON_DRAKE_BLADE_PALETTE = { b: 0x1d1424, W: 0xfdba74, w: 0xdc2626, v: 0x991b1b, g: 0xfbbf24 };
+const ICON_SHIELD_PALETTE = { b: 0x1d1424, s: 0x5c3a1e, S: 0x9a6a3a, d: 0x6b4423, h: 0xc08a52, w: 0xd6cbb5 };
+const ICON_IRON_SHIELD_PALETTE = { b: 0x1d1424, s: 0xb4c1d0, S: 0x4b6080, d: 0x2e3b4e, h: 0xdbe3ec, w: 0xf4f7fa };
+const ICON_MYTHRIL_SHIELD_PALETTE = { b: 0x1d1424, s: 0x7dd3fc, S: 0x38bdf8, d: 0x0ea5e9, h: 0xbae6fd, w: 0xf0f9ff };
+const ICON_GLACIER_MAIL_PALETTE = { b: 0x1d1424, s: 0xa5f3fc, S: 0x67e8f9, d: 0x0e7490, h: 0xcffafe, w: 0xffffff };
+const ICON_AMULET_PALETTE = { b: 0x1d1424, c: 0x8a5a2b, y: 0xfbbf24, Y: 0xfde68a, r: 0xa78bfa, R: 0x6d28d9, w: 0xffffff };
+const ICON_ANTIDOTE_CHARM_PALETTE = { b: 0x1d1424, y: 0xfbbf24, l: 0x86efac, L: 0x22c55e, D: 0x15803d };
+const ICON_EMBER_RING_PALETTE = { b: 0x1d1424, y: 0xfbbf24, Y: 0xfde68a, r: 0xf97316, R: 0xc2410c, w: 0xfff3c4 };
+const ICON_LIFE_CHARM_PALETTE = { b: 0x1d1424, c: 0x8a5a2b, r: 0xef4444, R: 0xb91c1c, w: 0xfecaca };
+const ICON_TALISMAN_PALETTE = { b: 0x1d1424, w: 0xfdf6e3, W: 0xd8cfb4, r: 0xdc2626, R: 0x991b1b, k: 0x3b2a4a };
+const ICON_SLIME_GEL_PALETTE = { b: 0x1d1424, w: 0xeafff0, l: 0x86efac, L: 0x22c55e, D: 0x15803d };
+const ICON_BAT_WING_PALETTE = { b: 0x1d1424, z: 0xa78bfa, B: 0x6d28d9, d: 0x4c1d95 };
+const ICON_WOLF_FANG_PALETTE = { b: 0x1d1424, w: 0xffffff, W: 0xd8dde6 };
+const ICON_SPIDER_SILK_PALETTE = { b: 0x1d1424, t: 0x8a5a2b, T: 0x5c3a1a, w: 0xffffff, W: 0xd6dbe4 };
+const ICON_YETI_FUR_PALETTE = { b: 0x1d1424, w: 0xffffff, W: 0xe2e8f0, F: 0x94a3b8 };
+const ICON_FROST_SCALE_PALETTE = { b: 0x1d1424, w: 0xffffff, l: 0xa5f3fc, L: 0x38bdf8, D: 0x0369a1 };
+const ICON_MAGMA_CORE_PALETTE = { b: 0x1d1424, k: 0x57534e, K: 0x292524, y: 0xfde047, Y: 0xfff3c4, o: 0xf97316, w: 0xffffff };
+const ICON_DRAKE_SCALE_PALETTE = { b: 0x1d1424, w: 0xffd0b0, l: 0xf87171, L: 0xdc2626, D: 0x7f1d1d };
+const ICON_CORN_PALETTE = { b: 0x1d1424, y: 0xfde047, Y: 0xeab308, g: 0x4ade80, G: 0x15803d };
+const ICON_BEAN_PALETTE = { b: 0x1d1424, g: 0x86efac, G: 0x16a34a, l: 0xd9f99d, L: 0x65a30d };
+const ICON_PUMPKIN_PALETTE = { b: 0x1d1424, o: 0xfb923c, O: 0xc2410c, Y: 0xfdba74, g: 0x4ade80, G: 0x166534 };
+const ICON_MOONFLOWER_PALETTE = { b: 0x1d1424, w: 0xffffff, W: 0xc7d2fe, y: 0xfde047, Y: 0xfbbf24, g: 0x4ade80, G: 0x166534 };
+const ICON_FISH_PALETTE = { b: 0x1d1424, l: 0x9fd4ff, L: 0x5b9bd5, D: 0x2c5f8a, w: 0xffffff, k: 0x1d1424, s: 0x7aa9cf };
+const ICON_GRILLED_FISH_PALETTE = {
+  b: 0x1d1424,
+  l: 0xe8b07a,
+  L: 0xc0703a,
+  D: 0x7a3a1a,
+  k: 0x3a1a0a,
+  w: 0xffffff,
+  s: 0xa06030,
+  W: 0xc8d0dc,
+};
+const ICON_BEAN_SOUP_PALETTE = { b: 0x1d1424, w: 0xe2e8f0, l: 0xbef264, L: 0x84cc16, G: 0x3f6212, c: 0xc0703a, C: 0x7a3a1a };
+const ICON_FISH_STEW_PALETTE = { b: 0x1d1424, w: 0xe2e8f0, l: 0xfde0a0, L: 0xe0a050, G: 0xfff7ed, c: 0x8a8f9a, C: 0x4b5160 };
+const ICON_PUMPKIN_PIE_PALETTE = { b: 0x1d1424, o: 0xfb923c, O: 0xc2410c, w: 0xfff7ed, W: 0xfed7aa, c: 0xd9a35a, C: 0x92602a };
+const ICON_MOON_TEA_PALETTE = { b: 0x1d1424, w: 0xffffff, W: 0xc8d0dc, l: 0xc7d2fe, L: 0x818cf8 };
+const ICON_MAP_PALETTE = { b: 0x1d1424, p: 0xf3e2c6, P: 0xc8a878, w: 0xfff8e8, W: 0xd8c098, G: 0x65a30d, r: 0xdc2626, R: 0x991b1b };
 
 function makeSign(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
@@ -1739,6 +3852,354 @@ function makeSign(scene: Phaser.Scene): void {
   g.fillRect(28, 32, 8, 4);
   g.generateTexture("sign", 64, 64);
   g.destroy();
+}
+
+// The keepers' workplaces (TownScene addWorkplace): a 2x2-tile building right
+// behind each town NPC that runs something, so they read as keepers standing in
+// front of their shop instead of people on bare grass. 32-cell grids on 4px
+// cells, 128px like HOME, baked through Scale2x like the props: drawn the way
+// HOME is -- seen straight on, flat walls and roofs with a darker band along
+// the top -- plus the props' outline. Each grid's left half is the keeper's
+// tile, so what they keep (a door, the tools, the way in) sits on that side.
+// A window pane is one block, not four: Scale2x rounds a 2x2 pane into a dot.
+
+// ELDER: a stone cottage under a steep slate gable, the door on the left where
+// the elder stands, a lit window on the right and one in the gable
+const ELDER_HUT_PALETTE = {
+  b: 0x1d1424,
+  R: 0x2b4150,
+  r: 0x3d5a6b,
+  s: 0x777588,
+  z: 0x55536a,
+  t: 0x7a4f2a,
+  T: 0x4a2f1a,
+  y: 0xffd672,
+  Y: 0xfff0b8,
+  d: 0x4a2f5c,
+  D: 0x24142e,
+};
+const ELDER_HUT = [
+  "................................",
+  "................................",
+  "...............bb...............",
+  "..............bRRb....bbbb......",
+  ".............bRRRRb...bssb......",
+  "...........bbrrrrrrbb.bssb......",
+  "..........brrrrrrrrrrbzssb......",
+  ".........brrrrryyrrrrrzssb......",
+  "........brrrrrryYrrrrrzssb......",
+  ".......brrrrrrrrrrrrrrzzzb......",
+  ".....bbrrrrrrrrrrrrrrrrrrrb.....",
+  "....brrrrrrrrrrrrrrrrrrrrrrb....",
+  "...brrrrrrrrrrrrrrrrrrrrrrrrb...",
+  "..brrrrrrrrrrrrrrrrrrrrrrrrrrb..",
+  ".brrrrrrrrrrrrrrrrrrrrrrrrrrrrb.",
+  "bbRRRRRRRRRRRRRRRRRRRRRRRRRRRRbb",
+  "..bzzzzzzzzzzzzzzzzzzzzzzzzzzb..",
+  "..bzzzzzzzzzzzzzzzzzzzzzzzzzzb..",
+  "..bsssssssssssssssstttttttsssb..",
+  "..bssdddddddssssssstYYYyytsssb..",
+  "..bszdDdDdDdsszzzzstYyyyytzzsb..",
+  "..bssdDdDdDdssssssstyyyyytsssb..",
+  "..bssdDdDdDdssssssstyyyyytsssb..",
+  "..bssdDdDdDdzsssssstyyyyytsssb..",
+  "..bssdDdDdDdssssssstttttttsssb..",
+  "..bssdDdDdydssssssTTTTTTTTTssb..",
+  "..bszdDdDdDdsszzzzsssssszzzzsb..",
+  "..bssdDdDdDdsssssssssssssssssb..",
+  "..bssdDdDdDdsssssssssssssssssb..",
+  "..bssdDdDdDdsssssssssssssssssb..",
+  "..bzzdDdDdDdzzzzzzzzzzzzzzzzzb..",
+  "..bbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+];
+
+// SHOP: a market stall, a striped awning over shelves of potions, bottles on
+// the counter and a lantern under the awning's left end
+const SHOP_STALL_PALETTE = {
+  b: 0x1d1424,
+  y: 0xffd672,
+  Y: 0xfff0b8,
+  a: 0xf2c14e,
+  A: 0xfbf1d6,
+  c: 0xd9a43a,
+  C: 0xd8cfb4,
+  o: 0xa8743f,
+  t: 0x7a4f2a,
+  T: 0x4a2f1a,
+  p: 0xe0454a,
+  u: 0x4f8be8,
+  g: 0x4cbf6a,
+  W: 0xf4f1ea,
+};
+const SHOP_STALL = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+  "bccccccccccccccccccccccccccccccb",
+  "baaaAAAAaaaaAAAAaaaaAAAAaaaaAAAb",
+  "baaaAAAAaaaaAAAAaaaaAAAAaaaaAAAb",
+  "baaaAAAAaaaaAAAAaaaaAAAAaaaaAAAb",
+  "baaaAAAAaaaaAAAAaaaaAAAAaaaaAAAb",
+  "baaaAAAAaaaaAAAAaaaaAAAAaaaaAAAb",
+  "baaaCAAAcaaaCAAAcaaaCAAAcaaaCAAb",
+  "botTTTTTTTTTTTTTTTTTTTTTTTTTTotb",
+  ".btTypTuTgTTpTuTTTgTTpTuTgTTTob.",
+  ".btTYpTuTgTTpTuTTTgTTpTuTgTTTob.",
+  ".btttttttttttttttttttttttttttob.",
+  ".btTTTTTTTTTTTTTTTTTTTTTTTTTTob.",
+  ".btTTTpTuTgTTpTuTTTgTTpTuTgTTob.",
+  ".btTTTtTuTtTTptuTTTgTtpTutgTTob.",
+  ".bttttWtttWtttWttttttWtttWtttob.",
+  ".btTTpppTuuuTgggTTTTpppTuuuTTob.",
+  ".btTTpWpTuWuTgWgTTTTpWpTuWuTTob.",
+  ".btooooooooooooooooooooooooooob.",
+  ".btooooooooooooooooooooooooooob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".btttttTtttttTtttttTtttttTtttob.",
+  ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+];
+
+// BLACKSMITH: a stone forge, a tall chimney, hammer and tongs on the wall
+// behind the smith and the hearth open and burning on the right, by the anvil
+const FORGE_PALETTE = {
+  b: 0x1d1424,
+  R: 0x2e2e38,
+  r: 0x41414e,
+  S: 0x9c9aa8,
+  s: 0x777588,
+  z: 0x55536a,
+  D: 0x140c10,
+  f: 0xf97316,
+  F: 0xfdba74,
+  Y: 0xfff3c4,
+  g: 0xb4421a,
+  t: 0x7a4f2a,
+  T: 0x4a2f1a,
+};
+const FORGE = [
+  "...bbbbbb.......................",
+  "...bSSSSb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "...bssssb.......................",
+  "bbbRRRRRRbbbbbbbbbbbbbbbbbbbbbbb",
+  "bRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  ".bzzzzzzzzzzzzzzzzzzzzzzzzzzzzb.",
+  ".bzzzzzzzzzzzzzzzzzzzzzzzzzzzzb.",
+  ".bssTTsssssTsTssssssssssssssssb.",
+  ".bssTTssssssTsssszDDDDDDDDDDzsb.",
+  ".bssstsssssTsTsssDDDDDDDDDDDDsb.",
+  ".bzzztssssTszzzzsDDDDDDDDDDDDsb.",
+  ".bssstsssTsssssssDDDDDDDDDDDDsb.",
+  ".bssstsssssssssssDDDDDDDDDDDDsb.",
+  ".bssssszzzzssssssDDDDDDDDDDDDsb.",
+  ".bsssssssssssssssDDDgDDggDDgDsb.",
+  ".bsssssssssssssssDDgffgfFfggDsb.",
+  ".bzzzzsssssszzzzsDgfFFfFFFfgDsb.",
+  ".bsssssssssssssssDffFYFFYFffDsb.",
+  ".bsssssssssssssssDggfffffgggDsb.",
+  ".bzzzzzzzzzzzzzzsggggggggggggsb.",
+  ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+];
+
+// ARENA: a palisade of pointed logs, a portcullised gateway under a gilt
+// shield, a lantern under its lintel and a banner either side
+const ARENA_GATE_PALETTE = {
+  b: 0x1d1424,
+  o: 0xa8743f,
+  t: 0x7a4f2a,
+  T: 0x4a2f1a,
+  y: 0xffd672,
+  D: 0x1d1424,
+  s: 0x6b6b78,
+  a: 0xfbbf24,
+  A: 0xd99a14,
+  p: 0xc0392b,
+};
+const ARENA_GATE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  ".b.......b.......b.......b......",
+  ".bb......bb..bbbbab......bb.....",
+  "bttb.b..bttbbapaapab.b..bttb.b..",
+  "bttb.bb.bttTaappppab.bb.bttb.bb.",
+  "bTTTbTTbottTaaappaaabttbTTTTbTTb",
+  "btAaaaaTottToaaaaaaTottToAaaaatb",
+  "btAaaaaTooooooaaaaoooooooAaaaatb",
+  "btAaaaaTTTTTTTTTTTTTTTTToAaaaatb",
+  "btApppaToDDDDDDTDDDDDDDToApppatb",
+  "btAapaaToDsDDsDysDDsDDDToAapaatb",
+  "btApppaToDsDDsDDsDDsDDDToApppatb",
+  "btAaaaaToDssssssssssssDToAaaaatb",
+  "btAaaaaToDsDDsDDsDDsDDDToAaaaatb",
+  "btAaaaaToDsDDsDDsDDsDDDToAaaaatb",
+  "btAaaaaToDsDDsDDsDDsDDDToAaaaatb",
+  "btAaaaaToDssssssssssssDToAaaaatb",
+  "btaAoaaToDsDDsDDsDDsDDDToaATaatb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bttTottToDssssssssssssDTottTottb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bttTottToDssssssssssssDTottTottb",
+  "bttTottToDsDDsDDsDDsDDDTottTottb",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+];
+
+// GAMBLER: a striped tent with a pennant, its flap tied back on a lantern-lit
+// way in and a fortune wheel painted on the right
+const GAMBLER_TENT_PALETTE = {
+  b: 0x1d1424,
+  m: 0xc0378a,
+  c: 0xf3e2c6,
+  a: 0xf2c14e,
+  p: 0xe0454a,
+  D: 0x1d1424,
+  T: 0x4a2f1a,
+  y: 0xffd672,
+  Y: 0xfff0b8,
+};
+const GAMBLER_TENT = [
+  "...............bbbb.............",
+  "...............bmmbbb...........",
+  "...............bmb..............",
+  "...............bb...............",
+  "..............bccb..............",
+  "............bbmcmcbb............",
+  "...........bcmmcmcmmb...........",
+  "..........bccmccmccmcb..........",
+  "........bbccmmccmmccmmbb........",
+  ".......bmccmmmccmmccmmmcb.......",
+  "......bmcccmmcccmmcccmmccb......",
+  "....bbmcccmmmcccmmmcccmmmcbb....",
+  "...bmmcccmmmmcccmmmcccmmmmccb...",
+  "..bmmccccmmmccccmmmccccmmmcccb..",
+  "bbmmccccmmmmccccmmmmccccmmmmccbb",
+  "baaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+  "bmmmccccmmmmccccmmmmccccmmmmcccb",
+  ".bmccccccmmccccccmmccccccmmcccb.",
+  ".bmmccccmmmmccccmmmmccccmmmmccb.",
+  ".bmmccccmmmmccccmmmmccpaammmccb.",
+  ".bmmccDDDDDcccccmmmmpppaaapmccb.",
+  ".bmmcDDDDDDDccccmmmmappaappmccb.",
+  ".bmmcDDDDDDDccccmmmaaapTppppccb.",
+  ".bmmcDDDTDDDccccmmmaaaTTTaaaccb.",
+  ".bmmcDDyYyDDccccmmmppppTpaaaccb.",
+  ".bmmcDDDyDDDccccmmmmppaappamccb.",
+  ".bmmcDDDDDDDccccmmmmpaaapppmccb.",
+  ".bmmcDDDDDDDccccmmmmccaapmmmccb.",
+  ".bmmcDDDDDDDccccmmmmccccmmmmccb.",
+  ".bmmcDDDDDDDccccmmmmccccmmmmccb.",
+  ".bmmcDDDDDDDccccmmmmccccmmmmccb.",
+  ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+];
+
+// HUNTER: a log cabin under a mossy roof, antlers over the door, a lantern
+// beside it and a hide stretched on its frame
+const HUNTER_LODGE_PALETTE = {
+  b: 0x1d1424,
+  R: 0x2f4a2a,
+  r: 0x3f5f34,
+  o: 0xa8743f,
+  t: 0x7a4f2a,
+  T: 0x4a2f1a,
+  d: 0x3a2a3e,
+  D: 0x1d1424,
+  y: 0xffd672,
+  Y: 0xfff0b8,
+  B: 0xe8dcc0,
+  h: 0xc89a6a,
+  H: 0xa87a4a,
+};
+const HUNTER_LODGE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "bRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrb",
+  "bRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRb",
+  "bottttttttttttttttttttttttttttob",
+  "bTttBtBtttBtBtttttttttttttttttTb",
+  ".bTTTBBTTTBBTTTTTttttttttttttTb.",
+  "bottttBBBBBtttttttTThhTThhTTttob",
+  "bTtttttttttttTttttThhhhhhhhTttTb",
+  ".bTTTdddddddTyTTTtTThHHHHhTTtTb.",
+  "botttdDdDdDdtYttttTThHHHHhTTttob",
+  "bTtttdDdDdDdttttttTThHHHHhTTttTb",
+  ".bTTTdDdDdDdTTTTTtTThHHHHhTTtTb.",
+  "botttdDdDdDdttttttTThHHHHhTTttob",
+  "bTtttdDdDdDdttttttThhHHHHhhTttTb",
+  ".bTTTdDdDdydTTTTTtThhTTTThhTtTb.",
+  "botttdDdDdDdttttttTTTTTTTTTTttob",
+  "bTtttdDdDdDdttttttttttttttttttTb",
+  ".bTTTdDdDdDdTTTTTTTTTTTTTTTTTTb.",
+  ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+];
+
+// Their winter look ("<key>-winter"): two cells of snow under the outline on
+// every column's top, a third on every third column, so roofs, the awning, the
+// tent's cone and the palisade's points all catch it. Baked through `scene`,
+// not `this`: check:art reads the plain grids, and this only recolours them.
+const SNOW_CAP_PALETTE = { n: 0xf2f7fb, N: 0xc9d9e6 };
+function snowCapped(rows: readonly string[]): string[] {
+  const g = rows.map((r) => [...r]);
+  for (let x = 0; x < g[0].length; x++) {
+    const y0 = g.findIndex((r) => r[x] !== ".");
+    if (y0 < 0) continue;
+    const cap: Array<[number, string | null]> = [
+      [1, "n"],
+      [2, x % 3 ? "N" : "n"],
+      [3, x % 3 === 0 ? "N" : null],
+    ];
+    for (const [k, c] of cap) {
+      const row = g[y0 + k];
+      if (c && row && row[x] !== "." && row[x] !== "b") row[x] = c;
+    }
+  }
+  return g.map((r) => r.join(""));
+}
+const WORKPLACE_ART: ReadonlyArray<readonly [string, readonly string[], Record<string, number>]> = [
+  ["hut-elder", ELDER_HUT, ELDER_HUT_PALETTE],
+  ["stall-shop", SHOP_STALL, SHOP_STALL_PALETTE],
+  ["forge", FORGE, FORGE_PALETTE],
+  ["gate-arena", ARENA_GATE, ARENA_GATE_PALETTE],
+  ["tent-gambler", GAMBLER_TENT, GAMBLER_TENT_PALETTE],
+  ["lodge-hunter", HUNTER_LODGE, HUNTER_LODGE_PALETTE],
+];
+function makeWorkplaceSnow(scene: Phaser.Scene): void {
+  for (const [key, rows, palette] of WORKPLACE_ART)
+    makeTexture(scene, `${key}-winter`, snowCapped(rows), { ...palette, ...SNOW_CAP_PALETTE });
 }
 
 function makeHouse(scene: Phaser.Scene): void {
@@ -1767,345 +4228,238 @@ function makeHouse(scene: Phaser.Scene): void {
   g.destroy();
 }
 
-// One background per battle origin, so a fight visually continues the map it
-// started on. Each ground band is the terrain the player was just standing on:
-// the grass base for the overworld, and the scene TERRAIN_TINTs folded into
-// their base tile for forest (grass x 0x88cc99), snow (grass x 0xbfe3fc) and
-// dungeon (path x 0x8899bb). Horizon sits at y=440, same as the old single bg,
-// so the combat sprites keep standing where they always did.
-function makeBattleBgs(scene: Phaser.Scene): void {
-  const g = scene.add.graphics();
-  const flecks = (color: number, count: number, y0: number, y1: number): void => {
-    for (let i = 0; i < count; i++) {
-      g.fillStyle(color, Math.random() * 0.6 + 0.2);
-      g.fillRect(Math.floor(Math.random() * GAME_WIDTH), y0 + Math.floor(Math.random() * (y1 - y0)), 4, 4);
+// HOME's extensions (home.ts), one texture per level, drawn the way makeHouse
+// draws the cottage — the same flat blocks, the same 128px box on the same
+// 2x2 footprint, so the collision, the HOME spot and its tag never move —
+// with each level's additions on top: 1 a stone chimney and doorstep, 2
+// window boxes and herb pots, 3 a lit dormer, door lanterns and a gilt eave.
+// The two windows stay where they were: the night glows (TownScene) sit on
+// them. Each level also gets a winter cap ("house-N-snow", N from 0) laid
+// over it when the town wears its snow skin: snow along the roof ridge,
+// icicles at the eave, on the chimney and the dormer once they are there.
+function makeHouseLevels(scene: Phaser.Scene): void {
+  for (let level = 1; level <= 3; level++) {
+    const g = scene.add.graphics();
+    g.fillStyle(0x8a2b3a, 1);
+    g.fillRect(0, 24, 128, 32);
+    g.fillStyle(0x6d2130, 1);
+    g.fillRect(0, 24, 128, 8);
+    g.fillStyle(0x453a52, 1);
+    g.fillRect(4, 56, 120, 72);
+    g.fillStyle(0x382e44, 1);
+    g.fillRect(4, 56, 120, 8);
+    g.fillStyle(0x2a1f2e, 1);
+    g.fillRect(48, 80, 32, 48);
+    g.fillStyle(0x171019, 1);
+    g.fillRect(60, 100, 8, 28);
+    g.fillStyle(0xffd672, 1);
+    g.fillRect(16, 60, 24, 24);
+    g.fillStyle(0xffd672, 0.3);
+    g.fillRect(12, 56, 32, 32);
+    g.fillStyle(0xffd672, 1);
+    g.fillRect(88, 60, 24, 24);
+    g.fillStyle(0xffd672, 0.3);
+    g.fillRect(84, 56, 32, 32);
+    // 1: HEARTH — a stone chimney off the right of the ridge, a doorstep
+    g.fillStyle(0x6b6670, 1);
+    g.fillRect(94, 6, 16, 22);
+    g.fillStyle(0x56515b, 1);
+    g.fillRect(94, 14, 16, 2);
+    g.fillRect(94, 22, 16, 2);
+    g.fillStyle(0x4b4650, 1);
+    g.fillRect(92, 2, 20, 6);
+    g.fillStyle(0x8b8494, 1);
+    g.fillRect(42, 122, 44, 6);
+    if (level >= 2) {
+      // 2: HERB GARDEN — window boxes in bloom, a herb pot either side of the door
+      g.fillStyle(0x6d4a1f, 1);
+      g.fillRect(12, 84, 32, 6);
+      g.fillRect(84, 84, 32, 6);
+      g.fillStyle(0x4d7c0f, 1);
+      g.fillRect(14, 80, 28, 4);
+      g.fillRect(86, 80, 28, 4);
+      g.fillStyle(0xf472b6, 1);
+      g.fillRect(18, 78, 4, 4);
+      g.fillRect(30, 78, 4, 4);
+      g.fillRect(98, 78, 4, 4);
+      g.fillStyle(0xfde047, 1);
+      g.fillRect(24, 78, 4, 4);
+      g.fillRect(90, 78, 4, 4);
+      g.fillRect(106, 78, 4, 4);
+      g.fillStyle(0xa0522d, 1);
+      g.fillRect(32, 114, 12, 12);
+      g.fillRect(84, 114, 12, 12);
+      g.fillStyle(0x65a30d, 1);
+      g.fillRect(30, 106, 16, 8);
+      g.fillRect(82, 106, 16, 8);
     }
-  };
-
-  // TOWN: open grassland under a day sky (night battles darken it with the
-  // scene-wide NIGHT_TINT overlay, so the bg itself stays daytime)
-  g.fillStyle(0x2e6fb8, 1);
-  g.fillRect(0, 0, GAME_WIDTH, 200);
-  g.fillStyle(0x4a8fd0, 1);
-  g.fillRect(0, 200, GAME_WIDTH, 140);
-  g.fillStyle(0x7fb8e8, 1);
-  g.fillRect(0, 340, GAME_WIDTH, 100);
-  g.fillStyle(0xfff3b0, 0.25);
-  g.fillCircle(240, 176, 120);
-  g.fillStyle(0xffe88a, 0.6);
-  g.fillCircle(240, 176, 60);
-  g.fillStyle(0xfff7c8, 1);
-  g.fillCircle(240, 176, 32);
-  g.fillStyle(0xffffff, 0.5);
-  g.fillEllipse(520, 120, 220, 48);
-  g.fillEllipse(900, 200, 260, 56);
-  g.fillEllipse(1150, 90, 180, 40);
-  g.fillStyle(0x174a35, 1);
-  g.fillTriangle(0, 440, 240, 300, 520, 440);
-  g.fillTriangle(400, 440, 720, 260, 1060, 440);
-  g.fillTriangle(900, 440, 1180, 320, 1280, 440);
-  g.fillStyle(GRASS_PALETTE.g, 1);
-  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
-  g.fillStyle(0x27684e, 1);
-  g.fillRect(0, 440, GAME_WIDTH, 16);
-  flecks(0x2a7a58, 40, 470, GAME_HEIGHT - 10);
-  g.generateTexture("battle-bg-town", GAME_WIDTH, GAME_HEIGHT);
-  g.clear();
-
-  // FOREST: green gloom under a dense canopy
-  g.fillStyle(0x0c2e1f, 1);
-  g.fillRect(0, 0, GAME_WIDTH, 160);
-  g.fillStyle(0x14452e, 1);
-  g.fillRect(0, 160, GAME_WIDTH, 150);
-  g.fillStyle(0x1d5c3c, 1);
-  g.fillRect(0, 310, GAME_WIDTH, 130);
-  g.fillStyle(0xd9f2b8, 0.08);
-  g.fillTriangle(300, 0, 400, 0, 220, 440);
-  g.fillTriangle(700, 0, 820, 0, 640, 440);
-  g.fillTriangle(1060, 0, 1140, 0, 1010, 440);
-  g.fillStyle(0x0f3a27, 1);
-  g.fillTriangle(60, 440, 160, 200, 260, 440);
-  g.fillTriangle(420, 440, 520, 170, 620, 440);
-  g.fillTriangle(760, 440, 860, 210, 960, 440);
-  g.fillTriangle(1100, 440, 1200, 180, 1300, 440);
-  g.fillStyle(0x082418, 1);
-  g.fillTriangle(-40, 440, 90, 260, 220, 440);
-  g.fillTriangle(280, 440, 400, 230, 520, 440);
-  g.fillTriangle(600, 440, 730, 280, 860, 440);
-  g.fillTriangle(940, 440, 1070, 240, 1200, 440);
-  flecks(0xb8e986, 18, 160, 430);
-  g.fillStyle(0x104927, 1);
-  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
-  g.fillStyle(0x155a31, 1);
-  g.fillRect(0, 440, GAME_WIDTH, 16);
-  g.generateTexture("battle-bg-forest", GAME_WIDTH, GAME_HEIGHT);
-  g.clear();
-
-  // DUNGEON: torch-lit cavern; glow first so the stalactites silhouette on it
-  g.fillStyle(0x0e0c22, 1);
-  g.fillRect(0, 0, GAME_WIDTH, 440);
-  g.fillStyle(0x161230, 1);
-  g.fillRect(0, 300, GAME_WIDTH, 140);
-  g.fillStyle(0xffa54d, 0.1);
-  g.fillCircle(200, 250, 150);
-  g.fillCircle(1080, 250, 150);
-  g.fillStyle(0xffc97a, 0.22);
-  g.fillCircle(200, 250, 70);
-  g.fillCircle(1080, 250, 70);
-  g.fillStyle(0x5a4632, 1);
-  g.fillRect(192, 250, 16, 56);
-  g.fillRect(1072, 250, 16, 56);
-  g.fillStyle(0xffb84d, 1);
-  g.fillCircle(200, 238, 14);
-  g.fillCircle(1080, 238, 14);
-  g.fillStyle(0xffe3a8, 1);
-  g.fillCircle(200, 242, 7);
-  g.fillCircle(1080, 242, 7);
-  g.fillStyle(0x241d44, 1);
-  g.fillTriangle(20, 0, 120, 0, 70, 120);
-  g.fillTriangle(150, 0, 230, 0, 190, 80);
-  g.fillTriangle(320, 0, 440, 0, 380, 150);
-  g.fillTriangle(540, 0, 620, 0, 580, 90);
-  g.fillTriangle(700, 0, 820, 0, 760, 160);
-  g.fillTriangle(900, 0, 980, 0, 940, 100);
-  g.fillTriangle(1060, 0, 1180, 0, 1120, 140);
-  g.fillTriangle(1210, 0, 1290, 0, 1250, 90);
-  g.fillStyle(0x2a2350, 1);
-  g.fillEllipse(120, 430, 200, 90);
-  g.fillEllipse(660, 435, 260, 70);
-  g.fillEllipse(1170, 430, 220, 90);
-  g.fillStyle(0x3d3931, 1);
-  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
-  g.fillStyle(0x4a453c, 1);
-  g.fillRect(0, 440, GAME_WIDTH, 16);
-  flecks(0x191238, 24, 470, GAME_HEIGHT - 10);
-  g.generateTexture("battle-bg-dungeon", GAME_WIDTH, GAME_HEIGHT);
-  g.clear();
-
-  // SNOW: icy peaks under a pale sky, snowfall flecks in front of everything
-  g.fillStyle(0x6e9fc4, 1);
-  g.fillRect(0, 0, GAME_WIDTH, 200);
-  g.fillStyle(0x8fb9d8, 1);
-  g.fillRect(0, 200, GAME_WIDTH, 140);
-  g.fillStyle(0xb8d8ec, 1);
-  g.fillRect(0, 340, GAME_WIDTH, 100);
-  g.fillStyle(0xffffff, 0.25);
-  g.fillCircle(240, 176, 100);
-  g.fillStyle(0xffffff, 0.6);
-  g.fillCircle(240, 176, 48);
-  g.fillStyle(0xffffff, 1);
-  g.fillCircle(240, 176, 26);
-  g.fillStyle(0x9fc0da, 1);
-  g.fillTriangle(0, 440, 240, 240, 480, 440);
-  g.fillTriangle(280, 440, 640, 160, 1000, 440);
-  g.fillTriangle(800, 440, 1160, 260, 1280, 440);
-  // summit caps clipped to the slopes above (same apexes, y solved per side)
-  g.fillStyle(0xeef7fd, 1);
-  g.fillTriangle(190, 282, 240, 240, 290, 282);
-  g.fillTriangle(560, 222, 640, 160, 720, 222);
-  g.fillTriangle(1080, 300, 1160, 260, 1187, 300);
-  flecks(0xffffff, 40, 0, 430);
-  g.fillStyle(0x175241, 1);
-  g.fillRect(0, 440, GAME_WIDTH, GAME_HEIGHT - 440);
-  g.fillStyle(0x9fc9d8, 0.85);
-  g.fillRect(0, 440, GAME_WIDTH, 16);
-  // frost patches so the icy-teal ground still reads as snowed-over grass
-  g.fillStyle(0xd8ecf5, 0.35);
-  g.fillEllipse(300, 560, 240, 40);
-  g.fillEllipse(880, 640, 300, 50);
-  g.fillEllipse(1150, 520, 200, 36);
-  g.generateTexture("battle-bg-snow", GAME_WIDTH, GAME_HEIGHT);
-  g.destroy();
+    if (level >= 3) {
+      // 3: FEATHER BEDS — a dormer with a lit window, lanterns, a gilt eave
+      g.fillStyle(0x6d2130, 1);
+      g.fillTriangle(48, 30, 64, 14, 80, 30);
+      g.fillStyle(0x453a52, 1);
+      g.fillRect(52, 28, 24, 24);
+      g.fillStyle(0xffd672, 1);
+      g.fillRect(58, 34, 12, 12);
+      g.fillStyle(0xd4a017, 1);
+      g.fillRect(0, 54, 128, 2);
+      g.fillStyle(0x2a1f2e, 1);
+      g.fillRect(40, 84, 4, 12);
+      g.fillRect(84, 84, 4, 12);
+      g.fillStyle(0xffd672, 1);
+      g.fillRect(38, 96, 8, 8);
+      g.fillRect(82, 96, 8, 8);
+    }
+    g.generateTexture(`house-${level}`, 128, 128);
+    g.destroy();
+  }
+  for (let level = 0; level <= 3; level++) {
+    const g = scene.add.graphics();
+    g.fillStyle(0xf1f5f9, 1);
+    g.fillRect(0, 20, 128, 8);
+    g.fillStyle(0xcbd5e1, 1);
+    g.fillRect(0, 26, 128, 2);
+    g.fillStyle(0xe0f2fe, 1);
+    for (const x of [6, 22, 38, 58, 76, 96, 116]) g.fillRect(x, 56, 2, 4 + (x % 3) * 2);
+    g.fillStyle(0xf1f5f9, 1);
+    if (level >= 1) g.fillRect(92, 0, 20, 4);
+    if (level >= 3) g.fillTriangle(56, 22, 64, 14, 72, 22);
+    g.generateTexture(`house-${level}-snow`, 128, 128);
+    g.destroy();
+  }
 }
 
-function makeTitleBg(scene: Phaser.Scene): void {
-  const g = scene.add.graphics();
+// Snow Field skin. The snow field draws its map from palette-swapped copies of
+// tiles16, shore16 and road16 baked from the same grids in the same order, so
+// every tile index, variation and transition mask means the same thing and
+// nothing in levels.ts or autotile.ts changes. Only the palettes the field
+// shows are swapped; house, soil and the volcano tiles keep theirs, there only
+// to hold their indices.
+//
+// The snow is a cool grey-blue, not white, on purpose: the frost moth's and the
+// yeti's rim pixels are near-white (luma ~240-250) and vanished against a white
+// floor. At luma ~188 the moth's rim still clears it by ~50. The terrain keeps
+// the green field's calm limits (check:art).
+const SNOW_GRASS_PALETTE = { g: 0xaebfce, h: 0xb5c5d3 };
+// trampled snow over frozen dirt, a clear step darker than the field
+const SNOW_PATH_PALETTE = { p: 0x8c8f96, h: 0x92959c, D: 0x5c5f66, P: 0x7d8087, m: 0x9a9da4, S: 0xa6a9b0 };
+// monster zones: snowed-over scrub, its twigs poking through as darker marks
+const SNOW_TALL_PALETTE = { g: 0xa2b4c4, h: 0x8ea2b3 };
+// cold dark water under icy foam
+const SNOW_WATER_PALETTE = { d: 0x123a57, B: 0x1b4d72, W: 0x2a6690, l: 0x5d9ac0, h: 0xc4e6f5 };
+// The canopy's lit top-left (H, c) carries the snow and the shaded side stays a
+// dark spruce green, so the same sphere reads as a laden conifer.
+const SNOW_TREE_PALETTE = { b: 0x0b231d, S: 0x123329, D: 0x1d4a3e, c: 0xa9bfcf, H: 0xe6eef5, t: 0x4a3a2c, T: 0x2f241a };
+// grass tones (g/q) equal SNOW_GRASS_PALETTE's g/h, as SHORE/ROAD do for grass
+const SNOW_SHORE_PALETTE = { W: 0x2a6690, B: 0x1b4d72, h: 0xc4e6f5, l: 0x5d9ac0, g: 0xaebfce, q: 0xb5c5d3 };
+const SNOW_ROAD_PALETTE = { p: 0x8c8f96, P: 0x7d8087, S: 0x999ca3, m: 0x9a9da4, g: 0xaebfce, q: 0xb5c5d3 };
 
-  // twilight sky: indigo night melting into a violet-pink horizon
-  const SKY_BANDS: Array<[number, number]> = [
-    [0x120b33, 150],
-    [0x1d1247, 130],
-    [0x2c1a63, 110],
-    [0x45247c, 90],
-    [0x6c3091, 70],
-    [0x94489b, 50],
-  ];
-  let skyY = 0;
-  for (const [color, h] of SKY_BANDS) {
-    g.fillStyle(color, 1);
-    g.fillRect(0, skyY, GAME_WIDTH, h);
-    skyY += h;
-  }
+// The texture keys buildTileLayers() reads for the snow field.
+export const SNOW_SKIN = { tiles: "tiles16-snow", shore: "shore16-snow", road: "road16-snow" } as const;
 
-  g.fillStyle(0xc86bd9, 0.1);
-  g.fillEllipse(260, 190, 420, 110);
-  g.fillEllipse(860, 110, 360, 90);
-  g.fillStyle(0x64d9e8, 0.08);
-  g.fillEllipse(580, 250, 480, 100);
+// Forest skin, built the same way as the snow field's. A deep wood: a duller,
+// darker moss than the town's grass (luma ~67 against ~79), a leaf-litter dirt
+// path, darker scrub in the monster zones, dark heavy canopies and murky swamp
+// water. It stops at ~67 because the spider's lower half is a dark purple
+// (luma 35-56) and has to stay off the floor; the orc's rim (luma 107) and
+// bright body clear it easily, so a green floor doesn't swallow it.
+const FOREST_GRASS_PALETTE = { g: 0x2f4b30, h: 0x34522f };
+// packed dirt under leaf litter, the litter a warm step lighter
+const FOREST_PATH_PALETTE = { p: 0x6a5236, h: 0x765633, D: 0x3b2e1f, P: 0x56432c, m: 0x7a5f40, S: 0x8a6e4c };
+// monster zones: darker undergrowth, blades a little lighter than its floor
+const FOREST_TALL_PALETTE = { g: 0x263f2a, h: 0x2d4a31 };
+// swamp water: a dark teal, apart from the moss in hue and a step darker,
+// with pale green scum on its crests
+const FOREST_WATER_PALETTE = { d: 0x081c1f, B: 0x0f2c2f, W: 0x163a3c, l: 0x2f5f5a, h: 0x8db8a0 };
+const FOREST_TREE_PALETTE = { b: 0x061a10, S: 0x0b2a1b, D: 0x123d27, c: 0x1d5534, H: 0x3a7a45, t: 0x3d2c1b, T: 0x261a0f };
+// grass tones (g/q) equal FOREST_GRASS_PALETTE's g/h, as for the other skins
+const FOREST_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, g: 0x2f4b30, q: 0x34522f };
+const FOREST_ROAD_PALETTE = { p: 0x6a5236, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x2f4b30, q: 0x34522f };
 
-  for (let i = 0; i < 90; i++) {
-    g.fillStyle(0xffffff, Math.random() * 0.75 + 0.15);
-    g.fillRect(Math.floor(Math.random() * GAME_WIDTH), Math.floor(Math.random() * 420), 4, 4);
-  }
-  const crossStar = (x: number, y: number, s: number, a: number): void => {
-    g.fillStyle(0xffffff, a);
-    g.fillRect(x - s, y - 2, s * 2, 4);
-    g.fillRect(x - 2, y - s, 4, s * 2);
-  };
-  crossStar(180, 90, 14, 0.9);
-  crossStar(520, 60, 10, 0.8);
-  crossStar(1180, 70, 12, 0.85);
-  crossStar(700, 160, 8, 0.7);
+// The texture keys buildTileLayers() reads for the forest.
+export const FOREST_SKIN = { tiles: "tiles16-forest", shore: "shore16-forest", road: "road16-forest" } as const;
 
-  g.fillStyle(0xffffff, 0.9);
-  g.fillCircle(820, 84, 3);
-  g.fillStyle(0xffffff, 0.45);
-  g.fillCircle(800, 92, 2);
-  g.fillStyle(0xffffff, 0.25);
-  g.fillCircle(782, 99, 2);
-  g.fillStyle(0xffffff, 0.12);
-  g.fillCircle(766, 106, 2);
+// Cave skin, built the same way. The cave floor is path tiles (buildDungeon
+// fills with T_PATH) and its walls and pillars are T_ROCK (26), so those two
+// carry the look: a warm grey stone floor (luma ~54) and cool grey boulders,
+// the volcano rock's lava crack (e) closed to a dark seam. The floor leans warm
+// on purpose. The cursed goblin's purple tint lands it at luma 33-82, right
+// across any dark floor, so it can only part from the floor by hue -- and a
+// warm floor stays the opposite hue to purple even under the night's blue
+// wash, where a neutral one turned the same navy. The slime's dark rim (~68)
+// still clears it.
+const CAVE_PATH_PALETTE = { p: 0x3a3632, h: 0x3f3a35, D: 0x26231f, P: 0x312e2a, m: 0x46413b, S: 0x504a43 };
+const CAVE_ROCK_PALETTE = { b: 0x141518, S: 0x2a2c31, D: 0x3c3f45, c: 0x55585f, H: 0x737780, e: 0x1b1c20 };
+// dark underground pools with a faint glint on the crests
+const CAVE_WATER_PALETTE = { d: 0x050c16, B: 0x0a1626, W: 0x102136, l: 0x24405f, h: 0x6a8fb0 };
+// The cave has no grass, so grass is painted as the cave floor itself:
+// DungeonScene draws its T_PATH floor as T_GRASS, the base terrain the shore
+// transitions round water off against, so the pools get the same curved,
+// foamed edges as the ponds outside instead of hard rectangles.
+const CAVE_GRASS_PALETTE = { g: 0x3a3632, h: 0x3f3a35 };
+// unused in today's cave (no zone is marked there), kept in the cave's tones
+const CAVE_TALL_PALETTE = { g: 0x312d2a, h: 0x37332f };
+const CAVE_SHORE_PALETTE = { W: 0x102136, B: 0x0a1626, h: 0x6a8fb0, l: 0x24405f, g: 0x3a3632, q: 0x3f3a35 };
+const CAVE_ROAD_PALETTE = { p: 0x3a3632, P: 0x312e2a, S: 0x433e38, m: 0x45403a, g: 0x3a3632, q: 0x3f3a35 };
 
-  g.fillStyle(0xfff3c4, 0.07);
-  g.fillCircle(150, 100, 80);
-  g.fillStyle(0xfff3c4, 0.12);
-  g.fillCircle(150, 100, 64);
-  g.fillStyle(0xffedb0, 0.35);
-  g.fillCircle(150, 100, 52);
-  g.fillStyle(0xfdf0c2, 1);
-  g.fillCircle(150, 100, 40);
-  g.fillStyle(0xe8d79a, 1);
-  g.fillCircle(136, 86, 7);
-  g.fillCircle(163, 110, 5);
-  g.fillCircle(146, 118, 4);
+// The texture keys buildTileLayers() reads for the cave.
+export const CAVE_SKIN = { tiles: "tiles16-cave", shore: "shore16-cave", road: "road16-cave" } as const;
 
-  g.fillStyle(0x241a4a, 1);
-  g.fillTriangle(-120, 600, 200, 400, 520, 600);
-  g.fillTriangle(340, 600, 700, 370, 1060, 600);
-  g.fillTriangle(880, 600, 1160, 430, 1400, 600);
-  g.fillStyle(0x1c1440, 1);
-  g.fillTriangle(-60, 600, 320, 470, 700, 600);
-  g.fillTriangle(560, 600, 940, 450, 1320, 600);
+// Autumn skins (season.ts), built the same way again. Only the grass, the
+// monster zones' scrub and the trees turn: the paths, the water, the houses
+// and the soil keep their own palettes. The canopies go rust and gold, lit
+// from the same top left, and carry most of the season. The grass only
+// yellows to an olive at the green's brightness and spread (luma ~87 against
+// ~77, h a ~5 step over g, the scrub a step under the grass, as in green):
+// a true straw or leaf-litter brown sits right on the hero's hair and boots
+// (0x6b4226, 0x4a2f1a; a first 0x56582a put a third of the hero's pixels
+// within RGB distance 40 of the floor), and this olive keeps every hero
+// colour at least as far off it as the green does (~44).
+const AUTUMN_GRASS_PALETTE = { g: 0x4a6028, h: 0x4e662b };
+const AUTUMN_TALL_PALETTE = { g: 0x42542a, h: 0x46592c };
+const AUTUMN_TREE_PALETTE = { b: 0x3a1408, S: 0x6e2a10, D: 0x9a4418, c: 0xc8662a, H: 0xe8a040, t: 0x4a3620, T: 0x2f2113 };
+// grass tones (g/q) equal AUTUMN_GRASS_PALETTE's g/h, as for the other skins
+const AUTUMN_SHORE_PALETTE = { W: 0x0133a9, B: 0x01207f, h: 0x7fc6f0, l: 0x2f6ecb, g: 0x4a6028, q: 0x4e662b };
+const AUTUMN_ROAD_PALETTE = { p: 0x735f43, P: 0x5e4c33, S: 0x887356, m: 0x897353, g: 0x4a6028, q: 0x4e662b };
+export const AUTUMN_SKIN = { tiles: "tiles16-autumn", shore: "shore16-autumn", road: "road16-autumn" } as const;
 
-  const island = (x: number, y: number, w: number): void => {
-    g.fillStyle(0x7ef9ff, 0.06);
-    g.fillEllipse(x, y + 26, w * 1.5, 40);
-    g.fillStyle(0x3a2a55, 1);
-    g.fillTriangle(x - w / 2, y, x + w / 2, y, x, y + w * 0.42);
-    g.fillStyle(0x241a3e, 1);
-    g.fillTriangle(x - w * 0.18, y + 8, x + w * 0.3, y + 6, x + w * 0.05, y + w * 0.34);
-    g.fillRect(x - w * 0.22, y + 14, 3, 22);
-    g.fillRect(x + w * 0.1, y + 18, 3, 16);
-    g.fillRect(x + w * 0.26, y + 10, 3, 12);
-    g.fillStyle(0x1f6b46, 1);
-    g.fillEllipse(x, y, w, 26);
-    g.fillStyle(0x2a8a5a, 1);
-    g.fillEllipse(x, y - 4, w * 0.82, 16);
-  };
+// The forest in autumn: its moss a warmer, yellower olive at the same depth
+// (luma ~74 against ~67, still above the spider's dark purple, and as far
+// off the hero as the forest's green), the undergrowth a step under it, and
+// deep rust canopies.
+const FOREST_AUTUMN_GRASS_PALETTE = { g: 0x3a5226, h: 0x3e5729 };
+const FOREST_AUTUMN_TALL_PALETTE = { g: 0x324624, h: 0x364b27 };
+const FOREST_AUTUMN_TREE_PALETTE = { b: 0x200a06, S: 0x4a1a0c, D: 0x742c12, c: 0xa04a1c, H: 0xcf7a30, t: 0x3d2c1b, T: 0x261a0f };
+const FOREST_AUTUMN_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, g: 0x3a5226, q: 0x3e5729 };
+const FOREST_AUTUMN_ROAD_PALETTE = { p: 0x6a5236, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x3a5226, q: 0x3e5729 };
+export const FOREST_AUTUMN_SKIN = { tiles: "tiles16-forestautumn", shore: "shore16-forestautumn", road: "road16-forestautumn" } as const;
 
-  island(230, 320, 200);
-  g.fillStyle(0x0f3d24, 1);
-  g.fillTriangle(212, 308, 228, 272, 244, 308);
-  g.fillRect(225, 306, 6, 10);
+/**
+ * The skin the town's or the forest's map wears in `season`: their own look
+ * in spring and summer (undefined is buildTileLayers' default, the town's),
+ * the autumn skins above, and in winter the snow field's skin -- whose house
+ * and soil tiles keep their palettes, so the town's homes and fields show
+ * through the snow. Read when a scene builds its map, so a season that turns
+ * while the player is out shows on the next visit. Minimap's SEASON_COLORS
+ * follows the same table.
+ */
+export function seasonSkin(region: "town" | "forest", season: Season = seasonToday()): TileSkin | undefined {
+  const look = seasonLook(region, season);
+  if (look === "autumn") return region === "town" ? AUTUMN_SKIN : FOREST_AUTUMN_SKIN;
+  if (look === "winter") return SNOW_SKIN;
+  return region === "town" ? undefined : FOREST_SKIN;
+}
 
-  island(330, 450, 100);
-  g.fillStyle(0x67e8f9, 1);
-  g.fillTriangle(318, 438, 330, 406, 342, 438);
-  g.fillStyle(0xa5f3fc, 0.8);
-  g.fillTriangle(324, 438, 330, 416, 336, 438);
-
-  const STONE = 0x191238;
-  const ROOF = 0x3d1d5c;
-  g.fillStyle(0x141033, 1);
-  g.fillEllipse(1020, 620, 460, 90);
-  g.fillStyle(STONE, 1);
-  g.fillRect(940, 500, 160, 110);
-  g.fillRect(908, 520, 40, 90);
-  g.fillRect(1092, 520, 40, 90);
-  g.fillRect(986, 430, 68, 80);
-  for (let i = 0; i < 5; i++) g.fillRect(944 + i * 32, 492, 16, 10);
-  g.fillStyle(ROOF, 1);
-  g.fillTriangle(900, 520, 928, 484, 956, 520);
-  g.fillTriangle(1084, 520, 1112, 484, 1140, 520);
-  g.fillTriangle(978, 430, 1020, 372, 1062, 430);
-  g.fillStyle(0x7ef9ff, 0.25);
-  g.fillCircle(1020, 360, 22);
-  g.fillStyle(0x7ef9ff, 0.5);
-  g.fillCircle(1020, 360, 13);
-  g.fillStyle(0xd9fbff, 1);
-  g.fillCircle(1020, 360, 7);
-  const win = (x: number, y: number): void => {
-    g.fillStyle(0xffd166, 0.25);
-    g.fillRect(x - 2, y - 2, 12, 16);
-    g.fillStyle(0xffd166, 1);
-    g.fillRect(x, y, 8, 12);
-  };
-  win(964, 530);
-  win(1000, 530);
-  win(1036, 530);
-  win(964, 566);
-  win(1036, 566);
-  win(918, 544);
-  win(1108, 544);
-  win(1010, 452);
-  win(1010, 482);
-  g.fillStyle(0x0b0820, 1);
-  g.fillRect(1000, 574, 40, 36);
-
-  g.fillStyle(0x12331f, 1);
-  g.fillRect(0, 600, GAME_WIDTH, 120);
-  g.fillStyle(0x0c2718, 1);
-  g.fillRect(0, 668, GAME_WIDTH, 52);
-  g.fillStyle(0x1a4a2c, 0.6);
-  g.fillRect(120, 620, 180, 6);
-  g.fillRect(420, 640, 220, 6);
-  g.fillRect(760, 616, 160, 6);
-  g.fillRect(1040, 644, 180, 6);
-
-  const pine = (x: number, base: number, h: number): void => {
-    g.fillStyle(0x081b12, 1);
-    g.fillTriangle(x - h * 0.32, base, x, base - h, x + h * 0.32, base);
-    g.fillTriangle(x - h * 0.24, base - h * 0.45, x, base - h * 1.35, x + h * 0.24, base - h * 0.45);
-    g.fillRect(x - 3, base - 6, 6, 10);
-  };
-  pine(80, 640, 90);
-  pine(150, 660, 120);
-  pine(230, 645, 80);
-  pine(310, 668, 100);
-  pine(1210, 655, 95);
-  pine(1265, 640, 75);
-
-  for (let i = 0; i < 26; i++) {
-    const fx = Math.floor(Math.random() * GAME_WIDTH);
-    const fy = 560 + Math.floor(Math.random() * 130);
-    g.fillStyle(0xffe066, 0.12);
-    g.fillCircle(fx, fy, 8);
-    g.fillStyle(0xffe066, Math.random() * 0.5 + 0.3);
-    g.fillRect(fx - 2, fy - 2, 4, 4);
-  }
-
-  const sparkle = (x: number, y: number, c: number, a: number): void => {
-    g.fillStyle(c, a);
-    g.fillRect(x - 2, y - 6, 4, 12);
-    g.fillRect(x - 6, y - 2, 12, 4);
-  };
-  sparkle(560, 500, 0x7ef9ff, 0.5);
-  sparkle(660, 460, 0xffd166, 0.4);
-  sparkle(760, 520, 0x7ef9ff, 0.35);
-  sparkle(470, 540, 0xd9fbff, 0.3);
-  sparkle(1130, 470, 0x7ef9ff, 0.45);
-  sparkle(360, 480, 0xffd166, 0.35);
-
-  g.fillStyle(0x7ef9ff, 0.12);
-  g.fillEllipse(110, 690, 220, 60);
-  g.fillStyle(0x67e8f9, 1);
-  g.fillTriangle(60, 712, 90, 640, 120, 712);
-  g.fillTriangle(110, 712, 135, 664, 160, 712);
-  g.fillStyle(0xa5f3fc, 0.8);
-  g.fillTriangle(78, 712, 90, 662, 102, 712);
-
-  g.generateTexture("title-bg", GAME_WIDTH, GAME_HEIGHT);
-  g.destroy();
+/**
+ * The battle backdrop for a fight that started in `origin` (a scene key, the
+ * ARENA's being the Town): the town's and the forest's in the season's look
+ * (seasonLook), as their maps are, "battle-bg-town-winter" and so on. Baked
+ * by src/backdrops.ts.
+ */
+export function battleBgKey(origin: string, season: Season = seasonToday()): string {
+  const region = origin.toLowerCase();
+  const look = seasonLook(region, season);
+  return `battle-bg-${region}${look ? `-${look}` : ""}`;
 }
 
 // Interchangeable tile indices for one terrain, so callers never hardcode the
@@ -2126,6 +4480,8 @@ export const TILE_VARIANTS = {
   tree: [3, 20, 21, 22],
 } as const;
 
+// The volcano tiles (23..27) have no variation frames, so no set lists them.
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
@@ -2137,6 +4493,77 @@ export class BootScene extends Phaser.Scene {
   }
 
   private buildTextures(): void {
+    // Every grid bakes through Scale2x (pixelart.ts) except where it bends
+    // what the grid was drawn to say. The terrain floors stay blocky: the
+    // water's and the lava's ripple dashes came out as diagonal streaks, and
+    // the transition tiles below draw the same fill, so all of them keep the
+    // one 4px pattern and meet without a seam (the grass, path, tall grass,
+    // soil, ash and scorch scatter is lone cells, which Scale2x leaves as
+    // they are anyway). The npc's face stays blocky too: Scale2x curved its flat
+    // eyes into smiles. The villagers (whose fisher did the same) and the
+    // monsters it bent -- the wisp's eyes went lopsided, the yeti's mouth
+    // turned down, the wasp's eye bars uneven -- are redrawn on the 32-cell
+    // grid instead.
+    keepBlocky(
+      GRASS_TILE,
+      GRASS_TILE_2,
+      GRASS_TILE_3,
+      GRASS_TILE_4,
+      PATH_TILE,
+      PATH_TILE_2,
+      PATH_TILE_3,
+      PATH_TILE_4,
+      TALL_TILE,
+      SOIL_TILE,
+      ASH_TILE,
+      SCORCH_TILE,
+      WATER_A,
+      WATER_B,
+      WATER_A_2,
+      WATER_B_2,
+      WATER_A_3,
+      WATER_B_3,
+      WATER_A_4,
+      WATER_B_4,
+      LAVA_A,
+      LAVA_B,
+      NPC_TILE,
+      // the fence posts slanted
+      FARM_FIELD_TILE,
+    );
+    // The shoreline and the road's edge round off; the water's and the path's
+    // fill inside them stays the base tiles' blocky pattern.
+    smoothBoundaryOnly(
+      "gq",
+      SHORE_TILE_1,
+      SHORE_TILE_2,
+      SHORE_TILE_3,
+      SHORE_TILE_4,
+      SHORE_TILE_5,
+      SHORE_TILE_6,
+      SHORE_TILE_7,
+      SHORE_TILE_8,
+      SHORE_TILE_9,
+      SHORE_TILE_10,
+      SHORE_TILE_11,
+      SHORE_TILE_12,
+      SHORE_TILE_13,
+      SHORE_TILE_14,
+      ROAD_TILE_1,
+      ROAD_TILE_2,
+      ROAD_TILE_3,
+      ROAD_TILE_4,
+      ROAD_TILE_5,
+      ROAD_TILE_6,
+      ROAD_TILE_7,
+      ROAD_TILE_8,
+      ROAD_TILE_9,
+      ROAD_TILE_10,
+      ROAD_TILE_11,
+      ROAD_TILE_12,
+      ROAD_TILE_13,
+      ROAD_TILE_14,
+    );
     makeTilesetTexture(
       this,
       "tiles16",
@@ -2167,6 +4594,13 @@ export class BootScene extends Phaser.Scene {
         { rows: TREE_TILE_2, palette: TREE_PALETTE },
         { rows: TREE_TILE_3, palette: TREE_PALETTE },
         { rows: TREE_TILE_4, palette: TREE_PALETTE },
+        // 23..27 are the volcano's T_ASH..T_SCORCH in levels.ts — same
+        // append-only rule as 0..7. 28 tiles = 1792px of the 2048px cap.
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
       ],
       16,
     );
@@ -2215,61 +4649,520 @@ export class BootScene extends Phaser.Scene {
       16,
     );
 
-    const flipRows = (rows: string[]): string[] => rows.map((r) => [...r].reverse().join(""));
+    // The snow field's skin (SNOW_SKIN): entry for entry the three bakes above
+    // with snow palettes. Keep the order identical -- check:art compares them.
+    makeTilesetTexture(
+      this,
+      "tiles16-snow",
+      [
+        { rows: GRASS_TILE, palette: SNOW_GRASS_PALETTE },
+        { rows: WATER_A, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_B, palette: SNOW_WATER_PALETTE },
+        { rows: TREE_TILE, palette: SNOW_TREE_PALETTE },
+        { rows: PATH_TILE, palette: SNOW_PATH_PALETTE },
+        { rows: TALL_TILE, palette: SNOW_TALL_PALETTE },
+        { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
+        { rows: GRASS_TILE_2, palette: SNOW_GRASS_PALETTE },
+        { rows: GRASS_TILE_3, palette: SNOW_GRASS_PALETTE },
+        { rows: GRASS_TILE_4, palette: SNOW_GRASS_PALETTE },
+        { rows: WATER_A_2, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_A_3, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_A_4, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_B_2, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_B_3, palette: SNOW_WATER_PALETTE },
+        { rows: WATER_B_4, palette: SNOW_WATER_PALETTE },
+        { rows: PATH_TILE_2, palette: SNOW_PATH_PALETTE },
+        { rows: PATH_TILE_3, palette: SNOW_PATH_PALETTE },
+        { rows: PATH_TILE_4, palette: SNOW_PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: SNOW_TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: SNOW_TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: SNOW_TREE_PALETTE },
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "shore16-snow",
+      [
+        { rows: SHORE_TILE_1, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_2, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_3, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_4, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_5, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_6, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_7, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_8, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_9, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_10, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_11, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_12, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_13, palette: SNOW_SHORE_PALETTE },
+        { rows: SHORE_TILE_14, palette: SNOW_SHORE_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "road16-snow",
+      [
+        { rows: ROAD_TILE_1, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_2, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_3, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_4, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_5, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_6, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_7, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_8, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_9, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_10, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_11, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_12, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_13, palette: SNOW_ROAD_PALETTE },
+        { rows: ROAD_TILE_14, palette: SNOW_ROAD_PALETTE },
+      ],
+      16,
+    );
 
-    const walkFrames = [HERO_LEGS_STRIDE_A, HERO_LEGS_PASS_A, HERO_LEGS_STRIDE_B, HERO_LEGS_PASS_B];
-    for (let i = 0; i < walkFrames.length; i++) {
-      const legs = walkFrames[i];
-      makeTexture(this, `hero-down-${i}`, [...HERO_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
-      makeTexture(this, `hero-up-${i}`, [...HERO_UP_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
-      makeTexture(this, `hero-right-${i}`, [...HERO_SIDE_HEAD, ...HERO_TORSO, ...legs], HERO_PALETTE);
-      makeTexture(this, `hero-left-${i}`, [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...legs], HERO_PALETTE);
-    }
+    // The forest's skin (FOREST_SKIN), the same way: entry for entry the base
+    // bakes with forest palettes, in the same order -- check:art compares them.
+    makeTilesetTexture(
+      this,
+      "tiles16-forest",
+      [
+        { rows: GRASS_TILE, palette: FOREST_GRASS_PALETTE },
+        { rows: WATER_A, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B, palette: FOREST_WATER_PALETTE },
+        { rows: TREE_TILE, palette: FOREST_TREE_PALETTE },
+        { rows: PATH_TILE, palette: FOREST_PATH_PALETTE },
+        { rows: TALL_TILE, palette: FOREST_TALL_PALETTE },
+        { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
+        { rows: GRASS_TILE_2, palette: FOREST_GRASS_PALETTE },
+        { rows: GRASS_TILE_3, palette: FOREST_GRASS_PALETTE },
+        { rows: GRASS_TILE_4, palette: FOREST_GRASS_PALETTE },
+        { rows: WATER_A_2, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_A_3, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_A_4, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_2, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_3, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_4, palette: FOREST_WATER_PALETTE },
+        { rows: PATH_TILE_2, palette: FOREST_PATH_PALETTE },
+        { rows: PATH_TILE_3, palette: FOREST_PATH_PALETTE },
+        { rows: PATH_TILE_4, palette: FOREST_PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: FOREST_TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: FOREST_TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: FOREST_TREE_PALETTE },
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "shore16-forest",
+      [
+        { rows: SHORE_TILE_1, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_2, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_3, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_4, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_5, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_6, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_7, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_8, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_9, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_10, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_11, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_12, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_13, palette: FOREST_SHORE_PALETTE },
+        { rows: SHORE_TILE_14, palette: FOREST_SHORE_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "road16-forest",
+      [
+        { rows: ROAD_TILE_1, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_2, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_3, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_4, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_5, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_6, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_7, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_8, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_9, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_10, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_11, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_12, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_13, palette: FOREST_ROAD_PALETTE },
+        { rows: ROAD_TILE_14, palette: FOREST_ROAD_PALETTE },
+      ],
+      16,
+    );
 
-    makeTexture(this, "hero-idle-down", [...HERO_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
-    makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
-    makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD, ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
-    makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD), ...HERO_TORSO, ...HERO_LEGS_IDLE], HERO_PALETTE);
+    // The cave's skin (CAVE_SKIN), the same way again. Trees keep their own
+    // palette: the cave has none left, its walls are rock (26).
+    makeTilesetTexture(
+      this,
+      "tiles16-cave",
+      [
+        { rows: GRASS_TILE, palette: CAVE_GRASS_PALETTE },
+        { rows: WATER_A, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_B, palette: CAVE_WATER_PALETTE },
+        { rows: TREE_TILE, palette: TREE_PALETTE },
+        { rows: PATH_TILE, palette: CAVE_PATH_PALETTE },
+        { rows: TALL_TILE, palette: CAVE_TALL_PALETTE },
+        { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
+        { rows: GRASS_TILE_2, palette: CAVE_GRASS_PALETTE },
+        { rows: GRASS_TILE_3, palette: CAVE_GRASS_PALETTE },
+        { rows: GRASS_TILE_4, palette: CAVE_GRASS_PALETTE },
+        { rows: WATER_A_2, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_A_3, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_A_4, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_B_2, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_B_3, palette: CAVE_WATER_PALETTE },
+        { rows: WATER_B_4, palette: CAVE_WATER_PALETTE },
+        { rows: PATH_TILE_2, palette: CAVE_PATH_PALETTE },
+        { rows: PATH_TILE_3, palette: CAVE_PATH_PALETTE },
+        { rows: PATH_TILE_4, palette: CAVE_PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: TREE_PALETTE },
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: CAVE_ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "shore16-cave",
+      [
+        { rows: SHORE_TILE_1, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_2, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_3, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_4, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_5, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_6, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_7, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_8, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_9, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_10, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_11, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_12, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_13, palette: CAVE_SHORE_PALETTE },
+        { rows: SHORE_TILE_14, palette: CAVE_SHORE_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "road16-cave",
+      [
+        { rows: ROAD_TILE_1, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_2, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_3, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_4, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_5, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_6, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_7, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_8, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_9, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_10, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_11, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_12, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_13, palette: CAVE_ROAD_PALETTE },
+        { rows: ROAD_TILE_14, palette: CAVE_ROAD_PALETTE },
+      ],
+      16,
+    );
 
-    makeTexture(this, "equip-sword", EQUIP_SWORD_TILE, EQUIP_SWORD_PALETTE);
-    makeTexture(this, "equip-shield", EQUIP_SHIELD_TILE, EQUIP_SHIELD_PALETTE);
-    makeTexture(this, "equip-iron-sword", EQUIP_SWORD_TILE, EQUIP_IRON_SWORD_PALETTE);
-    makeTexture(this, "equip-iron-shield", EQUIP_SHIELD_TILE, EQUIP_IRON_SHIELD_PALETTE);
-    makeTexture(this, "equip-mythril-sword", EQUIP_SWORD_TILE, EQUIP_MYTHRIL_SWORD_PALETTE);
-    makeTexture(this, "equip-mythril-shield", EQUIP_SHIELD_TILE, EQUIP_MYTHRIL_SHIELD_PALETTE);
+    // The autumn skins (AUTUMN_SKIN, FOREST_AUTUMN_SKIN), the same way: entry
+    // for entry the base bakes, in the same order -- check:art compares them.
+    // Paths and water keep the town's and the forest's own palettes.
+    makeTilesetTexture(
+      this,
+      "tiles16-autumn",
+      [
+        { rows: GRASS_TILE, palette: AUTUMN_GRASS_PALETTE },
+        { rows: WATER_A, palette: WATER_PALETTE },
+        { rows: WATER_B, palette: WATER_PALETTE },
+        { rows: TREE_TILE, palette: AUTUMN_TREE_PALETTE },
+        { rows: PATH_TILE, palette: PATH_PALETTE },
+        { rows: TALL_TILE, palette: AUTUMN_TALL_PALETTE },
+        { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
+        { rows: GRASS_TILE_2, palette: AUTUMN_GRASS_PALETTE },
+        { rows: GRASS_TILE_3, palette: AUTUMN_GRASS_PALETTE },
+        { rows: GRASS_TILE_4, palette: AUTUMN_GRASS_PALETTE },
+        { rows: WATER_A_2, palette: WATER_PALETTE },
+        { rows: WATER_A_3, palette: WATER_PALETTE },
+        { rows: WATER_A_4, palette: WATER_PALETTE },
+        { rows: WATER_B_2, palette: WATER_PALETTE },
+        { rows: WATER_B_3, palette: WATER_PALETTE },
+        { rows: WATER_B_4, palette: WATER_PALETTE },
+        { rows: PATH_TILE_2, palette: PATH_PALETTE },
+        { rows: PATH_TILE_3, palette: PATH_PALETTE },
+        { rows: PATH_TILE_4, palette: PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: AUTUMN_TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: AUTUMN_TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: AUTUMN_TREE_PALETTE },
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "shore16-autumn",
+      [
+        { rows: SHORE_TILE_1, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_2, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_3, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_4, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_5, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_6, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_7, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_8, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_9, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_10, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_11, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_12, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_13, palette: AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_14, palette: AUTUMN_SHORE_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "road16-autumn",
+      [
+        { rows: ROAD_TILE_1, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_2, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_3, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_4, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_5, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_6, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_7, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_8, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_9, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_10, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_11, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_12, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_13, palette: AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_14, palette: AUTUMN_ROAD_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "tiles16-forestautumn",
+      [
+        { rows: GRASS_TILE, palette: FOREST_AUTUMN_GRASS_PALETTE },
+        { rows: WATER_A, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B, palette: FOREST_WATER_PALETTE },
+        { rows: TREE_TILE, palette: FOREST_AUTUMN_TREE_PALETTE },
+        { rows: PATH_TILE, palette: FOREST_PATH_PALETTE },
+        { rows: TALL_TILE, palette: FOREST_AUTUMN_TALL_PALETTE },
+        { rows: HOUSE_TILE, palette: HOUSE_TILE_PALETTE },
+        { rows: SOIL_TILE, palette: SOIL_PALETTE },
+        { rows: GRASS_TILE_2, palette: FOREST_AUTUMN_GRASS_PALETTE },
+        { rows: GRASS_TILE_3, palette: FOREST_AUTUMN_GRASS_PALETTE },
+        { rows: GRASS_TILE_4, palette: FOREST_AUTUMN_GRASS_PALETTE },
+        { rows: WATER_A_2, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_A_3, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_A_4, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_2, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_3, palette: FOREST_WATER_PALETTE },
+        { rows: WATER_B_4, palette: FOREST_WATER_PALETTE },
+        { rows: PATH_TILE_2, palette: FOREST_PATH_PALETTE },
+        { rows: PATH_TILE_3, palette: FOREST_PATH_PALETTE },
+        { rows: PATH_TILE_4, palette: FOREST_PATH_PALETTE },
+        { rows: TREE_TILE_2, palette: FOREST_AUTUMN_TREE_PALETTE },
+        { rows: TREE_TILE_3, palette: FOREST_AUTUMN_TREE_PALETTE },
+        { rows: TREE_TILE_4, palette: FOREST_AUTUMN_TREE_PALETTE },
+        { rows: ASH_TILE, palette: ASH_PALETTE },
+        { rows: LAVA_A, palette: LAVA_PALETTE },
+        { rows: LAVA_B, palette: LAVA_PALETTE },
+        { rows: ROCK_TILE, palette: ROCK_PALETTE },
+        { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "shore16-forestautumn",
+      [
+        { rows: SHORE_TILE_1, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_2, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_3, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_4, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_5, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_6, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_7, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_8, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_9, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_10, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_11, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_12, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_13, palette: FOREST_AUTUMN_SHORE_PALETTE },
+        { rows: SHORE_TILE_14, palette: FOREST_AUTUMN_SHORE_PALETTE },
+      ],
+      16,
+    );
+    makeTilesetTexture(
+      this,
+      "road16-forestautumn",
+      [
+        { rows: ROAD_TILE_1, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_2, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_3, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_4, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_5, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_6, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_7, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_8, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_9, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_10, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_11, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_12, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_13, palette: FOREST_AUTUMN_ROAD_PALETTE },
+        { rows: ROAD_TILE_14, palette: FOREST_AUTUMN_ROAD_PALETTE },
+      ],
+      16,
+    );
+
+    drawHero.call(this);
+    drawLookPreviews(this);
+
+    makeTexture(this, "equip-sword", EQUIP_SWORD_32, EQUIP_SWORD_PALETTE, ART_PX);
+    makeTexture(this, "equip-shield", EQUIP_SHIELD_32, EQUIP_SHIELD_PALETTE, ART_PX);
+    makeTexture(this, "equip-iron-sword", EQUIP_SWORD_32, EQUIP_IRON_SWORD_PALETTE, ART_PX);
+    makeTexture(this, "equip-iron-shield", EQUIP_SHIELD_32, EQUIP_IRON_SHIELD_PALETTE, ART_PX);
+    makeTexture(this, "equip-mythril-sword", EQUIP_SWORD_32, EQUIP_MYTHRIL_SWORD_PALETTE, ART_PX);
+    makeTexture(this, "equip-mythril-shield", EQUIP_SHIELD_32, EQUIP_MYTHRIL_SHIELD_PALETTE, ART_PX);
+    // the forged gear too, so the title's save cards can draw it
+    bakeCraftedGear(this);
 
     makeTexture(this, "npc", NPC_TILE, NPC_PALETTE);
-    makeTexture(this, "slime", SLIME_TILE, SLIME_PALETTE);
-    makeTexture(this, "king", SLIME_TILE, KING_SLIME_PALETTE);
-    makeTexture(this, "goblin", GOBLIN_TILE, GOBLIN_PALETTE);
-    makeTexture(this, "troll", GOBLIN_TILE, TROLL_PALETTE);
-    makeTexture(this, "mossGolem", GOBLIN_TILE, MOSS_GOLEM_PALETTE);
-    makeTexture(this, "wolf", WOLF_TILE, WOLF_PALETTE);
-    makeTexture(this, "bat", BAT_TILE, BAT_PALETTE);
-    makeTexture(this, "wasp", WASP_TILE, WASP_PALETTE);
-    makeTexture(this, "spider", SPIDER_TILE, SPIDER_PALETTE);
-    makeTexture(this, "orc", ORC_TILE, ORC_PALETTE);
-    makeTexture(this, "wisp", WISP_TILE, WISP_PALETTE);
-    makeTexture(this, "frostMoth", FROST_MOTH_TILE, FROST_MOTH_PALETTE);
-    makeTexture(this, "yeti", YETI_TILE, YETI_PALETTE);
-    makeTexture(this, "iceGolem", ICE_GOLEM_TILE, ICE_GOLEM_PALETTE);
+    makeTexture(this, "npc-elder", NPC_ELDER_32, NPC_ELDER_PALETTE, ART_PX);
+    makeTexture(this, "npc-shop", NPC_SHOP_32, NPC_SHOP_PALETTE, ART_PX);
+    makeTexture(this, "npc-guard", NPC_GUARD_32, NPC_GUARD_PALETTE, ART_PX);
+    makeTexture(this, "npc-hunter", NPC_HUNTER_32, NPC_HUNTER_PALETTE, ART_PX);
+    makeTexture(this, "npc-gambler", NPC_GAMBLER_32, NPC_GAMBLER_PALETTE, ART_PX);
+    makeTexture(this, "npc-arena", NPC_ARENA_32, NPC_ARENA_PALETTE, ART_PX);
+    makeTexture(this, "npc-blacksmith", NPC_BLACKSMITH_32, NPC_BLACKSMITH_PALETTE, ART_PX);
+    // villagers: two stride frames plus a standing pose each (src/ui/Villagers.ts)
+    makeTexture(this, "villager-farmer-0", [...FARMER_TOP_32, ...HERO_LEGS_STRIDE_A_32], FARMER_PALETTE, ART_PX);
+    makeTexture(this, "villager-farmer-1", [...FARMER_TOP_32, ...HERO_LEGS_PASS_A_32], FARMER_PALETTE, ART_PX);
+    makeTexture(this, "villager-farmer-idle", [...FARMER_TOP_32, ...HERO_LEGS_IDLE_32], FARMER_PALETTE, ART_PX);
+    makeTexture(this, "villager-fisher-0", [...FISHER_TOP_32, ...HERO_LEGS_STRIDE_A_32], FISHER_PALETTE, ART_PX);
+    makeTexture(this, "villager-fisher-1", [...FISHER_TOP_32, ...HERO_LEGS_PASS_A_32], FISHER_PALETTE, ART_PX);
+    makeTexture(this, "villager-fisher-idle", [...FISHER_TOP_32, ...HERO_LEGS_IDLE_32], FISHER_PALETTE, ART_PX);
+    makeTexture(this, "villager-traveler-0", [...TRAVELER_TOP_32, ...HERO_LEGS_STRIDE_A_32], TRAVELER_PALETTE, ART_PX);
+    makeTexture(this, "villager-traveler-1", [...TRAVELER_TOP_32, ...HERO_LEGS_PASS_A_32], TRAVELER_PALETTE, ART_PX);
+    makeTexture(this, "villager-traveler-idle", [...TRAVELER_TOP_32, ...HERO_LEGS_IDLE_32], TRAVELER_PALETTE, ART_PX);
+    makeTexture(this, "slime", SLIME_32, SLIME_PALETTE, ART_PX);
+    makeTexture(this, "goldSlime", SLIME_32, GOLD_SLIME_PALETTE, ART_PX);
+    makeTexture(this, "king", SLIME_32, KING_SLIME_PALETTE, ART_PX);
+    makeTexture(this, "goblin", GOBLIN_32, GOBLIN_PALETTE, ART_PX);
+    makeTexture(this, "cursedGoblin", GOBLIN_32, CURSED_GOBLIN_PALETTE, ART_PX);
+    makeTexture(this, "troll", TROLL_32, TROLL_PALETTE, ART_PX);
+    makeTexture(this, "mossGolem", MOSS_GOLEM_32, MOSS_GOLEM_PALETTE, ART_PX);
+    makeTexture(this, "wolf", WOLF_32, WOLF_PALETTE, ART_PX);
+    makeTexture(this, "bat", BAT_32, BAT_PALETTE, ART_PX);
+    makeTexture(this, "wasp", WASP_32, WASP_PALETTE, ART_PX);
+    makeTexture(this, "spider", SPIDER_32, SPIDER_PALETTE, ART_PX);
+    makeTexture(this, "orc", ORC_32, ORC_PALETTE, ART_PX);
+    makeTexture(this, "wisp", WISP_32, WISP_PALETTE, ART_PX);
+    makeTexture(this, "frostMoth", FROST_MOTH_32, FROST_MOTH_PALETTE, ART_PX);
+    makeTexture(this, "yeti", YETI_32, YETI_PALETTE, ART_PX);
+    makeTexture(this, "iceGolem", ICE_GOLEM_32, ICE_GOLEM_PALETTE, ART_PX);
+    makeTexture(this, "magmaSlime", SLIME_32, MAGMA_SLIME_PALETTE, ART_PX);
+    makeTexture(this, "fireImp", FIRE_IMP_32, FIRE_IMP_PALETTE, ART_PX);
+    makeTexture(this, "salamander", SALAMANDER_32, SALAMANDER_PALETTE, ART_PX);
+    makeTexture(this, "flameDrake", FLAME_DRAKE_32, FLAME_DRAKE_PALETTE, ART_PX);
 
-    makeTexture(this, "dust", ["dd", "dd"], { d: 0xcbbfa8 });
     makeTexture(this, "spark", SPARK_TILE, SPARK_PALETTE);
     makeTexture(this, "glow", GLOW_TILE, GLOW_PALETTE);
     makeTexture(this, "coin", COIN_TILE, COIN_PALETTE);
     makeTexture(this, "firefly", FIREFLY_TILE, FIREFLY_PALETTE);
-    makeTexture(this, "snowflake", ["ww", "ww"], { w: 0xffffff });
-    makeTexture(this, "leaf", ["gd", "dg"], { g: 0x4ade80, d: 0x15803d });
     makeTexture(this, "crop-sprout", SPROUT_TILE, SPROUT_PALETTE);
     makeTexture(this, "crop-corn", CORN_TILE, CORN_PALETTE);
     makeTexture(this, "crop-bean", BEAN_TILE, BEAN_PALETTE);
     makeTexture(this, "chest", CHEST_TILE, CHEST_PALETTE);
     makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE);
+    makeTexture(this, "produce-crate", PRODUCE_CRATE_TILE, PRODUCE_CRATE_PALETTE);
+    makeTexture(this, "anvil", ANVIL_TILE, ANVIL_PALETTE);
+    makeTexture(this, "flowers", FLOWERS_TILE, FLOWERS_PALETTE);
+    makeTexture(this, "stones", STONES_TILE, STONES_PALETTE);
+    makeTexture(this, "icon-potion", ICON_FLASK, ICON_POTION_PALETTE);
+    makeTexture(this, "icon-mPotion", ICON_FLASK, ICON_M_POTION_PALETTE);
+    makeTexture(this, "icon-hiPotion", ICON_TALL, ICON_HI_POTION_PALETTE);
+    makeTexture(this, "icon-ether", ICON_TALL, ICON_ETHER_PALETTE);
+    makeTexture(this, "icon-elixir", ICON_ELIXIR, ICON_ELIXIR_PALETTE);
+    makeTexture(this, "icon-bomb", ICON_BOMB, ICON_BOMB_PALETTE);
+    makeTexture(this, "icon-candy", ICON_CANDY, ICON_CANDY_PALETTE);
+    makeTexture(this, "icon-sword", ICON_SWORD, ICON_SWORD_PALETTE);
+    makeTexture(this, "icon-ironSword", ICON_SWORD, ICON_IRON_SWORD_PALETTE);
+    makeTexture(this, "icon-mythrilSword", ICON_SWORD, ICON_MYTHRIL_SWORD_PALETTE);
+    makeTexture(this, "icon-drakeBlade", ICON_SWORD, ICON_DRAKE_BLADE_PALETTE);
+    makeTexture(this, "icon-shield", ICON_SHIELD, ICON_SHIELD_PALETTE);
+    makeTexture(this, "icon-ironShield", ICON_SHIELD, ICON_IRON_SHIELD_PALETTE);
+    makeTexture(this, "icon-mythrilShield", ICON_SHIELD, ICON_MYTHRIL_SHIELD_PALETTE);
+    makeTexture(this, "icon-glacierMail", ICON_SHIELD, ICON_GLACIER_MAIL_PALETTE);
+    makeTexture(this, "icon-amulet", ICON_AMULET, ICON_AMULET_PALETTE);
+    makeTexture(this, "icon-antidoteCharm", ICON_CHARM, ICON_ANTIDOTE_CHARM_PALETTE);
+    makeTexture(this, "icon-emberRing", ICON_RING, ICON_EMBER_RING_PALETTE);
+    makeTexture(this, "icon-lifeCharm", ICON_HEART, ICON_LIFE_CHARM_PALETTE);
+    makeTexture(this, "icon-talisman", ICON_TALISMAN, ICON_TALISMAN_PALETTE);
+    makeTexture(this, "icon-slimeGel", ICON_GEL, ICON_SLIME_GEL_PALETTE);
+    makeTexture(this, "icon-batWing", ICON_WING, ICON_BAT_WING_PALETTE);
+    makeTexture(this, "icon-wolfFang", ICON_FANG, ICON_WOLF_FANG_PALETTE);
+    makeTexture(this, "icon-spiderSilk", ICON_SILK, ICON_SPIDER_SILK_PALETTE);
+    makeTexture(this, "icon-yetiFur", ICON_FUR, ICON_YETI_FUR_PALETTE);
+    makeTexture(this, "icon-frostScale", ICON_SCALE, ICON_FROST_SCALE_PALETTE);
+    makeTexture(this, "icon-magmaCore", ICON_CORE, ICON_MAGMA_CORE_PALETTE);
+    makeTexture(this, "icon-drakeScale", ICON_SCALE, ICON_DRAKE_SCALE_PALETTE);
+    makeTexture(this, "icon-corn", ICON_CORN, ICON_CORN_PALETTE);
+    makeTexture(this, "icon-bean", ICON_BEAN, ICON_BEAN_PALETTE);
+    makeTexture(this, "icon-pumpkin", ICON_PUMPKIN, ICON_PUMPKIN_PALETTE);
+    makeTexture(this, "icon-moonflower", ICON_FLOWER, ICON_MOONFLOWER_PALETTE);
+    makeTexture(this, "icon-fish", ICON_FISH, ICON_FISH_PALETTE);
+    makeTexture(this, "icon-grilledFish", ICON_PLATE_FISH, ICON_GRILLED_FISH_PALETTE);
+    makeTexture(this, "icon-beanSoup", ICON_BOWL, ICON_BEAN_SOUP_PALETTE);
+    makeTexture(this, "icon-fishStew", ICON_BOWL, ICON_FISH_STEW_PALETTE);
+    makeTexture(this, "icon-pumpkinPie", ICON_PIE, ICON_PUMPKIN_PIE_PALETTE);
+    makeTexture(this, "icon-moonTea", ICON_CUP, ICON_MOON_TEA_PALETTE);
+    makeTexture(this, "icon-map", ICON_MAP, ICON_MAP_PALETTE);
+    makeTexture(this, "cave", CAVE_TILE, CAVE_PALETTE);
+    makeTexture(this, "farm-field", FARM_FIELD_TILE, FARM_FIELD_PALETTE);
 
     makeHouse(this);
+    makeHouseLevels(this);
+    makeTexture(this, "hut-elder", ELDER_HUT, ELDER_HUT_PALETTE);
+    makeTexture(this, "stall-shop", SHOP_STALL, SHOP_STALL_PALETTE);
+    makeTexture(this, "forge", FORGE, FORGE_PALETTE);
+    makeTexture(this, "gate-arena", ARENA_GATE, ARENA_GATE_PALETTE);
+    makeTexture(this, "tent-gambler", GAMBLER_TENT, GAMBLER_TENT_PALETTE);
+    makeTexture(this, "lodge-hunter", HUNTER_LODGE, HUNTER_LODGE_PALETTE);
+    makeWorkplaceSnow(this);
     makeSign(this);
-    makeCave(this);
     makeBattleBgs(this);
     makeTitleBg(this);
   }

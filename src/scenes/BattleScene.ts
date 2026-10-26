@@ -1,36 +1,126 @@
 import Phaser from "phaser";
-import { BATTLE_THEME, Sfx } from "../audio";
+import { type AbyssBout, abyssDropMult } from "../abyss";
+import { ARENA_CLEAR_BONUS, ARENA_GOLD_SHARE, ARENA_RECOVER_PCT, type ArenaRun } from "../arena";
+import { BATTLE_THEME, BOSS_THEME, FOREST_BATTLE_THEME, Sfx, SNOW_BATTLE_THEME, VOLCANO_BATTLE_THEME } from "../audio";
+import {
+  BOSS_LOOT,
+  BOSS_TELL_CHANCE,
+  BOSS_TELL_COOLDOWN,
+  BOSS_TELLS,
+  type BossTell,
+  BURN_PROOF,
+  bossStrikeDamage,
+  CHILL_PROOF,
+  COMBO_CAP,
+  captureChance,
+  comboBonus,
+  companionAtk,
+  DEATH_GOLD_LOSS,
+  ENRAGE_ATK_MULT,
+  ENRAGE_HP_SHARE,
+  FIELD_LOOT,
+  FREEZE_GRACE_TURNS,
+  guardedDamage,
+  POISON_TURNS,
+  poisonTickDamage,
+  regenAmount,
+  rollDamage,
+  SPELL_EFFECT_WEAK_MULT,
+  SPELLS,
+  type Spell,
+  type SpellEffect,
+  STEAL_CHANCE,
+  STEAL_GOLD_PCT,
+  STREAK_CAP,
+  STREAK_MIN,
+  scaleEnemy,
+  spellRoll,
+  WARD_COLOR,
+  WARD_TURNS,
+  WEAKNESS_MULT,
+} from "../battleRules";
+import {
+  COMPANION_CHILL_MULT,
+  COMPANION_DOT_PCT,
+  COMPANION_DOT_TURNS,
+  COMPANION_DOUBLE_MULT,
+  COMPANION_HEAL_PCT,
+  COMPANION_PILFER_PCT,
+  COMPANION_SKILLS,
+  type CompanionSkill,
+  companionSkillChance,
+} from "../companionSkills";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP } from "../config";
+import { type MealDef, takeMealCharge } from "../cooking";
+import { MATERIALS, rollDrop } from "../drops";
+import { bakeBattleFx, flash, loopFx, playFx, shake } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
-import { type Element, ENEMIES, type EnemyDef } from "../monsters";
-import { retroStyle, showToast } from "../pixelart";
+import { RESTED_WARD_TURNS } from "../home";
+import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, MPOTION_MP, POTION_HP } from "../itemInfo";
+import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
+import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
-import { NIGHT_RANGE, NIGHT_TINT } from "../ui/NightOverlay";
+import { rollTreasureMap } from "../treasure";
+import { addBattleWeather } from "../ui/BattleWeather";
+import { GEAR_LAYOUT } from "../ui/HeroGear";
+import { skyOverlay } from "../ui/NightOverlay";
+import { battleBgKey } from "./BootScene";
+import type { EndingData } from "./EndingScene";
 
-const CRIT_CHANCE = 0.1;
-const CRIT_MULT = 2;
-// an attack spell hitting a species' weakness multiplies its rolled damage
-const WEAKNESS_MULT = 1.5;
-const NIGHT_STAT_MULT = 1.25;
-const NIGHT_LOOT_MULT = 1.5;
-const STREAK_MIN = 3;
-// a hit always lands for at least this share of its own roll, whatever the
-// target's defense
-const MIN_DAMAGE_SHARE = 0.2;
-// how much gold a defeat costs
-const DEATH_GOLD_LOSS = 0.5;
-const STREAK_CAP = 8;
-// each consecutive FIGHT adds this much extra damage, so a pure-fight run
-// outpaces pausing to heal; items/magic/flee reset it
-const COMBO_PCT = 0.1;
-const COMBO_CAP = 8;
-// flat roll, independent of enemy HP — unlike throwCandy's ratio-based
-// capture chance, so players can't game it by whittling the enemy down first
-const STEAL_CHANCE = 0.35;
-const STEAL_GOLD_PCT = 0.4;
 // snappy lunges (out/back) — slow enough to read, fast enough to feel quick
 const LUNGE_OUT_MS = 90;
 const LUNGE_BACK_MS = 110;
+// BATTLE SPEED (GameState.battleSpeed: 1 / 1.5 / 2) divides every animation
+// in a battle through anim(): lunges, projectiles, NOVA, the boss wind-up,
+// damage pop-ups, the typewriter and the closing fades. What it leaves alone:
+// the input waits (every message still needs Z), the game logic and its
+// rolls, the fx wrappers' SCREEN SHAKE / FLASHES settings, and the slow fade
+// into the ending or epilogue (a story beat, not battle chrome). The floors
+// keep FASTER readable: a damage or heal number stays up at least
+// POPUP_MIN_MS, a status pop STATUS_POP_MIN_MS, a typed glyph TYPE_MIN_MS.
+const POPUP_MIN_MS = 500;
+const STATUS_POP_MIN_MS = 600;
+const TYPE_MIN_MS = 6;
+const FREEZE_TINT = 0x67e8f9;
+const ENRAGE_TINT = 0xff7070;
+// each attack spell's projectile and the burst where it lands (fx.ts sheets)
+const SPELL_FX: Record<string, readonly [string, string]> = {
+  FIRE: ["fx-fireball", "fx-fire"],
+  ICE: ["fx-iceshard", "fx-ice"],
+  BOLT: ["fx-spark", "fx-bolt"],
+  NOVA: ["fx-orb", "fx-nova"],
+};
+// a hit's sheet plays as long as the spark burst under it lives (hitBurst's lifespan)
+const HIT_FX_MS = 300;
+// a status sheet as long as its label's pop (flashStatus), floor and all
+const STATUS_FX_MS = 900;
+
+// status labels sit right-aligned on the HP rows, 20px inside each window
+const PLAYER_STATUS_RIGHT = 476;
+const ENEMY_STATUS_RIGHT = GAME_WIDTH - 52;
+// Player tags are size 5, 3 glyphs = 60px with 20px between. "HP 999/999"
+// ends at x=304, so a row holds two (336..476); a third (WRD with PSN and
+// FRZ up) wraps to a second row in the free strip between the HP and MP
+// rows, right of the HP bar (which ends at x=240).
+const PLAYER_STATUS_MIN_X = 324;
+const STATUS_ROWS = [90, 114, 138];
+// the enemy side works the same way: "HP 700/700" (an NG+3 FLAME DRAKE, the
+// most HP in the game) ends at x=1056, so one tag fills row 1 and the rest stack below, right of
+// the HP bar (which ends at x=992). With a boss's CHG, RAGE, a companion's
+// PSN/BRN and CHL all up, the fourth takes a third row (y 138..158), above
+// the COMBO line at y=168. The player never has more than three tags.
+const ENEMY_STATUS_MIN_X = 1076;
+// ...which is why a foe's HP stays three digits (battleRules ENEMY_HP_MAX): a
+// fourth would run "HP" into the first tag. Nothing outside the deep ABYSS
+// comes near it.
+const DOT_COLOR = { PSN: "#c084fc", BRN: "#fb923c" } as const;
+// the action menu splits into two rows, rather than shrinking its font, once
+// one row at size 5 would leave less than MENU_MIN_GAP between buttons (see
+// create()); two-row buttons sit MENU_ROW_GAP apart on MENU_ROWS_Y
+const MENU_MARGIN = 48;
+const MENU_MIN_GAP = 20;
+const MENU_ROW_GAP = 40;
+const MENU_ROWS_Y = [GAME_HEIGHT - 208, GAME_HEIGHT - 172];
 
 type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
 // one flat action row, spells included at the same level as everything else;
@@ -63,24 +153,13 @@ const ITEM_COL_X = 48;
 const ITEM_COL_WIDTH = 280;
 const ITEM_TEXT_OFFSET = 32;
 
-// Spells are learned automatically at their level gate, so nothing about
-// them needs saving: an old save just knows fewer spells until it levels up.
-interface Spell {
-  name: string;
-  cost: number;
-  learnLevel: number;
-  kind: "attack" | "heal";
-  power: number;
-  color: number;
-  element?: Element; // checked against the enemy's weakness for bonus damage
-}
-
-const SPELLS: Spell[] = [
-  { name: "FIRE", cost: 3, learnLevel: 1, kind: "attack", power: 10, color: 0xffa500, element: "fire" },
-  { name: "HEAL", cost: 4, learnLevel: 5, kind: "heal", power: 20, color: 0x4ade80 },
-  { name: "ICE", cost: 6, learnLevel: 9, kind: "attack", power: 18, color: 0x67e8f9, element: "ice" },
-  { name: "BOLT", cost: 10, learnLevel: 14, kind: "attack", power: 30, color: 0xfde047, element: "bolt" },
-];
+// a region's ordinary fights play its own take on the battle riff (see
+// audio.ts); the Town and the Dungeon keep the original
+const REGION_BATTLE_THEMES: Record<string, typeof BATTLE_THEME> = {
+  Forest: FOREST_BATTLE_THEME,
+  Snow: SNOW_BATTLE_THEME,
+  Volcano: VOLCANO_BATTLE_THEME,
+};
 
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyDef & { curHp: number };
@@ -92,6 +171,9 @@ export class BattleScene extends Phaser.Scene {
 
   private menuButtons: MenuButton[] = [];
   private menuTexts: Phaser.GameObjects.Text[] = [];
+  // vertical tap padding around each menu button: 14px for the single row
+  // (short of the hint line at y=568), 8px once there are two rows
+  private menuHitPadY = 14;
 
   private inItems = false;
   private itemIndex = 0;
@@ -111,11 +193,47 @@ export class BattleScene extends Phaser.Scene {
   private running = false;
   private night = false;
   private waitingAction: { resolve: (a: MenuAction) => void } | null = null;
-  private origin: "Town" | "Dungeon" | "Forest" | "Snow" = "Town";
+  private origin: "Town" | "Dungeon" | "Forest" | "Snow" | "Volcano" | "Abyss" = "Town";
+  // set for an ARENA bout (see arena.ts); null for every ordinary battle
+  private arena: ArenaRun | null = null;
+  // set for a fight down in the ABYSS (see abyss.ts): its floor, and whether
+  // the foe is that floor's GUARDIAN
+  private abyss: AbyssBout | null = null;
   private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
   // one successful steal per battle; failed attempts don't count against it
   private stolen = false;
+  private poisonTurns = 0;
+  private frozen = false;
+  private freezeGrace = 0;
+  private enraged = false;
+  // a boss mid wind-up (its strike lands on its next turn), and the turns
+  // left before it may wind up again (see BOSS_TELLS)
+  private charging = false;
+  private tellCooldown = 0;
+  private chargeText!: Phaser.GameObjects.Text;
+  private wardTurns = 0;
+  // companion skill state on the enemy (see companionSkills.ts), which the
+  // elemental spells' side effects share: a poison or burn ticking down, a
+  // web or a BOLT's shock costing its next turn, CHILL/PILFER spent
+  private enemyDot: { label: "PSN" | "BRN"; turns: number } | null = null;
+  private stuck: "web" | "shock" | null = null;
+  private chilled = false;
+  private pilfered = false;
+  // ORC's BULWARK: halves the next enemy hit, then it's gone
+  private guarded = false;
+  private dotText!: Phaser.GameObjects.Text;
+  private chillText!: Phaser.GameObjects.Text;
+  private poisonText!: Phaser.GameObjects.Text;
+  private frozenText!: Phaser.GameObjects.Text;
+  private wardText!: Phaser.GameObjects.Text;
+  // the meal from HOME this battle is fought on (cooking.ts)
+  private meal: { def: MealDef; left: number } | null = null;
+  // WELL RESTED from the HOME's FEATHER BEDS (home.ts): WARD up at the start
+  private rested = false;
+  private rageText!: Phaser.GameObjects.Text;
+  // a pale bubble around the hero for as long as WARD holds
+  private wardRing!: Phaser.GameObjects.Arc;
 
   private hitBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private glowBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -127,25 +245,63 @@ export class BattleScene extends Phaser.Scene {
     super("Battle");
   }
 
-  init(data: { enemy: string; from?: "Town" | "Dungeon" | "Forest" | "Snow" }): void {
+  init(data: {
+    enemy: string;
+    from?: "Town" | "Dungeon" | "Forest" | "Snow" | "Volcano" | "Abyss";
+    arena?: ArenaRun;
+    abyss?: AbyssBout;
+  }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
+    this.arena = data?.arena ?? null;
+    this.abyss = data?.abyss ?? null;
+    // a meal lasts so many battles: this one takes its charge now, won, lost
+    // or fled, each ARENA bout included, and keeps the meal to its end
+    this.meal = takeMealCharge(GameState);
     this.combo = 0;
     this.stolen = false;
+    this.poisonTurns = 0;
+    this.frozen = false;
+    this.freezeGrace = 0;
+    this.enraged = false;
+    this.charging = false;
+    this.tellCooldown = 0;
+    this.wardTurns = 0;
+    // spent by this battle, whatever it is
+    this.rested = GameState.rested;
+    GameState.rested = false;
+    if (this.rested) this.wardTurns = RESTED_WARD_TURNS;
+    this.enemyDot = null;
+    this.stuck = null;
+    this.chilled = false;
+    this.pilfered = false;
+    this.guarded = false;
     const def = ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime;
-    this.enemy = { ...def, curHp: def.hp };
     // Night is the risk/reward shift: tougher enemies, richer payout. Applied
-    // to the copy, so ENEMIES stays the daytime baseline.
-    this.night = isNight();
-    if (this.night) {
-      this.enemy.hp = Math.round(def.hp * NIGHT_STAT_MULT);
-      this.enemy.curHp = this.enemy.hp;
-      this.enemy.atk = Math.round(def.atk * NIGHT_STAT_MULT);
-      this.enemy.gold = Math.round(def.gold * NIGHT_LOOT_MULT);
-      this.enemy.exp = Math.round(def.exp * NIGHT_LOOT_MULT);
-    }
+    // to the copy, so ENEMIES stays the daytime baseline. Two exceptions, from
+    // the balance audit:
+    // - a boss keeps its daytime HP/ATK, though not its daytime payout. A boss
+    //   is a gate the story sends you through, and night x1.25 on NEW GAME+'s
+    //   x2.5 left an NG+3 night FLAME DRAKE unwinnable. The TROLL KING, a
+    //   giant, keeps the whole shift: it roams the town fields like any wild
+    //   foe, so meeting it at night is a choice, and it's Lv8 content that NG+
+    //   outgrows.
+    // - the ARENA takes no night shift at all. Its bouts are the bosses (stats
+    //   already exempt) and that TROLL KING, and its prize is a share of their
+    //   gold, so night would only pay x1.5 for the same risk. NEW GAME+ scaling
+    //   still applies there: that risk is real.
+    // - the ABYSS has no night either: no sky underground, and its depth
+    //   scaling below is its whole risk/reward curve (abyss.ts).
+    // NEW GAME+: each cycle hardens every foe on top of the night shift
+    // (GameState.enemyScale; 1 and 1 on a first playthrough), and in the ABYSS
+    // the floor's depth on top of that (abyss.ts abyssScale, capped). HP stops
+    // at ENEMY_HP_MAX, which only the deep ABYSS ever reaches. A GUARDIAN pays
+    // a cut of its gold, as an ARENA bout does: its first kill already paid
+    // in full (abyss.ts). The arithmetic is battleRules.scaleEnemy's.
+    this.night = isNight() && !this.abyss;
+    this.enemy = scaleEnemy(def, { night: this.night, arena: !!this.arena, abyss: this.abyss, ng: GameState.enemyScale() });
     const from = data?.from;
-    this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" ? from : "Town";
+    this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" || from === "Volcano" || from === "Abyss" ? from : "Town";
     if (!GameState.seenMonsters.includes(def.name)) {
       GameState.seenMonsters.push(def.name);
       // persist immediately: a battle ended by RUN never reaches the
@@ -155,7 +311,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
-    Sfx.playBgm(BATTLE_THEME);
+    Sfx.playBgm(this.enemy.boss || this.enemy.giant ? BOSS_THEME : (REGION_BATTLE_THEMES[this.origin] ?? BATTLE_THEME));
     this.menuTexts = [];
     this.itemTexts = [];
     this.inItems = false;
@@ -165,7 +321,20 @@ export class BattleScene extends Phaser.Scene {
     const unsubSaved = onSaved(() => showToast(this, "SAVED"));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubSaved);
 
-    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, `battle-bg-${this.origin.toLowerCase()}`);
+    // the town's and the forest's in the season's look, as their maps are; the
+    // ABYSS has its own (src/backdrops.ts) and the cave's lack of weather
+    const field = this.origin === "Abyss" ? "Dungeon" : this.origin;
+    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, battleBgKey(this.origin));
+    addBattleWeather(this, field);
+    // The night shade covers just the backdrop and its weather: everything
+    // added after it (fighters, windows, menus, numbers) draws on top at full
+    // brightness. Over the whole screen it dimmed every line of UI text. It's
+    // the open-ground sky of the field the fight started in (the ARENA's is
+    // the Town's), dawn and dusk colours included, so it carries straight on
+    // from the field; static, since the clock doesn't advance during a battle.
+    // The ABYSS has no sky and no night (see init).
+    const sky = skyOverlay(this.origin);
+    if (sky.alpha > 0 && !this.abyss) this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, sky.color, sky.alpha);
 
     // STREAK/COMBO live on the free line inside each stat window (below the
     // MP/HP rows) — at (16,24)/(GAME_WIDTH-16,24) they sat on top of the
@@ -177,23 +346,49 @@ export class BattleScene extends Phaser.Scene {
     // live combo counter, filled in by updateCombo() on every fight/heal turn
     this.comboText = this.add.text(GAME_WIDTH - 464, 168, "", retroStyle(6, "#fbbf24")).setDepth(120);
 
-    if (this.night) {
+    // Stacked in the gap between the two stat windows (x 496..784): as one
+    // 840px line across the top it ran over both windows and the foe's name.
+    // "TOUGHER FOES" is 12 x 20 = 240px, x 520..760, 24px clear of each
+    // window. It says only what the night changes here (see init): the
+    // payout for a boss, nothing in the ARENA, whose label takes the gap.
+    if (this.night && !this.arena) {
       this.add
-        // static: the clock doesn't advance during a battle
-        .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, NIGHT_TINT, NIGHT_RANGE)
-        .setDepth(1);
+        .text(GAME_WIDTH / 2, 40, this.enemy.boss ? "NIGHT\nRICHER LOOT" : "NIGHT\nTOUGHER FOES\nRICHER LOOT", retroStyle(5, "#a5b4fc"))
+        .setOrigin(0.5, 0)
+        .setAlign("center")
+        .setLineSpacing(8)
+        .setDepth(120);
+    }
+
+    // in the gap between the two stat windows (x 496..784), where the night
+    // note goes outside the ARENA: "ARENA 5/5" is 9 x 24 = 216px, x 532..748
+    if (this.arena) {
       this.add
-        .text(GAME_WIDTH / 2, 24, "NIGHT: STRONGER FOES, RICHER SPOILS", retroStyle(6, "#a5b4fc"))
+        .text(GAME_WIDTH / 2, 64, `ARENA ${this.arena.round + 1}/${this.arena.lineup.length}`, retroStyle(6, "#fbbf24"))
+        .setOrigin(0.5, 0)
+        .setDepth(120);
+    }
+    // ...and the ABYSS floor in the same spot (no night note down there):
+    // "ABYSS B999" is 10 x 24 = 240px, x 520..760
+    if (this.abyss) {
+      this.add
+        .text(GAME_WIDTH / 2, 64, `ABYSS B${this.abyss.floor}`, retroStyle(6, "#c084fc"))
         .setOrigin(0.5, 0)
         .setDepth(120);
     }
 
-    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, 280, this.enemy.texture).setScale(this.enemy.boss || this.enemy.giant ? 3 : 2);
+    // Bosses and giants draw at 3x (192px). Centred at 280 their top (184) ran
+    // under the enemy window (bottom 200) and hid the FLAME DRAKE's horns; at
+    // 312 even the 1.15x charge pulse stays below it.
+    const big = this.enemy.boss || this.enemy.giant;
+    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, big ? 312 : 280, this.enemy.texture).setScale(big ? 3 : 2);
     if (this.enemy.tint) this.enemySprite.setTint(this.enemy.tint);
     this.playerSprite = this.add.sprite(320, 368, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
-    this.weaponOverlay = this.add.sprite(348, 368, GameState.weaponTexture()).setScale(2);
-    this.shieldOverlay = this.add.sprite(292, 368, GameState.armorTexture()).setScale(2);
+    // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
+    const { weapon, shield } = GEAR_LAYOUT.down;
+    this.weaponOverlay = this.add.sprite(320 + weapon.x * 2, 368 + weapon.y * 2, GameState.weaponTexture()).setScale(2);
+    this.shieldOverlay = this.add.sprite(320 + shield.x * 2, 368 + shield.y * 2, GameState.armorTexture()).setScale(2);
     this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
     this.shieldOverlay.setVisible(!!GameState.equipped.armor);
 
@@ -222,6 +417,29 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0, 0);
     this.enemyHpBar = this.add.rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444).setOrigin(0, 0.5);
 
+    // one size smaller than the HP rows so "HP 999/999" (ends x=304) keeps a
+    // gap to "PSN FRZ" (x=336..476) when both statuses are up
+    this.poisonText = this.add.text(0, 90, "PSN", retroStyle(5, "#c084fc")).setOrigin(1, 0);
+    this.frozenText = this.add.text(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0);
+    this.wardText = this.add.text(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0);
+    // the meal's tag and battles left, this one counted, on the MP row
+    // right-aligned in the window: "MP 999/999" ends at x=304, the longest
+    // tag "GRILL 5" (140px) starts at 336
+    if (this.meal) this.add.text(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0);
+    this.wardRing = this.add
+      .circle(this.playerSprite.x, this.playerSprite.y, 64, WARD_COLOR, 0.12)
+      .setStrokeStyle(3, WARD_COLOR, 0.8)
+      .setVisible(false);
+    this.tweens.add({ targets: this.wardRing, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    this.rageText = this.add.text(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555")).setOrigin(1, 0).setVisible(false);
+    this.dotText = this.add.text(ENEMY_STATUS_RIGHT, 90, "PSN", retroStyle(5, DOT_COLOR.PSN)).setOrigin(1, 0).setVisible(false);
+    this.chillText = this.add.text(ENEMY_STATUS_RIGHT, 90, "CHL", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setVisible(false);
+    // pulses while a boss winds up, so the warning outlives its message
+    this.chargeText = this.add.text(ENEMY_STATUS_RIGHT, 90, "CHG", retroStyle(5, "#f97316")).setOrigin(1, 0).setVisible(false);
+    this.tweens.add({ targets: this.chargeText, alpha: 0.35, duration: 320, yoyo: true, repeat: -1 });
+    this.updateEnemyStatus();
+    this.updateStatus();
+
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92).setStrokeStyle(1, 0xffffff);
     this.msgText = this.add.text(64, GAME_HEIGHT - 104, "", retroStyle(8, "#f5f5f5")).setWordWrapWidth(GAME_WIDTH - 128);
 
@@ -233,23 +451,52 @@ export class BattleScene extends Phaser.Scene {
       ),
       { label: "E:ITEM", action: "item" },
       { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
-      { label: "ESC:RUN", action: "run" },
+      { label: "ESC:RUN", action: "run", enabled: () => !this.arena },
     ];
-    // spread the row evenly from measured text widths — up to 8 buttons once
-    // every spell is learned, so fixed 256px slots no longer fit
-    const margin = 48;
+    // Always size 5 (20px a glyph), within 48px margins (1184px of room).
+    // Up to BOLT the 8 buttons (50 glyphs, 1000px) fit one row, spread evenly
+    // with 26px gaps — the layout from Lv1 to Lv17. WARD makes it 56 glyphs
+    // (8px gaps) and NOVA 62 (1240px, wider than the room), so from Lv18 the
+    // attacks (FIGHT and the spells) take a row of their own above ITEM /
+    // STEAL / RUN, each centered with MENU_ROW_GAP between buttons; Lv24's
+    // attack row is the widest, 42 glyphs = 840 + 6 x 40 = 1080px. The rows'
+    // glyphs (y 502..522 / 538..558) clear the companion sprite (to y 488)
+    // above and the hint line (568..584) and message box (604) below.
     this.menuTexts = this.menuButtons.map((b) => this.add.text(0, menuY, b.label, retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
+    const room = GAME_WIDTH - MENU_MARGIN * 2;
     const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
-    const gap = (GAME_WIDTH - margin * 2 - total) / (this.menuTexts.length - 1);
-    let x = margin;
-    for (const t of this.menuTexts) {
-      t.setX(x);
-      x += t.width + gap;
+    const oneRowGap = (room - total) / (this.menuTexts.length - 1);
+    if (oneRowGap >= MENU_MIN_GAP) {
+      let x = MENU_MARGIN;
+      for (const t of this.menuTexts) {
+        t.setX(x);
+        x += t.width + oneRowGap;
+      }
+      this.menuHitPadY = 14;
+    } else {
+      const isAttack = (i: number) => this.menuButtons[i].action === "fight" || this.menuButtons[i].action === "magic";
+      const rows = [this.menuTexts.filter((_, i) => isAttack(i)), this.menuTexts.filter((_, i) => !isAttack(i))];
+      rows.forEach((row, r) => {
+        const width = row.reduce((n, t) => n + t.width, 0);
+        // a spell list longer than today's would close the gaps before overflowing
+        const gap = Math.min(MENU_ROW_GAP, (room - width) / Math.max(1, row.length - 1));
+        let x = GAME_WIDTH / 2 - (width + gap * (row.length - 1)) / 2;
+        for (const t of row) {
+          t.setPosition(x, MENU_ROWS_Y[r]);
+          x += t.width + gap;
+        }
+      });
+      // 36px between the rows' centres: 8px of padding each way keeps the
+      // two rows' tap boxes from overlapping
+      this.menuHitPadY = 8;
     }
     this.hideMenu();
 
+    // outlined like the map's name tags: it sits on the backdrop's field,
+    // not a panel (#9f9fd0 on that green is 1.4:1 bare)
     this.hintText = this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT - 144, "", retroStyle(4, "#9f9fd0"))
+      .setStroke("#0b0b2b", 4)
       .setOrigin(0.5)
       .setDepth(30);
 
@@ -270,6 +517,8 @@ export class BattleScene extends Phaser.Scene {
     }
     this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
 
+    // drawn once, by the first battle; later ones reuse the textures
+    bakeBattleFx(this);
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
       lifespan: 300,
@@ -368,6 +617,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (e.code === "Escape") {
+      // no way out of an ARENA bout but through it (see arena.ts)
+      if (this.arena) {
+        Sfx.error();
+        return;
+      }
       this.resolveAction("run");
       return;
     }
@@ -381,10 +635,9 @@ export class BattleScene extends Phaser.Scene {
       this.inItems = true;
       return;
     }
-    // direct spell hotkeys — the first letter of each spell (F/H/I/B are all
-    // distinct); unlearned or unaffordable just beeps. The MAGIC submenu
-    // stays reachable by clicking the menu button.
-    if (e.code === "KeyF" || e.code === "KeyI" || e.code === "KeyB" || e.code === "KeyH") {
+    // direct spell hotkeys — the first letter of each spell (F/H/I/B/W/N are
+    // all distinct, see Spell); unlearned or unaffordable just beeps
+    if (e.code.startsWith("Key") && SPELLS.some((s) => s.name[0] === e.code[3])) {
       const spell = this.knownSpells().find((s) => s.name.startsWith(e.code[3]));
       if (!spell || !this.canCast(spell)) {
         Sfx.error();
@@ -407,7 +660,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private stealAvailable(): boolean {
-    return !this.enemy.boss && !this.stolen;
+    return !this.enemy.boss && !this.stolen && !this.arena;
   }
 
   private resolveAction(action: MenuAction): void {
@@ -442,7 +695,9 @@ export class BattleScene extends Phaser.Scene {
 
     for (let i = 0; i < this.menuButtons.length; i++) {
       const t = this.menuTexts[i];
-      if (!t.visible || !t.getBounds().contains(pointer.x, pointer.y)) continue;
+      // padded past the glyphs so a button is a fair finger target: 8px of
+      // the >= 20px gap each side, and menuHitPadY up and down (see create())
+      if (!t.visible || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, this.menuHitPadY).contains(pointer.x, pointer.y)) continue;
       const btn = this.menuButtons[i];
       if (btn.enabled && !btn.enabled()) {
         Sfx.error();
@@ -473,7 +728,7 @@ export class BattleScene extends Phaser.Scene {
       this.menuTexts[i].setVisible(true);
       // gray out whatever can't be picked right now (MP-starved spell,
       // full-HP heal, spent steal)
-      this.menuTexts[i].setColor((this.menuButtons[i].enabled?.() ?? true) ? "#ffffff" : "#666666");
+      this.menuTexts[i].setColor((this.menuButtons[i].enabled?.() ?? true) ? "#ffffff" : DIM_TEXT);
     }
     this.hintText.setText(""); // every action, spells included, has a button above
   }
@@ -488,7 +743,7 @@ export class BattleScene extends Phaser.Scene {
       this.itemTexts[i].setVisible(true);
       const count = GameState.inventory[ITEM_SLOTS[i].key];
       this.itemTexts[i].setText(`${ITEM_SLOTS[i].label} x${count}`);
-      this.itemTexts[i].setColor(count > 0 ? "#ffffff" : "#666666");
+      this.itemTexts[i].setColor(count > 0 ? "#ffffff" : DIM_TEXT);
     }
     this.itemCursor.setVisible(true);
     const target = this.itemTexts[this.itemIndex];
@@ -503,12 +758,17 @@ export class BattleScene extends Phaser.Scene {
 
   private async runBattle(): Promise<void> {
     if (this.enemy.boss || this.enemy.giant) Sfx.boss();
-    await this.say(`${this.enemy.name} blocks your way!`);
+    await this.say(this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`);
+    if (this.rested) await this.say("Well rested: your WARD is up!");
 
     while (this.running) {
       if (GameState.player.hp <= 0) return this.defeat();
 
-      const action = await this.playerTurn();
+      if (this.poisonTurns > 0) await this.poisonTick();
+      // a frozen hero forfeits this action (null matches no case below); the
+      // companion and the enemy still take their turns
+      const action = this.frozen ? null : await this.playerTurn();
+      if (!action) await this.thaw();
 
       switch (action) {
         case "run": {
@@ -568,7 +828,18 @@ export class BattleScene extends Phaser.Scene {
       if (this.enemy.curHp <= 0) return this.victory();
 
       await this.enemyTurn();
+      await this.tickWard();
     }
+  }
+
+  // one enemy turn spent, whether it attacked, regrew or was the thaw round
+  private async tickWard(): Promise<void> {
+    if (this.wardTurns === 0) return;
+    this.wardTurns -= 1;
+    if (this.wardTurns > 0) return;
+    this.updateStatus();
+    // a hero the last blow just felled goes straight to defeat() instead
+    if (GameState.player.hp > 0) await this.say("Your WARD fades.");
   }
 
   private playerTurn(): Promise<MenuAction> {
@@ -585,15 +856,17 @@ export class BattleScene extends Phaser.Scene {
     if (this.combo >= COMBO_CAP) GameState.quest.comboCapped = true;
     this.updateCombo();
     const comboBonus = this.comboBonus();
-    const { dmg, crit } = this.calcDamage(GameState.effAtk(), this.enemy.def);
+    const { dmg, crit } = rollDamage(this.heroAtk(), this.enemy.def);
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
     Sfx.strike();
     if (crit) Sfx.critical();
     this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
     this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.fxOn(this.enemySprite, "fx-slash", HIT_FX_MS);
+    if (crit) this.fxOn(this.enemySprite, "fx-crit", HIT_FX_MS);
     this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
-    this.cameras.main.shake(crit ? 120 : 60, crit ? 0.012 : 0.004);
+    shake(this.cameras.main, crit ? 120 : 60, crit ? 0.012 : 0.004);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, crit);
     const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
     await this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
@@ -603,56 +876,126 @@ export class BattleScene extends Phaser.Scene {
 
   private canCast(spell: Spell): boolean {
     if (GameState.player.mp < spell.cost) return false;
-    return !(spell.kind === "heal" && GameState.player.hp >= GameState.effMaxHp());
+    return !(spell.kind === "heal" && this.hpFull());
+  }
+
+  // full HP only blocks a heal when there's no poison left to cure with it
+  private hpFull(): boolean {
+    return GameState.player.hp >= GameState.effMaxHp() && this.poisonTurns === 0;
+  }
+
+  // every HP-restoring action (HEAL, POTION, HI-POTION, ELIXIR) also cures
+  // poison; returns the suffix for that action's message
+  private curePoison(): string {
+    if (this.poisonTurns === 0) return "";
+    this.poisonTurns = 0;
+    this.updateStatus();
+    return " Poison cured!";
   }
 
   private async castSpell(spell: Spell): Promise<void> {
     this.resetCombo();
-    Sfx.magic();
+    if (spell.kind === "ward") Sfx.ward();
+    else if (spell.ultimate) Sfx.nova();
+    else Sfx.magic();
     GameState.player.mp -= spell.cost;
     this.updatePlayerStats();
     if (spell.kind === "heal") {
       const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, spell.power);
       GameState.player.hp += healed;
       this.updatePlayerStats();
-      this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-      this.healBurst.explode(12);
-      this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
-      await this.say(`${spell.name} restores ${healed} HP!`);
+      // the sheet in place of the glow burst, as long as that burst lived
+      this.fxOn(this.playerSprite, "fx-heal", 500);
+      if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+      await this.say(`${spell.name} restores ${healed} HP!${this.curePoison()}`);
       return;
     }
-    const roll = spell.power + Math.floor(Math.random() * Math.ceil(spell.power / 2));
-    const weak = spell.element !== undefined && this.enemy.weakness === spell.element;
-    const dmg = Math.floor(roll * (weak ? WEAKNESS_MULT : 1));
-    await this.castProjectile(spell.color);
+    if (spell.kind === "ward") {
+      const refreshed = this.wardTurns > 0;
+      this.wardTurns = WARD_TURNS;
+      this.updateStatus();
+      this.fxOn(this.playerSprite, "fx-ward", 500);
+      this.flashStatus("WARD", "#93c5fd");
+      await this.say(refreshed ? `WARD renewed for ${WARD_TURNS} turns!` : `A WARD halves damage for ${WARD_TURNS} turns!`);
+      return;
+    }
+    const { dmg, weak } = spellRoll(spell, this.enemy.weakness);
+    const fx = spell.effect;
+    const effect =
+      fx && this.spellEffectCanLand(fx.kind) && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
+    if (spell.ultimate) await this.castNova(spell);
+    else await this.castProjectile(spell);
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
     if (weak) {
       Sfx.critical();
-      this.cameras.main.shake(120, 0.01);
+      shake(this.cameras.main, 120, 0.01);
     }
-    await this.say(weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`);
+    // worst case "WEAKNESS! ICE hits for 39! ATK DN!", 34 glyphs
+    const tail = effect && this.enemy.curHp > 0 ? this.landSpellEffect(effect) : "";
+    await this.say(`${weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`}${tail}`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
   }
 
+  // the companion skills' own "would it do anything" rules (see
+  // companionSkillUseful), plus BURN_PROOF / CHILL_PROOF
+  private spellEffectCanLand(kind: SpellEffect): boolean {
+    const name = this.enemy.name;
+    if (kind === "burn") return this.enemyDot === null && !BURN_PROOF.includes(name);
+    if (kind === "chill") return !this.chilled && !CHILL_PROOF.includes(name);
+    return !this.stuck && !this.enemy.boss && !this.enemy.giant;
+  }
+
+  // Applies a landed side effect; returns the tail for the spell's message.
+  // Its label pops beside the foe, on the hero's side: over the sprite it
+  // would vanish into the hit flash (the spell's own colour, which is also
+  // the label's), and above it is the damage number's lane. "STUN" is 160px
+  // wide, so x-200 ends at 840, clear of even a boss's 192px sprite (864).
+  private landSpellEffect(kind: SpellEffect): string {
+    const x = this.enemySprite.x - 200;
+    const y = this.enemySprite.y;
+    if (kind === "burn") {
+      this.enemyDot = { label: "BRN", turns: COMPANION_DOT_TURNS };
+      this.updateEnemyStatus();
+      Sfx.spark();
+      this.fxOn(this.enemySprite, "fx-burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.flashStatus("BRN", DOT_COLOR.BRN, x, y);
+      return " BURN!";
+    }
+    if (kind === "chill") {
+      this.chilled = true;
+      this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
+      this.updateEnemyStatus();
+      Sfx.freeze();
+      this.fxOn(this.enemySprite, "fx-chill", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.flashStatus("CHL", "#67e8f9", x, y);
+      return " ATK DN!";
+    }
+    this.stuck = "shock";
+    Sfx.shock();
+    this.fxOn(this.enemySprite, "fx-shock", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.flashStatus("STUN", "#fde047", x, y);
+    return " STUN!";
+  }
+
   private async usePotion(): Promise<void> {
     this.resetCombo();
-    if (GameState.player.hp >= GameState.effMaxHp()) {
+    if (this.hpFull()) {
       Sfx.error();
       await this.say("HP is already full!");
       return;
     }
     Sfx.buy();
     GameState.inventory.potion -= 1;
-    const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, 25);
+    const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, POTION_HP);
     GameState.player.hp += healed;
     this.updatePlayerStats();
     this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.healBurst.explode(10);
-    this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
-    await this.say(`Potion heals ${healed} HP!`);
+    if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+    await this.say(`Potion heals ${healed} HP!${this.curePoison()}`);
   }
 
   private async useMPotion(): Promise<void> {
@@ -664,7 +1007,7 @@ export class BattleScene extends Phaser.Scene {
     }
     Sfx.buy();
     GameState.inventory.mPotion -= 1;
-    const restored = Math.min(GameState.player.maxMp - GameState.player.mp, 8);
+    const restored = Math.min(GameState.player.maxMp - GameState.player.mp, MPOTION_MP);
     GameState.player.mp += restored;
     this.updatePlayerStats();
     await this.say(`Magic restores ${restored} MP!`);
@@ -672,20 +1015,20 @@ export class BattleScene extends Phaser.Scene {
 
   private async useHiPotion(): Promise<void> {
     this.resetCombo();
-    if (GameState.player.hp >= GameState.effMaxHp()) {
+    if (this.hpFull()) {
       Sfx.error();
       await this.say("HP is already full!");
       return;
     }
     Sfx.buy();
     GameState.inventory.hiPotion -= 1;
-    const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, 50);
+    const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, HI_POTION_HP);
     GameState.player.hp += healed;
     this.updatePlayerStats();
     this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.healBurst.explode(10);
-    this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
-    await this.say(`Hi-Potion heals ${healed} HP!`);
+    if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+    await this.say(`Hi-Potion heals ${healed} HP!${this.curePoison()}`);
   }
 
   private async useEther(): Promise<void> {
@@ -697,7 +1040,7 @@ export class BattleScene extends Phaser.Scene {
     }
     Sfx.buy();
     GameState.inventory.ether -= 1;
-    const restored = Math.min(GameState.player.maxMp - GameState.player.mp, 12);
+    const restored = Math.min(GameState.player.maxMp - GameState.player.mp, ETHER_MP);
     GameState.player.mp += restored;
     this.updatePlayerStats();
     await this.say(`Ether restores ${restored} MP!`);
@@ -705,7 +1048,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async useElixir(): Promise<void> {
     this.resetCombo();
-    if (GameState.player.hp >= GameState.effMaxHp() && GameState.player.mp >= GameState.player.maxMp) {
+    if (this.hpFull() && GameState.player.mp >= GameState.player.maxMp) {
       Sfx.error();
       await this.say("HP and MP are already full!");
       return;
@@ -720,14 +1063,14 @@ export class BattleScene extends Phaser.Scene {
     this.healBurst.explode(12);
     const healed = GameState.effMaxHp() - hpBefore;
     if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
-    await this.say("Elixir fully restores HP and MP!");
+    await this.say(`Elixir fully restores HP and MP!${this.curePoison()}`);
   }
 
   private async throwBomb(): Promise<void> {
     this.resetCombo();
     Sfx.hit();
     GameState.inventory.bomb -= 1;
-    const dmg = 12;
+    const dmg = BOMB_DAMAGE;
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.enemySprite.setTint(0xffa500).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
@@ -743,12 +1086,22 @@ export class BattleScene extends Phaser.Scene {
       await this.say(`The ${this.enemy.name} is too strong!`);
       return;
     }
+    // the TROLL KING is a giant, catchable in the wild but not mid-gauntlet
+    if (this.arena) {
+      Sfx.error();
+      await this.say("No catching in the ARENA!");
+      return;
+    }
+    // ...nor as an ABYSS guardian (abyss.ts): a sure TROLL KING on B10 would
+    // be a free catch
+    if (this.abyss?.guardian) {
+      Sfx.error();
+      await this.say("A GUARDIAN can't be caught!");
+      return;
+    }
     Sfx.capture();
     GameState.inventory.candy -= 1;
-    const ratio = this.enemy.curHp / this.enemy.hp;
-    let chance = 0.15;
-    if (ratio < 0.5) chance = 0.4 + (1 - ratio) * 0.3;
-    if (Math.random() < chance) {
+    if (Math.random() < captureChance(this.enemy.curHp, this.enemy.hp)) {
       GameState.caught.push(this.enemy.name);
       GameState.companion = this.enemy.name;
       await this.say(`You caught ${this.enemy.name}! It joins your party!`);
@@ -789,8 +1142,9 @@ export class BattleScene extends Phaser.Scene {
     await this.say("You failed to steal anything!");
   }
 
-  // the caught monster fights alongside the hero: one follow-up strike per
-  // turn, scaled by its species attack plus half the hero's level
+  // the caught monster fights alongside the hero: one follow-up strike (or its
+  // species skill) per turn, scaled by its species attack plus half the hero's
+  // level and its bond, times COMPANION_ATK_MULT
   private async companionAttack(): Promise<void> {
     const name = GameState.companion;
     const def = name ? Object.values(ENEMIES).find((e) => e.name === name) : undefined;
@@ -799,51 +1153,470 @@ export class BattleScene extends Phaser.Scene {
     // bond bonus (see GameState.companionBondBonus); this fires once per
     // surviving round, so a long fight builds bond faster than a one-shot kill
     GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
+    const bond = GameState.companionBondBonus(name);
+    const atk = companionAtk(def, GameState.player.level, bond);
+    const skill = COMPANION_SKILLS[name];
+    if (skill && this.companionSkillUseful(skill) && Math.random() < companionSkillChance(bond)) {
+      await this.companionSkill(name, skill, atk);
+      return;
+    }
     Sfx.attack();
-    const sprite = this.companionSprite;
     let dmg = 0;
     let crit = false;
-    await new Promise<void>((resolve) => {
-      this.tweens.add({
-        targets: sprite,
-        x: this.enemySprite.x - 90,
-        y: this.enemySprite.y + 70,
-        duration: 130,
-        yoyo: true,
-        hold: 50,
-        onUpdate: this.ghostTrail(sprite),
-        onYoyo: () => {
-          const atk = def.atk + Math.floor(GameState.player.level / 2) + GameState.companionBondBonus(name);
-          ({ dmg, crit } = this.calcDamage(atk, this.enemy.def));
-          Sfx.strike();
-          if (crit) Sfx.critical();
-          this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
-          this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-          this.hitBurst.explode(crit ? 12 : 6);
-          this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg, crit);
-          this.updateEnemyHp();
-        },
-        onComplete: () => resolve(),
-      });
+    await this.companionLunge(() => {
+      ({ dmg, crit } = rollDamage(atk, this.enemy.def));
+      this.companionHit(dmg, crit);
     });
     await this.say(crit ? `CRITICAL! ${name} helps for ${dmg}!` : `${name} attacks for ${dmg}!`);
   }
 
+  // Dash at the foe and back; onHit runs once at the far end of the dash.
+  // Once: Phaser fires onYoyo per tweened property, and this tween moves x
+  // and y, so the strike used to land twice — two rolls of damage behind a
+  // message that reported one.
+  private companionLunge(onHit: () => void): Promise<void> {
+    const sprite = this.companionSprite;
+    if (!sprite) return Promise.resolve();
+    let struck = false;
+    return new Promise<void>((resolve) => {
+      this.tweens.add({
+        targets: sprite,
+        x: this.enemySprite.x - 90,
+        y: this.enemySprite.y + 70,
+        duration: this.anim(130),
+        yoyo: true,
+        hold: this.anim(50),
+        onUpdate: this.ghostTrail(sprite),
+        onYoyo: () => {
+          if (struck) return;
+          struck = true;
+          onHit();
+        },
+        onComplete: () => resolve(),
+      });
+    });
+  }
+
+  private companionHit(dmg: number, crit: boolean, tint?: number): void {
+    Sfx.strike();
+    if (crit) Sfx.critical();
+    this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
+    this.fxOn(this.enemySprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
+    this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+    this.hitBurst.explode(crit ? 12 : 6);
+    if (tint !== undefined) {
+      this.enemySprite.setTint(tint).setTintMode(Phaser.TintModes.FILL);
+      this.time.delayedCall(this.anim(200), () => this.restoreEnemyTint());
+    }
+    this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg, crit);
+    this.updateEnemyHp();
+  }
+
+  // a skill that can't do anything this round isn't rolled at all, so the
+  // companion strikes normally instead of wasting its turn
+  private companionSkillUseful(skill: CompanionSkill): boolean {
+    switch (skill.kind) {
+      case "heal":
+        return GameState.player.hp < GameState.effMaxHp();
+      case "pilfer":
+        // no gold out of a repeatable gauntlet but the prize (see arena.ts)
+        return !this.pilfered && !this.arena;
+      case "dot":
+        return this.enemyDot === null;
+      case "snare":
+        return !this.stuck && !this.enemy.boss && !this.enemy.giant;
+      case "guard":
+        return !this.guarded && this.wardTurns === 0;
+      case "chill":
+        return !this.chilled;
+      default:
+        return true;
+    }
+  }
+
+  // Messages stay within one 36-glyph line at worst: "SPIDER: WEB SNARE!
+  // 999, foe stuck" (33), "FROST MOTH: CHILL! 999 dmg ATK DN" (33).
+  private async companionSkill(name: string, skill: CompanionSkill, atk: number): Promise<void> {
+    const head = `${name}: ${skill.name}!`;
+    if (skill.kind === "heal") {
+      const max = GameState.effMaxHp();
+      const healed = Math.min(max - GameState.player.hp, Math.max(1, Math.round(max * COMPANION_HEAL_PCT)));
+      GameState.player.hp += healed;
+      Sfx.magic();
+      this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+      this.healBurst.explode(12);
+      this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+      this.updatePlayerStats();
+      await this.say(`${head} +${healed} HP`);
+      return;
+    }
+
+    Sfx.attack();
+    if (skill.kind === "double") {
+      const bites: number[] = [];
+      await this.companionLunge(() => {
+        const { dmg, crit } = rollDamage(atk, this.enemy.def);
+        bites.push(Math.max(1, Math.floor(dmg * COMPANION_DOUBLE_MULT)));
+        this.companionHit(bites[0], crit);
+      });
+      if (this.enemy.curHp > 0) {
+        await this.companionLunge(() => {
+          const { dmg, crit } = rollDamage(atk, this.enemy.def);
+          bites.push(Math.max(1, Math.floor(dmg * COMPANION_DOUBLE_MULT)));
+          this.companionHit(bites[1], crit);
+        });
+      }
+      await this.say(`${head} ${bites.join("+")} dmg`);
+      return;
+    }
+
+    const weak = skill.element !== undefined && this.enemy.weakness === skill.element;
+    const tint =
+      skill.element === "ice"
+        ? 0x67e8f9
+        : skill.element === "fire" || skill.dot === "BRN"
+          ? 0xfb923c
+          : skill.dot === "PSN"
+            ? 0xc084fc
+            : 0xffffff;
+    let dmg = 0;
+    await this.companionLunge(() => {
+      const roll = rollDamage(atk, skill.pierce ? 0 : this.enemy.def);
+      dmg = Math.max(1, Math.floor(roll.dmg * (skill.mult ?? 1) * (weak ? WEAKNESS_MULT : 1)));
+      this.companionHit(dmg, roll.crit, tint);
+    });
+
+    let tail = `${dmg} dmg`;
+    if (skill.kind === "drain") {
+      const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, Math.ceil(dmg / 2));
+      GameState.player.hp += healed;
+      if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
+      this.updatePlayerStats();
+      tail = `${dmg} dmg +${healed} HP`;
+    } else if (skill.kind === "pilfer") {
+      this.pilfered = true;
+      const gold = GameState.gainGold(Math.max(1, Math.round(this.enemy.gold * COMPANION_PILFER_PCT)));
+      Sfx.pickup();
+      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+      this.coinBurst.explode(8);
+      tail = `${dmg} dmg +${gold}G`;
+    } else if (skill.kind === "dot" && skill.dot && this.enemy.curHp > 0) {
+      this.enemyDot = { label: skill.dot, turns: COMPANION_DOT_TURNS };
+      this.updateEnemyStatus();
+      tail = `${dmg} dmg, ${skill.dot}`;
+    } else if (skill.kind === "snare" && this.enemy.curHp > 0) {
+      this.stuck = "web";
+      tail = `${dmg}, foe stuck`;
+    } else if (skill.kind === "guard") {
+      this.guarded = true;
+      tail = `${dmg} dmg +GUARD`;
+    } else if (skill.kind === "chill" && this.enemy.curHp > 0) {
+      this.chilled = true;
+      this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
+      this.updateEnemyStatus();
+      tail = `${dmg} dmg ATK DN`;
+    } else if (weak) {
+      tail = `WEAK! ${dmg} dmg`;
+    }
+    await this.say(`${head} ${tail}`);
+  }
+
+  // start of the enemy's turn, the companion-skill twin of poisonTick(): it
+  // can't take the last HP either, so a fight is still won by a blow
+  private async enemyDotTick(): Promise<void> {
+    const dot = this.enemyDot;
+    if (!dot) return;
+    dot.turns -= 1;
+    const dmg = Math.min(Math.max(1, Math.round(this.enemy.hp * COMPANION_DOT_PCT)), this.enemy.curHp - 1);
+    const word = dot.label === "PSN" ? "POISON" : "BURN";
+    if (dmg > 0) {
+      this.enemy.curHp -= dmg;
+      if (dot.label === "PSN") Sfx.poison();
+      else Sfx.spark();
+      this.enemySprite.setTint(dot.label === "PSN" ? 0xc084fc : 0xfb923c).setTintMode(Phaser.TintModes.FILL);
+      this.fxOn(this.enemySprite, dot.label === "PSN" ? "fx-poison" : "fx-burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
+      this.updateEnemyHp();
+      await this.say(`${this.enemy.name} takes ${dmg} ${word.toLowerCase()}!`);
+      this.restoreEnemyTint();
+    }
+    if (dot.turns === 0) {
+      this.enemyDot = null;
+      this.updateEnemyStatus();
+      await this.say(`${word} on ${this.enemy.name} wore off.`);
+    }
+  }
+
   private async enemyTurn(): Promise<void> {
+    await this.enemyDotTick();
+    // checked here rather than after each hit: whatever brought the boss low
+    // (FIGHT, spell, bomb, companion), it snaps right before it next acts
+    if ((this.enemy.boss || this.enemy.giant) && !this.enraged && this.enemy.curHp <= this.enemy.hp * ENRAGE_HP_SHARE) {
+      await this.enrage();
+    }
+    // SPIDER's web or BOLT's shock: this whole turn is lost (never on a boss
+    // or giant). "CURSED GOBLIN is shocked stiff!" is 31 glyphs.
+    if (this.stuck) {
+      const line = this.stuck === "web" ? "is stuck in the web!" : "is shocked stiff!";
+      this.stuck = null;
+      await this.say(`${this.enemy.name} ${line}`);
+      return;
+    }
+    // a wound-up strike lands before anything else this turn could; a fresh
+    // wind-up only once the cooldown has run out (see BOSS_TELLS)
+    const tell = BOSS_TELLS[this.enemy.name];
+    if (tell && this.charging) return this.bossStrike(tell);
+    if (tell && this.tellCooldown > 0) this.tellCooldown -= 1;
+    else if (tell && !this.frozen && Math.random() < BOSS_TELL_CHANCE) return this.bossTell(tell);
+    const special = this.rollSpecial();
+    if (this.freezeGrace > 0) this.freezeGrace -= 1;
+    if (special === "regen") return this.regenerate();
+
     await this.enemyLunge();
     // impact thud lands with the damage, not at the wind-up
     Sfx.hit();
-    const { dmg, crit } = this.calcDamage(this.enemy.atk, GameState.effDef());
+    const hit = rollDamage(this.enemy.atk, this.heroDef());
+    const crit = hit.crit;
+    const { dmg, note } = this.guardHit(hit.dmg);
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.playerSprite.setTint(0xff6666).setTintMode(Phaser.TintModes.FILL);
+    this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
-    this.cameras.main.shake(crit ? 120 : 80, crit ? 0.012 : 0.006);
+    shake(this.cameras.main, crit ? 120 : 80, crit ? 0.012 : 0.006);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, crit);
-    await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!` : `${this.enemy.name} attacks for ${dmg}!`);
+    await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
     this.playerSprite.clearTint();
     this.updatePlayerStats();
+    if (GameState.player.hp <= 0) return;
+
+    // a resist accessory still takes the hit but stops the status, and says
+    // so — otherwise the gear would look like it did nothing
+    if ((special === "poison" || special === "freeze") && GameState.resists(special)) {
+      await this.say(special === "poison" ? "ANTIDOTE CHARM blocks the poison!" : "EMBER RING blocks freezing!");
+      return;
+    }
+    // ...and a MOON TEA (cooking.ts) shrugs off a share of what gets past
+    if ((special === "poison" || special === "freeze") && this.meal && Math.random() < (this.meal.def.effect.resist ?? 0)) {
+      await this.say(`The ${this.meal.def.name} wards off ${special === "poison" ? "poison" : "the frost"}!`);
+      return;
+    }
+
+    if (special === "poison") {
+      Sfx.poison();
+      this.poisonTurns = POISON_TURNS;
+      this.updateStatus();
+      this.fxOn(this.playerSprite, "fx-poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.flashStatus("PSN", "#c084fc");
+      await this.say("POISONED! HEAL or POTION cures it.");
+    } else if (special === "freeze") {
+      await this.freezeHero();
+    }
+  }
+
+  // the hero's ATK and DEF as this battle's meal (cooking.ts) leaves them
+  private heroAtk(): number {
+    return Math.round(GameState.effAtk() * (1 + (this.meal?.def.effect.atk ?? 0)));
+  }
+
+  private heroDef(): number {
+    return Math.round(GameState.effDef() * (1 + (this.meal?.def.effect.def ?? 0)));
+  }
+
+  // WARD (while it lasts) or BULWARK (the next blow) halves a hit, never
+  // below 1; BULWARK is used up by the blow either way
+  private guardHit(raw: number): { dmg: number; note: string } {
+    const warded = this.wardTurns > 0;
+    const guarded = !warded && this.guarded;
+    this.guarded = false;
+    const dmg = guardedDamage(raw, warded || guarded);
+    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : "" };
+  }
+
+  private async freezeHero(): Promise<void> {
+    Sfx.freeze();
+    this.frozen = true;
+    this.updateStatus();
+    this.setPlayerTint(FREEZE_TINT);
+    this.fxOn(this.playerSprite, "fx-freeze", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.flashStatus("FRZ", "#67e8f9");
+    await this.say("FROZEN! You'll lose your next turn.");
+  }
+
+  // the wind-up turn: no attack, a warning, the CHG tag (see BOSS_TELLS)
+  private async bossTell(tell: BossTell): Promise<void> {
+    if (this.freezeGrace > 0) this.freezeGrace -= 1;
+    this.charging = true;
+    this.updateEnemyStatus();
+    Sfx.charge();
+    this.enemySprite.setTint(tell.color).setTintMode(Phaser.TintModes.FILL);
+    const scale = this.enemySprite.scale;
+    this.tweens.add({ targets: this.enemySprite, scale: scale * 1.08, duration: this.anim(160), yoyo: true, repeat: 2 });
+    this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+    this.glowBurst.explode(16);
+    shake(this.cameras.main, 200, 0.004);
+    await this.say(tell.warn);
+    this.restoreEnemyTint();
+  }
+
+  // the strike: ATK x tell.mult before DEF, no crit, capped at
+  // BOSS_STRIKE_MAX_HP_SHARE of max HP, then WARD/BULWARK as usual
+  private async bossStrike(tell: BossTell): Promise<void> {
+    // checked before this turn spends the grace, as rollSpecial() does
+    const canFreeze = !!tell.freezes && !this.frozen && this.freezeGrace === 0;
+    if (this.freezeGrace > 0) this.freezeGrace -= 1;
+    this.charging = false;
+    this.tellCooldown = BOSS_TELL_COOLDOWN;
+    this.updateEnemyStatus();
+    await this.enemyLunge();
+    Sfx.hit();
+    Sfx.critical();
+    const { dmg, note } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
+    GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
+    this.playerSprite.setTint(0xff6666).setTintMode(Phaser.TintModes.FILL);
+    this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
+    this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+    this.hitBurst.explode(24);
+    shake(this.cameras.main, 320, 0.018);
+    flash(this.cameras.main, 160, (tell.color >> 16) & 0xff, (tell.color >> 8) & 0xff, tell.color & 0xff);
+    this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
+    await this.say(`${tell.strike}! ${dmg} damage!${note}`);
+    this.playerSprite.clearTint();
+    this.updatePlayerStats();
+    if (GameState.player.hp <= 0 || !canFreeze) return;
+    if (GameState.resists("freeze")) {
+      await this.say("EMBER RING blocks freezing!");
+      return;
+    }
+    await this.freezeHero();
+  }
+
+  // A special that couldn't land falls back to a plain attack: no stacking
+  // or refreshing poison, no freeze while frozen or inside the grace window,
+  // no regen at full HP.
+  private rollSpecial(): EnemySpecial["kind"] | undefined {
+    const special = this.enemy.special;
+    if (!special || Math.random() >= special.chance) return undefined;
+    if (special.kind === "poison" && this.poisonTurns > 0) return undefined;
+    if (special.kind === "freeze" && (this.frozen || this.freezeGrace > 0)) return undefined;
+    if (special.kind === "regen" && this.enemy.curHp >= this.enemy.hp) return undefined;
+    return special.kind;
+  }
+
+  private async enrage(): Promise<void> {
+    this.enraged = true;
+    this.enemy.atk = Math.round(this.enemy.atk * ENRAGE_ATK_MULT);
+    Sfx.enrage();
+    this.restoreEnemyTint();
+    this.updateEnemyStatus();
+    shake(this.cameras.main, 400, 0.015);
+    flash(this.cameras.main, 200, 255, 60, 60);
+    const scale = this.enemySprite.scale;
+    this.tweens.add({ targets: this.enemySprite, scale: scale * 1.15, duration: this.anim(120), yoyo: true, repeat: 2 });
+    await this.say(`${this.enemy.name} is ENRAGED! ATK UP!`);
+  }
+
+  private async regenerate(): Promise<void> {
+    const healed = regenAmount(this.enemy.hp, this.enemy.curHp);
+    this.enemy.curHp += healed;
+    Sfx.magic();
+    this.healBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+    this.healBurst.explode(12);
+    this.flashHeal(this.enemySprite.x, this.enemySprite.y, healed);
+    this.updateEnemyHp();
+    await this.say(`${this.enemy.name} regrows its moss! +${healed} HP`);
+  }
+
+  // start of round: the tick can't take the last HP (see POISON_PCT)
+  private async poisonTick(): Promise<void> {
+    const dmg = poisonTickDamage(GameState.effMaxHp(), GameState.player.hp);
+    this.poisonTurns -= 1;
+    if (dmg > 0) {
+      GameState.player.hp -= dmg;
+      Sfx.poison();
+      this.setPlayerTint(0xc084fc);
+      this.fxOn(this.playerSprite, "fx-poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg);
+      this.updatePlayerStats();
+      await this.say(`The poison deals ${dmg} damage!`);
+      this.setPlayerTint(this.frozen ? FREEZE_TINT : undefined);
+    }
+    if (this.poisonTurns === 0) {
+      this.updateStatus();
+      await this.say("The poison wore off.");
+    }
+  }
+
+  private async thaw(): Promise<void> {
+    this.frozen = false;
+    this.freezeGrace = FREEZE_GRACE_TURNS;
+    shake(this.cameras.main, 80, 0.004);
+    await this.say("Frozen solid! You lose this turn.");
+    this.setPlayerTint(undefined);
+    this.updateStatus();
+  }
+
+  // the hero sprite plus its weapon/shield overlays, so a frozen hero reads
+  // as one iced-over figure; undefined clears it
+  private setPlayerTint(color: number | undefined): void {
+    for (const s of [this.playerSprite, this.weaponOverlay, this.shieldOverlay]) {
+      s.clearTint();
+      if (color !== undefined) s.setTint(color);
+    }
+  }
+
+  // status label pops over the hero when it lands, on top of the HP-row tag
+  // (a spell's side effect on the foe passes its own spot)
+  private flashStatus(label: string, color: string, x = this.playerSprite.x, y = this.playerSprite.y - 80): void {
+    const t = this.add.text(x, y, label, retroStyle(10, color)).setOrigin(0.5).setStroke("#000000", 2);
+    this.tweens.add({ targets: t, y: t.y - 60, alpha: 0, duration: this.anim(900, STATUS_POP_MIN_MS), onComplete: () => t.destroy() });
+  }
+
+  // lays the active player tags out right-to-left so a lone one sits flush
+  // against the window edge instead of leaving a hole where the other was,
+  // wrapping to the second row once one would cross PLAYER_STATUS_MIN_X
+  private updateStatus(): void {
+    this.layoutTags(
+      [
+        [this.frozenText, this.frozen],
+        [this.poisonText, this.poisonTurns > 0],
+        [this.wardText, this.wardTurns > 0],
+      ],
+      PLAYER_STATUS_RIGHT,
+      PLAYER_STATUS_MIN_X,
+    );
+    this.wardRing.setVisible(this.wardTurns > 0);
+  }
+
+  private updateEnemyStatus(): void {
+    if (this.enemyDot) this.dotText.setText(this.enemyDot.label).setColor(DOT_COLOR[this.enemyDot.label]);
+    this.layoutTags(
+      [
+        // first, so an incoming strike always holds the top row
+        [this.chargeText, this.charging],
+        [this.rageText, this.enraged],
+        [this.dotText, this.enemyDot !== null],
+        [this.chillText, this.chilled],
+      ],
+      ENEMY_STATUS_RIGHT,
+      ENEMY_STATUS_MIN_X,
+    );
+  }
+
+  private layoutTags(tags: Array<[Phaser.GameObjects.Text, boolean]>, rightEdge: number, minX: number): void {
+    let right = rightEdge;
+    let row = 0;
+    for (const [t, on] of tags) {
+      t.setVisible(on);
+      if (!on) continue;
+      if (right - t.width < minX && row < STATUS_ROWS.length - 1) {
+        row += 1;
+        right = rightEdge;
+      }
+      t.setPosition(right, STATUS_ROWS[row]);
+      right -= t.width + 20;
+    }
   }
 
   // throttled afterimage spawner for a tween's onUpdate: faded copies trail
@@ -851,7 +1624,7 @@ export class BattleScene extends Phaser.Scene {
   private ghostTrail(sprite: Phaser.GameObjects.Sprite): () => void {
     let last = 0;
     return () => {
-      if (this.time.now - last < 40) return;
+      if (this.time.now - last < this.anim(40)) return;
       last = this.time.now;
       const ghost = this.add
         .image(sprite.x, sprite.y, sprite.texture.key)
@@ -859,7 +1632,7 @@ export class BattleScene extends Phaser.Scene {
         .setFlipX(sprite.flipX)
         .setAlpha(0.35)
         .setTint(0x9fd4ff);
-      this.tweens.add({ targets: ghost, alpha: 0, duration: 180, onComplete: () => ghost.destroy() });
+      this.tweens.add({ targets: ghost, alpha: 0, duration: this.anim(180), onComplete: () => ghost.destroy() });
     };
   }
 
@@ -867,8 +1640,8 @@ export class BattleScene extends Phaser.Scene {
     const startX = this.enemySprite.x;
     const targetX = this.playerSprite.x + 80;
     const trail = this.ghostTrail(this.enemySprite);
-    await this.tweenPromise(this.enemySprite, { x: targetX }, LUNGE_OUT_MS, trail);
-    await this.tweenPromise(this.enemySprite, { x: startX }, LUNGE_BACK_MS);
+    await this.tweenPromise(this.enemySprite, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
+    await this.tweenPromise(this.enemySprite, { x: startX }, this.anim(LUNGE_BACK_MS));
   }
 
   private async lunge(): Promise<void> {
@@ -877,63 +1650,97 @@ export class BattleScene extends Phaser.Scene {
     const hasWeapon = !!GameState.equipped.weapon;
     const trail = this.ghostTrail(this.playerSprite);
     const syncOverlays = () => {
-      this.weaponOverlay.x = this.playerSprite.x + 28;
-      this.shieldOverlay.x = this.playerSprite.x - 28;
+      this.weaponOverlay.x = this.playerSprite.x + GEAR_LAYOUT.down.weapon.x * 2;
+      this.shieldOverlay.x = this.playerSprite.x + GEAR_LAYOUT.down.shield.x * 2;
     };
     this.playerSprite.x = startX;
     syncOverlays();
     if (hasWeapon) {
       // wind-up, then swing down through the lunge
       this.weaponOverlay.setAngle(-20);
-      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: LUNGE_OUT_MS, ease: "Sine.easeIn" });
+      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
     }
-    await this.tweenPromise(this.playerSprite, { x: targetX }, LUNGE_OUT_MS, () => {
+    await this.tweenPromise(this.playerSprite, { x: targetX }, this.anim(LUNGE_OUT_MS), () => {
       syncOverlays();
       trail();
     });
     syncOverlays();
     if (hasWeapon) {
-      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: LUNGE_BACK_MS, ease: "Sine.easeOut" });
+      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
     }
-    await this.tweenPromise(this.playerSprite, { x: startX }, LUNGE_BACK_MS, syncOverlays);
+    await this.tweenPromise(this.playerSprite, { x: startX }, this.anim(LUNGE_BACK_MS), syncOverlays);
     syncOverlays();
   }
 
-  private async castProjectile(color: number): Promise<void> {
-    const fb = this.add.circle(this.playerSprite.x + 40, this.playerSprite.y - 20, 16, color).setDepth(20);
-    this.tweens.add({
-      targets: fb,
-      alpha: { from: 1, to: 0.5 },
-      duration: 90,
-      repeat: -1,
-      yoyo: true,
-    });
-    await this.tweenPromise(fb, { x: this.enemySprite.x, y: this.enemySprite.y }, 240);
-    this.tweens.killTweensOf(fb); // the repeat:-1 pulse tween outlives destroy() otherwise
+  private async castProjectile(spell: Spell): Promise<void> {
+    const [shot, burst] = SPELL_FX[spell.name] ?? SPELL_FX.NOVA;
+    const x = this.playerSprite.x + 40;
+    const y = this.playerSprite.y - 20;
+    // the sheets fly rightwards; turned to aim at the foe
+    const fb = loopFx(this, shot, x, y, this.anim(90)).setRotation(Math.atan2(this.enemySprite.y - y, this.enemySprite.x - x));
+    await this.tweenPromise(fb, { x: this.enemySprite.x, y: this.enemySprite.y }, this.anim(240));
     fb.destroy();
-    const boom = this.add.circle(this.enemySprite.x, this.enemySprite.y, 24, color).setDepth(20);
+    this.fxOn(this.enemySprite, burst, 280);
     this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.glowBurst.explode(12);
-    this.cameras.main.shake(100, 0.008);
-    this.tweens.add({
-      targets: boom,
-      scale: 3,
-      alpha: 0,
-      duration: 280,
-      onComplete: () => boom.destroy(),
-    });
+    shake(this.cameras.main, 100, 0.008);
+  }
+
+  // NOVA: light gathers on the hero, one bright bolt, then three staggered
+  // blasts across the target under a long shake and flash — castProjectile,
+  // hitBurst and the camera effects reused, just stacked. Sfx.nova() is
+  // timed so its low boom lands on the last blast.
+  private async castNova(spell: Spell): Promise<void> {
+    this.glowBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+    this.glowBurst.explode(20);
+    flash(this.cameras.main, 150, 255, 255, 255);
+    await this.wait(this.anim(250));
+    await this.castProjectile(spell);
+    for (const [dx, dy] of [
+      [-44, -32],
+      [40, 28],
+      [0, 0],
+    ]) {
+      const x = this.enemySprite.x + dx;
+      const y = this.enemySprite.y + dy;
+      // 2x even on a boss: the outer blasts at 3x would reach the enemy window
+      playFx(this, "fx-nova", x, y, this.anim(360));
+      this.hitBurst.setPosition(x, y);
+      this.hitBurst.explode(14);
+      await this.wait(this.anim(110));
+    }
+    shake(this.cameras.main, 380, 0.02);
+    flash(this.cameras.main, 220, 245, 208, 254);
+  }
+
+  // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
+  // boss or giant as the sprite itself is
+  private fxOn(sprite: Phaser.GameObjects.Sprite, key: string, ms: number, min = 0): void {
+    const big = sprite === this.enemySprite && (this.enemy.boss || this.enemy.giant);
+    playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2);
+  }
+
+  // an animation's duration at the player's BATTLE SPEED, never below min
+  private anim(ms: number, min = 0): number {
+    return Math.max(min, Math.round(ms / GameState.battleSpeed));
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
   private flashDamage(x: number, y: number, amount: number, crit = false): void {
     const t = this.add
       .text(x + 40, y - 80, crit ? `${amount}!` : String(amount), retroStyle(crit ? 14 : 10, crit ? "#ff5555" : "#ffdd44"))
       .setOrigin(0.5)
-      .setStroke("#7c2d12", 2);
+      .setStroke("#7c2d12", 2)
+      // over an effect sheet, even one started after it
+      .setDepth(1);
     this.tweens.add({
       targets: t,
       y: y - (crit ? 200 : 160),
       alpha: 0,
-      duration: 800,
+      duration: this.anim(800, POPUP_MIN_MS),
       onComplete: () => t.destroy(),
     });
   }
@@ -942,25 +1749,15 @@ export class BattleScene extends Phaser.Scene {
     const t = this.add
       .text(x + 40, y - 80, `+${amount}`, retroStyle(10, "#4ade80"))
       .setOrigin(0.5)
-      .setStroke("#14532d", 2);
+      .setStroke("#14532d", 2)
+      .setDepth(1);
     this.tweens.add({
       targets: t,
       y: y - 160,
       alpha: 0,
-      duration: 800,
+      duration: this.anim(800, POPUP_MIN_MS),
       onComplete: () => t.destroy(),
     });
-  }
-
-  private calcDamage(atk: number, def: number): { dmg: number; crit: boolean } {
-    const crit = Math.random() < CRIT_CHANCE;
-    const raw = Math.floor(atk * (0.8 + Math.random() * 0.4));
-    // Defense subtracts, but never past a floor proportional to the blow. A
-    // flat 1-damage floor meant that once def outgrew the strongest attack in
-    // the game — level 10 in mythril — nothing could hurt the hero again.
-    // The floor is applied before the crit multiplier so a crit still doubles.
-    const hit = Math.max(Math.ceil(raw * MIN_DAMAGE_SHARE), raw - def);
-    return { dmg: crit ? hit * CRIT_MULT : hit, crit };
   }
 
   private updateEnemyHp(): void {
@@ -969,14 +1766,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // hit flashes clearTint the enemy sprite, which would also strip the gold
-  // tint of a rare enemy (GOLDEN SLIME); re-apply the def tint afterwards
+  // tint of a rare enemy (GOLDEN SLIME) or a boss's enrage glow; re-apply
+  // whichever applies afterwards
   private restoreEnemyTint(): void {
     this.enemySprite.clearTint();
-    if (this.enemy.tint) this.enemySprite.setTint(this.enemy.tint);
+    const tint = this.enraged ? ENRAGE_TINT : this.enemy.tint;
+    if (tint) this.enemySprite.setTint(tint);
   }
 
   private comboBonus(): number {
-    return Math.min(this.combo - 1, COMBO_CAP) * COMBO_PCT;
+    return comboBonus(this.combo);
   }
 
   private updateCombo(): void {
@@ -1000,68 +1799,106 @@ export class BattleScene extends Phaser.Scene {
     this.playerHpBar.setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
   }
 
+  // A won fight's quest bookkeeping: the ELDER's and HUNTER's counters, the
+  // achievement tallies, the daily bounty and a story boss's quest flag.
+  private tallyQuestKill(): void {
+    if (this.enemy.name === "SLIME") GameState.quest.slimes += 1;
+    if (this.enemy.name === "GOLDEN SLIME") GameState.quest.goldenSlimes += 1;
+    if (this.enemy.name === ENEMIES.wisp.name) GameState.quest.wispsDefeated += 1;
+    if (this.enemy.name === "BAT") GameState.quest.batsSlain += 1;
+    if (this.enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
+    // daily bounty board: unbounded like the counters above, only ever
+    // compared/clamped at display time
+    if (GameState.bounty && this.enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
+    // two story bosses share the `boss` flag; each sets its own quest gate
+    if (this.enemy.boss) {
+      if (this.enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;
+      else if (this.enemy.name === ENEMIES.iceGolem.name) GameState.quest.snowBoss = true;
+      else if (this.enemy.name === ENEMIES.flameDrake.name) GameState.quest.volcanoBoss = true;
+      else GameState.quest.bossDefeated = true;
+    }
+  }
+
   private async victory(caught = false): Promise<void> {
     this.running = false;
+    // before anything below: no quest flag, counter, loot, EXP or ending
+    if (this.arena) return this.arenaVictory(this.arena);
+    // the TROLL KING's flag (arena.ts: what puts it in the ARENA lineup) for
+    // beating it or catching it, which takes beating it down first; never
+    // from the ABYSS, where nothing sets a flag
+    if (!this.abyss && this.enemy.name === ENEMIES.troll.name) GameState.quest.trollDefeated = true;
+    // read before the boss branch below sets the flags: only the first MOSS
+    // GOLEM / FLAME DRAKE kill (of each NEW GAME+ cycle, which clears them)
+    // rolls the ending / epilogue, a rematch just ends the battle — and the
+    // ABYSS is all rematch, even in a NEW GAME+ cycle that hasn't yet beaten
+    // the boss it meets down there as a GUARDIAN (abyss.ts)
+    const firstMoss = !caught && !this.abyss && this.enemy.name === ENEMIES.mossGolem.name && !GameState.quest.forestBoss;
+    const firstDrake = !caught && !this.abyss && this.enemy.name === ENEMIES.flameDrake.name && !GameState.quest.volcanoBoss;
     if (!caught) {
       GameState.streak += 1;
       // streak bonus rewards pushing on without fleeing; capped so a long run
       // can't outpace the boss/chest economy
       const streakPct = GameState.streak >= STREAK_MIN ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
       const streakBonus = Math.floor(this.enemy.gold * streakPct);
-      const goldGained = GameState.gainGold(this.enemy.gold + streakBonus);
+      // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
+      const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + (this.meal?.def.effect.gold ?? 0))));
       GameState.battles += 1;
-      if (this.enemy.name === "SLIME") GameState.quest.slimes += 1;
-      if (this.enemy.name === "GOLDEN SLIME") GameState.quest.goldenSlimes += 1;
-      if (this.enemy.name === ENEMIES.wisp.name) GameState.quest.wispsDefeated += 1;
-      if (this.enemy.name === "BAT") GameState.quest.batsSlain += 1;
-      if (this.enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
-      // daily bounty board: unbounded like the counters above, only ever
-      // compared/clamped at display time
-      if (GameState.bounty && this.enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
-      // two story bosses share the `boss` flag; each sets its own quest gate
-      if (this.enemy.boss) {
-        if (this.enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;
-        else if (this.enemy.name === ENEMIES.iceGolem.name) GameState.quest.snowBoss = true;
-        else GameState.quest.bossDefeated = true;
-      }
+      // nothing fought in the ABYSS counts toward a quest, the bounty or a
+      // boss's flag (abyss.ts)
+      if (!this.abyss) this.tallyQuestKill();
       GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + 5);
       GameState.player.mp = Math.min(GameState.player.maxMp, GameState.player.mp + 2);
+      // FISH STEW (cooking.ts): a share of max HP back after each win
+      const mealHeal = Math.min(
+        GameState.effMaxHp() - GameState.player.hp,
+        Math.ceil(GameState.effMaxHp() * (this.meal?.def.effect.heal ?? 0)),
+      );
+      GameState.player.hp += mealHeal;
       Sfx.victory();
-      this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, 350);
+      this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, this.anim(350));
       await this.say(`${this.enemy.name} is defeated!`);
       await this.say(`Gained ${goldGained} gold!`);
+      // "The FISH STEW restores 999 HP!", 30 glyphs
+      if (mealHeal > 0 && this.meal) await this.say(`The ${this.meal.def.name} restores ${mealHeal} HP!`);
       if (streakBonus > 0) {
         Sfx.pickup();
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(10);
         await this.say(`${GameState.streak} WIN STREAK! +${streakBonus} bonus gold!`);
       }
-      if (this.enemy.boss) {
-        GameState.inventory.hiPotion += 1;
+      // a boss always leaves a HI-POTION; anything else rolls FIELD_LOOT
+      const roll = Math.random();
+      let edge = 0;
+      const loot = this.enemy.boss
+        ? BOSS_LOOT
+        : FIELD_LOOT.find((l) => {
+            edge += l.chance;
+            return roll < edge;
+          });
+      if (loot) GameState.inventory[loot.key] += 1;
+      // monster materials for the BLACKSMITH (drops.ts), more of them deep in
+      // the ABYSS (abyss.ts, at most x3); the ARENA returned above
+      const drop = rollDrop(this.enemy);
+      if (drop && this.abyss) drop.count *= abyssDropMult(this.abyss.floor);
+      if (drop) GameState.inventory[drop.material] += drop.count;
+      // one line for both, at most "Found a HI-POTION & 3 FROST SCALE!" (34)
+      const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);
+      if (found.length > 0) {
         Sfx.pickup();
-        await this.say("Found a HI-POTION!");
-      } else {
-        const roll = Math.random();
-        if (roll < 0.3) {
-          GameState.inventory.potion += 1;
-          Sfx.pickup();
-          await this.say("Found a POTION!");
-        } else if (roll < 0.45) {
-          GameState.inventory.candy += 1;
-          Sfx.pickup();
-          await this.say("Found some CANDY!");
-        } else if (roll < 0.55) {
-          GameState.inventory.mPotion += 1;
-          Sfx.pickup();
-          await this.say("Found an MPOTION!");
-        } else if (roll < 0.63) {
-          GameState.inventory.hiPotion += 1;
-          Sfx.pickup();
-          await this.say("Found a HI-POTION!");
-        }
+        await this.say(`Found ${found.join(" & ")}!`);
       }
-      GameState.player.exp += this.enemy.exp;
-      let msg = `EXP +${this.enemy.exp}`;
+      // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
+      // pay model has no room for it; its own line, the one above being full,
+      // and where to read it on a second (the bag's last page, which nothing
+      // else points a new player at; touch has an I button too). 29 glyphs,
+      // inside the 36 a row holds
+      if (!this.abyss && rollTreasureMap(GameState.treasureMaps, GameState.quest)) {
+        Sfx.pickup();
+        await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.");
+      }
+      const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0)));
+      GameState.player.exp += exp;
+      let msg = `EXP +${exp}`;
       let newRank = 0;
       while (GameState.player.level < MAX_LEVEL && GameState.player.exp >= expToNext(GameState.player.level)) {
         GameState.player.exp -= expToNext(GameState.player.level);
@@ -1079,14 +1916,13 @@ export class BattleScene extends Phaser.Scene {
         this.levelBurst.explode(24);
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(12);
-        this.cameras.main.shake(200, 0.01);
+        shake(this.cameras.main, 200, 0.01);
         msg = `LEVEL UP! LV ${GameState.player.level}`;
       }
       if (newRank > 0) msg += `  RANK #${newRank}!`;
       await this.say(msg);
       if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`);
     }
-    GameState.lockEncounters(4000);
     GameState.save();
     if (!caught) {
       this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
@@ -1094,10 +1930,18 @@ export class BattleScene extends Phaser.Scene {
     }
     await this.say("Battle won!");
     // story complete: the forest boss is the final boss — roll the ending
-    if (this.enemy.boss && this.enemy.name === ENEMIES.mossGolem.name) {
+    if (firstMoss) {
       this.cameras.main.fadeOut(1500, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
         this.scene.start("Ending");
+      });
+      return;
+    }
+    // the post-game's last region falls: same fade, the epilogue variant
+    if (firstDrake) {
+      this.cameras.main.fadeOut(1500, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.scene.start("Ending", { epilogue: true } satisfies EndingData);
       });
       return;
     }
@@ -1109,6 +1953,7 @@ export class BattleScene extends Phaser.Scene {
   // gold and your win streak, with everything else intact.
   private async defeat(): Promise<void> {
     this.running = false;
+    if (this.arena) return this.arenaDefeat(this.arena);
     Sfx.gameover();
     await this.say("You have fallen...");
     const lost = Math.floor(GameState.gold * DEATH_GOLD_LOSS);
@@ -1118,24 +1963,85 @@ export class BattleScene extends Phaser.Scene {
     GameState.player.mp = Math.max(0, Math.floor(GameState.player.maxMp / 2));
     // undefined sends TownScene back to PLAYER_SPAWN, the town centre
     GameState.pos = undefined;
-    GameState.lockEncounters(4000);
+    // a fall down in the ABYSS takes its portal with it (abyss.ts), saved
+    // here with the rest so a reload can't bring it back
+    const portalLost = !!this.abyss && GameState.abyssPortal > 0;
+    if (this.abyss) GameState.abyssPortal = 0;
     GameState.save();
     await this.say("A villager drags you home.");
     await this.say(lost > 0 ? `You lost ${lost} gold.` : "You had no gold to lose.");
-    this.cameras.main.fadeOut(800, 0, 0, 0);
+    // 27 glyphs, inside a row's 36
+    if (portalLost) await this.say("The ABYSS portal has faded.");
+    this.cameras.main.fadeOut(this.anim(800), 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Town");
+      // {}: with no data Phaser would replay the Town's last { fromDungeon }
+      // and the like, waking the hero at that exit instead of the centre
+      this.scene.start("Town", {});
     });
+  }
+
+  // An ARENA bout won: bank this boss's share of the prize and, unless it was
+  // the last, patch the hero up a little and restart straight into the next
+  // boss — no trip back through the Town between bouts, one fade instead of two.
+  // Messages stay within one line: "Next: GLACIER GOLEM! +999 HP +999 MP" (36).
+  private async arenaVictory(run: ArenaRun): Promise<void> {
+    Sfx.victory();
+    this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, this.anim(350));
+    await this.say(`${this.enemy.name} is defeated!`);
+    // This bout's share is paid, the record moved up and the game saved right
+    // here, so a run cut off from now on (the tab closed, a reload) keeps
+    // them; only a clear's bonus is left for endArena. enemy.gold carries NEW
+    // GAME+ loot scaling but no night bonus (see init).
+    const purse = run.purse + GameState.gainGold(Math.round(this.enemy.gold * ARENA_GOLD_SHARE));
+    const won = run.round + 1;
+    const record = !!run.record || won > GameState.arenaBest;
+    GameState.arenaBest = Math.max(GameState.arenaBest, won);
+    GameState.save();
+    if (won >= run.lineup.length) return this.endArena({ ...run, record }, won, purse, true);
+    const maxHp = GameState.effMaxHp();
+    const hp = Math.min(maxHp - GameState.player.hp, Math.ceil(maxHp * ARENA_RECOVER_PCT));
+    const mp = Math.min(GameState.player.maxMp - GameState.player.mp, Math.ceil(GameState.player.maxMp * ARENA_RECOVER_PCT));
+    GameState.player.hp += hp;
+    GameState.player.mp += mp;
+    this.updatePlayerStats();
+    if (hp > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, hp);
+    await this.say(`Next: ${ENEMIES[run.lineup[won]].name}! +${hp} HP +${mp} MP`);
+    this.cameras.main.fadeOut(this.anim(400), 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.restart({ enemy: run.lineup[won], from: "Town", arena: { ...run, round: won, purse, record } });
+    });
+  }
+
+  // Falling in the ARENA ends the run in place of the usual defeat: no gold
+  // lost, no streak reset, carried back out at 1 HP to where the hero stood
+  // by the keeper (GameState.pos, kept from when the Town handed over).
+  private async arenaDefeat(run: ArenaRun): Promise<void> {
+    Sfx.gameover();
+    await this.say("You fall in the ARENA...");
+    GameState.player.hp = 1;
+    this.updatePlayerStats();
+    return this.endArena(run, run.round, run.purse, false);
+  }
+
+  // `purse` was paid bout by bout (arenaVictory); a clear adds its bonus here,
+  // and the closing line reports the run's whole take
+  private async endArena(run: ArenaRun, won: number, purse: number, cleared: boolean): Promise<void> {
+    const prize = purse + (cleared ? GameState.gainGold(Math.round(purse * ARENA_CLEAR_BONUS)) : 0);
+    const record = !!run.record;
+    GameState.save();
+    if (cleared) Sfx.levelup();
+    const total = run.lineup.length;
+    await this.say(cleared ? `ARENA CLEARED! ${won}/${total} bouts won!` : `ARENA OVER: ${won}/${total} bouts won.`);
+    await this.say(record ? `Prize: +${prize}G  NEW RECORD!` : `Prize: +${prize}G  (best ${GameState.arenaBest})`);
+    this.end();
   }
 
   private end(): void {
     this.running = false;
-    GameState.lockEncounters(4000);
-    this.cameras.main.fadeOut(400, 0, 0, 0);
+    this.cameras.main.fadeOut(this.anim(400), 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      const target =
-        this.origin === "Dungeon" ? "Dungeon" : this.origin === "Forest" ? "Forest" : this.origin === "Snow" ? "Snow" : "Town";
-      this.scene.start(target, {
+      // init() already narrowed origin to a scene key, so it is the target
+      this.scene.start(this.origin, {
         fromBattle: true,
       });
     });
@@ -1146,7 +2052,7 @@ export class BattleScene extends Phaser.Scene {
       this.msgText.setText("");
       let i = 0;
       const ev = this.time.addEvent({
-        delay: 14,
+        delay: this.anim(14, TYPE_MIN_MS),
         repeat: text.length,
         callback: () => {
           i++;
@@ -1162,7 +2068,7 @@ export class BattleScene extends Phaser.Scene {
 
   // every battle action key also advances messages, so mashing your next
   // action never stalls on a textbox
-  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "F", "I", "B", "H", "S", "ESC", "SPACE"];
+  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
 
   private awaitAdvance(resolve: () => void): void {
     this.hintText.setText("Z:CONTINUE");

@@ -9,18 +9,26 @@ export const T_PATH = 4;
 export const T_TALL = 5;
 export const T_HOUSE = 6;
 export const T_SOIL = 7;
+// Volcano terrain, appended after BootScene's variation frames (8..22). Lava
+// swaps A/B on a timer the way water does; scorched ground marks the monster
+// zones there the way tall grass does everywhere else.
+export const T_ASH = 23;
+export const T_LAVA_A = 24;
+export const T_LAVA_B = 25;
+export const T_ROCK = 26;
+export const T_SCORCH = 27;
 
 export const MAP_W = 28;
 export const MAP_H = 20;
 
-export const SOLID = new Set<number>([T_WATER_A, T_WATER_B, T_TREE, T_HOUSE]);
+export const SOLID = new Set<number>([T_WATER_A, T_WATER_B, T_TREE, T_HOUSE, T_LAVA_A, T_LAVA_B, T_ROCK]);
 /**
  * Tiles that draw a thing standing *on* the ground rather than the ground
  * itself. Their art is cropped to the object with a transparent background, so
  * they render on the scene's object layer (with ground painted underneath)
  * instead of the terrain layer — see buildTileLayers in sceneCommon.ts.
  */
-export const OBJECT_TILES = new Set<number>([T_TREE, T_HOUSE]);
+export const OBJECT_TILES = new Set<number>([T_TREE, T_HOUSE, T_ROCK]);
 export const TALL_GRASS = T_TALL;
 
 export interface MonsterZone {
@@ -29,17 +37,19 @@ export interface MonsterZone {
   w: number;
   h: number;
   count: number;
-  kind?: "slime" | "goblin" | "wolf" | "bat" | "wasp" | "spider" | "orc" | "frostMoth" | "yeti";
+  kind?: "slime" | "goblin" | "wolf" | "bat" | "wasp" | "spider" | "orc" | "frostMoth" | "yeti" | "magmaSlime" | "fireImp" | "salamander";
 }
 
 export const MONSTER_ZONES: MonsterZone[] = [
   { cx: 4 * TILE, cy: 12 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3 },
   { cx: 17 * TILE, cy: 13 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3 },
   { cx: 10 * TILE, cy: 17 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3 },
-  { cx: 24 * TILE, cy: 7 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wolf" },
+  // the north-east meadow, off the main road and two tiles from the cave's
+  // spur road: it used to sit on the road itself, in front of the cave
+  { cx: 20 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wolf" },
   { cx: 23 * TILE, cy: 16 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "wolf" },
-  // no zone by the CAVE at (19,2): its tall grass and warning sign crowded the
-  // cave mouth, and three slime zones elsewhere already cover the overworld
+  // no zone right by the CAVE: its tall grass crowded the cave mouth, and
+  // three slime zones elsewhere already cover the overworld
 ];
 
 // Battle ends leave the hero standing where the fight started — inside the
@@ -83,6 +93,9 @@ const CHARS: Record<string, number> = {
   h: T_TALL,
   H: T_HOUSE,
   S: T_SOIL,
+  A: T_ASH,
+  L: T_LAVA_A,
+  R: T_ROCK,
 };
 
 // index -> char, the reverse of CHARS, for the map editor's export/save
@@ -141,10 +154,32 @@ export function loadMapOverride(): void {
   }
 }
 
+// A 2x2 zone's ragged rim: a 4x4 mask with the zone's own cells at (1..2,
+// 1..2), each one lumpy in its own way so no patch reads as a box.
+const ZONE_RIMS = [
+  [".h..", "hhh.", ".hh.", "...."],
+  ["....", ".hhh", "hhh.", "...."],
+  ["..h.", ".hh.", ".hhh", "...."],
+  ["....", ".hh.", "hhh.", "..h."],
+  [".h..", ".hhh", ".hh.", "..h."],
+];
+
 // Tall grass is how the map shows where monsters roam, so it is stamped from
 // MONSTER_ZONES rather than positioned by hand — the two drifted apart when the
 // map was resized and zones ended up marked in the wrong place, or not at all.
-function markZones(map: number[][], zones: MonsterZone[]): void {
+// A 2x2 zone also gets a rim from ZONE_RIMS, picked by where it sits, so the
+// patch is a clump rather than a square (sceneCommon frays its edge as well).
+// The rim only covers open `ground` — never a road, water, a tree — and never
+// a cell in `keepClear` (landmarks, chests); the roamers keep to the rect.
+function markZones(
+  map: number[][],
+  zones: MonsterZone[],
+  marker = T_TALL,
+  ground = T_GRASS,
+  keepClear: ReadonlyArray<{ x: number; y: number }> = [],
+): void {
+  const inMap = (tx: number, ty: number): boolean => tx >= 0 && tx < map[0].length && ty >= 0 && ty < map.length;
+  const clear = new Set(keepClear.map((p) => `${Math.floor(p.x / TILE)},${Math.floor(p.y / TILE)}`));
   for (const z of zones) {
     const x0 = Math.round((z.cx - z.w / 2) / TILE);
     const y0 = Math.round((z.cy - z.h / 2) / TILE);
@@ -152,9 +187,18 @@ function markZones(map: number[][], zones: MonsterZone[]): void {
     const y1 = Math.round((z.cy + z.h / 2) / TILE);
     for (let ty = y0; ty < y1; ty++) {
       for (let tx = x0; tx < x1; tx++) {
-        if (tx >= 0 && tx < map[0].length && ty >= 0 && ty < map.length) map[ty][tx] = T_TALL;
+        if (inMap(tx, ty)) map[ty][tx] = marker;
       }
     }
+    if (x1 - x0 !== 2 || y1 - y0 !== 2) continue;
+    const rim = ZONE_RIMS[(x0 * 3 + y0 * 7) % ZONE_RIMS.length];
+    rim.forEach((row, dy) => {
+      for (let dx = 0; dx < row.length; dx++) {
+        const tx = x0 - 1 + dx;
+        const ty = y0 - 1 + dy;
+        if (row[dx] === "h" && inMap(tx, ty) && map[ty][tx] === ground && !clear.has(`${tx},${ty}`)) map[ty][tx] = marker;
+      }
+    });
   }
 }
 
@@ -183,7 +227,7 @@ export function buildLevel(): number[][] {
   const map = rowsToMap(OVERWORLD_MAP.rows);
   // tall grass still comes from MONSTER_ZONES rather than the rows in the map
   // file, so moving a zone in code can never drift from the grass marking it
-  markZones(map, MONSTER_ZONES);
+  markZones(map, MONSTER_ZONES, T_TALL, T_GRASS, Object.values(EDITABLE_POS));
   return map;
 }
 
@@ -202,24 +246,26 @@ export const SHOP_POS = { ...LANDMARKS.SHOP_POS };
 // stop you dropping one on water), and 120px of clearance from the next
 // interactive spot, or a Z press near the seam picks the wrong one.
 //
-// Exits to another map (CAVE, FOREST, SNOW PASS) also need two walkable tiles
-// south of them for the nudge that keeps a returning hero off the trigger, and
-// their name label has to survive the camera clamp at a map edge — the SNOW
-// PASS sits one tile from the west edge, so its label is clamped inward.
+// FOREST, SNOW PASS and VOLCANO are roads running off the map: each sits on
+// the road's last tile at the edge, with two walkable road tiles inward of it
+// (a returning hero is set down there, off the trigger) and its signpost one
+// tile in, beside the road (TownScene.addMapExit). The CAVE is the one exit in
+// the middle of the map; its spur road ends at the mouth and a returning hero
+// steps out two tiles south.
 export const CAVE_POS = { ...LANDMARKS.CAVE_POS };
 // hero record board, west of the ELDER on the main road's north side
 export const RANK_BOARD_POS = { ...LANDMARKS.RANK_BOARD_POS };
 
-// monster hunter offering side bounties, out on the open ground south of the
-// road, four tiles east of the BOUNTY BOARD
+// monster hunter offering side bounties, across the north-south road from the
+// BOUNTY BOARD and a row lower, so the two name tags clear each other
 export const HUNTER_POS = { ...LANDMARKS.HUNTER_POS };
 
 // gambler offering the lucky wheel, on the road's south side, clear of the
 // wolf zone further east
 export const GAMBLER_POS = { ...LANDMARKS.GAMBLER_POS };
 
-// bounty board, on the town's other (north-south) road at x=7, clear of the
-// slime zone to its west (cx=4, cy=12)
+// bounty board, beside the town's other (north-south) road at x=7 rather than
+// on it, clear of the slime zone to its west (cx=4, cy=12)
 export const BOUNTY_BOARD_POS = { ...LANDMARKS.BOUNTY_BOARD_POS };
 
 // Fishing spot on the pond's west bank, with its signpost one tile north on
@@ -251,13 +297,23 @@ export const DUNGEON_ENTRY = { x: 10 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 }
 export const DUNGEON_ZONES: MonsterZone[] = [
   { cx: 4 * TILE, cy: 5 * TILE, w: 3 * TILE, h: 2 * TILE, count: 3 },
   { cx: 15 * TILE, cy: 6 * TILE, w: 3 * TILE, h: 2 * TILE, count: 3 },
-  { cx: 10 * TILE, cy: 12 * TILE, w: 3 * TILE, h: 2 * TILE, count: 1 },
+  // A row lower than it was: at row 12 the king (drawn 1.5x) reached 40px up
+  // into the boss room's top wall, now a solid rock face rather than trunks.
+  { cx: 10 * TILE, cy: 13 * TILE, w: 3 * TILE, h: 2 * TILE, count: 1 },
   // clear of the entry spawn at (10.5, 3.5) — this zone used to cover it, so
-  // walking into the cave dropped the player straight onto a bat
-  { cx: 11 * TILE, cy: 5 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "bat" },
+  // walking into the cave dropped the player straight onto a bat. A column
+  // right of x=11, where a bat at its left limit overlapped the pillar at (9,4).
+  { cx: 12 * TILE, cy: 5 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "bat" },
   { cx: 21 * TILE, cy: 10 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "bat" },
   { cx: 4 * TILE, cy: 12 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2, kind: "bat" },
 ];
+
+// The stair down to the ABYSS (abyss.ts), shown once the FLAME DRAKE has
+// fallen: the dead end of the cave's south-east pocket, reached only past the
+// chest at (22,12), the cave's deepest corner. Its "ABYSS" tag (100px) sits
+// at x 1198..1298, y 838..872 — over the pocket's boulders, clear of the chest
+// and inside the map.
+export const ABYSS_STAIRS_POS = { x: 19 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 };
 
 export const TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
   { id: "dungeon-1", x: 7 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 },
@@ -265,43 +321,48 @@ export const TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
   { id: "dungeon-3", x: 22 * TILE + TILE / 2, y: 12 * TILE + TILE / 2 },
 ];
 
+// The cave's walls and pillars are T_ROCK, the volcano's boulder: a tree
+// skinned grey still read as a tree. BootScene's CAVE_SKIN draws it as plain
+// cave rock with no lava crack. Same solidity as the trees it replaced, so
+// the layout, its reachability and every zone are unchanged.
 export function buildDungeon(): number[][] {
   const map: number[][] = Array.from({ length: DUNGEON_H }, () => Array<number>(DUNGEON_W).fill(T_PATH));
 
   for (let x = 0; x < DUNGEON_W; x++) {
-    map[0][x] = T_TREE;
-    map[DUNGEON_H - 1][x] = T_TREE;
+    map[0][x] = T_ROCK;
+    map[DUNGEON_H - 1][x] = T_ROCK;
   }
   for (let y = 0; y < DUNGEON_H; y++) {
-    map[y][0] = T_TREE;
-    map[y][DUNGEON_W - 1] = T_TREE;
+    map[y][0] = T_ROCK;
+    map[y][DUNGEON_W - 1] = T_ROCK;
   }
 
-  stamp(map, 1, 2, ["WWW", "WWW"]);
-  stamp(map, 14, 2, ["WWW", "WWW", "WWW"]);
-  stamp(map, 2, 9, ["WWW", "WWW"]);
-  stamp(map, 15, 9, ["WW", "WW", "WW"]);
+  // pools of overlapping 2x2s (see the forest's ponds), none a rectangle
+  stamp(map, 1, 2, ["WW.", "WWW", ".WW"]);
+  stamp(map, 14, 2, [".WW", "WWW", "WW."]);
+  stamp(map, 1, 9, [".WW", "WWW", "WW."]);
+  stamp(map, 14, 9, [".WW", "WWW", "WW."]);
 
-  stamp(map, 8, 4, ["TT", "..", ".."]);
-  stamp(map, 4, 7, [".T", "T."]);
+  stamp(map, 8, 4, ["RR", "..", ".."]);
+  stamp(map, 4, 7, [".R", "R."]);
 
   for (let x = 6; x <= 13; x++) {
     if (x === 9 || x === 10) continue; // doorway down into the boss room
-    map[10][x] = T_TREE;
+    map[10][x] = T_ROCK;
   }
-  map[11][6] = T_TREE;
-  map[12][6] = T_TREE;
-  map[11][13] = T_TREE;
-  map[12][13] = T_TREE;
+  map[11][6] = T_ROCK;
+  map[12][6] = T_ROCK;
+  map[11][13] = T_ROCK;
+  map[12][13] = T_ROCK;
 
-  stamp(map, 21, 4, ["WW", "WW", "WW"]);
-  stamp(map, 19, 5, [".T", "TT"]);
-  stamp(map, 19, 13, ["TT"]);
-  stamp(map, 21, 12, ["T"]);
-  stamp(map, 3, 14, ["T.", ".T"]);
-  stamp(map, 17, 14, ["TT"]);
-  stamp(map, 20, 2, ["T"]);
-  stamp(map, 23, 12, ["T", "T"]);
+  stamp(map, 21, 3, ["WW", "WW", ".W"]);
+  stamp(map, 19, 5, [".R", "RR"]);
+  stamp(map, 19, 13, ["RR"]);
+  stamp(map, 21, 12, ["R"]);
+  stamp(map, 3, 14, ["R.", ".R"]);
+  stamp(map, 17, 14, ["RR"]);
+  stamp(map, 20, 2, ["R"]);
+  stamp(map, 23, 12, ["R", "R"]);
 
   return map;
 }
@@ -311,7 +372,8 @@ export const FOREST_W = 26;
 export const FOREST_H = 18;
 export const FOREST_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
-// World-map position of the forest entrance, at the end of the eastern lane
+// World-map position of the forest entrance, where the eastern lane runs off
+// the map's east edge
 export const FOREST_POS = { ...LANDMARKS.FOREST_POS };
 
 export const FOREST_ZONES: Array<MonsterZone & { kind?: "wasp" | "spider" | "orc" }> = [
@@ -342,17 +404,19 @@ export function buildForest(): number[][] {
     map[y][FOREST_W - 1] = T_TREE;
   }
 
-  // winding path: entrance (top-center) down, across, down into the clearing
-  stamp(map, 11, 1, ["PP", "PP", "PP"]);
+  // winding path: in through a gap in the top border, across, down into the
+  // clearing. The gap is the way back to town (sceneCommon.addTownExitSign).
+  stamp(map, 11, 0, ["PP", "PP", "PP", "PP"]);
   stamp(map, 13, 3, ["PPPPPP"]);
   stamp(map, 18, 4, ["P", "P", "P", "P"]);
   stamp(map, 13, 7, ["PPPPPP"]);
   stamp(map, 13, 8, ["P", "P", "P"]);
   stamp(map, 14, 10, ["PPPP"]);
 
-  // small ponds
-  stamp(map, 1, 6, ["WW", "WW", "WW"]);
-  stamp(map, 23, 12, ["WW", "WW", "WW"]);
+  // small ponds, each two overlapping 2x2 pools: lopsided, and never a
+  // one-tile finger, which the shoreline art sharpens into a spike
+  stamp(map, 1, 5, ["WW.", "WWW", ".WW"]);
+  stamp(map, 22, 11, [".WW", "WWW", "WW."]);
 
   // tree clusters
   stamp(map, 2, 2, ["T"]);
@@ -372,6 +436,9 @@ export function buildForest(): number[][] {
   markZones(
     map,
     FOREST_ZONES.filter((z) => z.count > 1),
+    T_TALL,
+    T_GRASS,
+    [FOREST_ENTRY, ...FOREST_TREASURE_POS],
   );
 
   return map;
@@ -383,10 +450,25 @@ export const SNOW_W = 24;
 export const SNOW_H = 16;
 export const SNOW_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
 
-// World-map position of the pass, at the west end of the main road. It used to
-// sit at (1,1), in the map's north-west corner; this keeps it in the same
-// quarter of the map while clearing both the map edge and the house door.
+// World-map position of the pass, where the south-western road runs off the
+// map's west edge.
 export const SNOW_POS = { ...LANDMARKS.SNOW_POS };
+
+// World-map position of the volcano road's end: it leaves the forest lane by
+// the GUARD and runs south off the map's bottom edge, a tile clear of the wolf
+// zone to its west. Opens once the GLACIER GOLEM falls.
+export const VOLCANO_POS = { ...LANDMARKS.VOLCANO_POS };
+
+// ARENA keeper, on the grass just north of the main road between the ELDER
+// and the trees: 286px from the GAMBLER, the nearest other talk spot, and its
+// name tag clear of every other label (see arena.ts for what it runs)
+export const ARENA_POS = { ...LANDMARKS.ARENA_POS };
+
+// BLACKSMITH, on the grass south-west of the SHOP: 202px from it and from the
+// RANK BOARD, the nearest other talk spots, and its name tag clear of the
+// SHOP's sprite, every other label and the map edge (ui/Blacksmith.ts forges
+// monster materials into gear)
+export const BLACKSMITH_POS = { ...LANDMARKS.BLACKSMITH_POS };
 
 // Filled here rather than at the declaration because it needs every landmark
 // above to exist first. The map editor moves whatever is listed.
@@ -414,15 +496,19 @@ export const LANDMARK_TILES: Record<string, { tile: number; cells: Array<[number
       [1, 0],
     ],
   },
+  // a 3x2 pool with a lobe off its north-east corner and one south-west by
+  // the cast spot, so its shore is not a rounded rectangle
   FISH_POS: {
     tile: T_WATER_A,
     cells: [
       [1, -1],
       [2, -1],
       [3, -1],
+      [4, -1],
       [1, 0],
       [2, 0],
       [3, 0],
+      [1, 1],
     ],
   },
 };
@@ -443,7 +529,27 @@ Object.assign(EDITABLE_POS, {
   FARM_SIGN_POS,
   FOREST_POS,
   SNOW_POS,
+  VOLCANO_POS,
+  ARENA_POS,
+  BLACKSMITH_POS,
 });
+
+// The keepers whose workplace TownScene draws behind them: a 2x2-tile building
+// on the two rows north of the keeper's tile, its left column over the
+// keeper's. Solid to the hero; the villagers and anything that picks a free
+// tile (the treasure map) keep off its cells (workplaceCells).
+export const WORKPLACE_LANDMARKS = ["NPC_POS", "SHOP_POS", "BLACKSMITH_POS", "ARENA_POS", "GAMBLER_POS", "HUNTER_POS"] as const;
+export const workplaceCells = (): Array<[number, number]> =>
+  WORKPLACE_LANDMARKS.flatMap((k) => {
+    const tx = Math.floor(EDITABLE_POS[k].x / TILE);
+    const ty = Math.floor(EDITABLE_POS[k].y / TILE);
+    return [
+      [tx, ty - 2],
+      [tx + 1, ty - 2],
+      [tx, ty - 1],
+      [tx + 1, ty - 1],
+    ] as Array<[number, number]>;
+  });
 
 export const SNOW_ZONES: Array<MonsterZone & { kind?: "frostMoth" | "yeti" }> = [
   { cx: 5 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "frostMoth" },
@@ -478,19 +584,23 @@ export function buildSnow(): number[][] {
     map[y][SNOW_W - 1] = T_TREE;
   }
 
-  // winding path: entrance (top-center) down, across, down into the boss basin
-  stamp(map, 11, 1, ["PP", "PP", "PP"]);
+  // winding path: in through a gap in the top border (the way back to town),
+  // across, down into the boss basin
+  stamp(map, 11, 0, ["PP", "PP", "PP", "PP"]);
   stamp(map, 9, 3, ["PPPPPP"]);
   stamp(map, 9, 4, ["P", "P"]);
+  // joins the row-3 path to the row-5 one; they only touched corners
+  stamp(map, 14, 4, ["P", "P"]);
   stamp(map, 15, 5, ["PPPPP"]);
   stamp(map, 19, 6, ["P", "P", "P"]);
   stamp(map, 14, 8, ["PPPP"]);
   stamp(map, 17, 9, ["P", "P"]);
 
-  // frozen ponds
-  stamp(map, 2, 2, ["WW", "WW"]);
-  stamp(map, 20, 11, ["WWW", "WWW"]);
-  stamp(map, 3, 12, ["WW", "WW"]);
+  // frozen ponds, two overlapping 2x2 pools each (see the forest's); the
+  // first keeps (3,3) beside the ice-fishing hole
+  stamp(map, 2, 1, [".WW", "WWW", "WW."]);
+  stamp(map, 20, 10, [".WW", "WWW", "WW."]);
+  stamp(map, 3, 11, ["WW.", "WWW", ".WW"]);
 
   // wind-carved rock clusters
   stamp(map, 7, 2, ["T"]);
@@ -509,6 +619,88 @@ export function buildSnow(): number[][] {
   markZones(
     map,
     SNOW_ZONES.filter((z) => z.count > 1),
+    T_TALL,
+    T_GRASS,
+    [SNOW_ENTRY, SNOW_FISH_POS, ...SNOW_TREASURE_POS],
+  );
+
+  return map;
+}
+
+// Volcano: the last region, past the GLACIER GOLEM. Same 24x16 frame and
+// top-centre entry as the snow field, walled in basalt instead of trees, with
+// the boss in a lava-ringed crater at the bottom that one bridge leads into.
+export const VOLCANO_W = 24;
+export const VOLCANO_H = 16;
+export const VOLCANO_ENTRY = { x: 12 * TILE + TILE / 2, y: 1 * TILE + TILE / 2 };
+
+// Roamers float over terrain (no collider), so every zone keeps an ash tile
+// between it and the nearest lava or the sprites would wade through it.
+export const VOLCANO_ZONES: Array<MonsterZone & { kind?: "magmaSlime" | "fireImp" | "salamander" }> = [
+  { cx: 5 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "magmaSlime" },
+  { cx: 19 * TILE, cy: 4 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "magmaSlime" },
+  // clear of the entry spawn at (12.5, 3.5), same rule as DUNGEON_ZONES
+  { cx: 12 * TILE, cy: 7 * TILE, w: 2 * TILE, h: 2 * TILE, count: 3, kind: "fireImp" },
+  { cx: 5 * TILE, cy: 10 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2, kind: "salamander" },
+  { cx: 19 * TILE, cy: 10 * TILE, w: 2 * TILE, h: 2 * TILE, count: 2, kind: "salamander" },
+  // flame drake boss: the crater floor is x 9..14, y 11..14, and the 1.5x
+  // sprite roaming this box stays inside it, a row clear of the bridge
+  { cx: 12 * TILE, cy: 13 * TILE, w: 3 * TILE, h: 2 * TILE, count: 1 },
+];
+
+export const VOLCANO_TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
+  { id: "volcano-1", x: 21 * TILE + TILE / 2, y: 2 * TILE + TILE / 2 },
+  { id: "volcano-2", x: 2 * TILE + TILE / 2, y: 13 * TILE + TILE / 2 },
+  { id: "volcano-3", x: 21 * TILE + TILE / 2, y: 13 * TILE + TILE / 2 },
+];
+
+export function buildVolcano(): number[][] {
+  const map: number[][] = Array.from({ length: VOLCANO_H }, () => Array<number>(VOLCANO_W).fill(T_ASH));
+
+  for (let x = 0; x < VOLCANO_W; x++) {
+    map[0][x] = T_ROCK;
+    map[VOLCANO_H - 1][x] = T_ROCK;
+  }
+  for (let y = 0; y < VOLCANO_H; y++) {
+    map[y][0] = T_ROCK;
+    map[y][VOLCANO_W - 1] = T_ROCK;
+  }
+
+  // the way back to town: a gap in the top wall above the entry
+  stamp(map, 11, 0, ["AA"]);
+  // twin lava pools flanking the entry, dripping south — not quite mirrored
+  stamp(map, 8, 3, [".LL...LLL", "LLL...LL.", "LL.....LL"]);
+  // ...and the vents along the side walls
+  stamp(map, 1, 5, ["L..", "LL.", "LLL", "L.."]);
+  stamp(map, 20, 6, [".LL", "LLL", "..L", "..L"]);
+
+  // the crater: a lava moat on three sides, basalt on the fourth, and a
+  // two-tile bridge at x 11-12 as the only way in
+  stamp(map, 8, 10, ["LLL..LLL"]);
+  for (let y = 11; y <= 14; y++) {
+    map[y][8] = T_LAVA_A;
+    map[y][15] = T_LAVA_A;
+  }
+  // the moat bulges out here and there, so its walls aren't ruled lines
+  stamp(map, 7, 12, ["L", "L"]);
+  stamp(map, 16, 11, ["L"]);
+
+  // basalt outcrops
+  stamp(map, 7, 2, ["R"]);
+  stamp(map, 16, 2, ["R"]);
+  stamp(map, 6, 7, ["R"]);
+  stamp(map, 17, 7, ["R"]);
+  stamp(map, 3, 12, ["R"]);
+  stamp(map, 20, 12, ["R"]);
+
+  // scorched ground marks the zones the way tall grass does elsewhere; the
+  // crater stays unmarked so the FLAME DRAKE is still a surprise
+  markZones(
+    map,
+    VOLCANO_ZONES.filter((z) => z.count > 1),
+    T_SCORCH,
+    T_ASH,
+    [VOLCANO_ENTRY, ...VOLCANO_TREASURE_POS],
   );
 
   return map;

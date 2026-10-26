@@ -1,9 +1,26 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
+import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
-import { CROPS, FARM_PLOTS, GameState, isNight, onSaved } from "../gameState";
+import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { canDeliver, deliver, deliveryReward, materialName, rollDeliveryIfStale } from "../delivery";
+import { eventToday } from "../events";
+import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, materialNameOf } from "../favors";
 import {
+  cropProgress,
+  type DeliveryState,
+  dayIndex,
+  FARM_PLOTS,
+  FIRE_BEASTS,
+  GameState,
+  isNight,
+  onSaved,
+  type VillagerKey,
+} from "../gameState";
+import { BEDS_LEVEL, houseTexture } from "../home";
+import {
+  ARENA_POS,
+  BLACKSMITH_POS,
   BOUNTY_BOARD_POS,
   buildLevel,
   CAVE_POS,
@@ -29,12 +46,17 @@ import {
   SHOP_POS,
   SNOW_POS,
   T_GRASS,
+  T_PATH,
   TALL_GRASS,
   TILE,
+  VOLCANO_POS,
+  WORKPLACE_LANDMARKS,
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
 import {
+  addExitArrow,
+  boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   isWalkableCell,
@@ -42,24 +64,46 @@ import {
   paintTile,
   startWaterAnimation,
   type TileLayers,
+  whilePanelUp,
 } from "../sceneCommon";
+import { seasonLook, seasonNews } from "../season";
 import { AchievementsUI } from "../ui/AchievementsUI";
+import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
+import { BlacksmithUI } from "../ui/Blacksmith";
 import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
-import { addHelpPopup } from "../ui/HelpPopup";
+import { addFootsteps } from "../ui/Footsteps";
+import { addGuideArrow } from "../ui/GuideArrow";
+import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { placeHeroGear } from "../ui/HeroGear";
+import { HomeUI } from "../ui/HomeUI";
 import { InventoryUI } from "../ui/InventoryUI";
+import { KitchenUI } from "../ui/Kitchen";
+import { LookPicker } from "../ui/LookPicker";
 import { LuckyWheel } from "../ui/LuckyWheel";
 import { MapEditor } from "../ui/MapEditor";
 import { Minimap } from "../ui/Minimap";
-import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { NIGHT_ENCOUNTER_MULT, type NightLight, NightOverlay } from "../ui/NightOverlay";
+import { QuestLog } from "../ui/QuestLog";
 import { RankingUI } from "../ui/RankingUI";
 import { SettingsUI } from "../ui/SettingsUI";
 import { ShopUI } from "../ui/Shop";
 import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
+import { TreasureDigger } from "../ui/TreasureDig";
+import { type Rect, Villagers } from "../ui/Villagers";
+import { showUnlockTip } from "../unlockTips";
+import { bakeHero, seasonSkin } from "./BootScene";
+
+// The last day whose town event (events.ts) was announced. Module scope, so
+// it outlives a Town restart — every battle and field trip ends in one, and
+// the toast would otherwise repeat after each fight — but not a page load.
+let announcedDay = -1;
+// lets the arrival and rest-until-morning fades finish before it shows
+const EVENT_TOAST_DELAY = 600;
 
 const ENCOUNTER_RATE = 0.18;
 const ENCOUNTER_COOLDOWN = 600;
@@ -68,21 +112,92 @@ const MAX_COOLDOWN_STEP = 50;
 // long enough for the SAVED confirmation to be readable before the title
 const QUIT_SAVE_DELAY = 700;
 const TROLL_KING_SPAWN_CHANCE = 0.35;
-// Exits to another map (CAVE, FOREST, SNOW PASS) are all marked the same way:
-// the tile that actually triggers the transition is outlined and pulsing, with
-// the destination name above it — no signposts. The dy clears the CAVE's 128px
-// entrance art and the neighbouring GUARD label.
+// Exits to another map are marked in the world rather than with a box: FOREST,
+// SNOW PASS and VOLCANO are roads running off the map's edge with a signpost
+// beside them (addMapExit), the CAVE is its mouth art with the name over it.
 const EXIT_LABEL_COLOR = "#9f9fd0";
-const EXIT_AREA_COLOR = 0xffd166;
-// gap between the top of the marker box (or of whatever entrance art stands
-// above it) and the destination name, so the name reads as part of the box
+// gap between the top of the cave art and its name
 const EXIT_LABEL_GAP = 20;
+// A person's name tag shows only as the hero comes close: full within
+// NPC_TAG_NEAR, gone past NPC_TAG_FAR, by distance alone, so it never blinks.
+// A town tagged end to end was noise. The places keep theirs up — signs,
+// exits, HOME, and the SHOP and BLACKSMITH, which are where they stand.
+const NPC_TAG_NEAR = 2.5 * TILE;
+const NPC_TAG_FAR = 3.5 * TILE;
+const ALWAYS_TAGGED = new Set(["SHOP", "BLACKSMITH"]);
+// The southern meadow's dressing, as tiles: flower patches and stones in the
+// open grass between the footpath, the groves and the slime meadows. Nothing
+// collides with them, a spot the map editor has turned into something other
+// than grass is skipped, and the flowers sleep under the winter snow.
+const MEADOW_DECOR: ReadonlyArray<readonly ["flowers" | "stones", number, number]> = [
+  ["flowers", 11, 15],
+  ["flowers", 14, 15],
+  ["flowers", 17, 16],
+  ["flowers", 10, 19],
+  ["flowers", 21, 14],
+  ["flowers", 12, 13],
+  ["flowers", 4, 14],
+  ["stones", 18, 15],
+  ["stones", 11, 17],
+  ["stones", 16, 19],
+  ["stones", 22, 13],
+  ["stones", 2, 13],
+];
 const GOLDEN_SLIME_CHANCE = 0.08;
 // The house art and its shadow, one step above the object layer so neither the
 // transition overlay (1) nor the object layer (2) can paint over the building.
 const HOUSE_DEPTH = OBJECT_LAYER_DEPTH + 1;
+// Each keeper's workplace (BootScene draws them, levels.ts says where): its
+// texture; its roofline, px down from the top of the 128px art (the apex,
+// awning beam, palisade points or eaves, not a chimney or pennant poking
+// above), where the keeper's tag sits; and its lamps at night as offsets from
+// the building's centre -- the windows and lanterns in its art, and the
+// forge's hearth with a slow flicker.
+const WORKPLACES: Record<
+  (typeof WORKPLACE_LANDMARKS)[number],
+  { key: string; roof: number; lights: ReadonlyArray<{ dx: number; dy: number; radius: number; color?: number; pulseMs?: number }> }
+> = {
+  NPC_POS: {
+    key: "hut-elder",
+    roof: 8,
+    lights: [
+      { dx: 26, dy: 22, radius: 32 },
+      { dx: 0, dy: -32, radius: 16 },
+    ],
+  },
+  SHOP_POS: { key: "stall-shop", roof: 20, lights: [{ dx: -46, dy: -4, radius: 32 }] },
+  BLACKSMITH_POS: { key: "forge", roof: 36, lights: [{ dx: 28, dy: 48, radius: 44, color: 0xff8a3d, pulseMs: 900 }] },
+  ARENA_POS: { key: "gate-arena", roof: 24, lights: [{ dx: -2, dy: -2, radius: 32 }] },
+  GAMBLER_POS: { key: "tent-gambler", roof: 12, lights: [{ dx: -30, dy: 35, radius: 32 }] },
+  HUNTER_POS: { key: "lodge-hunter", roof: 32, lights: [{ dx: -10, dy: 24, radius: 32 }] },
+};
+// half a retroStyle(5) tag's height (5 x 4 x 1.3 = 26px) plus a 2px gap
+const TAG_CLEAR = 15;
 
 type LastMove = "down" | "up" | "right" | "left";
+
+// One step from an exit back into the map, in tiles: away from the edge it
+// sits on. The CAVE, on no edge, steps out south of its mouth.
+const inwardOf = (pos: { x: number; y: number }): { dx: number; dy: number } => {
+  const tx = Math.floor(pos.x / TILE);
+  const ty = Math.floor(pos.y / TILE);
+  if (tx === 0) return { dx: 1, dy: 0 };
+  if (tx === MAP_W - 1) return { dx: -1, dy: 0 };
+  if (ty === MAP_H - 1) return { dx: 0, dy: -1 };
+  return { dx: 0, dy: 1 };
+};
+// where a hero coming back through an exit is set down: two tiles in, off
+// the trigger
+const stepIn = (pos: { x: number; y: number }): { x: number; y: number } => {
+  const { dx, dy } = inwardOf(pos);
+  return { x: pos.x + dx * TILE * 2, y: pos.y + dy * TILE * 2 };
+};
+
+// a display object's world-space box, in the shape Villagers takes
+const rectOf = (obj: { getBounds(): Phaser.Geom.Rectangle }): Rect => {
+  const b = obj.getBounds();
+  return { x: b.x, y: b.y, w: b.width, h: b.height };
+};
 
 interface Roamer {
   sprite: Phaser.Physics.Arcade.Sprite;
@@ -108,6 +223,7 @@ export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private companionFollower!: CompanionSprite;
+  private treasure!: TreasureDigger;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private layers!: TileLayers;
@@ -118,38 +234,63 @@ export class TownScene extends Phaser.Scene {
   private rankBoard!: RankingUI;
   private fishing!: FishingUI;
   private farm!: FarmUI;
+  private blacksmith!: BlacksmithUI;
+  private kitchen!: KitchenUI;
+  private home!: HomeUI;
+  // the house as built so far (home.ts), and its winter snow cap
+  private houseImage!: Phaser.GameObjects.Image;
+  private houseSnow?: Phaser.GameObjects.Image;
   private cropSprites: Phaser.GameObjects.Sprite[] = [];
   private mapEditor!: MapEditor;
   // every object drawn relative to an editable landmark, with the offset it
   // was drawn at, so the map editor can move a landmark and its whole set of
   // sprites/labels together without waiting for a scene restart
   private landmarkParts: Array<{ name: string; obj: { x: number; y: number }; dx: number; dy: number }> = [];
+  // world-space boxes of every fixed name tag (NPCs, signs, exits, HOME, zone
+  // warnings), so the villagers can keep their own tags clear of them
+  private fixedLabels: Rect[] = [];
+  // the fixed NPCs' sprites, turned to face the hero who talks to them
+  private npcSprites: Phaser.GameObjects.Sprite[] = [];
+  // what the hero bumps into besides the tilemap: the SHOP's crate, the
+  // anvil, the keepers' workplaces and the farm's fence (static bodies, see
+  // addBlocker)
+  private blockers: Phaser.GameObjects.Zone[] = [];
+  // the workplaces' lamps, lit once the night overlay exists
+  private workplaceLights: Array<{ landmark: string; light: NightLight }> = [];
+  // the name tags that fade with the hero's distance (NPC_TAG_NEAR)
+  private npcTags: Array<{ tag: Phaser.GameObjects.Text; sprite: Phaser.GameObjects.Sprite }> = [];
+  private villagers!: Villagers;
   private level: number[][] = [];
   private editorQueued = false;
   private luckyWheel!: LuckyWheel;
   private achievementsUI!: AchievementsUI;
+  private questLog!: QuestLog;
+  private lookPicker!: LookPicker;
   private settingsUI!: SettingsUI;
-  private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer[] = [];
   private wispRoamer?: Roamer;
   private wasNight = false;
+  // a town-event toast is scheduled but not yet shown (see announceEvent)
+  private eventToastPending = false;
   private encounterCooldown = 0;
   private lastMove: LastMove = "down";
   private night!: NightOverlay;
   private touch?: TouchControls;
   private homeLabel!: Phaser.GameObjects.Text;
   private homeBubble!: Phaser.GameObjects.Container;
+  private homeBubbleText!: Phaser.GameObjects.Text;
   private bubbleVisible = false;
   private resting = false;
   private enteringDungeon = false;
   private enteringForest = false;
   private enteringSnow = false;
-  // true while overlapping the forest/snow zone; reset a full tile away so
-  // the sealed-entrance dialogue doesn't restart every overlap frame
+  private enteringVolcano = false;
+  // true while overlapping the forest/snow/volcano zone; reset a full tile
+  // away so the sealed-entrance dialogue doesn't restart every overlap frame
   private forestOverlapActive = false;
   private snowOverlapActive = false;
+  private volcanoOverlapActive = false;
   private zQueued = false;
   private sQueued = false;
   private ctrlSQueued = false;
@@ -157,10 +298,12 @@ export class TownScene extends Phaser.Scene {
   private gCheatQueued = false;
   private mQueued = false;
   private tQueued = false;
+  private cQueued = false;
   private bQueued = false;
   private aQueued = false;
   private oQueued = false;
   private qQueued = false;
+  private uQueued = false;
   // claims achievements at most once per second; the checks read live
   // GameState, so battle/fishing/treasure mutations made while a modal or
   // another scene owns input are caught on the next tick after returning here
@@ -169,8 +312,8 @@ export class TownScene extends Phaser.Scene {
   private quitting = false;
   private unsubSaved: () => void = () => {};
   // true while an achievement save is in flight; the onSaved "SAVED" toast is
-  // skipped so it doesn't clobber the "ACHIEVEMENT: ...!" toast on the same
-  // shared __toast text object (showToast reuses one per scene)
+  // skipped so it doesn't queue up behind the "ACHIEVEMENT: ...!" toast for
+  // the same save (showToast shows one toast at a time per scene)
   private suppressSavedToast = false;
   private yQueued = false;
   private nQueued = false;
@@ -207,8 +350,11 @@ export class TownScene extends Phaser.Scene {
     super("Town");
   }
 
-  create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean; fromSnow?: boolean }): void {
+  create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean; fromSnow?: boolean; fromVolcano?: boolean }): void {
     Sfx.playBgm(OVERWORLD_THEME);
+    // the title bakes the save's look before it starts the town; this covers
+    // any other way in (a no-op when that look is already baked)
+    bakeHero(this, GameState.heroLook);
     this.roamers = [];
     // Every entry gets a grace period, not just a return from battle: nothing
     // locked encounters when walking into the cave or forest, and their entry
@@ -219,26 +365,42 @@ export class TownScene extends Phaser.Scene {
     this.enteringDungeon = false;
     this.enteringForest = false;
     this.enteringSnow = false;
+    this.enteringVolcano = false;
     this.forestOverlapActive = false;
     this.snowOverlapActive = false;
+    this.volcanoOverlapActive = false;
     this.quitConfirm = false;
     this.quitting = false;
     this.wispRoamer = undefined;
     this.landmarkParts = [];
+    this.fixedLabels = [];
+    this.npcSprites = [];
+    this.npcTags = [];
+    this.blockers = [];
+    this.workplaceLights = [];
     this.wasNight = isNight();
+    this.eventToastPending = false;
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
     // — SHUTDOWN listeners fire in registration order, so this unsubscribes
     // before that save happens and no toast gets created on a scene that's
     // already tearing down. Keep this the first SHUTDOWN listener.
+    // Not over an open panel: a save made in one (a buy, an equip, a forge, a
+    // companion picked) is already reported on the panel's own message line,
+    // and this toast (y 100..124) landed on its top rows — the shop, the bag
+    // and the forge hang from y 28 on touch screens, and their titles sit at
+    // y 85..139 on a keyboard. The dialogue box (y 456..688) is clear of it,
+    // so a save made while talking (a bounty paid, a favor taken) still shows.
     this.unsubSaved = onSaved(() => {
-      if (!this.suppressSavedToast) showToast(this, "SAVED", STATUS_HUD_TOAST_Y);
+      if (this.suppressSavedToast || (this.uiBlocking() && !this.dialogue.isActive())) return;
+      showToast(this, "SAVED", STATUS_HUD_TOAST_Y);
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildLevel();
     this.level = level;
-    this.layers = buildTileLayers(this, level);
+    // the season's skin (BootScene's seasonSkin): green, autumn or snowed in
+    this.layers = buildTileLayers(this, level, { skin: seasonSkin("town") });
 
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
 
@@ -250,31 +412,53 @@ export class TownScene extends Phaser.Scene {
       "HOUSE_POS",
       addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 118, h: 22, yOffset: 66, depth: HOUSE_DEPTH }),
     );
-    this.track(
+    this.houseImage = this.track(
       "HOUSE_POS",
       this.add
-        .image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, "house")
+        .image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, houseTexture(GameState.houseLevel))
         .setOrigin(0.5, 0.5)
         .setDepth(HOUSE_DEPTH),
     );
+    // in the snow skin, snow on the roof, the chimney and the dormer
+    if (seasonLook("town") === "winter") {
+      this.houseSnow = this.track(
+        "HOUSE_POS",
+        this.add.image(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE, `house-${GameState.houseLevel}-snow`).setDepth(HOUSE_DEPTH + 0.01),
+      );
+    }
     this.homeLabel = this.track(
       "HOUSE_POS",
       this.add
         .text(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - 80, "HOME", retroStyle(5, "#9f9fd0"))
+        .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11),
     );
+    this.fixedLabels.push(rectOf(this.homeLabel));
     this.homeBubble = this.track("HOUSE_POS", this.buildHomeBubble());
+    // the bubble replaces the HOME tag up close, so it counts as one too
+    this.fixedLabels.push(rectOf(this.homeBubble));
     this.homeBubble.setVisible(false);
 
     this.addNpc("NPC_POS", NPC_POS, "ELDER", 0xffffff, "#9f9fd0");
     this.addNpc("SHOP_POS", SHOP_POS, "SHOP", 0xffd166);
+    // the keeper's produce, a tile east of him by the north-south road
+    this.addProp("SHOP_POS", { x: SHOP_POS.x + TILE, y: SHOP_POS.y }, "produce-crate");
 
     this.track("CAVE_POS", addGroundShadow(this, CAVE_POS, { w: 104, h: 24, yOffset: 56 }));
     this.track("CAVE_POS", this.add.image(CAVE_POS.x, CAVE_POS.y, "cave").setDepth(9));
     // the cave mouth is 128px tall and centred on the entrance tile, so its
-    // name clears the art rather than the marker box
-    this.addMapExit("CAVE_POS", CAVE_POS, "CAVE", 48);
+    // name clears the art (1.25 tiles: half the art plus half the tag);
+    // flipped under it at the top of the map (labelY)
+    const caveTag = this.track(
+      "CAVE_POS",
+      this.add
+        .text(CAVE_POS.x, this.labelY(CAVE_POS.y, TILE * 1.25 + EXIT_LABEL_GAP), "CAVE", retroStyle(6, EXIT_LABEL_COLOR))
+        .setStroke("#1a1028", 4)
+        .setOrigin(0.5)
+        .setDepth(11),
+    );
+    this.fixedLabels.push(rectOf(caveTag));
 
     this.addSign("RANK_BOARD_POS", RANK_BOARD_POS, "RANK BOARD", "#c084fc");
     this.addSign("BOUNTY_BOARD_POS", BOUNTY_BOARD_POS, "BOUNTY BOARD", "#facc15");
@@ -283,29 +467,57 @@ export class TownScene extends Phaser.Scene {
     // farm field: signpost on the grass beside the plots
     this.addSign("FARM_SIGN_POS", FARM_SIGN_POS, "FARM", "#a3e635");
 
+    // the tilled rows and their fence over the 3x2 soil; FARM_POS is the
+    // middle of the field's south row, where the fence stays open
+    this.track("FARM_POS", this.add.image(FARM_POS.x, FARM_POS.y - TILE / 2, "farm-field").setDepth(OBJECT_LAYER_DEPTH - 0.5));
+    this.addBlocker("FARM_POS", FARM_POS.x, FARM_POS.y - TILE * 1.5 + 8, TILE * 3, 16);
+    this.addBlocker("FARM_POS", FARM_POS.x - TILE * 1.5 + 4, FARM_POS.y - TILE / 2, 8, TILE * 2);
+    this.addBlocker("FARM_POS", FARM_POS.x + TILE * 1.5 - 4, FARM_POS.y - TILE / 2, 8, TILE * 2);
+
     this.cropSprites = farmPlots().map((pos) =>
       this.track("FARM_POS", this.add.sprite(pos.x, pos.y, "crop-sprout").setDepth(8).setVisible(false)),
     );
 
-    // eastern woods entrance: no signpost here, unlike the other exits — the
-    // GUARD stands right beside it and already marks the opening
+    // the eastern lane into the woods
     this.addMapExit("FOREST_POS", FOREST_POS, "FOREST");
 
-    // gatekeeper who lets nobody through until the KING SLIME falls; stands a
-    // tile south of the entrance — beside it, where his name tag clears the
-    // FOREST label now that the label hugs the marker box
+    // gatekeeper who lets nobody through until the KING SLIME falls: on the
+    // signpost's side of the lane, two tiles further in. Across the lane his
+    // tag hung over the hero walking out; this keeps it off the lane and
+    // clear of the sign's.
+    const gate = inwardOf(FOREST_POS);
     this.guardPos = {
-      x: Phaser.Math.Clamp(FOREST_POS.x, TILE, (MAP_W - 1) * TILE),
-      y: Phaser.Math.Clamp(FOREST_POS.y + TILE, TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
+      x: Phaser.Math.Clamp(FOREST_POS.x + gate.dx * 3 * TILE - (gate.dy ? TILE : 0), TILE, (MAP_W - 1) * TILE),
+      y: Phaser.Math.Clamp(FOREST_POS.y + gate.dy * 3 * TILE - (gate.dx ? TILE : 0), TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
     };
     this.addNpc("FOREST_POS", this.guardPos, "GUARD", 0x67e8f9);
 
-    // north-west mountain pass to the snow field: no signpost, same as the
-    // other two exits — every one of them is just its name above the opening
+    // the mountain pass to the snow field, off the west edge
     this.addMapExit("SNOW_POS", SNOW_POS, "SNOW PASS");
+
+    // the crater road, the last exit: marked like the others even while
+    // sealed, so the GLACIER GOLEM's reward has somewhere visible to point to
+    this.addMapExit("VOLCANO_POS", VOLCANO_POS, "VOLCANO");
 
     this.addNpc("HUNTER_POS", HUNTER_POS, "HUNTER", 0x86efac);
     this.addNpc("GAMBLER_POS", GAMBLER_POS, "GAMBLER", 0xf472b6);
+    // runs the boss gauntlet (arena.ts); stands even before it opens, so the
+    // KING SLIME has something to unlock
+    this.addNpc("ARENA_POS", ARENA_POS, "ARENA", 0xfbbf24);
+    // forges monster materials into gear (ui/Blacksmith.ts); steel grey, a
+    // tint no other NPC or minimap dot uses
+    this.addNpc("BLACKSMITH_POS", BLACKSMITH_POS, "BLACKSMITH", 0xcbd5e1);
+    this.addProp("BLACKSMITH_POS", { x: BLACKSMITH_POS.x + TILE, y: BLACKSMITH_POS.y }, "anvil");
+    for (const landmark of WORKPLACE_LANDMARKS) this.addWorkplace(landmark);
+
+    const winter = seasonLook("town") === "winter";
+    MEADOW_DECOR.forEach(([key, tx, ty], i) => {
+      if (level[ty]?.[tx] !== T_GRASS || (winter && key === "flowers")) return;
+      this.add
+        .image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, key)
+        .setDepth(4)
+        .setFlipX(i % 2 === 1);
+    });
 
     const respawn = GameState.pos ?? PLAYER_SPAWN;
     // Position-based fallback for old saves / any other path that lands here
@@ -318,16 +530,19 @@ export class TownScene extends Phaser.Scene {
     const fromDungeon = !!data?.fromDungeon || nearCave;
     const fromForest = !!data?.fromForest;
     const fromSnow = !!data?.fromSnow;
+    const fromVolcano = !!data?.fromVolcano;
     const spawn = fromDungeon
-      ? { x: CAVE_POS.x, y: CAVE_POS.y + TILE * 2 }
+      ? stepIn(CAVE_POS)
       : fromForest
-        ? { x: FOREST_POS.x, y: FOREST_POS.y + TILE * 2 }
+        ? stepIn(FOREST_POS)
         : fromSnow
-          ? { x: SNOW_POS.x, y: SNOW_POS.y + TILE * 2 }
-          : respawn;
-    // just walked out of the cave/forest/snow: hold off re-triggering it in
-    // case the player is still holding the walk-in key
-    if (fromDungeon || fromForest || fromSnow) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
+          ? stepIn(SNOW_POS)
+          : fromVolcano
+            ? stepIn(VOLCANO_POS)
+            : respawn;
+    // just walked out of the cave/forest/snow/volcano: hold off re-triggering
+    // it in case the player is still holding the walk-in key
+    if (fromDungeon || fromForest || fromSnow || fromVolcano) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
     // the map editor can paint a tree (or water) over wherever the hero was
     // standing — drop them back at the town spawn rather than inside a wall
     const safeSpawn = isWalkableCell(level, Math.floor(spawn.x / TILE), Math.floor(spawn.y / TILE)) ? spawn : PLAYER_SPAWN;
@@ -339,6 +554,31 @@ export class TownScene extends Phaser.Scene {
     // and carry their collision on the object layer now.
     this.physics.add.collider(this.player, this.layers.terrain);
     this.physics.add.collider(this.player, this.layers.objects);
+    this.physics.add.collider(this.player, this.blockers);
+
+    // a chevron on each edge exit's last tile, pointing off the map
+    for (const [landmark, pos] of [
+      ["FOREST_POS", FOREST_POS],
+      ["SNOW_POS", SNOW_POS],
+      ["VOLCANO_POS", VOLCANO_POS],
+    ] as const) {
+      const { dx, dy } = inwardOf(pos);
+      this.track(landmark, addExitArrow(this, this.player, pos.x, pos.y, Phaser.Math.RadToDeg(Math.atan2(-dy, -dx))));
+    }
+    // No tag under a talk or a panel (the talk's name plate sat right on
+    // them, a panel let them show through), and toasts wait for it to close —
+    // but not under the map editor, which is all about where things stand.
+    // The people's tags fade with distance while the rest are up.
+    whilePanelUp(
+      this,
+      () => this.uiBlocking() && !this.mapEditor.isActive(),
+      () => {
+        for (const { tag, sprite } of this.npcTags) {
+          const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, sprite.x, sprite.y);
+          tag.setAlpha(Phaser.Math.Clamp((NPC_TAG_FAR - d) / (NPC_TAG_FAR - NPC_TAG_NEAR), 0, 1));
+        }
+      },
+    );
 
     // A battle just ended on this spot, which is inside a monster zone —
     // step out to the nearest walkable tile outside it so the encounter
@@ -347,40 +587,44 @@ export class TownScene extends Phaser.Scene {
 
     this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
+    this.treasure = new TreasureDigger(this, "town", this.player, { toastY: STATUS_HUD_TOAST_Y });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
     createWalkAnimations(this);
 
-    this.dust = this.add.particles(0, 0, "dust", {
-      speed: { min: 16, max: 44 },
-      lifespan: { min: 180, max: 320 },
-      scale: { start: 1, end: 0 },
-      alpha: { start: 0.45, end: 0 },
-      frequency: 70,
-      emitting: false,
-    });
-    this.dust.startFollow(this.player, 0, 28);
+    addFootsteps(this, this.player, level, "town");
+    addGuideArrow(this, this.player, "town", () => this.quitConfirm || this.uiBlocking());
 
-    this.fireflies = this.add.particles(0, 0, "firefly", {
-      speed: { min: 12, max: 40 },
-      lifespan: { min: 2500, max: 4500 },
-      scale: { start: 1, end: 0.4 },
-      alpha: { start: 0.7, end: 0 },
-      frequency: 700,
-      emitting: false,
-    });
-    // fireflies are lights, not motes: ADD makes them actually glow once the
-    // night overlay darkens the ground under them
-    this.fireflies.setBlendMode(Phaser.BlendModes.ADD);
-    this.fireflies.startFollow(this.player, 0, 0);
+    // petals and butterflies by day, fireflies at night; this replaces the
+    // town's own player-following fireflies, which would double up with it
+    addAmbient(this, "town");
 
     this.spawnMonsters();
 
+    // after every fixed tag exists (spawnMonsters adds the zone warnings), and
+    // kept off the same spots tryTalk() answers, plus the map exits and the
+    // workplaces (their centres: AVOID_RADIUS covers all four tiles)
+    this.villagers = new Villagers(
+      this,
+      level,
+      [
+        ...this.talkSpots(),
+        CAVE_POS,
+        FOREST_POS,
+        SNOW_POS,
+        VOLCANO_POS,
+        ...WORKPLACE_LANDMARKS.map((k) => ({ x: EDITABLE_POS[k].x + TILE / 2, y: EDITABLE_POS[k].y - TILE * 1.5 })),
+      ],
+      MONSTER_ZONES,
+      this.fixedLabels,
+    );
+
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;
-      if (this.uiBlocking()) return;
+      // nor under the quit prompt, whose Y would then race the battle's fade
+      if (this.uiBlocking() || this.quitConfirm) return;
       // the monster zones are cramped enough that a slime can overlap the
       // player at the same moment as the troll; always let the rare one win
       // the tie instead of whichever roamer the physics engine happened to
@@ -439,10 +683,27 @@ export class TownScene extends Phaser.Scene {
       this.enterSnow();
     });
 
+    const volcano = this.add.zone(VOLCANO_POS.x, VOLCANO_POS.y, TILE, TILE).setDepth(1);
+    this.physics.add.existing(volcano);
+    this.physics.add.overlap(this.player, volcano, () => {
+      if (this.enteringVolcano || this.enteringDungeon || this.enteringForest || this.enteringSnow || this.encounterCooldown > 0) return;
+      if (this.uiBlocking()) return;
+      // overlap fires every frame while the body stays in the zone, so only
+      // act on the entry edge and reset on exit (see updateVolcanoGate)
+      if (this.volcanoOverlapActive) return;
+      this.volcanoOverlapActive = true;
+      // the last gate: the crater stays shut until the GLACIER GOLEM falls
+      if (!GameState.quest.snowBoss) {
+        this.dialogue.start(["A crust of black ice", "seals the crater.", "Its frost comes from", "the far snow field..."]);
+        return;
+      }
+      this.enterVolcano();
+    });
+
     startWaterAnimation(this, this.layers.terrain);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
+    boundCameraToMap(this, MAP_W * TILE, MAP_H * TILE);
 
     const kb = this.input.keyboard!;
     this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
@@ -473,13 +734,22 @@ export class TownScene extends Phaser.Scene {
     this.keyI.on(Phaser.Input.Keyboard.Events.DOWN, () => {
       this.iQueued = true;
     });
-    this.keyG = kb.addKey(Phaser.Input.Keyboard.KeyCodes.G);
-    this.keyG.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      if (this.keyG.ctrlKey) this.gCheatQueued = true;
-    });
+    // CTRL+G, +100 gold: a dev server's test key only. A build leaves it out
+    // (Vite folds import.meta.env.DEV to false), or anyone could buy their way
+    // up the RANK BOARD and into TYCOON.
+    if (import.meta.env.DEV) {
+      this.keyG = kb.addKey(Phaser.Input.Keyboard.KeyCodes.G);
+      this.keyG.on(Phaser.Input.Keyboard.Events.DOWN, () => {
+        if (this.keyG.ctrlKey) this.gCheatQueued = true;
+      });
+    }
     this.keyM = kb.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.keyM.on(Phaser.Input.Keyboard.Events.DOWN, () => {
       this.mQueued = true;
+    });
+    // C at HOME: a new look (the bubble says so; on touch the bubble is tapped)
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.C).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.cQueued = true;
     });
     this.keyT = kb.addKey(Phaser.Input.Keyboard.KeyCodes.T);
     this.keyT.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
@@ -496,13 +766,20 @@ export class TownScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
+    // quest journal: U, since R (restore) and X (export) belong to the map editor
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+      if (!e.repeat) this.uQueued = true;
+    });
+    // Y/N only count while the quit prompt is up, same as ESC below: a Y
+    // pressed any earlier sat queued and answered the next Q prompt the
+    // moment it opened, quitting to the title without asking
     this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
     this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.yQueued = true;
+      if (this.quitConfirm && !e.repeat) this.yQueued = true;
     });
     this.keyN = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N);
     this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.nQueued = true;
+      if (this.quitConfirm && !e.repeat) this.nQueued = true;
     });
     this.keyO = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.keyO.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
@@ -529,6 +806,13 @@ export class TownScene extends Phaser.Scene {
     this.rankBoard = new RankingUI(this);
     this.fishing = new FishingUI(this);
     this.farm = new FarmUI(this);
+    this.blacksmith = new BlacksmithUI(this);
+    this.kitchen = new KitchenUI(this);
+    this.home = new HomeUI(this, {
+      rest: () => this.rest(),
+      cook: () => this.kitchen.open(),
+      built: (level) => this.houseBuilt(level),
+    });
     this.mapEditor = new MapEditor(this, this.layers, level, (name, x, y) => this.moveLandmark(name, x, y));
     // ?edit in the URL opens the editor without a keypress — a way in that
     // survives whatever swallows the hotkey (a Mac's F-keys, an IME holding
@@ -536,24 +820,40 @@ export class TownScene extends Phaser.Scene {
     if (new URLSearchParams(window.location.search).has("edit")) this.editorQueued = true;
     this.luckyWheel = new LuckyWheel(this);
     this.achievementsUI = new AchievementsUI(this);
-    this.settingsUI = new SettingsUI(this);
+    this.questLog = new QuestLog(this);
+    this.lookPicker = new LookPicker(this);
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
+    this.settingsUI = new SettingsUI(this, () => {
+      this.quitConfirm = this.yQueued = true;
+      this.quitConfirmText.setVisible(true);
+    });
 
-    const help = addHelpPopup(this, [
-      ["HJKL", "MOVE"],
-      ["Z", "TALK/OK"],
-      ["I", "ITEMS"],
-      ["B", "BESTIARY"],
-      ["A", "ACHIEVE"],
-      ["O", "SETTINGS"],
-      ["T", "MAP"],
-      ["S", "HUD"],
-      ["M", "MUTE"],
-      ["ESC", "SKIP"],
-      ["F2", "MAP EDIT"],
-      ["CTRL+S", "SAVE"],
-      ["Q", "QUIT"],
-      ["?", "HELP"],
-    ]);
+    const help = addHelpPopup(
+      this,
+      [
+        ["HJKL", "MOVE"],
+        ["Z", "TALK/OK"],
+        // only by the door (nearHouse), as the HOME bubble says
+        ["C", "LOOK@HOME"],
+        ["I", "ITEMS"],
+        ["B", "BESTIARY"],
+        ["A", "ACHIEVE"],
+        ["U", "JOURNAL"],
+        ["O", "SETTINGS"],
+        ["T", "MAP"],
+        ["S", "HUD"],
+        ["M", "MUTE"],
+        ["ESC", "SKIP"],
+        ["F2", "MAP EDIT"],
+        ["CTRL+S", "SAVE"],
+        ["Q", "QUIT"],
+        ["?", "HELP"],
+      ],
+      // no goal line: the keyboard list's 8 rows run down to y 506, where
+      // the goal line's row starts at 504 (the fields' 6 rows leave room)
+      "",
+      () => this.uiBlocking() || this.quitConfirm,
+    );
 
     // key landmarks in world px, drawn as colored dots over the tile map
     this.minimap = new Minimap(this, level, this.player, [
@@ -564,16 +864,36 @@ export class TownScene extends Phaser.Scene {
       { x: RANK_BOARD_POS.x, y: RANK_BOARD_POS.y, color: 0xc084fc },
       { x: BOUNTY_BOARD_POS.x, y: BOUNTY_BOARD_POS.y, color: 0xfacc15 },
       { x: GAMBLER_POS.x, y: GAMBLER_POS.y, color: 0xf472b6 },
+      { x: ARENA_POS.x, y: ARENA_POS.y, color: 0xfbbf24 },
+      { x: BLACKSMITH_POS.x, y: BLACKSMITH_POS.y, color: 0xcbd5e1 },
       { x: FOREST_POS.x, y: FOREST_POS.y, color: 0x4ade80 },
       { x: SNOW_POS.x, y: SNOW_POS.y, color: 0xa5f3fc },
+      { x: VOLCANO_POS.x, y: VOLCANO_POS.y, color: 0xf97316 },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
       { x: FARM_POS.x, y: FARM_POS.y, color: 0xa3e635 },
     ]);
 
     // open ground: no ambient shade, full night range
     this.night = new NightOverlay(this);
+    // the house's two windows light up at night (36px either side of its
+    // centre, 8px below, in the 128px art) and move with it in the map editor
+    const windows = [-36, 36].map((dx) => ({
+      x: HOUSE_POS.x + TILE + dx,
+      y: HOUSE_POS.y + TILE + 8,
+      radius: 36,
+      color: 0xffc861,
+      strength: 0.6,
+      lamp: true,
+    }));
+    for (const glow of this.night.addLights(windows)) this.track("HOUSE_POS", glow);
+    if (GameState.houseLevel >= BEDS_LEVEL) this.lightDormer();
+    for (const { landmark, light } of this.workplaceLights) for (const glow of this.night.addLights([light])) this.track(landmark, glow);
 
     this.hud = new StatusHud(this);
+    // "AUTUMN HAS COME!" (16 x 20 = 320px) on the first visit of a new season,
+    // after the arrival fade like the town event's toast, queued with it
+    const news = seasonNews();
+    if (news) this.time.delayedCall(EVENT_TOAST_DELAY, () => showToast(this, news, STATUS_HUD_TOAST_Y));
 
     // An edited map silently outranks the code, which reads as "my changes
     // didn't deploy" — say so on screen instead, and say how to undo it.
@@ -606,9 +926,15 @@ export class TownScene extends Phaser.Scene {
       this.rankBoard.destroy();
       this.fishing.destroy();
       this.farm.destroy();
+      this.blacksmith.destroy();
+      this.kitchen.destroy();
+      this.home.destroy();
       this.mapEditor.destroy();
       this.luckyWheel.destroy();
       this.achievementsUI.destroy();
+      this.villagers.destroy();
+      this.questLog.destroy();
+      this.lookPicker.destroy();
       this.settingsUI.destroy();
       this.minimap.destroy();
       this.night.destroy();
@@ -622,13 +948,9 @@ export class TownScene extends Phaser.Scene {
   // One place decides how an exit to another map is drawn, so the three
   // openings can't drift apart again (they had three different offsets, two
   // colours, and the CAVE's name sat below its entrance instead of above).
-  // The marker traces the TILE x TILE overlap zone that fires the transition,
-  // so what the player sees is exactly what they have to step on. Depth 9.5
-  // keeps it over the CAVE's entrance art but under the hero and NPCs (10).
-  // The x clamp keeps a long name on the map when the opening hugs an edge.
-  // A name tag above its marker hides under the status HUD when the marker is
+  // A name tag above its spot hides under the status HUD when the spot is
   // near the top of the map: the camera clamps there, so it can never scroll
-  // clear. Flip the tag below the marker in that band instead.
+  // clear. Flip the tag below the spot in that band instead.
   private labelY(y: number, offset: number): number {
     return y - offset < STATUS_HUD_HEIGHT + 20 ? y + offset : y - offset;
   }
@@ -652,6 +974,9 @@ export class TownScene extends Phaser.Scene {
       if (part.name !== landmark) continue;
       part.obj.x = x + part.dx;
       part.obj.y = y + part.dy;
+      // a static body (a prop's, the fence's) stays where it was unless told
+      const body = (part.obj as { body?: unknown }).body;
+      if (body instanceof Phaser.Physics.Arcade.StaticBody) body.updateFromGameObject();
     }
   }
 
@@ -667,61 +992,159 @@ export class TownScene extends Phaser.Scene {
     }
   }
 
-  // sprite + shadow + name tag, the shape every town NPC shares
+  // sprite + shadow + name tag, the shape every town NPC shares. A role with
+  // art of its own (`npc-<label>`, e.g. npc-elder) is drawn as it is; the
+  // rest share the robed "npc" figure, told apart by tint.
   private addNpc(landmark: string, pos: { x: number; y: number }, label: string, tint: number, labelColor?: string): void {
-    this.track(landmark, this.add.sprite(pos.x, pos.y, "npc").setDepth(10).setTint(tint));
+    const key = `npc-${label.toLowerCase()}`;
+    const own = this.textures.exists(key);
+    const sprite = this.track(landmark, this.add.sprite(pos.x, pos.y, own ? key : "npc").setDepth(10));
+    if (!own) sprite.setTint(tint);
+    this.npcSprites.push(sprite);
     this.track(landmark, addGroundShadow(this, pos));
-    this.track(
+    const at = this.tagAt(landmark, pos);
+    const tag = this.track(
       landmark,
       this.add
-        .text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
+        .text(at.x, at.y, label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
+        .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11),
     );
+    this.fixedLabels.push(rectOf(tag));
+    if (!ALWAYS_TAGGED.has(label)) this.npcTags.push({ tag: tag.setAlpha(0), sprite });
+  }
+
+  // Where a person's tag goes: over their head; for a keeper with a workplace
+  // (WORKPLACES), centred over the building as HOME's is, just above its
+  // roofline -- over the front of the art, the hearth and the counter, it
+  // covered what they keep. Where the row above the building is road, it
+  // drops onto the building's empty top edge instead, off the road.
+  private tagAt(landmark: string, pos: { x: number; y: number }): { x: number; y: number } {
+    const place = WORKPLACES[landmark as (typeof WORKPLACE_LANDMARKS)[number]];
+    if (!place) return { x: pos.x, y: this.labelY(pos.y, 48) };
+    const top = pos.y - TILE * 2.5;
+    const tx = Math.floor(pos.x / TILE);
+    const above = Math.floor(top / TILE) - 1;
+    const roadAbove = [tx, tx + 1].some((x) => this.level[above]?.[x] === T_PATH);
+    const y = top + place.roof - TAG_CLEAR;
+    return { x: pos.x + TILE / 2, y: roadAbove ? Math.max(y, top + TAG_CLEAR) : y };
+  }
+
+  // a keeper's prop on its own ground shadow, carried with them in the
+  // editor; solid at its foot, like a tree trunk, so the hero walks round it
+  private addProp(landmark: string, pos: { x: number; y: number }, key: string): void {
+    this.track(landmark, addGroundShadow(this, pos, { w: 52, h: 14 }));
+    this.track(landmark, this.add.image(pos.x, pos.y, key).setDepth(9));
+    this.addBlocker(landmark, pos.x, pos.y + 12, 48, 24);
+  }
+
+  // A keeper's workplace behind them (levels.ts WORKPLACE_LANDMARKS): 2x2
+  // tiles on the two rows north of their tile, its left column over theirs.
+  // Solid over that footprint as HOME's tiles are, not just at its foot like
+  // a prop: two tiles tall, a hero walking in under its roof would stand on
+  // the art. Carried with the keeper in the map editor; snowed in the winter
+  // skin, its lamps lit at night.
+  private addWorkplace(landmark: (typeof WORKPLACE_LANDMARKS)[number]): void {
+    const pos = EDITABLE_POS[landmark];
+    const { key, lights } = WORKPLACES[landmark];
+    const x = pos.x + TILE / 2;
+    const y = pos.y - TILE * 1.5;
+    this.track(landmark, addGroundShadow(this, { x, y }, { w: 120, h: 18, yOffset: 60, depth: HOUSE_DEPTH }));
+    this.track(landmark, this.add.image(x, y, seasonLook("town") === "winter" ? `${key}-winter` : key).setDepth(HOUSE_DEPTH));
+    this.addBlocker(landmark, x, y, TILE * 2, TILE * 2);
+    for (const l of lights) {
+      const light = {
+        x: x + l.dx,
+        y: y + l.dy,
+        radius: l.radius,
+        color: l.color ?? 0xffc861,
+        strength: 0.55,
+        lamp: true,
+        pulseMs: l.pulseMs,
+      };
+      this.workplaceLights.push({ landmark, light });
+    }
+  }
+
+  // an invisible static box the hero collides with (create() adds the
+  // collider once the hero exists), moved along with its landmark
+  private addBlocker(landmark: string, x: number, y: number, w: number, h: number): void {
+    const zone = this.track(landmark, this.add.zone(x, y, w, h));
+    this.physics.add.existing(zone, true);
+    this.blockers.push(zone);
   }
 
   // signpost + name tag, the shape every interactive spot shares
   private addSign(landmark: string, pos: { x: number; y: number }, label: string, color: string): void {
     this.track(landmark, this.add.image(pos.x, pos.y, "sign").setDepth(9));
-    this.track(landmark, this.add.text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, color)).setOrigin(0.5).setDepth(11));
+    // outlined like the snow field's tags: winter's snow (season.ts) is as
+    // pale as the field's, and the bare colours sank into it (contrast ~1.3)
+    const tag = this.track(
+      landmark,
+      this.add.text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, color)).setStroke("#1a1028", 4).setOrigin(0.5).setDepth(11),
+    );
+    this.fixedLabels.push(rectOf(tag));
   }
 
-  private addMapExit(landmark: string, pos: { x: number; y: number }, name: string, artClearance = 0): void {
-    const marker = this.track(
-      landmark,
-      this.add.rectangle(pos.x, pos.y, TILE, TILE, EXIT_AREA_COLOR, 0.25).setStrokeStyle(2, EXIT_AREA_COLOR, 0.9).setDepth(9.5),
-    );
-    this.tweens.add({ targets: marker, alpha: 0.45, duration: 900, yoyo: true, repeat: -1, ease: "sine.inout" });
-    const halfWidth = (name.length * 6 * PIXEL) / 2;
-    const label = this.add
-      .text(
-        Phaser.Math.Clamp(pos.x, halfWidth, MAP_W * TILE - halfWidth),
-        this.labelY(pos.y, TILE / 2 + artClearance + EXIT_LABEL_GAP),
-        name,
-        retroStyle(6, EXIT_LABEL_COLOR),
-      )
-      .setOrigin(0.5)
-      .setDepth(11);
-    this.track(landmark, label);
+  // An exit on the map's edge, on the last tile of the road running off it:
+  // a signpost a tile in, beside the road (north of an east-west road, west
+  // of a north-south one), and a chevron on the edge tile once the hero is
+  // close. The arrow needs the hero, so it is added after the hero is.
+  private addMapExit(landmark: string, pos: { x: number; y: number }, name: string): void {
+    const { dx, dy } = inwardOf(pos);
+    this.addSign(landmark, { x: pos.x + dx * TILE - (dy ? TILE : 0), y: pos.y + dy * TILE - (dx ? TILE : 0) }, name, EXIT_LABEL_COLOR);
+  }
+
+  // The last line follows rest(): only a night's sleep moves the clock. The
+  // first names the look change beside HOME rather than taking a fourth line,
+  // whose taller bubble would drop its tail onto the hero's head. At
+  // retroStyle(5) (20px a glyph) "Z: REST, COOK, BUILD" is the widest line
+  // either way (400px; "HOME  TAP: NEW LOOK" 380, "SLEEP UNTIL MORNING" 380,
+  // "SLEEP AFTER 20:00" 340), so the box sized once below fits every swap.
+  private homeBubbleLines(): string {
+    return [
+      `HOME  ${isTouchDevice() ? "TAP" : "C"}: NEW LOOK`,
+      "Z: REST, COOK, BUILD",
+      isNight() ? "SLEEP UNTIL MORNING" : "SLEEP AFTER 20:00",
+    ].join("\n");
   }
 
   private buildHomeBubble(): Phaser.GameObjects.Container {
-    const lines = ["HOME", "Z: REST - FULL HP/MP", "SLEEP UNTIL MORNING"];
-    const text = this.add.text(0, 0, lines.join("\n"), retroStyle(5, "#f5f5f5")).setOrigin(0.5).setAlign("center").setLineSpacing(4);
+    const text = this.add.text(0, 0, this.homeBubbleLines(), retroStyle(5, "#f5f5f5")).setOrigin(0.5).setAlign("center").setLineSpacing(4);
+    this.homeBubbleText = text;
     const pad = 20;
     const w = text.width + pad * 2;
     const h = text.height + pad * 2;
     const border = this.add.rectangle(0, 0, w + 8, h + 8, 0xffffff).setOrigin(0.5);
     const box = this.add.rectangle(0, 0, w, h, 0x0b0b2b).setOrigin(0.5);
+    // a tap on the bubble is touch's C (it only shows by the door)
+    box.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+      if (this.bubbleVisible && !this.uiBlocking()) this.openLookPicker();
+    });
     const tail = this.add
       .triangle(0, h / 2 + 4, -24, 0, 24, 0, 0, 28, 0x0b0b2b)
       .setStrokeStyle(2, 0xffffff)
       .setOrigin(0.5);
-    // the camera never scrolls past the map edge, so clamping the bubble to
-    // the map keeps it fully on screen even for a house in the far corner
+    // The camera never scrolls past the map's left, right or bottom edge, so
+    // clamping the bubble to the map there keeps it fully on screen even for a
+    // house in a far corner. The top is different: boundCameraToMap lets the
+    // camera rise STATUS_HUD_HEIGHT above the map (an empty strip behind the
+    // HUD). Keeping the bubble's top at least that far into the map still
+    // clears the HUD — at the camera's highest it just sits lower on screen.
     const x = Phaser.Math.Clamp(HOUSE_POS.x + TILE, w / 2 + 8, MAP_W * TILE - w / 2 - 8);
     const y = Phaser.Math.Clamp(HOUSE_POS.y + TILE - h / 2 - 32, STATUS_HUD_HEIGHT + h / 2, MAP_H * TILE - h / 2 - 8);
     return this.add.container(x, y, [border, box, text, tail]).setDepth(12);
+  }
+
+  private openLookPicker(): void {
+    this.player.setVelocity(0, 0);
+    this.lookPicker.open(GameState.heroLook, (look) => {
+      if (look === null || look === GameState.heroLook) return;
+      GameState.heroLook = look;
+      bakeHero(this, look);
+      GameState.save();
+    });
   }
 
   private nearHouse(): boolean {
@@ -732,6 +1155,8 @@ export class TownScene extends Phaser.Scene {
 
   private updateHomeBubble(): void {
     const near = this.nearHouse();
+    // dusk or dawn can pass while the hero stands by the door
+    if (near) this.homeBubbleText.setText(this.homeBubbleLines());
     if (near === this.bubbleVisible) return;
     this.bubbleVisible = near;
     this.homeBubble.setVisible(near);
@@ -780,6 +1205,17 @@ export class TownScene extends Phaser.Scene {
     });
   }
 
+  private enterVolcano(): void {
+    if (this.enteringVolcano) return;
+    this.enteringVolcano = true;
+    Sfx.night();
+    this.player.setVelocity(0, 0);
+    this.cameras.main.fadeOut(200, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start("Volcano");
+    });
+  }
+
   // resets forestOverlapActive once the player is a full tile clear of the
   // entrance, so stepping back in re-triggers the forest zone
   private updateForestGate(): void {
@@ -800,7 +1236,7 @@ export class TownScene extends Phaser.Scene {
         sprite.setVisible(false);
         continue;
       }
-      const grown = (GameState.minutes - plot.plantedAt) / CROPS[plot.crop].grow;
+      const grown = cropProgress(plot);
       sprite.setVisible(true);
       if (grown < 0.4) {
         sprite.setTexture("crop-sprout").setScale(0.7).clearTint();
@@ -820,6 +1256,14 @@ export class TownScene extends Phaser.Scene {
     }
   }
 
+  // and again for the volcano's
+  private updateVolcanoGate(): void {
+    if (!this.volcanoOverlapActive) return;
+    if (Math.abs(this.player.x - VOLCANO_POS.x) > TILE || Math.abs(this.player.y - VOLCANO_POS.y) > TILE) {
+      this.volcanoOverlapActive = false;
+    }
+  }
+
   // true while a modal panel owns input — every place that checks this must
   // use this method instead of listing the panels itself, or a newly added
   // panel silently stops blocking (this happened once already: overlap
@@ -833,15 +1277,49 @@ export class TownScene extends Phaser.Scene {
       this.rankBoard.isActive() ||
       this.fishing.isActive() ||
       this.farm.isActive() ||
+      this.blacksmith.isActive() ||
+      this.kitchen.isActive() ||
+      this.home.isActive() ||
       this.mapEditor.isActive() ||
       this.luckyWheel.isActive() ||
       this.achievementsUI.isActive() ||
-      this.settingsUI.isActive()
+      this.questLog.isActive() ||
+      this.lookPicker.isActive() ||
+      this.settingsUI.isActive() ||
+      helpOpen(this)
     );
+  }
+
+  // The day only counts as announced once the toast is handed over: a Town
+  // restart during the delay (a battle) drops this timer, and update() then
+  // schedules it again. showToast queues it behind any toast already up (an
+  // achievement claimed on arrival) rather than cutting that off.
+  private announceEvent(day: number, text: string): void {
+    this.eventToastPending = false;
+    // a panel opened during the delay; update() retries once it closes
+    if (this.uiBlocking()) return;
+    announcedDay = day;
+    showToast(this, text, STATUS_HUD_TOAST_Y);
   }
 
   update(_time: number, delta: number): void {
     GameState.minutes += (delta / 1000) * GameState.timeSpeed;
+
+    // A town event is announced once a day: on the first arrival that day, or
+    // when the clock (or a rest) turns the day over here. Held back while a
+    // panel is up so it doesn't land on one. Its longest line, "FISHING
+    // DERBY! POND CATCHES PAY x1.5 TODAY", is 42 x 20 = 840px (x 220..1060)
+    // under the HUD, clear of the touch menu strip (x>=1222).
+    const day = dayIndex();
+    if (day !== announcedDay && !this.eventToastPending && !this.uiBlocking()) {
+      const event = eventToday();
+      if (!event) {
+        announcedDay = day;
+      } else {
+        this.eventToastPending = true;
+        this.time.delayedCall(EVENT_TOAST_DELAY, () => this.announceEvent(day, event.toast));
+      }
+    }
 
     const night = isNight();
     if (night !== this.wasNight) {
@@ -854,14 +1332,18 @@ export class TownScene extends Phaser.Scene {
     this.updateHomeBubble();
     this.updateForestGate();
     this.updateSnowGate();
+    this.updateVolcanoGate();
     this.updateCrops();
     if (this.editorQueued) {
       this.editorQueued = false;
+      // F2 is handled ahead of the uiBlocking() gate, so it would otherwise
+      // open the editor right over the journal
+      if (this.questLog.isActive()) this.questLog.close();
       this.mapEditor.toggle();
     }
     this.minimap.update();
 
-    if (this.gCheatQueued) {
+    if (import.meta.env.DEV && this.gCheatQueued) {
       this.gCheatQueued = false;
       const gained = GameState.gainGold(100);
       GameState.save();
@@ -869,10 +1351,13 @@ export class TownScene extends Phaser.Scene {
     }
 
     this.achievementCheckAccum += delta;
-    if (this.achievementCheckAccum >= 1000) {
+    // only with no panel or talk up: a tip or trophy toast drawn over an open
+    // panel (the bag, the journal...) covered its top rows. Nothing is lost:
+    // the check just waits for the panel to close.
+    if (this.achievementCheckAccum >= 1000 && !this.uiBlocking()) {
       this.achievementCheckAccum = 0;
       const earned = claimAchievements();
-      if (earned.length > 0) {
+      if (showUnlockTip(this, "town", STATUS_HUD_TOAST_Y) || earned.length > 0) {
         this.suppressSavedToast = true;
         GameState.save();
         this.suppressSavedToast = false;
@@ -883,7 +1368,7 @@ export class TownScene extends Phaser.Scene {
       // batch every name earned this tick into a single toast instead.
       const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
       if (names.length > 0) {
-        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`);
+        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, STATUS_HUD_TOAST_Y);
       }
     }
 
@@ -913,10 +1398,12 @@ export class TownScene extends Phaser.Scene {
     }
 
     if (this.quitConfirm) {
+      // kept to their boxes, as under a panel: left on their last velocity
+      // they walked off across the map until the prompt closed
+      this.updateRoamers(delta);
       if (this.quitting) return;
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.dust.emitting = false;
       this.zQueued =
         this.ctrlSQueued =
         this.iQueued =
@@ -926,6 +1413,7 @@ export class TownScene extends Phaser.Scene {
         this.tQueued =
         this.aQueued =
         this.oQueued =
+        this.uQueued =
           false;
       if (this.yQueued) {
         this.yQueued = false;
@@ -972,13 +1460,16 @@ export class TownScene extends Phaser.Scene {
         this.aQueued = false;
         if (this.achievementsUI.isActive()) this.achievementsUI.close();
       }
+      if (this.uQueued) {
+        this.uQueued = false;
+        if (this.questLog.isActive()) this.questLog.close();
+      }
       if (this.oQueued) {
         this.oQueued = false;
         if (this.settingsUI.isActive()) this.settingsUI.close();
       }
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.dust.emitting = false;
       this.dialogue.update();
       this.shop.update();
       this.inventory.update();
@@ -986,11 +1477,18 @@ export class TownScene extends Phaser.Scene {
       this.rankBoard.update();
       this.fishing.update();
       this.farm.update();
+      this.blacksmith.update();
+      this.kitchen.update();
+      this.home.update();
       this.mapEditor.update();
       this.luckyWheel.update();
       this.achievementsUI.update();
+      this.questLog.update();
+      this.lookPicker.update();
       this.settingsUI.update();
       this.updateRoamers(delta);
+      // the town keeps living behind a panel; whoever is talking stands still
+      this.villagers.update(delta, this.player, this.dialogue.isActive());
       return;
     }
 
@@ -1012,10 +1510,24 @@ export class TownScene extends Phaser.Scene {
       return;
     }
 
+    if (this.uQueued) {
+      this.uQueued = false;
+      this.questLog.open();
+      return;
+    }
+
     if (this.oQueued) {
       this.oQueued = false;
       this.settingsUI.open();
       return;
+    }
+
+    if (this.cQueued) {
+      this.cQueued = false;
+      if (this.nearHouse()) {
+        this.openLookPicker();
+        return;
+      }
     }
 
     if (this.zQueued) {
@@ -1049,9 +1561,9 @@ export class TownScene extends Phaser.Scene {
 
     this.playerShadow.setPosition(this.player.x, this.player.y + 28);
     this.companionFollower.update(this.player.x, this.player.y);
-    this.dust.emitting = moving;
     this.updateEquipOverlays();
     this.updateRoamers(delta);
+    this.villagers.update(delta, this.player, this.dialogue.isActive());
     this.checkEncounter(delta);
   }
 
@@ -1070,15 +1582,7 @@ export class TownScene extends Phaser.Scene {
   }
 
   private updateEquipOverlays(): void {
-    this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
-    this.shieldOverlay.setVisible(!!GameState.equipped.armor);
-    this.weaponOverlay.setTexture(GameState.weaponTexture());
-    this.shieldOverlay.setTexture(GameState.armorTexture());
-    const flip = this.lastMove === "left";
-    this.weaponOverlay.setFlipX(flip);
-    this.shieldOverlay.setFlipX(flip);
-    this.weaponOverlay.setPosition(this.player.x + 14, this.player.y + 4);
-    this.shieldOverlay.setPosition(this.player.x - 14, this.player.y + 8);
+    placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
   }
 
   private toggleStatus(): void {
@@ -1089,27 +1593,17 @@ export class TownScene extends Phaser.Scene {
   }
 
   private updateDayNight(): void {
-    const factor = this.night.update();
-    this.fireflies.emitting = factor > 0.05;
-    this.fireflies.setAlpha(factor);
+    this.night.update();
   }
 
   private updateStatus(): void {
     this.hud.update();
   }
 
-  // NPCs on the main road sit 3 tiles (192px) apart, closer than 2x the 120px
-  // talk radius (240px) — their radii overlap in a ~24px band. Picking the
-  // nearest candidate (instead of the first one whose radius contains the
-  // player) makes standing in that band resolve to whichever NPC is actually
-  // closest, not whichever happens to be checked first.
-  private tryTalk(): boolean {
-    const dist2 = (x: number, y: number): number => {
-      const dx = this.player.x - x;
-      const dy = this.player.y - y;
-      return dx * dx + dy * dy;
-    };
-    const candidates: Array<{ x: number; y: number; run: () => void }> = [
+  // Every fixed spot Z answers to. Also what the villagers steer clear of, so
+  // the two can't drift apart.
+  private talkSpots(): Array<{ x: number; y: number; run: () => void }> {
+    return [
       { x: NPC_POS.x, y: NPC_POS.y, run: () => this.startElderDialogue() },
       {
         x: SHOP_POS.x,
@@ -1133,7 +1627,7 @@ export class TownScene extends Phaser.Scene {
         },
       },
       { x: HUNTER_POS.x, y: HUNTER_POS.y, run: () => this.startHunterDialogue() },
-      { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + 2 * TILE, run: () => this.rest() },
+      { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + 2 * TILE, run: () => this.homeChoice() },
       {
         x: RANK_BOARD_POS.x,
         y: RANK_BOARD_POS.y,
@@ -1167,16 +1661,167 @@ export class TownScene extends Phaser.Scene {
           this.luckyWheel.open();
         },
       },
+      { x: ARENA_POS.x, y: ARENA_POS.y, run: () => this.startArenaDialogue() },
+      {
+        x: BLACKSMITH_POS.x,
+        y: BLACKSMITH_POS.y,
+        run: () => {
+          Sfx.buy();
+          this.blacksmith.open();
+        },
+      },
+    ];
+  }
+
+  // The keeper explains the gauntlet and asks under the last page (the
+  // dialogue's choices: FIGHT, or LEAVE — which ESC also picks). Lines fit
+  // the dialogue's 28-glyph touch rows unbroken; the question gets a page of
+  // its own, as the five lines before it fill one.
+  private startArenaDialogue(): void {
+    if (!arenaOpen()) {
+      this.dialogue.start(["The ARENA is shut.", "Beat the KING SLIME,", "then come back!"], "ARENA");
+      return;
+    }
+    const lineup = arenaLineup();
+    this.dialogue.ask(
+      [
+        `${lineup.length} ${lineup.length === 1 ? "boss" : "bosses"} you've beaten,`,
+        "back to back. No running!",
+        "Items are allowed, and you",
+        `heal ${Math.round(ARENA_RECOVER_PCT * 100)}% between bouts.`,
+        `Your best run: ${GameState.arenaBest} won.`,
+        "ENTER THE ARENA?",
+      ],
+      "ARENA",
+      ["FIGHT", "LEAVE"],
+      (i) => {
+        if (i === 0) this.startArena();
+      },
+    );
+  }
+
+  // the keeper's yes: straight into the first bout behind the same fade an
+  // encounter uses; BattleScene carries the run from there (see arena.ts)
+  private startArena(): void {
+    // No encounterCooldown check: that grace is for random encounters, and
+    // here it silently swallowed an explicit FIGHT picked within the first
+    // seconds in town. It's still raised below, so nothing ambushes the fade.
+    const run: ArenaRun = { lineup: arenaLineup(), round: 0, purse: 0 };
+    this.player.setVelocity(0, 0);
+    this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    Sfx.boss();
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start("Battle", { enemy: run.lineup[0], from: "Town", arena: run });
+    });
+  }
+
+  // NPCs on the main road sit 3 tiles (192px) apart, closer than 2x the 120px
+  // talk radius (240px) — their radii overlap in a ~24px band. Picking the
+  // nearest candidate (instead of the first one whose radius contains the
+  // player) makes standing in that band resolve to whichever NPC is actually
+  // closest, not whichever happens to be checked first. The villagers join
+  // the same pick at wherever they are walking right now.
+  // A villager's favor comes first (favors.ts): offered with a YES/NO, its
+  // progress with a hint while it's open, paid when it's met — handing over
+  // pieces from the bag asks first. Otherwise, or once the chain is done or
+  // waits on a region, just a hint. villagers.talk() also stops the walker
+  // and turns it to the hero. Lines stay within the touch box's 28 glyphs.
+  private talkToVillager(index: number, key: VillagerKey, name: string): void {
+    const hint = this.villagers.talk(index, this.player.x);
+    const step = favorStep(key);
+    const status = favorStatus(key);
+    if (!step || status === "done" || status === "locked") {
+      this.dialogue.start(hint, name);
+      return;
+    }
+    if (status === "offer") {
+      this.dialogue.ask([...step.talk, "Will you help me?"], name, ["YES", "NO"], (i) => {
+        if (i !== 0) return;
+        acceptFavor(key);
+        GameState.save();
+        this.dialogue.start(["Thank you, hero!", "Come see me by day", "when it's done."], name);
+      });
+      return;
+    }
+    const { have, need } = favorProgress(key);
+    if (status === "open") {
+      this.dialogue.start([`How is it going? ${Math.min(have, need)}/${need}`, ...hint], name);
+      return;
+    }
+    const pay = () => {
+      const paid = completeFavor(key);
+      if (!paid) return;
+      if (paid === "full") {
+        this.dialogue.start(["Your purse is full.", "Come back with room."], name);
+        return;
+      }
+      Sfx.buy();
+      GameState.save();
+      this.dialogue.start(
+        ["Thank you, hero!", `Take ${paid.gold} gold.`, ...(paid.elixir ? ["And this ELIXIR. That's", "all I needed. Thanks!"] : [])],
+        name,
+      );
+    };
+    if (step.takes) {
+      const pieces = `${step.need} ${materialNameOf(step.takes)}`;
+      this.dialogue.ask([`You have ${pieces}!`, "Will you hand it over?"], name, ["YES", "NO"], (i) => {
+        if (i === 0) pay();
+      });
+      return;
+    }
+    pay();
+  }
+
+  private tryTalk(): boolean {
+    // a treasure map's X (ui/TreasureDig.ts) first: spots keep 2 tiles clear
+    // of every talk spot, but a villager can wander up to one
+    if (this.treasure.tryDig()) return true;
+    const dist2 = (x: number, y: number): number => {
+      const dx = this.player.x - x;
+      const dy = this.player.y - y;
+      return dx * dx + dy * dy;
+    };
+    const candidates = [
+      ...this.talkSpots(),
+      ...this.villagers.talkTargets().map((v) => ({
+        x: v.x,
+        y: v.y,
+        run: () => this.talkToVillager(v.index, v.key, v.name),
+      })),
     ];
     const RADIUS2 = 120 * 120;
-    let best: { d: number; run: () => void } | null = null;
+    let best: { d: number; x: number; y: number; run: () => void } | null = null;
     for (const c of candidates) {
       const d = dist2(c.x, c.y);
-      if (d <= RADIUS2 && (!best || d < best.d)) best = { d, run: c.run };
+      if (d <= RADIUS2 && (!best || d < best.d)) best = { d, ...c };
     }
     if (!best) return false;
+    // a fixed NPC turns to the hero, the way a villager does
+    const { x, y } = best;
+    const npc = this.npcSprites.find((s) => s.x === x && s.y === y);
+    npc?.setFlipX(this.player.x < npc.x);
     best.run();
     return true;
+  }
+
+  // HOME's Z: its panel (ui/HomeUI.ts) — rest, the kitchen, or build on
+  private homeChoice(): void {
+    this.home.open();
+  }
+
+  // a new extension (home.ts): the house redrawn as it now stands, its snow
+  // cap with it, and the dormer lit at night once there is one
+  private houseBuilt(level: number): void {
+    this.houseImage.setTexture(houseTexture(level));
+    this.houseSnow?.setTexture(`house-${level}-snow`);
+    if (level === BEDS_LEVEL) this.lightDormer();
+  }
+
+  // the FEATHER BEDS' dormer window, 24px above the house's centre
+  private lightDormer(): void {
+    const dormer = { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE - 24, radius: 24, color: 0xffc861, strength: 0.5, lamp: true };
+    for (const glow of this.night.addLights([dormer])) this.track("HOUSE_POS", glow);
   }
 
   private rest(): void {
@@ -1188,7 +1833,17 @@ export class TownScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       GameState.player.hp = GameState.effMaxHp();
       GameState.player.mp = GameState.player.maxMp;
-      GameState.minutes = (Math.floor(GameState.minutes / 1440) + 1) * 1440 + 360;
+      // the FEATHER BEDS (home.ts): the next battle opens with WARD up
+      if (GameState.houseLevel >= BEDS_LEVEL) GameState.rested = true;
+      // Only a night's sleep moves the clock: to the next 06:00, which past
+      // midnight is the same day's. A daytime rest used to jump to the next
+      // dawn as well, and with crops timed on GameState.minutes that made
+      // plant -> rest -> harvest a ~15s loop worth ~150k G an hour. A night
+      // slept through still grows the night crops (cropGrowth counts it).
+      if (isNight()) {
+        const dawn = Math.floor(GameState.minutes / 1440) * 1440 + 360;
+        GameState.minutes = GameState.minutes < dawn ? dawn : dawn + 1440;
+      }
       GameState.save();
       this.hud.forceRefresh();
       this.cameras.main.fadeIn(400, 0, 0, 0);
@@ -1215,21 +1870,44 @@ export class TownScene extends Phaser.Scene {
       q.slimeReward = true;
       const gained = GameState.gainGold(30);
       Sfx.buy();
-      this.dialogue.start(["Well done, hero!", "You hunted 5 slimes.", `Take these ${gained} gold!`], "ELDER");
+      // and the next errand with it, so the reward isn't a dead end
+      const next = q.bossDefeated ? [] : ["Now the KING SLIME", "waits in the cave", "up north!"];
+      this.dialogue.start(["Well done, hero!", "You hunted 5 slimes.", `Take these ${gained} gold!`, ...next], "ELDER");
       return;
     }
     if (!q.bossDefeated) {
-      this.dialogue.start(
-        ["Welcome back!", "Slimes lurk in the grass.", "Hunt 5 slimes first.", "Then face the KING SLIME", "in the cave up north!"],
-        "ELDER",
-      );
+      // on NEW GAME+ the ELDER knows the hero, and warns the beasts have grown
+      // (GameState.enemyScale) before the same first errand as ever. A first
+      // talk can be a first meeting, so no "welcome back"
+      const greeting =
+        GameState.ngPlus > 0 ? ["You again, hero?", "The beasts have grown", "fiercer since your", "last journey."] : ["Welcome, hero!"];
+      // the slime hunt only until it's reported
+      const errand = q.slimeReward
+        ? ["The KING SLIME waits", "in the cave up north!"]
+        : ["Slimes lurk in the grass.", "Hunt 5 slimes first.", "Then face the KING SLIME", "in the cave up north!"];
+      // the TROLL KING (TownScene's roaming giant) can wander the very
+      // meadows the slime hunt sends a new hero to, and no Lv1-3 hero wins
+      // that fight
+      const troll = q.trollDefeated ? [] : ["A crowned TROLL KING", "roams the grass too.", "RUN until you're strong!"];
+      this.dialogue.start([...greeting, ...errand, ...troll], "ELDER");
       return;
     }
     if (!q.finalReward) {
       q.finalReward = true;
       const gained = GameState.gainGold(100);
       Sfx.buy();
-      this.dialogue.start(["You are our hero!", "The KING SLIME is gone.", `Take this ${gained} gold!`], "ELDER");
+      this.dialogue.start(
+        [
+          "You are our hero!",
+          "The KING SLIME is gone.",
+          `Take this ${gained} gold!`,
+          "The eastern woods hold",
+          "a deeper threat now.",
+          "The GUARD by the woods",
+          "knows more.",
+        ],
+        "ELDER",
+      );
       return;
     }
     if (!q.forestBoss) {
@@ -1250,7 +1928,36 @@ export class TownScene extends Phaser.Scene {
       GameState.inventory.elixir += 2;
       Sfx.buy();
       this.dialogue.start(
-        ["The GLACIER GOLEM...", "fallen? You are the", "truest hero this realm", "has ever known.", `${gained} gold and 2 ELIXIRS!`],
+        [
+          "The GLACIER GOLEM...",
+          "fallen? You are the",
+          "truest hero this realm",
+          "has ever known.",
+          `${gained} gold and 2 ELIXIRS!`,
+          // its frost was what held the crater shut (see the volcano gate)
+          "But with its frost gone,",
+          "the VOLCANO to the",
+          "south-east awakens...",
+        ],
+        "ELDER",
+      );
+      return;
+    }
+    // fifth and last step of the main chain; it sits ahead of the bestiary so
+    // a finished drake hunt is paid before the long catch-them-all goal
+    if (!q.volcanoReward && q.volcanoBoss) {
+      q.volcanoReward = true;
+      const gained = GameState.gainGold(400);
+      GameState.inventory.elixir += 3;
+      Sfx.buy();
+      this.dialogue.start(
+        [
+          "The FLAME DRAKE is slain",
+          "and the mountain sleeps.",
+          "No hero will ever",
+          "match your legend!",
+          `${gained} gold and 3 ELIXIRS!`,
+        ],
         "ELDER",
       );
       return;
@@ -1300,13 +2007,16 @@ export class TownScene extends Phaser.Scene {
     if (!q.hunterCatchAccepted) {
       q.hunterCatchAccepted = true;
       q.caughtAtAccept = GameState.caught.length;
-      this.dialogue.start(["Now a different job:", "catch any 3 beasts", "with CANDY. Fresh", "catches only!"], "HUNTER");
+      this.dialogue.start(
+        ["Now a different job:", "catch any 3 beasts", "with CANDY. Fresh", "catches only! Weaken one", "first, then throw it."],
+        "HUNTER",
+      );
       return;
     }
     if (!q.hunterCatchReward) {
       const caught = Math.min(GameState.caught.length - q.caughtAtAccept, 3);
       if (caught < 3) {
-        this.dialogue.start([`${caught} of 3 beasts caught.`, "Throw CANDY in battle", "to fill the order!"], "HUNTER");
+        this.dialogue.start([`${caught} of 3 beasts caught.`, "Throw CANDY at a hurt", "one to fill the order!"], "HUNTER");
         return;
       }
       q.hunterCatchReward = true;
@@ -1340,33 +2050,113 @@ export class TownScene extends Phaser.Scene {
       this.dialogue.start(["3 yetis down! Take", `${gained} gold and 2`, "HI-POTIONS."], "HUNTER");
       return;
     }
+    // fourth job, once the GLACIER GOLEM falls and opens the volcano: a catch
+    // job again, since catches are already on record (GameState.caught) and
+    // a kill count would need a new BattleScene counter
+    if (!q.snowBoss) {
+      this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
+      return;
+    }
+    if (!q.hunterFireAccepted) {
+      q.hunterFireAccepted = true;
+      q.fireCaughtAtAccept = GameState.caught.length;
+      this.dialogue.start(
+        [
+          "Last job, the big one:",
+          "the VOLCANO's beasts",
+          "fetch a fortune alive.",
+          "Catch one MAGMA SLIME,",
+          "FIRE IMP and SALAMANDER.",
+          "Fresh catches only!",
+        ],
+        "HUNTER",
+      );
+      return;
+    }
+    if (!q.hunterFireReward) {
+      const got = GameState.fireBeastsCaught();
+      if (got.length < FIRE_BEASTS.length) {
+        const missing = FIRE_BEASTS.filter((name) => !got.includes(name));
+        this.dialogue.start(
+          [`${got.length} of ${FIRE_BEASTS.length} fire beasts caught.`, `Still missing: ${missing.join(", ")}.`],
+          "HUNTER",
+        );
+        return;
+      }
+      q.hunterFireReward = true;
+      // the reward line reports what gainGold() actually credited, so a purse
+      // at MAX_GOLD isn't promised gold it never got (see 6105867)
+      const gained = GameState.gainGold(250);
+      GameState.inventory.elixir += 1;
+      Sfx.buy();
+      this.dialogue.start(["The full set! Take", `${gained} gold and an`, "ELIXIR. Best hunter", "I've ever known."], "HUNTER");
+      return;
+    }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
   }
 
-  // rerolls once a new in-game day starts (or on first read), then either
-  // shows progress, pays out a finished bounty once, or says it's already
-  // been claimed — no streak/partial-credit tracking, same as every other
-  // day-based gate in this game
+  // The board's two jobs on one talk. The kill bounty rerolls once a new
+  // in-game day starts (or on first read), then shows progress, pays out a
+  // finished bounty once, or says it's already been claimed — no streak or
+  // partial credit, same as every other day-based gate. Then the delivery
+  // (delivery.ts): materials are the BLACKSMITH's too, so they're only taken
+  // on a YES under the last page (NO, or ESC, keeps them). Every line is at
+  // most 28 glyphs (the touch box's row) and the delivery starts on a row of
+  // its own; the longest talk — a bounty still open plus a delivery ready —
+  // fills one page ("BOUNTY: FROST MOTH 5/6 REWARD: 342 GOLD." 2 rows,
+  // "DELIVER 4 SPIDER SILK FOR 1560 GOLD + A BOMB. YOU HAVE 5." 3) and the
+  // question gets a page of its own over the choices.
   private startBountyDialogue(): void {
     GameState.rollBountyIfStale();
     const b = GameState.bounty;
     if (!b) return;
+    const d = rollDeliveryIfStale();
+    const name = materialName(d.material);
+    const lines: string[] = [];
     if (b.claimed) {
-      this.dialogue.start(["ALREADY CLAIMED TODAY.", "COME BACK TOMORROW."], "BOUNTY BOARD");
+      lines.push("BOUNTY CLAIMED TODAY.");
+    } else if (b.have < b.need) {
+      lines.push(`BOUNTY: ${b.target} ${b.have}/${b.need}`, `REWARD: ${b.reward} GOLD.`);
+    } else {
+      const gained = GameState.gainGold(b.reward);
+      // only latch claimed once gold actually landed — at the cap gainGold()
+      // returns 0, same MAX_GOLD edge BattleScene's steal already guards
+      if (gained > 0) b.claimed = true;
+      Sfx.buy();
+      GameState.save();
+      lines.push("BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`);
+    }
+    if (d.done) {
+      lines.push("\nDELIVERY DONE TODAY.");
+    } else {
+      const reward = deliveryReward(d.material, d.need);
+      lines.push(
+        `\nDELIVER ${d.need} ${name}`,
+        `FOR ${reward.gold} GOLD${reward.bomb ? " + A BOMB" : ""}.`,
+        `YOU HAVE ${GameState.inventory[d.material]}.`,
+      );
+      if (canDeliver(d)) {
+        lines.push(`HAND IN ${d.need} ${name}?`);
+        this.dialogue.ask(lines, "BOUNTY BOARD", ["YES", "NO"], (i) => {
+          if (i === 0) this.handInDelivery(d);
+        });
+        return;
+      }
+    }
+    this.dialogue.start(lines, "BOUNTY BOARD");
+  }
+
+  // the board's YES: paid first, then the pieces go (delivery.ts deliver())
+  private handInDelivery(d: DeliveryState): void {
+    const name = materialName(d.material);
+    const paid = deliver(d);
+    if (!paid) {
+      this.dialogue.start(["YOUR PURSE IS FULL.", "COME BACK WITH ROOM."], "BOUNTY BOARD");
       return;
     }
-    const progress = Math.min(b.have, b.need);
-    if (progress < b.need) {
-      this.dialogue.start([`TARGET: ${b.target}`, `PROGRESS: ${progress}/${b.need}`, `REWARD: ${b.reward} GOLD`], "BOUNTY BOARD");
-      return;
-    }
-    const gained = GameState.gainGold(b.reward);
-    // only latch claimed once gold actually landed — at the cap gainGold()
-    // returns 0, same MAX_GOLD edge BattleScene's steal already guards
-    if (gained > 0) b.claimed = true;
     Sfx.buy();
     GameState.save();
-    this.dialogue.start(["BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`], "BOUNTY BOARD");
+    this.dialogue.start([`DELIVERED ${d.need} ${name}!`, `TAKE ${paid.gold} GOLD${paid.bomb ? " AND A BOMB" : ""}.`], "BOUNTY BOARD");
   }
 
   private checkEncounter(delta: number): void {
@@ -1397,31 +2187,17 @@ export class TownScene extends Phaser.Scene {
 
   private spawnMonsters(): void {
     this.roamerGroup = this.physics.add.group();
+    // No warning signpost by each zone any more: the clump of tall grass and
+    // the monsters wandering in it say it, and the slime hunt's meadows are
+    // on the minimap and the guide arrow.
     for (const zone of MONSTER_ZONES) {
-      const signX = zone.cx - zone.w / 2 - 32;
-      this.add.image(signX, zone.cy, "sign").setDepth(9);
-      const bang = this.add
-        .text(signX, zone.cy - 64, "!", retroStyle(10, "#ffdd44"))
-        .setOrigin(0.5)
-        .setStroke("#7c2d12", 2)
-        .setDepth(11);
-      this.tweens.add({
-        targets: bang,
-        y: zone.cy - 84,
-        duration: 420,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
-
       const kind: "slime" | "wolf" = zone.kind === "wolf" ? "wolf" : "slime";
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
         const golden = kind === "slime" && Math.random() < GOLDEN_SLIME_CHANCE;
         const roamerKind: Roamer["kind"] = golden ? "goldSlime" : kind;
-        const sprite = this.roamerGroup.create(x, y, kind) as Phaser.Physics.Arcade.Sprite;
-        if (golden) sprite.setTint(0xffd700);
+        const sprite = this.roamerGroup.create(x, y, roamerKind) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
         this.roamers.push({
@@ -1514,7 +2290,7 @@ export class TownScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
-    if (toast) showToast(this, "A NIGHT WISP EMERGES!");
+    if (toast) showToast(this, "A NIGHT WISP EMERGES!", STATUS_HUD_TOAST_Y);
   }
 
   private removeNightWisp(): void {

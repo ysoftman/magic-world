@@ -1,10 +1,16 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { isEventToday } from "../events";
 import { GameState } from "../gameState";
-import { retroStyle } from "../pixelart";
+import { DIM_TEXT, retroStyle } from "../pixelart";
+import { isTouchDevice } from "./TouchControls";
 
-const PANEL_W = 460;
+// Sized by the key hint (retroStyle(4), 16px a glyph): "D-PAD: MOVE   Z:
+// SPIN   ESC: CLOSE" is 34 x 16 = 544px and the keyboard's "J/K: ..." 512,
+// both past the 460px this panel had. At 600 (x 340..940) the touch line
+// keeps 28px a side, clear of the d-pad (x<=258) and ESC (x>=960).
+const PANEL_W = 600;
 const PANEL_H = 420;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const ROW_GAP = 48;
@@ -30,6 +36,23 @@ const WHEEL_TABLE: WheelOutcome[] = [
   { name: "JACKPOT", mult: 5, chance: 0.05 },
 ];
 
+// LUCKY DAY (events.ts): more wins and fewer busts, but still break-even —
+// 0*.37 + 1*.35 + 2*.25 + 5*.03 = 1.0x. Any edge above 1.0 would be a farm:
+// the 1000G tier spins every ~2.2s with nothing to stop it short of the
+// gold cap, so even +8% would out-earn every other town income. The luck is
+// paid for out of the jackpot (5% -> 3%): a bust drops from 40% to 37%, a
+// DOUBLE-or-better rises from 25% to 28%, and the swings get smaller.
+const LUCKY_TABLE: WheelOutcome[] = [
+  { name: "BUST", mult: 0, chance: 0.37 },
+  { name: "REFUND", mult: 1, chance: 0.35 },
+  { name: "DOUBLE", mult: 2, chance: 0.25 },
+  { name: "JACKPOT", mult: 5, chance: 0.03 },
+];
+
+// the idle line between spins; on a lucky day it says so, broken by hand —
+// left to the 420px wrap it would split as "LUCKY DAY! FEWER / BUSTS"
+const idleText = (): string => (isEventToday("lucky") ? "LUCKY DAY!\nFEWER BUSTS" : "PICK A WAGER AND SPIN!");
+
 type WheelState = "select" | "spinning" | "result";
 
 export class LuckyWheel {
@@ -39,6 +62,9 @@ export class LuckyWheel {
   private index = 0;
   private state: WheelState = "select";
   private wager = 0;
+  // the table the current spin was placed under, fixed at spin() so a day
+  // rolling over mid-spin can't change the odds after the wager is paid
+  private table = WHEEL_TABLE;
   private spinUntil = 0;
   private nextTick = 0;
   private resultUntil = 0;
@@ -117,9 +143,14 @@ export class LuckyWheel {
       .setWordWrapWidth(PANEL_W - 40, true)
       .setAlign("center");
     // only UP/DOWN/J/K are bound below — this is a single column, not a
-    // grid, so no H/L to advertise
+    // grid, so no H/L to advertise; touch moves with the d-pad's arrows
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "J/K: MOVE   Z: SPIN   ESC: CLOSE", retroStyle(4, "#666666"))
+      .text(
+        GAME_WIDTH / 2,
+        PANEL_TOP + PANEL_H - 30,
+        isTouchDevice() ? "D-PAD: MOVE   Z: SPIN   ESC: CLOSE" : "J/K: MOVE   Z: SPIN   ESC: CLOSE",
+        retroStyle(4, DIM_TEXT),
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -171,7 +202,7 @@ export class LuckyWheel {
     this.cursor.setVisible(true);
     this.status.setVisible(true);
     this.hint.setVisible(true);
-    this.status.setText("PICK A WAGER AND SPIN!");
+    this.status.setText(idleText());
     this.refresh();
   }
 
@@ -223,7 +254,7 @@ export class LuckyWheel {
       this.zQueued = false;
       if (now >= this.resultUntil) {
         this.state = "select";
-        this.status.setText("PICK A WAGER AND SPIN!");
+        this.status.setText(idleText());
         this.refresh();
       }
     }
@@ -238,6 +269,7 @@ export class LuckyWheel {
     }
     GameState.gold -= tier;
     this.wager = tier;
+    this.table = isEventToday("lucky") ? LUCKY_TABLE : WHEEL_TABLE;
     this.dirty = true;
     this.goldText.setText(`G ${GameState.gold}`);
     this.state = "spinning";
@@ -248,8 +280,8 @@ export class LuckyWheel {
 
   private resolve(): void {
     let r = Math.random();
-    let outcome = WHEEL_TABLE[WHEEL_TABLE.length - 1];
-    for (const o of WHEEL_TABLE) {
+    let outcome = this.table[this.table.length - 1];
+    for (const o of this.table) {
       if (r < o.chance) {
         outcome = o;
         break;
@@ -279,7 +311,7 @@ export class LuckyWheel {
     this.goldText.setText(`G ${GameState.gold}`);
     WAGER_TIERS.forEach((tier, i) => {
       const affordable = GameState.gold >= tier;
-      this.rows[i].setText(`WAGER ${tier}G`).setColor(affordable ? "#ffffff" : "#666666");
+      this.rows[i].setText(`WAGER ${tier}G`).setColor(affordable ? "#ffffff" : DIM_TEXT);
     });
     this.renderCursor();
   }

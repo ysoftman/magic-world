@@ -3,6 +3,7 @@ import { Sfx } from "./audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 import { GameState } from "./gameState";
 import { loadMapOverride } from "./levels";
+import { AbyssScene } from "./scenes/AbyssScene";
 import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
 import { DungeonScene } from "./scenes/DungeonScene";
@@ -11,6 +12,7 @@ import { ForestScene } from "./scenes/ForestScene";
 import { SnowScene } from "./scenes/SnowScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { TownScene } from "./scenes/TownScene";
+import { VolcanoScene } from "./scenes/VolcanoScene";
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) Sfx.suspendBgmForHiddenTab();
@@ -35,7 +37,7 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, TownScene, DungeonScene, ForestScene, SnowScene, BattleScene, EndingScene],
+  scene: [BootScene, TitleScene, TownScene, DungeonScene, ForestScene, SnowScene, VolcanoScene, AbyssScene, BattleScene, EndingScene],
 };
 
 // Canvas text bakes in whatever font is available at draw time; unlike DOM
