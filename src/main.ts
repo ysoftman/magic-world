@@ -45,6 +45,10 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  // every sound is Sfx's (audio.ts), synthesized on its own AudioContext;
+  // Phaser's SoundManager went unused but still opened a second context and
+  // kept it running from the first key on
+  audio: { noAudio: true },
   scene: [BootScene, TitleScene, TownScene, DungeonScene, ForestScene, SnowScene, VolcanoScene, AbyssScene, BattleScene, EndingScene],
 };
 

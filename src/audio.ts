@@ -567,6 +567,17 @@ const AMBIENCE_VOLUME: Record<AmbienceCue, number> = {
   pop: 0.024,
 };
 const DRONE_VOLUME = 0.02;
+// BGM is booked on the AudioContext's own clock: every BGM_TICK_MS a timer
+// books the notes due in the next BGM_LOOKAHEAD seconds at their exact start
+// times. One setTimeout per note left each note to the main thread, and a
+// scene being built (title -> town) held a 300ms note to 405ms. A stall
+// longer than the lookahead (building the town took ~0.6s headless) leaves
+// the next note in the past; it starts BGM_LEAD from "now" instead, so the
+// tune waits and goes on rather than skipping what the stall overran or
+// playing it late in a heap. BGM_LEAD also puts a fresh start just ahead.
+const BGM_TICK_MS = 50;
+const BGM_LOOKAHEAD = 0.2;
+const BGM_LEAD = 0.05;
 
 export type AmbienceCue = "bird" | "warble" | "cricket" | "owl" | "drip" | "bubble" | "rumble" | "pop";
 
@@ -575,15 +586,35 @@ export class Sfx {
   private static master: GainNode | null = null;
   private static bgmBus: GainNode | null = null;
   private static sfxBus: GainNode | null = null;
-  private static bgmTimer: ReturnType<typeof setTimeout> | null = null;
+  private static bgmTimer: ReturnType<typeof setInterval> | null = null;
   private static bgmTrack: Note[] | null = null;
+  private static bgmIndex = 0;
+  // the AudioContext time the next note starts at; null until anchored
+  private static bgmNext: number | null = null;
+  // notes booked ahead and not started yet, so a track change or a hidden
+  // tab can call them off
+  private static bgmBooked: Array<{ osc: OscillatorNode; at: number }> = [];
+  private static resuming = false;
 
   static ensure(): void {
     if (Sfx.ctx) {
       // autoplay policies can start (or leave) the context suspended when
       // it's created before any user gesture, e.g. by the title screen's
-      // BGM starting on load; nothing else in this file ever resumes it
-      if (Sfx.ctx.state === "suspended") void Sfx.ctx.resume();
+      // BGM starting on load, and iOS "interrupts" it (a call, another
+      // app's audio, the page in the background) — a state that isn't
+      // "suspended", so it never came back. Resume whenever it isn't
+      // running, short of closed; one request at a time, as the BGM's
+      // booking calls this every tick until it does run.
+      const state: string = Sfx.ctx.state;
+      if (state !== "running" && state !== "closed" && !Sfx.resuming) {
+        Sfx.resuming = true;
+        Sfx.ctx
+          .resume()
+          .catch(() => undefined)
+          .finally(() => {
+            Sfx.resuming = false;
+          });
+      }
       return;
     }
     try {
@@ -615,6 +646,8 @@ export class Sfx {
   static toggleMuted(): boolean {
     GameState.soundMuted = !GameState.soundMuted;
     GameState.saveSettings();
+    // the BGM notes booked ahead would still sound for up to the lookahead
+    if (GameState.soundMuted) Sfx.callOffBookedBgm();
     return GameState.soundMuted;
   }
 
@@ -633,41 +666,95 @@ export class Sfx {
   }
 
   private static restartBgmLoop(): void {
-    if (Sfx.bgmTimer !== null) clearTimeout(Sfx.bgmTimer);
-    Sfx.bgmTimer = null;
-    const track = Sfx.bgmTrack;
-    if (!track) return;
-    let i = 0;
-    const step = (): void => {
-      const note = track[i % track.length];
-      if (note.freq) Sfx.tone(note.freq, note.dur * 0.9, "triangle", BGM_VOLUME, 0, Sfx.bgmBus);
-      i++;
-      Sfx.bgmTimer = setTimeout(step, note.dur * 1000);
-    };
-    step();
+    Sfx.stopBgmClock();
+    if (!Sfx.bgmTrack) return;
+    Sfx.bgmIndex = 0;
+    Sfx.bgmNext = null;
+    // the first booking waits for the first tick: scenes call playBgm() at
+    // the top of create(), and a note booked then went out just before the
+    // rest of create() stalled the main thread, its next one ~0.6s late
+    Sfx.bgmTimer = setInterval(Sfx.bookBgm, BGM_TICK_MS);
   }
 
-  // A hidden tab clamps setTimeout to >=1000ms, which would otherwise turn
-  // the loop into a slow, distorted dribble of single notes. Go silent
-  // instead and pick the same track back up (from its first note) on
-  // return. Wired to document visibilitychange in main.ts.
-  static suspendBgmForHiddenTab(): void {
-    if (Sfx.bgmTimer !== null) clearTimeout(Sfx.bgmTimer);
+  // stops the booking and calls off the notes booked ahead
+  private static stopBgmClock(): void {
+    if (Sfx.bgmTimer !== null) clearInterval(Sfx.bgmTimer);
     Sfx.bgmTimer = null;
+    Sfx.callOffBookedBgm();
+  }
+
+  // a note already sounding plays out, as it did when each note had its own
+  // timer; the ones booked to start later never do
+  private static callOffBookedBgm(): void {
+    for (const b of Sfx.bgmBooked) {
+      try {
+        // a stop time before its start: the note never sounds
+        b.osc.stop();
+      } catch {
+        // already ended
+      }
+    }
+    Sfx.bgmBooked = [];
+  }
+
+  private static bookBgm(): void {
+    const track = Sfx.bgmTrack;
+    if (!track) return;
+    // muted, no context is made just for silence (tone() never made one)
+    if (!GameState.soundMuted) Sfx.ensure();
+    const ctx = Sfx.ctx;
+    // a suspended context's clock is frozen: book nothing, and anchor afresh
+    // once it runs, rather than piling the notes onto one instant
+    if (ctx?.state !== "running") {
+      Sfx.bgmNext = null;
+      return;
+    }
+    const now = ctx.currentTime;
+    Sfx.bgmBooked = Sfx.bgmBooked.filter((b) => b.at > now);
+    // a fresh start, or a stall that left the next note in the past
+    if (Sfx.bgmNext === null || Sfx.bgmNext < now) Sfx.bgmNext = now + BGM_LEAD;
+    while (Sfx.bgmNext < now + BGM_LOOKAHEAD) {
+      const note = track[Sfx.bgmIndex];
+      // muted, the notes still go by (tone() returns null), so unmuting
+      // comes back in time
+      if (note.freq) {
+        const osc = Sfx.tone(note.freq, note.dur * 0.9, "triangle", BGM_VOLUME, Sfx.bgmNext - now, Sfx.bgmBus);
+        if (osc) Sfx.bgmBooked.push({ osc, at: Sfx.bgmNext });
+      }
+      Sfx.bgmIndex = (Sfx.bgmIndex + 1) % track.length;
+      Sfx.bgmNext += note.dur;
+    }
+  }
+
+  // A hidden tab clamps timers to >=1000ms, longer than the lookahead, which
+  // would turn the loop into a slow, broken dribble of notes. Go silent
+  // instead and pick the same track back up (from its first note) on
+  // return. Wired to document visibilitychange in main.ts, which on return
+  // also wakes a context the system suspended meanwhile.
+  static suspendBgmForHiddenTab(): void {
+    Sfx.stopBgmClock();
   }
 
   static resumeBgmFromHiddenTab(): void {
+    if (Sfx.ctx) Sfx.ensure();
     if (Sfx.bgmTrack && Sfx.bgmTimer === null) Sfx.restartBgmLoop();
   }
 
-  private static tone(freq: number, dur: number, type: OscillatorType = "square", vol = 0.08, when = 0, bus: GainNode | null = null): void {
-    if (GameState.soundMuted) return;
+  private static tone(
+    freq: number,
+    dur: number,
+    type: OscillatorType = "square",
+    vol = 0.08,
+    when = 0,
+    bus: GainNode | null = null,
+  ): OscillatorNode | null {
+    if (GameState.soundMuted) return null;
     Sfx.ensure();
-    if (!Sfx.ctx) return;
+    if (!Sfx.ctx) return null;
     // autoplay policy: a context created before any user gesture stays
     // suspended with currentTime frozen, so every scheduled note would pile
     // onto the same timestamp and fire at once on resume — skip them instead
-    if (Sfx.ctx.state !== "running") return;
+    if (Sfx.ctx.state !== "running") return null;
     const t = Sfx.ctx.currentTime + when;
     const osc = Sfx.ctx.createOscillator();
     const gain = Sfx.ctx.createGain();
@@ -678,6 +765,7 @@ export class Sfx {
     osc.connect(gain).connect(bus ?? Sfx.sfxBus ?? Sfx.master ?? Sfx.ctx.destination);
     osc.start(t);
     osc.stop(t + dur);
+    return osc;
   }
 
   static move(): void {
