@@ -50,7 +50,7 @@ import {
   type CompanionSkill,
   companionSkillChance,
 } from "../companionSkills";
-import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP, PIXEL } from "../config";
 import { type MealDef, takeMealCharge } from "../cooking";
 import { MATERIALS, rollDrop } from "../drops";
 import { bakeBattleFx, flash, loopFx, playFx, shake } from "../fx";
@@ -73,9 +73,30 @@ const LUNGE_OUT_MS = 90;
 const LUNGE_BACK_MS = 110;
 // breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
 const IDLE_BOB_PX = 4;
+// a flier's breathing is a hover: higher and quicker, wings at work
+const FLY_BOB_PX = 8;
+const FLY_BOB_MS = 1100;
+// Where the fighters stand (stand()): each one's lowest opaque row on a
+// ground line just under the backdrop's lit lip (the horizon is y 440, the
+// lip to 452), a shadow under it. Placed by their centres (the foe at 280, a
+// boss at 312, the hero at 368), every foe and the hero hung over the far
+// hills or the cave wall, the foes up to 96px off the ground. The companion
+// stands a step nearer, in front of the hero. The item list's first row
+// starts at y 474: the shadows end by 466 and 472.
+const GROUND_Y = 456;
+const COMPANION_GROUND_Y = 464;
+// a flier's lowest pixel this far over its shadow, about the hero's chin
+const FLY_LIFT = 64;
+// A shadow's strength, a flier's paler and narrower (a share of its body's
+// width) for its height, and how far a fighter rises off its rest (a breath,
+// a win's hop) for its shadow to fade out. At 0.25 and half the body a
+// flier's shadow was a smudge on the cave's and the snow field's dark ground.
+const SHADOW_ALPHA = 0.4;
+const FLY_SHADOW_ALPHA = 0.35;
+const FLY_SHADOW_W = 0.6;
+const SHADOW_FADE_LIFT = 64;
 // where the companion stands, and where a caught monster flies to (catchFx)
 const COMPANION_X = 180;
-const COMPANION_Y = 440;
 // the CANDY icon's light pink (BootScene ICON_CANDY_PALETTE): a catch's glow
 const CANDY_PINK = 0xf9a8d4;
 // the OS's reduced-motion setting, as fx.ts reads it: no breathing, no hops
@@ -175,6 +196,71 @@ const ITEM_COL_X = [24, 319, 637, 908];
 // and a tap off the list goes back. 43 glyphs at 16px = 688px, x 296..984.
 const TOUCH_ITEM_HINT = "TAP:SELECT  TAP AGAIN:USE  TAP OUTSIDE:BACK";
 
+// A fighter's feet on its texture, read off the pixels once per texture: how
+// far under the centre its lowest opaque row ends, and the middle and width
+// of its bottom FOOT_ROWS rows (its feet) and of its whole body, in texture
+// pixels from the centre. The grids leave different margins under the feet
+// (the SLIME none, the GOBLIN 8px, the BAT 26px), so a centre puts no two on
+// the same ground.
+interface Footing {
+  feet: number;
+  footX: number;
+  footW: number;
+  bodyX: number;
+  bodyW: number;
+}
+const FOOT_ROWS = 8;
+const footings = new Map<string, Footing>();
+
+function footingOf(scene: Phaser.Scene, key: string): Footing {
+  const known = footings.get(key);
+  if (known) return known;
+  const src = scene.textures.get(key).getSourceImage();
+  const { width: w, height: h } = src;
+  let footing: Footing = { feet: h / 2, footX: 0, footW: w, bodyX: 0, bodyW: w };
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (ctx && (src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) {
+    ctx.canvas.width = w;
+    ctx.canvas.height = h;
+    ctx.drawImage(src, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const span = (y0: number, y1: number): [number, number] => {
+      let l = w;
+      let r = -1;
+      for (let y = y0; y <= y1; y++)
+        for (let x = 0; x < w; x++)
+          if (data[(y * w + x) * 4 + 3] > 0) {
+            l = Math.min(l, x);
+            r = Math.max(r, x);
+          }
+      return [l, r + 1];
+    };
+    let bottom = h - 1;
+    while (bottom >= 0 && span(bottom, bottom)[1] === 0) bottom--;
+    if (bottom >= 0) {
+      const [fl, fr] = span(Math.max(0, bottom - FOOT_ROWS + 1), bottom);
+      const [bl, br] = span(0, bottom);
+      footing = { feet: bottom + 1 - h / 2, footX: (fl + fr - w) / 2, footW: fr - fl, bodyX: (bl + br - w) / 2, bodyW: br - bl };
+    }
+  }
+  footings.set(key, footing);
+  return footing;
+}
+
+// a fighter on the ground (stand()), and what its shadow follows (syncShadow)
+interface Stance {
+  sprite: Phaser.GameObjects.Sprite;
+  shadow: Phaser.GameObjects.Graphics;
+  // the sprite's y and scale at rest, its shadow's strength there, and the
+  // shadow's middle off the sprite's centre in texture pixels
+  restY: number;
+  scale: number;
+  alpha: number;
+  offX: number;
+  // tweened to 0 to take the shadow off a foe that stays on screen (catchFx)
+  fade: number;
+}
+
 // a region's ordinary fights play its own take on the battle riff (see
 // audio.ts); the Town and the Dungeon keep the original
 const REGION_BATTLE_THEMES: Record<string, typeof BATTLE_THEME> = {
@@ -214,6 +300,10 @@ export class BattleScene extends Phaser.Scene {
   private enemyBaseScale = 2;
   private enemyPulse?: Phaser.Tweens.Tween;
   private companionIdle?: Phaser.Tweens.Tween;
+  // each fighter's footing and shadow (stand())
+  private heroStance!: Stance;
+  private enemyStance!: Stance;
+  private companionStance?: Stance;
   private hintText!: Phaser.GameObjects.Text;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
@@ -418,14 +508,17 @@ export class BattleScene extends Phaser.Scene {
         .setDepth(120);
     }
 
-    // Bosses and giants draw at 3x (192px). Centred at 280 their top (184) ran
-    // under the enemy window (bottom 200) and hid the FLAME DRAKE's horns; at
-    // 312 even the 1.15x charge pulse stays below it.
+    // Bosses and giants draw at 3x (192px). On the ground the tallest, the
+    // FLAME DRAKE, tops out at y 276, 262 through the 1.15x charge pulse:
+    // clear of the enemy window (to y 200), which a boss centred at 280 ran
+    // under, hiding the drake's horns. The fliers' tops are at 256 at most.
     const big = this.enemy.boss || this.enemy.giant;
     this.enemyBaseScale = big ? 3 : 2;
-    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, big ? 312 : 280, this.enemy.texture).setScale(this.enemyBaseScale);
-    this.playerSprite = this.add.sprite(320, 368, "hero-down-0").setScale(2);
+    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, 0, this.enemy.texture).setScale(this.enemyBaseScale);
+    this.playerSprite = this.add.sprite(320, 0, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
+    this.enemyStance = this.stand(this.enemySprite, GROUND_Y, !!this.enemy.flying);
+    this.heroStance = this.stand(this.playerSprite, GROUND_Y);
     // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
     this.weaponOverlay = this.add.sprite(0, 0, GameState.weaponTexture()).setScale(2);
     this.shieldOverlay = this.add.sprite(0, 0, GameState.armorTexture()).setScale(2);
@@ -436,14 +529,12 @@ export class BattleScene extends Phaser.Scene {
     const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
     // assigned either way: the scene instance outlives a battle (see init),
     // and a companion dismissed since the last one would leave its sprite here
-    this.companionSprite = companionDef ? this.add.sprite(COMPANION_X, COMPANION_Y, companionDef.texture).setScale(1.5) : undefined;
+    this.companionSprite = companionDef ? this.add.sprite(COMPANION_X, 0, companionDef.texture).setScale(1.5) : undefined;
+    this.companionStance = this.companionSprite && this.stand(this.companionSprite, COMPANION_GROUND_Y, !!companionDef?.flying);
 
-    // The foe sinks rather than rises: a boss at 312 has its horns just under
-    // the enemy window even through the charge pulse (above), and a rise
-    // would lift them into it.
-    this.heroIdle = this.idleBob(this.playerSprite, -IDLE_BOB_PX, 1400, 0);
-    this.enemyIdle = this.idleBob(this.enemySprite, IDLE_BOB_PX, 1700, 500);
-    this.companionIdle = this.companionSprite && this.idleBob(this.companionSprite, -IDLE_BOB_PX, 1200, 900);
+    this.heroIdle = this.idleBob(this.playerSprite, 1400, 0);
+    this.enemyIdle = this.idleBob(this.enemySprite, 1700, 500, this.enemy.flying);
+    this.companionIdle = this.companionSprite && this.idleBob(this.companionSprite, 1200, 900, companionDef?.flying);
 
     this.window(32, 24, 464, 176);
     this.window(GAME_WIDTH - 496, 24, 464, 176);
@@ -849,7 +940,6 @@ export class BattleScene extends Phaser.Scene {
     for (const t of this.itemTexts) t.setVisible(false);
     this.itemCursor.setVisible(false);
     this.itemInfoText.setVisible(false);
-    this.companionSprite?.setAlpha(1);
   }
 
   // back from the item list to the menu, no turn spent
@@ -864,11 +954,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private renderItems(): void {
-    // The list's first row (y 474..502) runs over the companion's feet (it
-    // stands to y 488), and there's no room to move the list down: the info
-    // line, the hint and the message box fill the 116px under it. So the
-    // companion fades back while the list is up (hideItems restores it).
-    this.companionSprite?.setAlpha(0.3);
+    // The list's first row (y 474..502) starts just under the companion's
+    // shadow (to y 472, COMPANION_GROUND_Y): no room to move the list down,
+    // as the info line, the hint and the message box fill the 116px under it.
     for (let i = 0; i < ITEM_SLOTS.length; i++) {
       this.itemTexts[i].setVisible(true);
       const count = GameState.inventory[ITEM_SLOTS[i].key];
@@ -1250,10 +1338,11 @@ export class BattleScene extends Phaser.Scene {
   // companion's place, where it lands as the new companion (in place of any
   // old one, as GameState.companion now says). Its way (p) starts slow and
   // speeds up while its size shrinks fast and then slowly, and its 140px
-  // hop peaks late (p * p), over the hero rather than under the foe's stat
-  // window: checked in 0.001 steps for a 2x foe and a 3x giant, no top edge
-  // under either window rises above where the foe stood. It passes behind
-  // the hero's head (the foe is drawn first) for about 40ms. BATTLE SPEED
+  // hop (a flier's FLY_LIFT less, being up that much already) peaks late
+  // (p * p), over the hero rather than under the foe's stat window: checked
+  // in 0.001 steps for every catchable foe from the ground line, no top edge
+  // rises above y 247 (the TROLL KING's), 47px under the windows, and it
+  // clears the hero's head but for a brush of under 10ms. BATTLE SPEED
   // applies: 0.88s at 1x.
   private async catchFx(): Promise<void> {
     const sprite = this.enemySprite;
@@ -1261,6 +1350,11 @@ export class BattleScene extends Phaser.Scene {
     this.settleEnemyScale();
     sprite.setTint(CANDY_PINK).setTintMode(Phaser.TintModes.FILL);
     this.catchBurst.explode(14, sprite.x, sprite.y);
+    // lifted off the ground as it goes, so its shadow goes with the glow
+    this.tweens.add({ targets: this.enemyStance, fade: 0, duration: this.anim(200) });
+    const flying = !!this.enemy.flying;
+    const toY = this.restY(this.enemy.texture, 1.5, COMPANION_GROUND_Y, flying);
+    const hop = 140 - (flying ? FLY_LIFT : 0);
     const { x: fromX, y: fromY, scale: fromScale } = sprite;
     let last = 0;
     await new Promise<void>((resolve) => {
@@ -1272,7 +1366,7 @@ export class BattleScene extends Phaser.Scene {
           const t = tw.getValue() ?? 0;
           const p = 1 - Math.cos((t * Math.PI) / 2);
           const x = Phaser.Math.Linear(fromX, COMPANION_X, p);
-          const y = Phaser.Math.Linear(fromY, COMPANION_Y, p) - Math.sin(Math.PI * p * p) * 140;
+          const y = Phaser.Math.Linear(fromY, toY, p) - Math.sin(Math.PI * p * p) * hop;
           sprite.setPosition(x, y).setScale(Phaser.Math.Linear(fromScale, 0.5, Math.sin((t * Math.PI) / 2)));
           if (this.time.now - last < this.anim(40)) return;
           last = this.time.now;
@@ -1282,12 +1376,14 @@ export class BattleScene extends Phaser.Scene {
       });
     });
     sprite.setVisible(false);
-    this.catchBurst.explode(16, COMPANION_X, COMPANION_Y);
+    this.catchBurst.explode(16, COMPANION_X, toY);
+    // an old companion's breathing ran over its own texture's footing
+    this.companionIdle?.stop();
     if (this.companionSprite) this.companionSprite.setTexture(this.enemy.texture);
-    else {
-      this.companionSprite = this.add.sprite(COMPANION_X, COMPANION_Y, this.enemy.texture);
-      this.companionIdle = this.idleBob(this.companionSprite, -IDLE_BOB_PX, 1200, 0);
-    }
+    else this.companionSprite = this.add.sprite(COMPANION_X, toY, this.enemy.texture);
+    this.companionSprite.setScale(1.5);
+    this.companionStance = this.stand(this.companionSprite, COMPANION_GROUND_Y, flying, this.companionStance);
+    this.companionIdle = this.idleBob(this.companionSprite, 1200, 0, flying);
     this.companionSprite.setScale(0.5);
     await this.tweenPromise(this.companionSprite, { scale: 1.5, ease: "Back.easeOut" }, this.anim(180));
   }
@@ -1388,11 +1484,12 @@ export class BattleScene extends Phaser.Scene {
     await this.say(raised ? `${line}\nATK/DEF +1 (${GameState.partnerCount()} PARTNERS)` : line);
   }
 
-  // Dash at the foe and back; onHit runs once at the far end of the dash.
-  // Once: Phaser fires onYoyo per tweened property, and this tween moves x
-  // and y, so the strike used to land twice — two rolls of damage behind a
-  // message that reported one. The breathing holds meanwhile: it tweens y
-  // too, and would pull the dash off line and snap it at the end.
+  // Dash at the foe along the ground and back, its shadow along (update);
+  // onHit runs once at the far end of the dash. Once: Phaser fires onYoyo per
+  // tweened property, and when this tween also moved y (up to the foe, which
+  // then stood higher) the strike landed twice — two rolls of damage behind a
+  // message that reported one. The breathing holds meanwhile, so the dash
+  // keeps one height.
   private companionLunge(onHit: () => void): Promise<void> {
     const sprite = this.companionSprite;
     if (!sprite) return Promise.resolve();
@@ -1402,7 +1499,6 @@ export class BattleScene extends Phaser.Scene {
       this.tweens.add({
         targets: sprite,
         x: this.enemySprite.x - 90,
-        y: this.enemySprite.y + 70,
         duration: this.anim(130),
         yoyo: true,
         hold: this.anim(50),
@@ -1927,17 +2023,83 @@ export class BattleScene extends Phaser.Scene {
 
   update(): void {
     this.syncGear();
+    this.syncShadow(this.heroStance);
+    this.syncShadow(this.enemyStance);
+    if (this.companionStance) this.syncShadow(this.companionStance);
+  }
+
+  // Puts a fighter, already at its scale, on the ground at groundY (a flier
+  // FLY_LIFT over it) with a shadow there, in place of the shadow it had (a
+  // caught monster's new texture). The shadow spans the feet two cells wider
+  // each side, or FLY_SHADOW_W of the body for a flier; it lies on the
+  // backdrop's 4px cells, 3 to 5 rows of them, and under every fighter.
+  private stand(sprite: Phaser.GameObjects.Sprite, groundY: number, flying = false, old?: Stance): Stance {
+    old?.shadow.destroy();
+    const scale = sprite.scaleX;
+    const f = footingOf(this, sprite.texture.key);
+    const restY = this.restY(sprite.texture.key, scale, groundY, flying);
+    sprite.setY(restY);
+    const w = flying ? f.bodyW * scale * FLY_SHADOW_W : f.footW * scale + PIXEL * 4;
+    const half = Math.max(PIXEL * 2, Math.round(w / 2 / PIXEL) * PIXEL);
+    const h = Phaser.Math.Clamp(Math.round((half * 2 * 0.16) / PIXEL) * PIXEL, PIXEL * 3, PIXEL * 5);
+    const shadow = this.add.graphics({ x: sprite.x, y: groundY }).fillStyle(0x000000, 1);
+    for (let top = -h / 2; top < h / 2; top += PIXEL) {
+      const mid = (top + PIXEL / 2) / (h / 2);
+      const hw = Math.round((half * Math.sqrt(1 - mid * mid)) / PIXEL) * PIXEL;
+      shadow.fillRect(-hw, top, hw * 2, PIXEL);
+    }
+    this.children.moveBelow(shadow, this.enemySprite);
+    const stance = {
+      sprite,
+      shadow,
+      restY,
+      scale,
+      alpha: flying ? FLY_SHADOW_ALPHA : SHADOW_ALPHA,
+      offX: flying ? f.bodyX : f.footX,
+      fade: 1,
+    };
+    this.syncShadow(stance);
+    return stance;
+  }
+
+  // where a fighter's centre rests for its feet (or a flier's lowest pixel,
+  // FLY_LIFT up) to be at groundY
+  private restY(key: string, scale: number, groundY: number, flying: boolean): number {
+    return groundY - (flying ? FLY_LIFT : 0) - footingOf(this, key).feet * scale;
+  }
+
+  // A shadow keeps to the ground under its fighter: along with a lunge, a
+  // dash, a shake or a run, not with a breath, a hop or a catch's arc, which
+  // lift the fighter off it and so pale it. It fades and goes with its
+  // fighter (the defeat pop, the catch) and grows back with a new companion.
+  private syncShadow(s: Stance): void {
+    const { sprite } = s;
+    const lift = Math.max(0, s.restY - sprite.y);
+    s.shadow
+      .setX(sprite.x + (sprite.flipX ? -s.offX : s.offX) * sprite.scaleX)
+      .setVisible(sprite.visible)
+      .setAlpha(s.alpha * s.fade * sprite.alpha * Math.min(1, sprite.scaleX / s.scale) * Math.max(0, 1 - lift / SHADOW_FADE_LIFT));
   }
 
   // A slow rise and fall on y, each fighter at its own pace and offset so
-  // none breathe in step. Only y: a hit tell and a boss's heal tween scale,
-  // the death pop scale and alpha, a lunge x, so none of them fights this.
-  // Real time, not anim(): BATTLE SPEED hurries the fight, not a fighter's
-  // breathing (as the WARD ring's pulse). The OS's reduced-motion setting
-  // (fx.ts) keeps the fighters still.
-  private idleBob(sprite: Phaser.GameObjects.Sprite, dy: number, ms: number, delay: number): Phaser.Tweens.Tween | undefined {
+  // none breathe in step; a flier hovers, higher and quicker. Only y: a hit
+  // tell and a boss's heal tween scale, the death pop scale and alpha, a
+  // lunge x, so none of them fights this. Every fighter rises off its rest
+  // and back, its feet never under the ground line. Real time, not anim():
+  // BATTLE SPEED hurries the fight, not a fighter's breathing (as the WARD
+  // ring's pulse). The OS's reduced-motion setting (fx.ts) keeps the
+  // fighters still.
+  private idleBob(sprite: Phaser.GameObjects.Sprite, ms: number, delay: number, flying = false): Phaser.Tweens.Tween | undefined {
     if (reducedMotion()) return undefined;
-    return this.tweens.add({ targets: sprite, y: sprite.y + dy, duration: ms, delay, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    return this.tweens.add({
+      targets: sprite,
+      y: sprite.y - (flying ? FLY_BOB_PX : IDLE_BOB_PX),
+      duration: flying ? FLY_BOB_MS : ms,
+      delay,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   // A win: the hero hops twice, the companion a beat behind. On y, so each
@@ -2045,10 +2207,10 @@ export class BattleScene extends Phaser.Scene {
   // toward y - rise, but stops with its top edge at POPUP_TOP, under the stat
   // windows (y 24..200) that sit over both fighters' columns: from y - 80
   // they ran up over the COMBO line and HP bar, and a boss's or a crit on the
-  // hero over the MP line. A foe's head is at y 216, so its numbers now start
-  // on its body and rise POPUP_MIN_RISE; the hero's start at his head as
-  // before. Outlined as text on the art is (AGENTS.md), since it crosses the
-  // fighter now.
+  // hero over the MP line. A flier's head can be up at y 256 (stand()), so
+  // its numbers may start on its body and rise POPUP_MIN_RISE; a foe on the
+  // ground's start over its head, as the hero's do. Outlined as text on the
+  // art is (AGENTS.md), since it can cross the fighter.
   private popNumber(x: number, y: number, text: string, size: number, color: string, rise: number): void {
     const t = this.add
       .text(x + 40, 0, text, retroStyle(size, color))

@@ -16,14 +16,15 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
 // The backdrop loses to the fighters: every layer is less saturated and lower
 // in contrast than the 32-cell sprites in front of it (the same idea as
 // check:art's limit on terrain), and nothing bright sits behind where they
-// stand (hero x 256..384, y 304..432; foe x 864..1056, y 216..408), behind
-// the two stat windows (x 32..496 and 784..1248, y 24..200; their 0.85 fill
-// lets the backdrop through) or behind the NIGHT / ARENA / ABYSS note
-// between them (x 520..760, y 40..116).
+// stand (hero x 256..384, y 336..464; foe x 864..1056, y 256..466, shadows
+// included), behind the two stat windows (x 32..496 and 784..1248, y
+// 24..200; their 0.85 fill lets the backdrop through) or behind the NIGHT /
+// ARENA / ABYSS note between them (x 520..760, y 40..116).
 //
 // Fixed lines the rest of the battle relies on:
 // - the horizon is y 440: BattleWeather splashes rain below it, and the
-//   companion stands on it
+//   fighters stand just under its lit lip, their shadows on the ground
+//   (BattleScene GROUND_Y 456, the companion's 464)
 // - the ground stays dark and plain where the battle menu, the hint and the
 //   item list are drawn straight onto it (y 488..584) in white and pale blue:
 //   tufts, cracks and seams keep to the strip just under the horizon

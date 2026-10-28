@@ -21,6 +21,7 @@ export interface EnemyDef {
   giant?: boolean; // just a bigger sprite + boss fanfare, no quest/story hooks
   rare?: boolean; // rare world jackpot (GOLDEN SLIME): own palette, big payout, not required for collection
   weakness?: Element; // attack spell element that deals bonus damage (bestiary shows the hint)
+  flying?: boolean; // hovers over its shadow in battle; everything else stands on the ground (BattleScene)
   special?: EnemySpecial;
 }
 
@@ -52,7 +53,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     rare: true, // dungeon-exclusive jackpot: a palette reskin, as GOLDEN SLIME is
     weakness: "bolt",
   },
-  bat: { name: "BAT", texture: "bat", hp: 18, atk: 6, def: 0, exp: 12, gold: 8, weakness: "ice" },
+  bat: { name: "BAT", texture: "bat", hp: 18, atk: 6, def: 0, exp: 12, gold: 8, weakness: "ice", flying: true },
   wolf: { name: "WOLF", texture: "wolf", hp: 30, atk: 9, def: 1, exp: 25, gold: 15, weakness: "fire" },
   king: {
     name: "KING SLIME",
@@ -95,6 +96,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     exp: 22,
     gold: 14,
     weakness: "bolt",
+    flying: true,
     special: { kind: "poison", chance: 0.2 },
   },
   // The forest's jackpot, as the GOLDEN SLIME is the town's: a WASP in its
@@ -110,6 +112,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 168,
     rare: true, // forest jackpot: big payout, not required for collection
     weakness: "bolt",
+    flying: true,
     special: { kind: "poison", chance: 0.2 },
   },
   spider: {
@@ -146,6 +149,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 70,
     rare: true, // night-only world jackpot: big payout, not required for collection
     weakness: "ice", // cold snuffs out its ghost-flame
+    flying: true,
   },
   frostMoth: {
     name: "FROST MOTH",
@@ -156,6 +160,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     exp: 58,
     gold: 38,
     weakness: "fire",
+    flying: true,
     special: { kind: "freeze", chance: 0.2 },
   },
   // the snow field's jackpot, 3.5% of the frost moths (SnowScene), scaled
@@ -170,6 +175,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 456,
     rare: true, // snow field jackpot: big payout, not required for collection
     weakness: "fire",
+    flying: true,
     special: { kind: "freeze", chance: 0.2 },
   },
   yeti: {
