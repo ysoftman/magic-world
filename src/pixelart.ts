@@ -131,6 +131,13 @@ export function pumpToasts(scene: Phaser.Scene): void {
   if (next) playToast(scene, t, state, next);
 }
 
+// whether a toast is up now (fading in, held or fading out), for what would
+// share its line: the town's HOME bubble steps aside for it
+export function toastShowing(scene: Phaser.Scene): boolean {
+  const t = scene.children.getByName(TOAST_NAME) as Phaser.GameObjects.Text | null;
+  return !!t && toastStates.get(t)?.showing === true;
+}
+
 // what a toast is about: "SOUND" for "SOUND: ON", the whole text when there's
 // no colon ("SAVED")
 const toastTopic = (text: string): string => text.split(":")[0];

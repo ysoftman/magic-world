@@ -55,7 +55,7 @@ import {
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { objectiveLine } from "../objective";
-import { addGroundShadow, retroStyle, showToast } from "../pixelart";
+import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
 import {
   addExitArrow,
   askQuitToTitle,
@@ -1200,11 +1200,17 @@ export class TownScene extends Phaser.Scene {
     const near = this.nearHouse();
     // dusk or dawn can pass while the hero stands by the door
     if (near) this.homeBubbleText.setText(this.homeBubbleLines());
-    if (near === this.bubbleVisible) return;
-    this.bubbleVisible = near;
-    this.homeBubble.setVisible(near);
+    // A toast's line (y 100..124, a wrapped one to 152) crossed the bubble
+    // with the HUD hidden or the camera partway down, so the bubble steps
+    // aside while one is up (~1.3s). The HOME tag stays down meanwhile: the
+    // hero is at the door, and it would only flash up in the bubble's place.
+    // C (nearHouse) still works; a tap waits for the bubble to come back.
+    const shown = near && !toastShowing(this);
     this.homeLabel.setVisible(!near);
-    if (near) {
+    if (shown === this.bubbleVisible) return;
+    this.bubbleVisible = shown;
+    this.homeBubble.setVisible(shown);
+    if (shown) {
       this.tweens.killTweensOf(this.homeBubble);
       this.homeBubble.setAlpha(0);
       this.tweens.add({
