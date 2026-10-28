@@ -124,7 +124,7 @@
 
 ## build / run
 
-[Bun](https://bun.sh) 필요. 글꼴 Press Start 2P(OFL)는 `@fontsource/press-start-2p` 의 라틴 subset 으로 번들에 들어 있어, 폰트 CDN 에 닿지 못하는 오프라인·사내망에서도 같은 글꼴로 나온다.
+[Bun](https://bun.sh) 필요. 글꼴 Press Start 2P(OFL)는 `@fontsource/press-start-2p` 의 라틴 subset 으로, 긴 글(대화·설명)의 Departure Mono(Helena Zhang, SIL OFL 1.1, [departuremono.com](https://departuremono.com/))는 공식 배포본을 같은 라틴 범위로 잘라 `src/assets/fonts/`(라이선스 `OFL.txt`)에 넣어 번들에 들어 있어, 폰트 CDN 에 닿지 못하는 오프라인·사내망에서도 같은 글꼴로 나온다.
 
 ```bash
 bun install

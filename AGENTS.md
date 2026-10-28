@@ -61,10 +61,20 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 
 - `Press Start 2P` 는 고정폭이고 글자 하나가 1em 이다. `retroStyle(n)` 텍스트의 폭은
   **`문자수 x n x PIXEL(4)` px** — 예: `retroStyle(6)` 26글자 = 26 x 24 = 624px.
-- 글꼴은 `@fontsource/press-start-2p` 의 latin subset 을 번들로 쓴다(`src/main.ts` 의 CSS
-  import). 그 범위(U+0000-00FF, U+2000-206F 등, 패키지 `unicode.json` 의 `latin`) 밖 글자는
-  fallback 폰트로 그려져 위 폭 규칙이 맞지 않으니, 새 문구는 범위 안 글자만 쓰고 ★ 는 쓰지
-  않는다. 실제 사례: 예전 Google Fonts CDN 을 막으면 전 화면이 fallback 이 되어 `HOME` 이름표가
+- **긴 글은 `bodyStyle`, 짧은 글은 `retroStyle`.** 대화창 본문, 전투 메시지, 상점·가방·대장간·
+  부엌의 INFO·msg 줄, 도움말 본문, 업적 설명, 퀘스트 상세는 `bodyStyle(22|33)`(Departure
+  Mono)로 쓴다. 제목·HUD·메뉴·이름표·선택지·토스트·키 안내 줄은 `retroStyle` 그대로다. 실제
+  사례: Press Start 2P 32px 다섯 줄은 행간이 없어 한 덩어리로 읽혔다.
+- Departure Mono 도 고정폭이다. 글자 폭은 **`size x 7/11`** — `bodyStyle(33)` 21px,
+  `bodyStyle(22)` 14px(`pixelart.ts` 의 `BODY_GLYPH_W`). 11px 격자라 22·33 외의 크기는 흐리다.
+  줄 높이(Phaser metrics)는 39 / 26px 로 retroStyle 보다 크고, 대문자는 줄 위에서 8 / 6px
+  아래(악센트 자리), 내림획은 37 / 24px 까지 내려온다. 세로 여백은 이 값으로 계산한다.
+  retroStyle(6·8) 줄을 33으로, (4·5) 줄을 22로 바꾸면 가로 폭은 늘 줄어든다.
+- 글꼴은 `@fontsource/press-start-2p` 의 latin subset 과 같은 범위로 자른 Departure Mono
+  (`src/assets/fonts/`, 자른 명령은 그 CSS 주석)를 번들로 쓴다(`src/main.ts` 의 CSS import,
+  부팅 전에 두 글꼴을 다 기다린다). 그 범위(U+0000-00FF, U+2000-206F 등, 패키지 `unicode.json`
+  의 `latin`) 밖 글자는 fallback 폰트로 그려져 위 폭 규칙이 맞지 않으니, 새 문구는 범위 안
+  글자만 쓰고 ★ 는 쓰지 않는다. 실제 사례: 예전 Google Fonts CDN 을 막으면 전 화면이 fallback 이 되어 `HOME` 이름표가
   84→53px 로 줄었다. 지금은 번들이라 오프라인에서도 같다.
 - 확인 순서
   1. 그 텍스트가 그릴 수 있는 **가장 긴 문자열**로 계산한다. 몬스터/아이템 이름, 카운트다운
@@ -120,7 +130,7 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 - 해상도: 텍스트는 `retroStyle` 의 `TEXT_RESOLUTION`(화면이 캔버스를 키우는 장치 배율을 올림한
   값, 1~3)으로 구워진다. 1로 구우면 회색 AA 테두리가 FIT 확대(맥북 DPR2 에서 2.25배)로 번져
   흐려 보였다(20px 줄의 중간 밝기 픽셀 24.7% → 3 에서 0%). 그래서 Text 는 반드시 `retroStyle`
-  로 만든다. 텍스처 메모리가 배율의 제곱으로 늘어서 상한이 3이다(마을 431줄 기준 3.9 → 35MB).
+  이나 `bodyStyle` 로 만든다. 텍스처 메모리가 배율의 제곱으로 늘어서 상한이 3이다(마을 431줄 기준 3.9 → 35MB).
 
 ### 패널 키 안내 표기
 
