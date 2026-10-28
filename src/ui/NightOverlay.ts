@@ -22,9 +22,12 @@ const WHITE = 0xffffff;
 // the grass ends up as bright as under the old navy. Blue over green over
 // red, as moonlight, but no more blue than 1.3x the green: past that the
 // red and blue left in a face outweigh its green and skin turns mauve (the
-// first try, 0x9ea8ff, did). Here skin is a warm grey (hue 12) and white a
-// pale steel blue.
-const NIGHT_CAST = 0xa1b5eb;
+// first try, 0x9ea8ff, did). Here skin is a warm grey (hue 16, 12 at the
+// darkest) and white a pale steel blue. A step more green than the 0xa1b5eb
+// it was picked as: that left the darkest skin's green two or three levels
+// over its blue, so a rounding at the edge of the night took a face under
+// hue 8 (7.5 in the winter town at 05:06).
+const NIGHT_CAST = 0xa1b6eb;
 
 // How dark full night gets on open ground, as `gloom`. Enclosed scenes pass a
 // smaller range and carry a constant `ambient` instead, so their own gloom
@@ -42,7 +45,8 @@ const DEEP_DIM = 0.7;
 // the most: matched on the grass, snow (the snow field, the town in winter)
 // and the town's battle sky came out 1.2-1.5x as bright as before at night,
 // nearer a blue evening than night. They take this much more gloom at full
-// night, which brings them back to about their old brightness.
+// night, which brings them back to about their old brightness, as grey: the
+// night's colour comes up with the clock there too (nightBlue).
 const SNOW_EXTRA_GLOOM = 0.2;
 const SKY_EXTRA_GLOOM = 0.15;
 const snowy = (sceneKey: string): boolean => sceneKey === "Snow" || seasonLook(sceneKey.toLowerCase()) === "winter";
@@ -62,17 +66,21 @@ export const NIGHT_ENCOUNTER_MULT = 1.8;
 // the night it hands over to. The old NORMAL wash's pinks and purples, made
 // into factors, took so much green off that 19:15 came out nearly as dark as
 // the night, and the dawn's purple under the night's cast turned faces mauve.
+// Two stops sit a few levels off the colour they were picked as, where a face
+// at the edge of the range fell out of it: 06:30's gold over day skin, itself
+// hue 30.6 (0xfff0d4, 31.3 by a rounding), and 19:30's purple over the snow
+// field's standing blue (0xdcc0e6, 7.6).
 type SkyStop = readonly [hour: number, factor: number];
 const OPEN_SKY: readonly SkyStop[] = [
   [5.0, WHITE],
   [5.5, 0xfff2ee],
   [6.0, 0xffd8dc],
-  [6.5, 0xfff0d4],
+  [6.5, 0xfff0d8],
   [7.0, WHITE],
   [18.0, WHITE],
   [18.5, 0xffe4c4],
   [19.0, 0xffcfcf],
-  [19.5, 0xdcc0e6],
+  [19.5, 0xdcc3e6],
   [20.0, WHITE],
 ];
 // The crater's sky through its ash: the same hours pulled red, so sunset
@@ -126,19 +134,32 @@ function skyAt(stops: readonly SkyStop[], h: number): number {
   return WHITE;
 }
 
-// the night's multiply factor at `gloom` (see NIGHT_RANGE)
-function nightCast(gloom: number): number {
-  if (gloom <= NIGHT_RANGE) return mix(WHITE, NIGHT_CAST, gloom / NIGHT_RANGE);
-  return multiply(NIGHT_CAST, mix(0, WHITE, 1 - DEEP_DIM * (gloom - NIGHT_RANGE)));
+// The night's multiply factor at `gloom` (see NIGHT_RANGE), its colour come
+// up no further than `blue`: whatever gloom is left over only dims, by
+// DEEP_DIM per unit, as past NIGHT_RANGE.
+function nightCast(gloom: number, blue = gloom): number {
+  const cast = Math.min(gloom, blue, NIGHT_RANGE);
+  return multiply(mix(WHITE, NIGHT_CAST, cast / NIGHT_RANGE), mix(0, WHITE, 1 - DEEP_DIM * (gloom - cast)));
 }
+
+// How far the night's colour has come up at `h`: with the clock, as on open
+// ground, or as far as the scene's own `ambient` keeps it all day. The sky's
+// dusk and dawn colours fade across the same half hour, 19:30..20:00 and
+// 05:30..06:00, so a scene whose gloom brought the colour up faster than that
+// (the forest's ambient, the snow's extra) put the whole cast under the last
+// of the purple and the pink: faces went mauve (hue 345 in the winter forest
+// at 19:45, 0 in the forest at 19:52, 6 at 05:45 in the winter forest). Past
+// this the dark is grey, so each scene still gets as dark as before at each
+// minute (luma within 0.014) and full night and day are the same factor.
+const nightBlue = (h: number, ambient: number): number => Math.max(ambient, darkness(h) * NIGHT_RANGE);
 
 const clockHour = (): number => (GameState.minutes / 60) % 24;
 
 // The sky's tint times the night's cast: two multiplies are one, so a single
 // rectangle carries both.
-function overlayAt(sceneKey: string, h: number, gloom: number): number {
+function overlayAt(sceneKey: string, h: number, gloom: number, ambient = 0): number {
   const sky = SKY_BY_SCENE[sceneKey];
-  return multiply(sky ? mix(WHITE, skyAt(sky.stops, h), sky.strength) : WHITE, nightCast(gloom));
+  return multiply(sky ? mix(WHITE, skyAt(sky.stops, h), sky.strength) : WHITE, nightCast(gloom, nightBlue(h, ambient)));
 }
 
 /**
@@ -263,7 +284,7 @@ export class NightOverlay {
   update(): number {
     const h = clockHour();
     const gloom = this.ambient + darkness(h) * this.range;
-    const color = overlayAt(this.scene.sys.settings.key, h, gloom);
+    const color = overlayAt(this.scene.sys.settings.key, h, gloom, this.ambient);
     // under a white factor a lamp has nothing to give back either
     this.rect.setFillStyle(color);
     (this.lightmap ?? this.rect).setVisible(color !== WHITE);
