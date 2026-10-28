@@ -20,7 +20,6 @@ export interface EnemyDef {
   boss?: boolean; // story boss (KING SLIME, MOSS GOLEM): quest flag, uncatchable, boss dialogue
   giant?: boolean; // just a bigger sprite + boss fanfare, no quest/story hooks
   rare?: boolean; // rare world jackpot (GOLDEN SLIME): own palette, big payout, not required for collection
-  tint?: number; // sprite tint applied in the world and in battle (none now: the rare ones have their own textures)
   weakness?: Element; // attack spell element that deals bonus damage (bestiary shows the hint)
   special?: EnemySpecial;
 }

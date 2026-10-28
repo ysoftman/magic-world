@@ -98,7 +98,7 @@ export class CompanionSprite {
     if (GameState.companion !== this.currentName) {
       this.currentName = GameState.companion;
       const def = this.currentName ? Object.values(ENEMIES).find((e) => e.name === this.currentName) : undefined;
-      if (def) this.sprite.setTexture(def.texture).setTint(def.tint ?? 0xffffff);
+      if (def) this.sprite.setTexture(def.texture);
       else this.currentName = null;
     }
     const shown = this.currentName !== null;

@@ -910,7 +910,6 @@ export class AbyssScene extends Phaser.Scene {
       sprite.setDepth(10);
       sprite.body?.setSize(40, 24).setOffset(12, 32);
       if (boss) sprite.setScale(1.5);
-      if (def.tint) sprite.setTint(def.tint);
       this.roamers.push({
         sprite,
         minX: zone.cx - zone.w / 2 + 8,

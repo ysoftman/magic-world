@@ -434,8 +434,6 @@ export class BestiaryUI {
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
       icon.setTexture(def.texture).setVisible(rowSeen);
-      if (def.tint) icon.setTint(def.tint);
-      else icon.clearTint();
       const note = rowSeen ? speciesNote(def) : "";
       // a row without a note (unseen, or a plain SLIME) keeps its name
       // centered on the icon instead of floating above an empty line

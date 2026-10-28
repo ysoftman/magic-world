@@ -56,7 +56,7 @@ import { MATERIALS, rollDrop } from "../drops";
 import { bakeBattleFx, flash, loopFx, playFx, shake } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
-import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, MPOTION_MP, POTION_HP } from "../itemInfo";
+import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
@@ -64,6 +64,7 @@ import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { skyOverlay } from "../ui/NightOverlay";
+import { isTouchDevice } from "../ui/TouchControls";
 import { battleBgKey } from "./BootScene";
 import type { EndingData } from "./EndingScene";
 
@@ -88,6 +89,10 @@ const reducedMotion = (): boolean => window.matchMedia?.("(prefers-reduced-motio
 // keep FASTER readable: a damage or heal number stays up at least
 // POPUP_MIN_MS, a status pop STATUS_POP_MIN_MS, a typed glyph TYPE_MIN_MS.
 const POPUP_MIN_MS = 500;
+// a damage/heal number's highest top edge (popNumber), 16px under the stat
+// windows' bottom (200), and the least it rises from where it starts
+const POPUP_TOP = 216;
+const POPUP_MIN_RISE = 48;
 const STATUS_POP_MIN_MS = 600;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
@@ -158,9 +163,17 @@ const ITEM_SLOTS: ItemSlot[] = [
 ];
 
 const ITEMS_PER_ROW = 4;
-const ITEM_COL_X = 48;
-const ITEM_COL_WIDTH = 280;
 const ITEM_TEXT_OFFSET = 32;
+// Each column as wide as its longest entry at two digits, 24px glyphs plus
+// the 4px outline, with the cursor's ITEM_TEXT_OFFSET in front: POTION x99
+// 32 + 244, MPOTION x99 32 + 268, CANDY x99 32 + 220, HI-POTION x99 32 + 316
+// = 1176px, spread over x 24..1256 with ~19px between columns. At a flat
+// 280px a column, MPOTION x10 already ran 16px into the next one's cursor.
+const ITEM_COL_X = [24, 319, 637, 908];
+// the item list's line on a touch screen, where H/J/K/L, Z and ESC aren't
+// there: a tap picks an item, a second tap on it uses it (onPointerDown),
+// and a tap off the list goes back. 43 glyphs at 16px = 688px, x 296..984.
+const TOUCH_ITEM_HINT = "TAP:SELECT  TAP AGAIN:USE  TAP OUTSIDE:BACK";
 
 // a region's ordinary fights play its own take on the battle riff (see
 // audio.ts); the Town and the Dungeon keep the original
@@ -188,6 +201,7 @@ export class BattleScene extends Phaser.Scene {
   private itemIndex = 0;
   private itemTexts: Phaser.GameObjects.Text[] = [];
   private itemCursor!: Phaser.GameObjects.Text;
+  private itemInfoText!: Phaser.GameObjects.Text;
 
   private pendingSpell!: Spell;
   private companionSprite?: Phaser.GameObjects.Sprite;
@@ -397,7 +411,6 @@ export class BattleScene extends Phaser.Scene {
     // 312 even the 1.15x charge pulse stays below it.
     const big = this.enemy.boss || this.enemy.giant;
     this.enemySprite = this.add.sprite(GAME_WIDTH - 320, big ? 312 : 280, this.enemy.texture).setScale(big ? 3 : 2);
-    if (this.enemy.tint) this.enemySprite.setTint(this.enemy.tint);
     this.playerSprite = this.add.sprite(320, 368, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
     // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
@@ -408,10 +421,16 @@ export class BattleScene extends Phaser.Scene {
     this.syncGear();
 
     const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
-    if (companionDef) {
-      this.companionSprite = this.add.sprite(180, 440, companionDef.texture).setScale(1.5);
-      if (companionDef.tint) this.companionSprite.setTint(companionDef.tint);
-    }
+    // assigned either way: the scene instance outlives a battle (see init),
+    // and a companion dismissed since the last one would leave its sprite here
+    this.companionSprite = companionDef ? this.add.sprite(COMPANION_X, COMPANION_Y, companionDef.texture).setScale(1.5) : undefined;
+
+    // The foe sinks rather than rises: a boss at 312 has its horns just under
+    // the enemy window even through the charge pulse (above), and a rise
+    // would lift them into it.
+    this.heroIdle = this.idleBob(this.playerSprite, -IDLE_BOB_PX, 1400, 0);
+    this.enemyIdle = this.idleBob(this.enemySprite, IDLE_BOB_PX, 1700, 500);
+    this.companionIdle = this.companionSprite && this.idleBob(this.companionSprite, -IDLE_BOB_PX, 1200, 900);
 
     this.window(32, 24, 464, 176);
     this.window(GAME_WIDTH - 496, 24, 464, 176);
@@ -464,20 +483,27 @@ export class BattleScene extends Phaser.Scene {
       ...this.knownSpells().map(
         (s): MenuButton => ({ label: `${s.name[0]}:${s.name}`, action: "magic", spell: s, enabled: () => this.canCast(s) }),
       ),
-      { label: "E:ITEM", action: "item" },
+      // greyed out with nothing in the bag, as a spent STEAL is: an empty list
+      // has nothing to pick
+      { label: "E:ITEM", action: "item", enabled: () => this.hasItems() },
       { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
       { label: "ESC:RUN", action: "run", enabled: () => !this.arena },
     ];
-    // Always size 5 (20px a glyph), within 48px margins (1184px of room).
-    // Up to BOLT the 8 buttons (50 glyphs, 1000px) fit one row, spread evenly
-    // with 26px gaps — the layout from Lv1 to Lv17. WARD makes it 56 glyphs
-    // (8px gaps) and NOVA 62 (1240px, wider than the room), so from Lv18 the
-    // attacks (FIGHT and the spells) take a row of their own above ITEM /
-    // STEAL / RUN, each centered with MENU_ROW_GAP between buttons; Lv24's
-    // attack row is the widest, 42 glyphs = 840 + 6 x 40 = 1080px. The rows'
-    // glyphs (y 502..522 / 538..558) clear the companion sprite (to y 488)
-    // above and the hint line (568..584) and message box (604) below.
-    this.menuTexts = this.menuButtons.map((b) => this.add.text(0, menuY, b.label, retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
+    // Always size 5 (20px a glyph), within 48px margins (1184px of room), and
+    // outlined, as text straight on the backdrop is (AGENTS.md): a greyed-out
+    // DIM_TEXT button was 1.7:1 on the town's daytime field bare. The outline
+    // adds 4px to each button. Up to BOLT the 8 buttons (50 glyphs, 1000px +
+    // 32) fit one row, spread evenly with ~22px gaps — the layout from Lv1 to
+    // Lv17. WARD makes it 56 glyphs (3px gaps) and NOVA 62 (1240px, wider
+    // than the room), so from Lv18 the attacks (FIGHT and the spells) take a
+    // row of their own above ITEM / STEAL / RUN, each centered with
+    // MENU_ROW_GAP between buttons; Lv24's attack row is the widest, 42 glyphs
+    // = 840 + 7 x 4 + 6 x 40 = 1108px. The rows (y 500..524 / 536..560)
+    // clear the companion sprite (to y 488) above and the hint line (566..586)
+    // and message box (604) below.
+    this.menuTexts = this.menuButtons.map((b) =>
+      this.add.text(0, menuY, b.label, retroStyle(5, "#ffffff")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5),
+    );
     const room = GAME_WIDTH - MENU_MARGIN * 2;
     const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
     const oneRowGap = (room - total) / (this.menuTexts.length - 1);
@@ -515,22 +541,34 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(30);
 
+    // outlined as the menu is: an empty slot's DIM_TEXT sits on the field too
     const itemY = GAME_HEIGHT - 232;
     for (let i = 0; i < ITEM_SLOTS.length; i++) {
       const slot = ITEM_SLOTS[i];
-      const colX = ITEM_COL_X + (i % ITEMS_PER_ROW) * ITEM_COL_WIDTH;
       const t = this.add
         .text(
-          colX + ITEM_TEXT_OFFSET,
+          ITEM_COL_X[i % ITEMS_PER_ROW] + ITEM_TEXT_OFFSET,
           itemY + Math.floor(i / ITEMS_PER_ROW) * 40,
           `${slot.label} x${GameState.inventory[slot.key]}`,
           retroStyle(6, "#ffffff"),
         )
+        .setStroke("#0b0b2b", 4)
         .setOrigin(0, 0.5)
         .setVisible(false);
       this.itemTexts.push(t);
     }
-    this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setOrigin(0, 0.5).setVisible(false);
+    this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5).setVisible(false);
+    // what the cursor's item does, as the shop and the bag word it
+    // (itemInfo.ts). Size 4 is all that fits between the second item row
+    // (size 6 at y=528, to 544) and the hint (from 566): y 544..564. The
+    // longest, "CANDY: THROW TO CATCH A WEAKENED MONSTER", is 40 glyphs =
+    // 640px, x 320..960. Outlined like the hint: it sits on the backdrop.
+    this.itemInfoText = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - 166, "", retroStyle(4, "#ffd166"))
+      .setStroke("#0b0b2b", 4)
+      .setOrigin(0.5)
+      .setDepth(30)
+      .setVisible(false);
 
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
@@ -568,6 +606,16 @@ export class BattleScene extends Phaser.Scene {
       lifespan: 600,
       scale: { start: 1, end: 0 },
       alpha: { start: 1, end: 0 },
+      emitting: false,
+    });
+    // a caught monster's trail and its landing (catchFx); smaller than the
+    // other bursts, or the trail's glows run together into one pink rope
+    this.catchBurst = this.add.particles(0, 0, "glow", {
+      speed: { min: 30, max: 110 },
+      lifespan: 450,
+      scale: { start: 0.6, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: CANDY_PINK,
       emitting: false,
     });
 
@@ -613,9 +661,7 @@ export class BattleScene extends Phaser.Scene {
         return;
       }
       if (e.code === "Escape") {
-        this.inItems = false;
-        this.hideItems();
-        this.renderMenu();
+        this.closeItems();
         return;
       }
       if (e.code === "KeyZ") {
@@ -645,6 +691,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (e.code === "KeyE") {
+      if (!this.hasItems()) {
+        Sfx.error();
+        return;
+      }
       this.hideMenu();
       this.renderItems();
       this.inItems = true;
@@ -694,7 +744,16 @@ export class BattleScene extends Phaser.Scene {
     if (this.inItems) {
       for (let i = 0; i < this.itemTexts.length; i++) {
         const t = this.itemTexts[i];
-        if (!t.visible || !t.getBounds().contains(pointer.x, pointer.y)) continue;
+        // padded as the menu's buttons are, so a near miss doesn't close it
+        if (!t.visible || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, 8).contains(pointer.x, pointer.y)) continue;
+        // a tap on another item only moves the cursor there, so a touch
+        // player can read what it does before a second tap (or Z) spends it
+        if (i !== this.itemIndex) {
+          this.itemIndex = i;
+          Sfx.move();
+          this.renderItems();
+          return;
+        }
         const slot = ITEM_SLOTS[i];
         if (GameState.inventory[slot.key] <= 0) {
           Sfx.error();
@@ -705,6 +764,10 @@ export class BattleScene extends Phaser.Scene {
         this.resolveAction(slot.action);
         return;
       }
+      // a tap anywhere off the list goes back to the menu, as ESC does: a
+      // touch screen has no ESC in a battle, and an empty or unwanted list
+      // otherwise held the fight there
+      this.closeItems();
       return;
     }
 
@@ -751,9 +814,27 @@ export class BattleScene extends Phaser.Scene {
   private hideItems(): void {
     for (const t of this.itemTexts) t.setVisible(false);
     this.itemCursor.setVisible(false);
+    this.itemInfoText.setVisible(false);
+    this.companionSprite?.setAlpha(1);
+  }
+
+  // back from the item list to the menu, no turn spent
+  private closeItems(): void {
+    this.inItems = false;
+    this.hideItems();
+    this.renderMenu();
+  }
+
+  private hasItems(): boolean {
+    return ITEM_SLOTS.some((s) => GameState.inventory[s.key] > 0);
   }
 
   private renderItems(): void {
+    // The list's first row (y 474..502) runs over the companion's feet (it
+    // stands to y 488), and there's no room to move the list down: the info
+    // line, the hint and the message box fill the 116px under it. So the
+    // companion fades back while the list is up (hideItems restores it).
+    this.companionSprite?.setAlpha(0.3);
     for (let i = 0; i < ITEM_SLOTS.length; i++) {
       this.itemTexts[i].setVisible(true);
       const count = GameState.inventory[ITEM_SLOTS[i].key];
@@ -764,7 +845,9 @@ export class BattleScene extends Phaser.Scene {
     const target = this.itemTexts[this.itemIndex];
     this.itemCursor.setX(target.x - ITEM_TEXT_OFFSET);
     this.itemCursor.setY(target.y);
-    this.hintText.setText("H/L/J/K:NAV  Z:OK  ESC:BACK");
+    const slot = ITEM_SLOTS[this.itemIndex];
+    this.itemInfoText.setText(`${slot.label}: ${ITEM_INFO[slot.key]}`).setVisible(true);
+    this.hintText.setText(isTouchDevice() ? TOUCH_ITEM_HINT : "HJKL:MOVE  Z:OK  ESC:BACK");
   }
 
   private knownSpells(): Spell[] {
@@ -1661,10 +1744,12 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // status label pops over the hero when it lands, on top of the HP-row tag
-  // (a spell's side effect on the foe passes its own spot)
+  // (a spell's side effect on the foe passes its own spot); like the damage
+  // numbers it stops under the stat windows (POPUP_TOP, see popNumber)
   private flashStatus(label: string, color: string, x = this.playerSprite.x, y = this.playerSprite.y - 80): void {
     const t = this.add.text(x, y, label, retroStyle(10, color)).setOrigin(0.5).setStroke("#000000", 2);
-    this.tweens.add({ targets: t, y: t.y - 60, alpha: 0, duration: this.anim(900, STATUS_POP_MIN_MS), onComplete: () => t.destroy() });
+    const endY = Math.max(t.y - 60, POPUP_TOP + t.height / 2);
+    this.tweens.add({ targets: t, y: endY, alpha: 0, duration: this.anim(900, STATUS_POP_MIN_MS), onComplete: () => t.destroy() });
   }
 
   // lays the active player tags out right-to-left so a lone one sits flush
@@ -1874,30 +1959,33 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private flashDamage(x: number, y: number, amount: number, crit = false): void {
-    const t = this.add
-      .text(x + 40, y - 80, crit ? `${amount}!` : String(amount), retroStyle(crit ? 14 : 10, crit ? "#ff5555" : "#ffdd44"))
-      .setOrigin(0.5)
-      .setStroke("#7c2d12", 2)
-      // over an effect sheet, even one started after it
-      .setDepth(1);
-    this.tweens.add({
-      targets: t,
-      y: y - (crit ? 200 : 160),
-      alpha: 0,
-      duration: this.anim(800, POPUP_MIN_MS),
-      onComplete: () => t.destroy(),
-    });
+    this.popNumber(x, y, crit ? `${amount}!` : String(amount), crit ? 14 : 10, crit ? "#ff5555" : "#ffdd44", crit ? 200 : 160);
   }
 
   private flashHeal(x: number, y: number, amount: number): void {
+    this.popNumber(x, y, `+${amount}`, 10, "#4ade80", 160);
+  }
+
+  // A damage or heal number that pops out of the fighter at (x, y) and rises
+  // toward y - rise, but stops with its top edge at POPUP_TOP, under the stat
+  // windows (y 24..200) that sit over both fighters' columns: from y - 80
+  // they ran up over the COMBO line and HP bar, and a boss's or a crit on the
+  // hero over the MP line. A foe's head is at y 216, so its numbers now start
+  // on its body and rise POPUP_MIN_RISE; the hero's start at his head as
+  // before. Outlined as text on the art is (AGENTS.md), since it crosses the
+  // fighter now.
+  private popNumber(x: number, y: number, text: string, size: number, color: string, rise: number): void {
     const t = this.add
-      .text(x + 40, y - 80, `+${amount}`, retroStyle(10, "#4ade80"))
+      .text(x + 40, 0, text, retroStyle(size, color))
       .setOrigin(0.5)
-      .setStroke("#14532d", 2)
+      .setStroke("#1a1028", 4)
+      // over an effect sheet, even one started after it
       .setDepth(1);
+    const endY = Math.max(y - rise, POPUP_TOP + t.height / 2);
+    t.setY(Math.max(y - 80, endY + POPUP_MIN_RISE));
     this.tweens.add({
       targets: t,
-      y: y - 160,
+      y: endY,
       alpha: 0,
       duration: this.anim(800, POPUP_MIN_MS),
       onComplete: () => t.destroy(),
@@ -1909,13 +1997,11 @@ export class BattleScene extends Phaser.Scene {
     this.enemyHpBar.setScale(Math.max(0, this.enemy.curHp / this.enemy.hp), 1);
   }
 
-  // hit flashes clearTint the enemy sprite, which would also strip the gold
-  // tint of a rare enemy (GOLDEN SLIME) or a boss's enrage glow; re-apply
-  // whichever applies afterwards
+  // hit flashes clearTint the enemy sprite, which would also strip a boss's
+  // enrage glow; re-apply it afterwards
   private restoreEnemyTint(): void {
     this.enemySprite.clearTint();
-    const tint = this.enraged ? ENRAGE_TINT : this.enemy.tint;
-    if (tint) this.enemySprite.setTint(tint);
+    if (this.enraged) this.enemySprite.setTint(ENRAGE_TINT);
   }
 
   private comboBonus(): number {
@@ -2222,7 +2308,8 @@ export class BattleScene extends Phaser.Scene {
   private static readonly ADVANCE_KEYS = ["Z", "A", "E", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
 
   private awaitAdvance(resolve: () => void): void {
-    this.hintText.setText("Z:CONTINUE");
+    // a tap advances too (below), and a touch screen has no Z
+    this.hintText.setText(isTouchDevice() ? "TAP:CONTINUE" : "Z:CONTINUE");
     const done = () => {
       for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.removeListener(`keydown-${k}`, done);
       this.input.off("pointerdown", done);
