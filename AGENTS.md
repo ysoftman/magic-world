@@ -338,12 +338,22 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 
 ## 픽셀 그리드 검증 (`bun run check:art`)
 
-`BootScene.ts` 의 타일/스프라이트 그리드를 손대면 **커밋 전에
+`src/art/*.ts`(BootScene 이 부팅 때 굽는다)의 타일/스프라이트 그리드를 손대면 **커밋 전에
 `bun run check:art`** 를 돌린다. 이 검사가 실제로 잡아낸 버그가 있어서
 남겨둔 것이다 — `BAT_TILE` 이 3행만 17자라 텍스처가 68px 로 구워진 것,
 `ICE_GOLEM_TILE` 이 팔레트에 없는 문자를 써서 2픽셀이 투명하게 빠진 것,
 길 variation 2장이 위상이 접혀 바이트 단위로 중복된 것. 셋 다 아무것도
 throw 하지 않고 그림만 조용히 틀리는 종류다.
+
+그림은 영역별 파일에 있다: `tiles.ts`(지형 격자·팔레트), `tilesets.ts`(tiles16/shore16/road16 와
+스킨 굽기, `*_SKIN`·`seasonSkin`·`battleBgKey`·`TILE_VARIANTS`), `hero.ts`, `npcs.ts`, `monsters.ts`,
+`props.ts`, `icons.ts`, `landmarks.ts`. 격자·팔레트와 그것을 굽는 `bake*` 함수가 같은 파일에 있고
+BootScene 은 순서대로 부르기만 한다. 씬이 쓰는 이름은 BootScene 이 다시 export 한다. 새 굽기는 그
+파일의 `bake*` 안에 `makeTexture(this, "키", 격자, 팔레트)` 로 쓴다 — check:art 는 `this` 로 시작하는
+호출만 읽어 격자와 팔레트 짝을 본다. 계산된 팔레트·변형 격자는 `scene` 인자로 구워 검사에서
+뺀다(`drawLookPreviews`, `makeWorkplaceSnow`). 다른 파일이 쓰는 격자·팔레트는 `export const`.
+같은 영역 파일 이름(`src/art/monsters.ts`)과 겹치는 게임 데이터 파일은 경로를 붙여 부른다
+(`src/monsters.ts`).
 
 검사 항목:
 
@@ -404,7 +414,9 @@ throw 하지 않고 그림만 조용히 틀리는 종류다.
 그렇게 되므로, 넣을 때 아틀라스(구운 텍스처를 2배로 늘어놓은 시트)로
 결과를 눈으로 확인한다. 얼굴(눈이 비대칭·웃는 눈으로 바뀜), 1칸 점무늬,
 가로 잔물결(사선 줄무늬로 바뀜)은 `keepBlocky(...)` 로 4px 그대로 두고,
-지형 경계만 다듬을 전환 타일은 `smoothBoundaryOnly(계열, ...)` 를 쓴다.
+지형 경계만 다듬을 전환 타일은 `smoothBoundaryOnly(계열, ...)` 를 쓴다. 등록은 그 격자가 있는 파일
+최상위, 격자 정의 뒤에 둔다. 모듈을 불러올 때 등록되어 굽기보다 먼저 실행되고, 정의 앞에 두면
+TDZ 로 부팅이 죽는다.
 32칸으로 다시 그린 그리드는 `makeTexture(..., ART_PX)` 로 Scale2x 없이
 굽고, check:art 가 32x32 인지 본다.
 
@@ -420,7 +432,8 @@ throw 하지 않고 그림만 조용히 틀리는 종류다.
 아이템 아이콘은 `icon-<키>` 텍스처다(인벤토리·소재·요리 재료·요리 키, 보물 지도는
 `icon-map`). 16칸 그리드를 기본 Scale2x 로 구워 64px 이 되고, 패널은 그 절반인
 32px 로 그린다. 아이템 창·상점·대장간·KITCHEN 이 키 이름으로 텍스처를 찾으므로,
-아이템이나 요리를 새로 넣으면 BootScene 에 그 아이콘도 함께 그려야 한다. 빠지면
+아이템이나 요리를 새로 넣으면 `src/art/icons.ts` 에 그 아이콘 격자·팔레트와 `bakeIcons` 의 한
+줄을 함께 넣어야 한다. 빠지면
 Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비와 같은 팔레트
 (`EQUIP_*_PALETTE`)로 칠해서 등급 색이 서로 맞는다.
 
@@ -437,7 +450,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   `COMPANION_GROUND_Y` 464, 나는 몬스터는 `FLY_LIFT` 64 위에 뜨고 그림자는 땅에). 발 위치는 텍스처의
   실제 불투명 아래 끝(`footingOf`)으로 맞춘다. 실제 사례: 적을 중심 좌표(y 280)로 세워 발이 지평선보다
   32px 이상 위에 있고 그림자도 없어, 몬스터 종류와 상관없이 모두 떠 보였다. 새 몬스터를 넣으면
-  `monsters.ts` 의 `flying`(다리 없이 날개로 나는 것만)을 정한다.
+  `src/monsters.ts` 의 `flying`(다리 없이 날개로 나는 것만)을 정한다.
 - 바닥의 y 474..586 에는 전투 메뉴·힌트·아이템 목록이 흰색·연파랑 글자로 바로
   그려진다. 그래서 바닥은 어둡고 무늬가 없게 둔다. 풀·균열 같은 디테일은
   지평선 바로 아래(y 444..484)나 화면 양 끝에만 둔다. 처음 시안에서 화산 균열이

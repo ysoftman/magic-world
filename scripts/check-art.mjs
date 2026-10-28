@@ -1,5 +1,5 @@
-// Guards the pixel grids in BootScene.ts against the two failure modes that are
-// invisible in review but wreck a texture:
+// Guards the pixel grids in src/art/*.ts (baked by BootScene.ts) against the
+// two failure modes that are invisible in review but wreck a texture:
 //   (a) a ragged row -- makeTexture() sizes on the LONGEST row, so one wrong row
 //       widens the whole texture and shifts every row under it (the BAT_TILE bug)
 //   (b) a character with no palette entry -- drawRows() silently skips it, so the
@@ -13,7 +13,12 @@
 // could break on what it actually bakes, with the game's own scale2x().
 import { buildRamp, scale2x } from "../src/pixelart.ts";
 
-const src = await Bun.file(`${import.meta.dir}/../src/scenes/BootScene.ts`).text();
+// every art file read as one source, so a grid in one file and the bake that
+// draws it in another still pair up
+const artDir = `${import.meta.dir}/../src/art`;
+const artFiles = [...new Bun.Glob("*.ts").scanSync(artDir)].sort().map((f) => `${artDir}/${f}`);
+const sources = [`${import.meta.dir}/../src/scenes/BootScene.ts`, ...artFiles];
+const src = (await Promise.all(sources.map((f) => Bun.file(f).text()))).join("\n");
 const TRANSPARENT = ".";
 const paletteColoursSafe = (name) => {
   const m = src.match(new RegExp(`const ${name} = \\{([\\s\\S]*?)\\};`));
@@ -26,8 +31,9 @@ const fail = (msg) => {
 };
 
 // ---- parse every `const NAME = [ "..." , ... ];` grid and every palette ----
+// (exported or not: tiles.ts exports what tilesets.ts bakes)
 const grids = new Map();
-for (const m of src.matchAll(/^const ([A-Z0-9_]+) = \[([\s\S]*?)\];$/gm)) {
+for (const m of src.matchAll(/^(?:export )?const ([A-Z0-9_]+) = \[([\s\S]*?)\];$/gm)) {
   const body = m[2];
   if (!/^[\s"'.\w,]*$/.test(body) || !body.includes('"')) continue;
   grids.set(
@@ -36,14 +42,14 @@ for (const m of src.matchAll(/^const ([A-Z0-9_]+) = \[([\s\S]*?)\];$/gm)) {
   );
 }
 // single-line grids such as HERO_TORSO
-for (const m of src.matchAll(/^const ([A-Z0-9_]+) = (\["[^\]]*"\]);$/gm)) {
+for (const m of src.matchAll(/^(?:export )?const ([A-Z0-9_]+) = (\["[^\]]*"\]);$/gm)) {
   grids.set(
     m[1],
     [...m[2].matchAll(/"([^"]*)"/g)].map((r) => r[1]),
   );
 }
 const palettes = new Map();
-for (const m of src.matchAll(/^const ([A-Z0-9_]+_PALETTE) = \{([\s\S]*?)\};$/gm)) {
+for (const m of src.matchAll(/^(?:export )?const ([A-Z0-9_]+_PALETTE) = \{([\s\S]*?)\};$/gm)) {
   palettes.set(m[1], new Set([...m[2].matchAll(/(\w+):\s*0x[0-9a-fA-F]+/g)].map((p) => p[1])));
 }
 console.log(`parsed ${grids.size} grids, ${palettes.size} palettes`);
@@ -382,20 +388,21 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
 }
 
 // ---- the baked result: what Scale2x makes of the grids ----
-// BootScene.buildTextures() names the grids that stay blocky (keepBlocky) and
-// the ones smoothed only across a terrain edge (smoothBoundaryOnly); every
-// other grid bakes through plain Scale2x. A tile bakes with its edges clamped.
-const callNames = (fn) => {
-  const m = src.match(new RegExp(`${fn}\\(([\\s\\S]*?)\\);`));
-  if (!m) return null;
-  return { family: m[1].match(/^\s*"([^"]*)"/)?.[1], names: [...m[1].matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((n) => n[1]) };
-};
-const blockyCall = callNames("keepBlocky");
-const boundaryCall = callNames("smoothBoundaryOnly");
-if (!blockyCall) fail("no keepBlocky(...) call in BootScene -- every grid would bake through Scale2x");
-if (!boundaryCall) fail("no smoothBoundaryOnly(...) call in BootScene -- the transitions' fill would bend");
-const blocky = new Set(blockyCall?.names ?? []);
-const boundaryOf = new Map((boundaryCall?.names ?? []).map((n) => [n, boundaryCall.family]));
+// The art files name the grids that stay blocky (keepBlocky) and the ones
+// smoothed only across a terrain edge (smoothBoundaryOnly), each file beside
+// its own grids; every other grid bakes through plain Scale2x. A tile bakes
+// with its edges clamped.
+const calls = (fn) =>
+  [...src.matchAll(new RegExp(`^\\s*${fn}\\(([\\s\\S]*?)\\);`, "gm"))].map((m) => ({
+    family: m[1].match(/^\s*"([^"]*)"/)?.[1],
+    names: [...m[1].matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((n) => n[1]),
+  }));
+const blockyCalls = calls("keepBlocky");
+const boundaryCalls = calls("smoothBoundaryOnly");
+if (!blockyCalls.length) fail("no keepBlocky(...) call in src/art -- every grid would bake through Scale2x");
+if (!boundaryCalls.length) fail("no smoothBoundaryOnly(...) call in src/art -- the transitions' fill would bend");
+const blocky = new Set(blockyCalls.flatMap((c) => c.names));
+const boundaryOf = new Map(boundaryCalls.flatMap((c) => c.names.map((n) => [n, c.family])));
 for (const n of [...blocky, ...boundaryOf.keys()]) if (!grids.has(n)) fail(`${n} is listed for its bake but is no grid`);
 // a blocky grid is shown at the same 2x cell resolution, so both compare cell for cell
 const doubled = (rows) =>
@@ -407,7 +414,8 @@ const bakeTile = (name) => {
   const rows = grids.get(name);
   return blocky.has(name) ? doubled(rows) : scale2x(rows, "clamp", boundaryOf.get(name));
 };
-console.log(`\nbaked through Scale2x: ${blocky.size} grids kept blocky, ${boundaryOf.size} smoothed across "${boundaryCall?.family}" only`);
+const families = [...new Set(boundaryOf.values())].map((f) => `"${f}"`).join(", ");
+console.log(`\nbaked through Scale2x: ${blocky.size} grids kept blocky, ${boundaryOf.size} smoothed across ${families} only`);
 
 // water A/B: B still A at a phase, now 2 rows a step
 for (const suffix of ["", "_2", "_3", "_4"]) {
