@@ -267,13 +267,21 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 
 ## 필드 씬 입력(종료 확인·터치·게임패드)
 
-- 타이틀로 나가기(Q)는 `sceneCommon` 의 `askQuitToTitle(this.dialogue, () => this.quit())` 로
-  대화창에서 묻고, 씬의 `quit()` 은 `quitting = true` 뒤 `saveAndQuit(this)` 를 부른다. 실제
+- 타이틀로 나가기(Q)는 `sceneCommon` 의 `FieldKeys.takeQuitKey(this.dialogue, () => this.uiBlocking(),
+  () => this.quit())`(안에서 `askQuitToTitle`)로 대화창에서 묻고, 씬의 `quit()` 은 `quitting = true` 뒤 `saveAndQuit(this)` 를 부른다. 실제
   사례: 예전에는 여섯 필드 씬이 각자 중앙 `QUIT TO TITLE? Y/N` 글자와 Y/N/ESC 리스너를 따로
   들고 있었고, 안내 화살표·도움말·조우·보물 파기·심연 계단 질문이 그 플래그를 씬마다 따로
   봤다. 지금은 대화창이 `uiBlocking()` 이라 영웅·패널 키가 멈추고 이름표도 숨으며, 저장 뒤
   타이틀로 가기까지의 700ms 는 `quitting` 하나로 막는다. 새 필드 씬도 DialogueBox 와 이 두
-  줄(`askQuitToTitle`, `quitting` 가드)을 넣는다.
+  줄(`takeQuitKey`, `quitting` 가드)을 넣는다.
+- 필드 공통 키(S·CTRL+S·M·T·I·B·A·U·O·Q)는 `sceneCommon` 의 `FieldKeys` 가 등록하고 큐에 담는다. 새 필드
+  씬은 create() 에서 TouchControls 보다 먼저 `new FieldKeys(this)` 를 만들고(마을은 `{ toastY:
+  STATUS_HUD_TOAST_Y, repeatI: true }`), update() 에서 `takeSystemKeys(hud)` → `takeMapKey` → quitting
+  가드 → `takeQuitKey` 순으로 부른다(마을은 T 를 가드 뒤, Q 다음에 읽는다). 이 키들의 `*Queued`
+  플래그를 씬에 새로 만들지 않는다. 씬 전용 키(설원 Z, 마을 Z·SPACE·C·G·F2)만 씬이 직접 등록한다.
+  실제 사례: 여섯 씬이 같은 키 등록·플래그·처리를 각자 들고 있어, 최근 커밋 150개 중 21개가 이 씬
+  3개 이상을 함께 고쳤다. 공통 키를 더하려면 `FieldKey` 타입과 생성자를 고치고 TouchControls 의
+  `MENU`·Gamepad 의 `FIELD` 표도 같이 본다.
 - 필드의 패널 키나 전투 키를 새로 만들면 터치와 게임패드도 같이 본다. 터치 오른쪽 세로 줄은
   `TouchControls` 의 `MENU`(씬이 등록한 키만 버튼이 됨), 패드는 `src/ui/Gamepad.ts` 의
   `FIELD`/`BATTLE` 표다. 둘 다 `sendKey` 로 키보드 이벤트를 합성해 보내서 씬은 키보드만
