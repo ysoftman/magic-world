@@ -6,17 +6,17 @@
 // the browser has no `process` for. Without git, or in a copy that isn't the
 // repository (an archive, maybe unpacked inside some other repo), the file
 // keeps its own "" and the tag shows the bare version.
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import type { BunPlugin } from "bun";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = `${import.meta.dir}/..`;
 
 function gitHash(): string {
-  if (!existsSync(join(ROOT, ".git"))) return "";
   try {
-    const out = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], { cwd: ROOT, stderr: "ignore" });
-    const hash = out.stdout.toString().trim();
-    return out.success && /^[0-9a-f]+$/.test(hash) ? hash : "";
+    // --show-prefix prints "" only at the top of a work tree, so a copy
+    // unpacked inside some other repository doesn't take that one's HEAD
+    const out = Bun.spawnSync(["git", "rev-parse", "--show-prefix", "--short", "HEAD"], { cwd: ROOT, stderr: "ignore" });
+    const [prefix, hash = ""] = out.stdout.toString().split("\n");
+    return out.success && prefix === "" && /^[0-9a-f]+$/.test(hash) ? hash : "";
   } catch {
     // no git on the PATH
     return "";
@@ -25,7 +25,7 @@ function gitHash(): string {
 
 export default {
   name: "build-info",
-  setup(build: { onLoad: (opts: { filter: RegExp }, load: () => { contents: string; loader: "ts" }) => void }) {
+  setup(build) {
     // read when the file is loaded: once per build, and once per dev server
     // (its hot reloads of other files keep it; a commit alone reloads nothing)
     build.onLoad({ filter: /[\\/]src[\\/]buildInfo\.ts$/ }, () => ({
@@ -33,4 +33,4 @@ export default {
       loader: "ts",
     }));
   },
-};
+} satisfies BunPlugin;

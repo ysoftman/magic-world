@@ -11,12 +11,9 @@
 // tileset's geometry matches what the scenes read back. The grids bake through
 // Scale2x (pixelart.ts), so the last section repeats the checks that Scale2x
 // could break on what it actually bakes, with the game's own scale2x().
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { buildRamp, scale2x } from "../src/pixelart.ts";
 
-const SRC = fileURLToPath(new URL("../src/scenes/BootScene.ts", import.meta.url));
-const src = readFileSync(SRC, "utf8");
+const src = await Bun.file(`${import.meta.dir}/../src/scenes/BootScene.ts`).text();
 const TRANSPARENT = ".";
 const paletteColoursSafe = (name) => {
   const m = src.match(new RegExp(`const ${name} = \\{([\\s\\S]*?)\\};`));
