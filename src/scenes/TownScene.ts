@@ -6,6 +6,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { canDeliver, deliver, deliveryReward, materialName, rollDeliveryIfStale } from "../delivery";
 import { eventToday } from "../events";
 import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, materialNameOf } from "../favors";
+import { encounterOut } from "../fx";
 import {
   cropProgress,
   type DeliveryState,
@@ -1701,8 +1702,7 @@ export class TownScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     Sfx.boss();
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       this.scene.start("Battle", { enemy: run.lineup[0], from: "Town", arena: run });
     });
   }
@@ -2426,8 +2426,7 @@ export class TownScene extends Phaser.Scene {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
       this.scene.start("Battle", { enemy: kind, from: "Town" });

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { Sfx, SNOW_THEME } from "../audio";
 import { GAME_WIDTH } from "../config";
+import { encounterOut } from "../fx";
 import { GameState, isNight, onSaved } from "../gameState";
 import { buildSnow, escapeFromZones, SNOW_ENTRY, SNOW_FISH_POS, SNOW_H, SNOW_TREASURE_POS, SNOW_W, SNOW_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
@@ -755,8 +756,7 @@ export class SnowScene extends Phaser.Scene {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const rolled = roll < 0.5 ? "frostMoth" : "yeti";
       const kind = enemy ?? (rolled === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : rolled);

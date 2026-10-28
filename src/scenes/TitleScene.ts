@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Sfx, TITLE_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_VERSION, GAME_WIDTH } from "../config";
+import { warmEncounterOut } from "../fx";
 import {
   damagedCopyKeys,
   deleteDamagedCopies,
@@ -108,6 +109,8 @@ export class TitleScene extends Phaser.Scene {
     this.started = false;
     this.buttons = [];
     Sfx.playBgm(TITLE_THEME);
+    // every game passes through here before its first encounter
+    warmEncounterOut(this.cameras.main);
 
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "title-bg");
 

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { FOREST_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
+import { encounterOut } from "../fx";
 import { econDay, GameState, isNight, onSaved } from "../gameState";
 import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
@@ -756,8 +757,7 @@ export class ForestScene extends Phaser.Scene {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const rolled = roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc";
       const kind = enemy ?? (rolled === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : rolled);

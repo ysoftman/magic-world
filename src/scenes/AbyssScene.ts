@@ -15,6 +15,7 @@ import {
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
+import { encounterOut } from "../fx";
 import { GameState, onSaved } from "../gameState";
 import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
@@ -993,8 +994,7 @@ export class AbyssScene extends Phaser.Scene {
     const guardian = !!roamer && roamer.id === null;
     run.fight = { x: this.player.x, y: this.player.y, roamer: roamer?.id ?? null, guardian, battles: GameState.battles };
     const bout: AbyssBout = { floor: run.floor, guardian };
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       this.scene.start("Battle", { enemy: kind, from: "Abyss", abyss: bout });
     });
   }

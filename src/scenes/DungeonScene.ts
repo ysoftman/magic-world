@@ -3,6 +3,7 @@ import { abyssOpen, abyssResume } from "../abyss";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
+import { encounterOut } from "../fx";
 import { GameState, isNight, onSaved } from "../gameState";
 import {
   ABYSS_STAIRS_POS,
@@ -818,8 +819,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingDungeon = true;
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.35 ? "slime" : roll < 0.7 ? "goblin" : "bat");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("dungeon") });

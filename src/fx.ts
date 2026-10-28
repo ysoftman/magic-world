@@ -1,4 +1,5 @@
-import type Phaser from "phaser";
+import Phaser from "phaser";
+import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 
 // Camera shake and full-screen flash behind the SCREEN SHAKE / FLASHES
@@ -29,6 +30,46 @@ export function flash(camera: Phaser.Cameras.Scene2D.Camera, duration: number, r
   const full = GameState.flashes && !reducedMotion();
   camera.flashEffect.alpha = full ? 1 : SOFT_FLASH_ALPHA;
   camera.flash(full ? duration : Math.min(duration, SOFT_FLASH_MAX_MS), red, green, blue);
+}
+
+// The mosaic's biggest block. It steps up a whole art pixel (PIXEL) at a time:
+// a block size between grid lines would cut the art into slivers.
+const MOSAIC_MAX = 32;
+
+/**
+ * The fade into a battle, then `done`: the screen breaks into ever bigger
+ * blocks as it goes black, so walking into a fight never looks like walking
+ * through a door (those keep the plain fade). The whole frame goes, HUD too.
+ * With FLASHES off or the OS's reduced motion on, just the plain fade. The
+ * filter is never removed: `done` starts the battle, and the shutdown destroys
+ * this camera with it.
+ */
+export function encounterOut(camera: Phaser.Cameras.Scene2D.Camera, ms: number, done: () => void): void {
+  if (GameState.flashes && !reducedMotion()) {
+    const mosaic = camera.filters.external.addBlocky({ size: PIXEL });
+    camera.scene.tweens.addCounter({
+      from: PIXEL,
+      to: MOSAIC_MAX,
+      duration: ms,
+      onUpdate: (tw) => {
+        const size = Math.round((tw.getValue() ?? PIXEL) / PIXEL) * PIXEL;
+        mosaic.size.x = size;
+        mosaic.size.y = size;
+      },
+    });
+  }
+  camera.fadeOut(ms, 0, 0, 0);
+  camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, done);
+}
+
+/**
+ * Builds the mosaic's shader before the first encounter needs it: its first
+ * use stalled a frame for 213ms, most of the 300ms fade. A 1px block changes
+ * nothing on screen, and comes off again after the one frame it renders.
+ */
+export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
+  const warm = camera.filters.external.addBlocky({ size: 1 });
+  camera.scene.events.once(Phaser.Scenes.Events.RENDER, () => camera.filters.external.remove(warm));
 }
 
 // The battle's effects as pixel-art sprite sheets, drawn here in code when the

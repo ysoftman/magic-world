@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { Sfx, VOLCANO_THEME } from "../audio";
 import { GAME_WIDTH } from "../config";
+import { encounterOut } from "../fx";
 import { GameState, isNight, onSaved } from "../gameState";
 import {
   buildVolcano,
@@ -700,8 +701,7 @@ export class VolcanoScene extends Phaser.Scene {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
