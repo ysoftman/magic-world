@@ -397,7 +397,7 @@ export class TownScene extends Phaser.Scene {
 
     const level = buildLevel();
     this.level = level;
-    // the season's skin (BootScene's seasonSkin): green, autumn or snowed in
+    // the season's skin (seasonSkin in art/tilesets.ts): green, autumn or snowed in
     this.season = seasonToday();
     this.layers = buildTileLayers(this, level, { skin: seasonSkin("town") });
 

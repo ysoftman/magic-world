@@ -163,9 +163,9 @@ export class ForestScene extends Phaser.Scene {
 
     const level = buildForest();
     this.level = level;
-    // forest-palette copies of the shared tilesets (BootScene's FOREST_SKIN)
-    // rather than a tint over the town's grass, which only ever darkened it;
-    // in autumn and winter the season's (seasonSkin)
+    // forest-palette copies of the shared tilesets (FOREST_SKIN in
+    // art/tilesets.ts) rather than a tint over the town's grass, which only
+    // ever darkened it; in autumn and winter the season's (seasonSkin)
     this.season = seasonToday();
     const layers = buildTileLayers(this, level, { skin: seasonSkin("forest") });
     // the wall of trees round the glade, thickened; clear of the way out and its sign

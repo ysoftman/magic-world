@@ -169,13 +169,13 @@ export class DungeonScene extends Phaser.Scene {
 
     const level = buildDungeon();
     this.level = level;
-    // Drawn from the cave's own palettes (BootScene's CAVE_SKIN) rather than a
-    // tint over the town's, which left green trees. The floor is T_PATH in the
-    // level, but is drawn as T_GRASS, which CAVE_SKIN paints as that same floor:
-    // the shore transitions only run between water and grass, so this is what
-    // rounds the pools' edges off instead of leaving hard rectangles. Under
-    // the rock walls the ground is that floor too. Walkability and the minimap
-    // keep reading `level` itself.
+    // Drawn from the cave's own palettes (CAVE_SKIN in art/tilesets.ts) rather
+    // than a tint over the town's, which left green trees. The floor is T_PATH
+    // in the level, but is drawn as T_GRASS, which CAVE_SKIN paints as that
+    // same floor: the shore transitions only run between water and grass, so
+    // this is what rounds the pools' edges off instead of leaving hard
+    // rectangles. Under the rock walls the ground is that floor too.
+    // Walkability and the minimap keep reading `level` itself.
     const floorView = level.map((row) => row.map((tile) => (tile === T_PATH ? T_GRASS : tile)));
     const layers = buildTileLayers(this, floorView, { ground: T_GRASS, skin: CAVE_SKIN });
     // the rock walls, thickened; clear of the cave mouth

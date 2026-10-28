@@ -81,7 +81,7 @@ const CHEST_LOOT: Array<{ key: "potion" | "hiPotion" | "ether"; chance: number; 
 ];
 
 // The stairs, baked here rather than in BootScene since only the ABYSS and
-// the cave's way down use them: the cave's own stone (BootScene's
+// the cave's way down use them: the cave's own stone (art/tilesets.ts's
 // CAVE_ROCK_PALETTE), steps narrowing into a void with a violet glow, and a
 // flight rising into daylight for the way back up.
 const STAIRS_PALETTE = {

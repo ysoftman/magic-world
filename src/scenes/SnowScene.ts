@@ -166,8 +166,9 @@ export class SnowScene extends Phaser.Scene {
 
     const level = buildSnow();
     this.level = level;
-    // snow-palette copies of the shared tilesets (BootScene's SNOW_SKIN), not a
-    // tint over the green ones: a tint can only darken, so the field stayed green
+    // snow-palette copies of the shared tilesets (SNOW_SKIN in art/tilesets.ts),
+    // not a tint over the green ones: a tint can only darken, so the field stayed
+    // green
     const layers = buildTileLayers(this, level, { skin: SNOW_SKIN });
     addBorderDressing(this, level, SNOW_SKIN, [SNOW_ENTRY, { x: SNOW_ENTRY.x - 2 * TILE, y: SNOW_ENTRY.y }]);
     this.layer = layers.terrain;

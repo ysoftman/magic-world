@@ -66,8 +66,8 @@ export interface TileLayers {
 
 /**
  * Texture keys a map is drawn from. A scene can swap in a palette-swapped set
- * (BootScene's SNOW_SKIN) baked from the same grids in the same order, so
- * every tile index, variation and transition mask keeps its meaning.
+ * (SNOW_SKIN in art/tilesets.ts) baked from the same grids in the same order,
+ * so every tile index, variation and transition mask keeps its meaning.
  */
 export interface TileSkin {
   tiles: string;
