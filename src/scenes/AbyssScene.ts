@@ -504,8 +504,14 @@ export class AbyssScene extends Phaser.Scene {
     this.night = new NightOverlay(this, GLOOM, 0);
     // the pools' faint blue, as in the cave, and the stair down glowing violet
     this.night.addLights([
-      ...lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), { radius: 112, color: 0x3b82f6, strength: 0.18, pulseMs: 4200 }),
-      { x: down.x, y: down.y, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400 },
+      ...lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), {
+        radius: 112,
+        color: 0x3b82f6,
+        strength: 0.18,
+        pulseMs: 4200,
+        air: true,
+      }),
+      { x: down.x, y: down.y, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true },
     ]);
 
     this.inventory = new InventoryUI(this);

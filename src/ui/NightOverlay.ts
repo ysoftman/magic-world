@@ -160,11 +160,30 @@ function lampLevel(h: number, dark: number): number {
   return h >= 19 && h < 20 ? Math.max(dark, h - 19) : dark;
 }
 
-// Lights (addLights) draw just over the overlay so they shine through the dark
-// instead of being dimmed with everything else, and under Ambient's fireflies
-// and embers (90.5) and the area title (95). ADD over the multiply: a glow
-// lifts what the night took off, the windows' and the lava's colour with it.
+// Lamps (addLights) light what's under them through a lightmap: a
+// screen-sized texture filled with the overlay's factor, each lamp's glow
+// added into it, the lot multiplied over the scene in the rectangle's place.
+// Inside a lamp the factor climbs back toward white, so the art comes back to
+// its own colours and its dark pixels stay dark. Added straight over the
+// multiply (ADD), a glow lifted everything under it by the same amount
+// instead: halfway out of the forge's light its black doorway came out
+// orange-brown (L* 4 by day, 16 under the glow; 5 now), and a face at the
+// hearth lost contrast it had in the plain dark (skin to eye 12.0:1 by day,
+// 6.1 at night, 5.5 in the glow; 8.5 now, with the halo below). The lightmap
+// is made with the first lamp, so a scene without any keeps the single
+// rectangle (and the 3.7MB the texture costs).
+//
+// The lightmap only gives the art back, though: a lantern's art comes back
+// as it is by day, unlit, and the forge's doorway is black. So each lamp also
+// keeps a halo at its source, HALO_RADIUS of its radius, ADD over the
+// overlay; what stands in the rest of its light is lit without the wash. An
+// air glow (NightLight.air) is all halo, at its full radius: light in the air
+// rather than on things, for ground the lightmap couldn't show it on (the
+// cave's and the ABYSS's floor are near black by day too). Both draw just
+// over the overlay and under Ambient's fireflies and embers (90.5) and the
+// area title (95).
 const LIGHT_DEPTH = 90.4;
+const HALO_RADIUS = 0.5;
 // The swell of a pulsing light: slow and shallow, a glow breathing rather
 // than anything that reads as a flicker or a flash.
 const PULSE_SWING = 0.12;
@@ -182,6 +201,8 @@ export interface NightLight {
   pulseMs?: number;
   /** lit by someone (a window), so on before full dark; see lampLevel */
   lamp?: boolean;
+  /** a glow in the air, added over the dark, instead of light on what's under it (see LIGHT_DEPTH) */
+  air?: boolean;
 }
 
 /**
@@ -215,7 +236,11 @@ export function lightsOverTiles(
 }
 
 export class NightOverlay {
+  // the overlay on its own, or the lightmap's fill once there's a lamp
   private rect: Phaser.GameObjects.Rectangle;
+  private lightmap?: Phaser.GameObjects.RenderTexture;
+  // the lightmap's glows, off the display list
+  private lamps: Phaser.GameObjects.Image[] = [];
   private ambient: number;
   private range: number;
   private scene: Phaser.Scene;
@@ -239,7 +264,9 @@ export class NightOverlay {
     const h = clockHour();
     const gloom = this.ambient + darkness(h) * this.range;
     const color = overlayAt(this.scene.sys.settings.key, h, gloom);
-    this.rect.setFillStyle(color).setVisible(color !== WHITE);
+    // under a white factor a lamp has nothing to give back either
+    this.rect.setFillStyle(color);
+    (this.lightmap ?? this.rect).setVisible(color !== WHITE);
     // Lights follow this overlay's own darkness, not the clock alone, and not
     // the sky: outdoors that's the night's ramp, while the always-dim cave
     // and crater keep a standing glow that grows after dark. Lamps come on a
@@ -254,39 +281,88 @@ export class NightOverlay {
   }
 
   /**
-   * Adds glows that come up with the dark: ADD-blended over this overlay so a
-   * lit window or a lava pool actually shines at night. Returns the images so
-   * a caller can move them with what they belong to (the map editor's house).
+   * Adds glows that come up with the dark: lamps in the lightmap, so a lit
+   * window or a lava pool gives back the colours around it at night, or air
+   * glows over the overlay (see LIGHT_DEPTH). Returns the images, in world
+   * space either way, so a caller can move them with what they belong to (the
+   * map editor's house).
    */
   addLights(lights: readonly NightLight[]): Phaser.GameObjects.Image[] {
-    return lights.map((l) => {
-      const img = this.scene.add
-        .image(l.x, l.y, glowTexture(this.scene, Math.max(1, Math.round(l.radius / PIXEL))))
-        .setTint(l.color)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(LIGHT_DEPTH)
-        .setAlpha(0);
-      // out of step with each other, so a whole field never breathes as one
-      this.lights.push({ img, strength: l.strength, pulseMs: l.pulseMs, lamp: l.lamp, phase: Math.random() * Math.PI * 2 });
-      return img;
-    });
+    const images: Phaser.GameObjects.Image[] = [];
+    for (const l of lights) {
+      // out of step with each other, so a whole field never breathes as one;
+      // a lamp and its halo in step
+      const phase = Math.random() * Math.PI * 2;
+      const glow = (img: Phaser.GameObjects.Image): Phaser.GameObjects.Image => {
+        img.setTint(l.color).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+        this.lights.push({ img, strength: l.strength, pulseMs: l.pulseMs, lamp: l.lamp, phase });
+        images.push(img);
+        return img;
+      };
+      const halo = l.air ? l.radius : l.radius * HALO_RADIUS;
+      glow(this.scene.add.image(l.x, l.y, glowTexture(this.scene, halo)).setDepth(LIGHT_DEPTH));
+      // the lamp's light itself, off the display list, drawn into the lightmap
+      if (!l.air) this.lamps.push(glow(new Phaser.GameObjects.Image(this.scene, l.x, l.y, glowTexture(this.scene, l.radius))));
+    }
+    if (lights.some((l) => !l.air)) this.recordLightmap();
+    return images;
+  }
+
+  // What the lightmap draws, recorded once and replayed each frame it shows
+  // (render mode "all" redraws it as it's drawn), again when lamps are added.
+  // What changes from frame to frame, the fill's colour and each lamp's alpha,
+  // lives on the objects it draws, so update() never touches the recording.
+  private recordLightmap(): void {
+    if (!this.lightmap) {
+      this.lightmap = this.scene.add
+        .renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT)
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(90)
+        .setBlendMode(Phaser.BlendModes.MULTIPLY)
+        .setRenderMode("all")
+        .setVisible(this.rect.visible);
+      // the overlay's rectangle becomes the lightmap's fill
+      this.rect.removeFromDisplayList();
+      this.rect.setBlendMode(Phaser.BlendModes.NORMAL).setVisible(true);
+    }
+    (this.lightmap.texture as Phaser.Textures.DynamicTexture).commandBuffer.length = 0;
+    this.lightmap
+      .preserve(true)
+      .callback(() => this.followCamera())
+      .draw([this.rect, ...this.lamps]);
+  }
+
+  // Run by the lightmap as it's drawn, inside the frame's render: the camera
+  // has scrolled for this frame by then (startFollow moves it in its own
+  // preRender, after update()), so lamps placed from update() would trail the
+  // map by a frame while it pans.
+  private followCamera(): void {
+    const own = this.lightmap?.camera as Phaser.Cameras.Scene2D.Camera | undefined;
+    if (!own) return;
+    const main = this.scene.cameras.main;
+    own.roundPixels = main.roundPixels;
+    own.setScroll(main.scrollX, main.scrollY).preRender();
   }
 
   destroy(): void {
     this.rect.destroy();
+    this.lightmap?.destroy();
     for (const l of this.lights) l.img.destroy();
     this.lights = [];
+    this.lamps = [];
   }
 }
 
-// A white radial glow `cells` art pixels in radius, baked once per size: falloff
-// in sixteenths, one half-PIXEL (2px) square at a time, so it stays stepped
-// pixel art rather than a smooth gradient, but rounder than the 4px world it
-// lights. Steep and rounded down at the rim, so the outermost step is faint
-// enough not to read as the edge of a disc. Tinted per light.
+// A white radial glow `radius` px in radius to the nearest art pixel, baked
+// once per size: falloff in sixteenths, one half-PIXEL (2px) square at a time, so
+// it stays stepped pixel art rather than a smooth gradient, but rounder than
+// the 4px world it lights. Steep and rounded down at the rim, so the outermost
+// step is faint enough not to read as the edge of a disc. Tinted per light.
 const GLOW_STEPS = 16;
 const GLOW_PX = PIXEL / 2;
-function glowTexture(scene: Phaser.Scene, cells: number): string {
+function glowTexture(scene: Phaser.Scene, radius: number): string {
+  const cells = Math.max(1, Math.round(radius / PIXEL));
   const key = `night-glow-${cells}`;
   if (scene.textures.exists(key)) return key;
   const g = scene.add.graphics();

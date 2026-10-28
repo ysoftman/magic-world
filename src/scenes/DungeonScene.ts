@@ -384,7 +384,7 @@ export class DungeonScene extends Phaser.Scene {
     this.night = new NightOverlay(this, 0.35, 0.25);
     // a faint blue light off the pools, shimmering slower than the lava's
     this.night.addLights(
-      lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), { radius: 112, color: 0x3b82f6, strength: 0.18, pulseMs: 4200 }),
+      lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), { radius: 112, color: 0x3b82f6, strength: 0.18, pulseMs: 4200, air: true }),
     );
 
     this.inventory = new InventoryUI(this);

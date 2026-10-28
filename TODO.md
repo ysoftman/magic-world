@@ -6,7 +6,7 @@
 
 ## 예정
 
-- 밤 조명 라이트맵(RenderTexture): 밤 오버레이를 MULTIPLY 로 바꾼 뒤에도 ADD 글로우가 빛 안의 원래 색을 돌려주지 못하면, 씬마다 1280x720 RT 에 밤 배율 fill + 글로우 stamp 를 매 프레임 그려 MULTIPLY 로 표시(메모리 +3.7MB, NEAREST·2px 계단 글로우 유지) — 2026-10-28 Phaser 스킬 검토(docs) 후보 3
+- 밤 라이트맵(NightOverlay): 실기기(모바일) 프레임 비용 확인 — 헤드리스 데스크톱 Chrome 에서는 사각형과 차이 없음(스텝 약 1.0ms), 램프 있는 씬(마을·화산)만 +3.7MB. 화산은 용암 둘레 바위의 주황 안개가 줄어 분위기가 바뀌었으니 실기기에서 눈으로도 확인
 - 텍스트를 RetroFont BitmapText 로 옮기기(장기): DPR 과 무관하게 선명하고 글자 텍스처 메모리(해상도 3 에서 약 37MB)와 갱신 비용이 거의 사라짐. setStroke 외곽선 미지원이라 외곽선 변형을 따로 구워야 하고 retroStyle(5)(2.5배)는 고르지 않은 픽셀이 됨 — Phaser 스킬 검토(qa) 후보 8
 - 타자기 문장의 텍스처 재업로드: 대화창·전투 메시지가 글자마다 Text 를 다시 구워 해상도 3 에서 타이핑 중 프레임당 약 4MB 를 GPU 로 올림. 실기기(모바일) 프로파일 뒤 무거우면 줄 단위 공개(setCrop)나 BitmapText — qa 후보 6
 - 전체화면 실기기 확인: 안드로이드 Chrome(행 탭·D-pad →), iPad/macOS Safari, Firefox — 헤드리스 Chrome 에서만 확인함(설정의 FULLSCREEN 줄, `SettingsUI.setFullscreen`)
