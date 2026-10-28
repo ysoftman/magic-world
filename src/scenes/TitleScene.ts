@@ -450,6 +450,11 @@ export class TitleScene extends Phaser.Scene {
       Sfx.ensure();
       if (settings.isActive() || picker.isActive() || nameEntry.isActive()) return;
       const key = e.key.toLowerCase();
+      // as in the field and in battle; before the Y/N check so it doesn't back out
+      if (key === "m") {
+        showToast(this, Sfx.toggleMuted() ? "SOUND: OFF" : "SOUND: ON");
+        return;
+      }
       if (mode !== "menu") {
         // Y confirms; any other key backs out, as DELETE always has
         if (key === "y") yes();
