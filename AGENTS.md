@@ -62,6 +62,18 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   지난번 데이터를 다시 준다(`node_modules/phaser/src/scene/Systems.js:742`,
   `if (data) settings.data = data`). 받는 쪽에서 비우는 곳(`takeFightSpot`, `EndingScene`)도 있지만,
   새 씬은 그걸 빠뜨리기 쉽다.
+- 전체화면은 Phaser 의 `scale.startFullscreen()`/`toggleFullscreen()` 대신 `SettingsUI` 의
+  `setFullscreen` 처럼 `document.documentElement` 에 `scale.fullscreen.request` 이름의 메서드로 직접
+  요청하고, 끄기는 `scale.stopFullscreen()` 이다. 4.2.1 의 `startFullscreen` 은 요청의 promise 를
+  버려 거부가 uncaught rejection 이 되고, `FULLSCREEN_FAILED` 를 내는 `fullscreenErrorHandler` 는
+  부르는 곳이 없으며, 캔버스를 새 div 로 옮겨 그 div 를 보내서 게임 둘레가 검게 나온다(소스로 확인:
+  `node_modules/phaser/src/scale/ScaleManager.js` 의 `startFullscreen`·`getFullscreenTarget`).
+  루트로 요청해도 ScaleManager 가 fullscreenchange 를 받아 `isFullscreen`·화면 맞춤·
+  `ENTER/LEAVE_FULLSCREEN` 은 그대로다. 요청은 사용자 동작(keydown, 클릭, 터치는 손을 뗄 때) 뒤에만
+  되고 게임패드 버튼이나 오래된 터치 뒤의 `sendKey` 합성 키는 아니라서, 새 진입점에는
+  `navigator.userActivation.isActive` 가드와 거부 토스트를 같이 둔다. ScaleManager 는 게임에 하나라
+  씬 UI 가 건 리스너는 SHUTDOWN 에서 뗀다. Phaser 를 올리면 `startFullscreen` 이 promise 를
+  처리하게 됐는지 다시 본다.
 - 브라우저로 직접 확인하는 일은 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
 
 ## UI 텍스트가 패널/화면을 벗어나지 않는지 확인

@@ -2,30 +2,30 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { BATTLE_SPEEDS, GameState, TEXT_SPEEDS, TIME_SPEEDS } from "../gameState";
-import { retroStyle, showToast } from "../pixelart";
+import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { isTouchDevice } from "./TouchControls";
 
-// Ten retroStyle(6) rows (24px, Press Start 2P measures 1em) from
-// PANEL_TOP+104 at a 36px pitch. The panel grew upward for the ninth (BATTLE
+// Eleven retroStyle(6) rows (24px, Press Start 2P measures 1em) from
+// PANEL_TOP+98 at a 33px pitch. The panel grew upward for the ninth (BATTLE
 // SPEED) and is pinned by its bottom edge at y=588 rather than centred, so the
 // rows and the touch clearance below them didn't have to shrink: it spans
 // y=92..588 (just under the 88px HUD), the title runs 132..164 — low enough
 // that a one-line toast on the HUD's y=100 row (to 126) can't clip it, the
-// CLOSE chip beside it 126..170 — the rows 184..532 and the hint line
+// CLOSE chip beside it 126..170 — the rows 178..532 and the hint line
 // (retroStyle(4), centred at PANEL_H-36) still sits
 // at 544..560 — 12px above the d-pad's right arrow (TouchControls: centre
 // 214,616 r44, top 572). With no room left above (the HUD) or below (the
-// d-pad), the tenth (GUIDE ARROW) came out of the pitch: 40 would run the
-// last row to 568, onto the hint, and 36 still leaves 12px between rows and
-// 12px above the hint. Widest row
+// d-pad), the tenth (GUIDE ARROW) came out of the pitch (40 to 36) and the
+// eleventh (FULLSCREEN) did again: 33 keeps 12px above the hint and 8 under
+// the CLOSE chip, and leaves 9 between rows. Widest row
 // "> BGM VOLUME: ##########  100%" is 30 x 24 = 720px, x=280..1000 inside the
 // panel's 160..1120, clear of the d-pad (x<=258) and the touch menu (x>=1222).
 const PANEL_W = 960;
 const PANEL_H = 496;
 const PANEL_TOP = 588 - PANEL_H;
 const TITLE_Y = PANEL_TOP + 56;
-const ROW_Y = PANEL_TOP + 104;
-const ROW_GAP = 36;
+const ROW_Y = PANEL_TOP + 98;
+const ROW_GAP = 33;
 
 const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
 const TIME_SPEED_LABELS: Record<number, string> = { 1: "NORMAL", 5: "FAST", 20: "VERY FAST" };
@@ -40,10 +40,18 @@ const LABELS = [
   "SCREEN SHAKE",
   "FLASHES",
   "GUIDE ARROW",
+  "FULLSCREEN",
   "EXPORT SAVE",
   "IMPORT SAVE",
 ];
 const TOGGLES: Record<number, "screenShake" | "flashes" | "guideArrow"> = { 5: "screenShake", 6: "flashes", 7: "guideArrow" };
+// The browser's state rather than a saved setting: it shows what the screen
+// is now, and ESC leaving fullscreen flips it back through LEAVE_FULLSCREEN
+const FULLSCREEN_ROW = 8;
+// iPhone Safari has no element fullscreen (only a <video>'s), and an iframe
+// without allow="fullscreen" turns it off; the row reads N/A there
+const fullscreenSupported = (scale: Phaser.Scale.ScaleManager): boolean =>
+  scale.fullscreen.available && document.fullscreenEnabled !== false;
 // the stepped rows: which setting each adjusts and its allowed values
 const SPEEDS: Record<number, { key: "textSpeed" | "timeSpeed" | "battleSpeed"; values: number[] }> = {
   2: { key: "textSpeed", values: TEXT_SPEEDS },
@@ -78,6 +86,7 @@ export class SettingsUI {
   private closeChip: Phaser.GameObjects.Container;
   private quitChip?: Phaser.GameObjects.Container;
   private quitText?: Phaser.GameObjects.Text;
+  private offFullscreen: () => void;
 
   constructor(scene: Phaser.Scene, onQuit?: () => void) {
     this.scene = scene;
@@ -164,6 +173,33 @@ export class SettingsUI {
       });
     }
 
+    // The FULLSCREEN row also takes a tap or click, on pointerup. Asking for
+    // fullscreen needs the browser's user activation: a touch only grants it
+    // at touchend, and the d-pad sends its key from pointerdown, so a tap on
+    // the row itself is the one touch input sure to work. The padding (4px,
+    // most of the 9px gap on each side) widens the target without moving the
+    // text: the box is 438..470, the rows beside it end at 433 and start at 475.
+    this.rows[FULLSCREEN_ROW]
+      .setPadding(40, 4)
+      .setInteractive({ useHandCursor: true })
+      .on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+        if (!this.active) return;
+        this.row = FULLSCREEN_ROW;
+        this.refresh();
+        this.setFullscreen(!scene.scale.isFullscreen);
+      });
+    // the ScaleManager is the game's, so it outlives this scene's rows
+    const onFullscreenChange = () => {
+      if (this.active) this.refresh();
+    };
+    scene.scale.on(Phaser.Scale.Events.ENTER_FULLSCREEN, onFullscreenChange);
+    scene.scale.on(Phaser.Scale.Events.LEAVE_FULLSCREEN, onFullscreenChange);
+    this.offFullscreen = () => {
+      scene.scale.off(Phaser.Scale.Events.ENTER_FULLSCREEN, onFullscreenChange);
+      scene.scale.off(Phaser.Scale.Events.LEAVE_FULLSCREEN, onFullscreenChange);
+    };
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.offFullscreen);
+
     const kb = scene.input.keyboard!;
     const up = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     const down = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
@@ -239,6 +275,7 @@ export class SettingsUI {
   }
 
   destroy(): void {
+    this.offFullscreen();
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();
@@ -257,6 +294,12 @@ export class SettingsUI {
 
   private adjust(dir: number): void {
     if (!this.active || this.row >= LABELS.length - 2) return;
+    if (this.row === FULLSCREEN_ROW) {
+      // left is OFF, right is ON like the toggles; the row redraws on the
+      // ENTER/LEAVE_FULLSCREEN that follows
+      this.setFullscreen(dir > 0);
+      return;
+    }
     const toggle = TOGGLES[this.row];
     if (this.row === 0) this.setVolume("bgmVolume", GameState.bgmVolume + dir * 0.1);
     else if (this.row === 1) this.setVolume("sfxVolume", GameState.sfxVolume + dir * 0.1);
@@ -280,6 +323,39 @@ export class SettingsUI {
       Sfx.move();
     }
     this.refresh();
+  }
+
+  private setFullscreen(on: boolean): void {
+    const scale = this.scene.scale;
+    if (!fullscreenSupported(scale)) {
+      Sfx.error();
+      return;
+    }
+    if (on === scale.isFullscreen) return;
+    if (!on) {
+      scale.stopFullscreen();
+      Sfx.move();
+      return;
+    }
+    const refused = () => {
+      Sfx.error();
+      showToast(this.scene, "CLICK OR TAP FULLSCREEN");
+    };
+    // A pad button is no user activation, nor is the d-pad's key once the
+    // last touchend is a few seconds old; asking then would only be refused
+    if (navigator.userActivation?.isActive === false) {
+      refused();
+      return;
+    }
+    // The page's root goes fullscreen, not Phaser's startFullscreen(): that
+    // one sends a wrapper div (black backdrop around the game instead of the
+    // page's navy) and drops requestFullscreen's promise, so a refusal is an
+    // uncaught rejection, and FULLSCREEN_FAILED never fires (4.2.1:
+    // fullscreenErrorHandler has no caller). The ScaleManager still follows
+    // the root through fullscreenchange: isFullscreen, the refit, the events.
+    // fullscreen.request is the method name this browser has, maybe prefixed.
+    const root = document.documentElement as unknown as Record<string, (options: FullscreenOptions) => Promise<void> | undefined>;
+    Promise.resolve(root[scale.fullscreen.request]({ navigationUI: "hide" })).then(() => Sfx.move(), refused);
   }
 
   private setVolume(key: "bgmVolume" | "sfxVolume", value: number): void {
@@ -337,6 +413,7 @@ export class SettingsUI {
       const n = Math.round(v * 10);
       return "#".repeat(n) + "-".repeat(10 - n);
     };
+    const fullscreenOk = fullscreenSupported(this.scene.scale);
     const values = [
       `${bar(GameState.bgmVolume)}  ${Math.round(GameState.bgmVolume * 100)}%`,
       `${bar(GameState.sfxVolume)}  ${Math.round(GameState.sfxVolume * 100)}%`,
@@ -346,6 +423,7 @@ export class SettingsUI {
       GameState.screenShake ? "ON" : "OFF",
       GameState.flashes ? "ON" : "OFF",
       GameState.guideArrow ? "ON" : "OFF",
+      fullscreenOk ? (this.scene.scale.isFullscreen ? "ON" : "OFF") : "N/A",
       "",
       "",
     ];
@@ -356,7 +434,9 @@ export class SettingsUI {
       // is 22 x 24 = 528px, inside the widest row's 720
       const slot = i >= LABELS.length - 2 ? ` (SLOT ${GameState.saveSlot})` : "";
       this.rows[i].setText(`${selected ? "> " : ""}${label}${slot}${value}`);
-      this.rows[i].setColor(selected ? "#ffd166" : "#f5f5f5");
+      // N/A stays greyed even under the cursor; the "> " still marks it
+      const dimmed = i === FULLSCREEN_ROW && !fullscreenOk;
+      this.rows[i].setColor(dimmed ? DIM_TEXT : selected ? "#ffd166" : "#f5f5f5");
     });
   }
 }
