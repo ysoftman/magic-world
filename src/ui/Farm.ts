@@ -208,14 +208,18 @@ export class FarmUI {
       .setDepth(152)
       .setVisible(false)
       .setWordWrapWidth(PANEL_W - 60, true)
-      .setAlign("center");
+      .setAlign("center")
+      // Press Start 2P has no built-in leading: a harvest's two lines sat 3px
+      // apart, as the fishing panel's did
+      .setLineSpacing(8);
     // touch names the d-pad by its own button labels (no J/K/H/L/TAB there);
-    // 48 x 16 = 768px keeps it between the d-pad (x<=194 on this line) and Z
+    // 51 x 16 = 816px (x 232..1048) keeps it between the d-pad (x<=194 on
+    // this line) and Z (x>=1084); the keyboard's 55 (880px) keeps 40px inside
     this.hint = scene.add
       .text(
         GAME_WIDTH / 2,
         PANEL_TOP + PANEL_H - 22,
-        isTouchDevice() ? "^v: PLOT  <>: SEED  Z: PLANT/HARVEST  ESC: CLOSE" : "JK: PLOT  HL/TAB: SEED  Z: PLANT/HARVEST  ESC: CLOSE",
+        isTouchDevice() ? "^v: PLOT   <>: SEED   Z: PLANT/HARVEST   ESC: CLOSE" : "JK: PLOT   HL/TAB: SEED   Z: PLANT/HARVEST   ESC: CLOSE",
         retroStyle(4, DIM_TEXT),
       )
       .setOrigin(0.5)
@@ -336,9 +340,10 @@ export class FarmUI {
     addIngredient(GameState.pantry, plot.crop);
     // the ingredient on a line of its own under the payout, so the kitchen
     // (cooking.ts) gets found: "+1 MOONFLOWER TO COOK" is 21 x 24 = 504px
-    // under "GOLDEN MOONFLOWER! x3  +1296G" (696px), and the two lines (y
-    // 320..380, 315..385 at the golden pulse's 1.15) sit between the last
-    // plot row (to y 309) and the hint (from 388)
+    // under "GOLDEN MOONFLOWER! x3  +1296G" (696px), and the two lines with
+    // their 8px leading (56px: y 322..378 from the panel's top, 318..382 at
+    // the golden pulse's 1.15) sit between the last plot row (to y 306) and
+    // the hint (from 390)
     const cookLine = `+1 ${INGREDIENTS[plot.crop]} TO COOK`;
     if (golden) {
       GameState.goldenHarvests += 1;

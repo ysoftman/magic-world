@@ -6,6 +6,7 @@ import { MATERIALS, type MaterialKey } from "../drops";
 import { econDay, GameState, isNight } from "../gameState";
 import { BEDS_LEVEL, GARDEN_LEVEL, GARDEN_YIELD, gardenPick, HOUSE_STAGES, type HouseStage } from "../home";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // HOME's panel: REST, COOK (the kitchen, ui/Kitchen.ts) and BUILD (home.ts's
@@ -21,11 +22,11 @@ import { isTouchDevice } from "./TouchControls";
 // NEXT FIGHT", 43 x 20 = 860px) and up to three lines under it from y+298 at
 // a 28px pitch ("MAGMA CORE  99/2" 320px, the pantry 832px at size 4); the
 // message at y+392 ("BUILD FEATHER BEDS FOR 8000G? Z/ESC", 35 x 24 = 840px)
-// and the key hint at y+430. On touch pinned to y=28, ending at y=488,
-// above the d-pad.
+// and the key hint at y+430. On touch pinned over the HUD (statusHud.ts),
+// ending at y=468, above the d-pad.
 const PANEL_W = 960;
 const PANEL_H = 460;
-const PANEL_TOP = isTouchDevice() ? 28 : GAME_HEIGHT / 2 - PANEL_H / 2;
+const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : GAME_HEIGHT / 2 - PANEL_H / 2;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 70;
 const STATUS_X = NAME_X + 200;
 const ROW_Y = PANEL_TOP + 124;
@@ -109,7 +110,7 @@ export class HomeUI {
         .text(
           GAME_WIDTH / 2,
           PANEL_TOP + 430,
-          isTouchDevice() ? "D-PAD: PICK   Z: OK   ESC: CLOSE" : "J/K: PICK   Z: OK   ESC: CLOSE",
+          isTouchDevice() ? "D-PAD: MOVE   Z: OK   ESC: CLOSE" : "JK: MOVE   Z: OK   ESC: CLOSE",
           retroStyle(4, DIM_TEXT),
         )
         .setOrigin(0.5),

@@ -107,15 +107,15 @@ export class SettingsUI {
         .setVisible(false);
       this.rows.push(row);
     });
-    // The keyboard line (56 x 16 = 896px, x 192..1088: two-space gaps keep it
-    // 32px inside the panel's sides) runs under the touch d-pad's up arrow;
-    // the touch line is 50 x 16 = 800px (x 240..1040), clear of it and of Z,
-    // and names the d-pad rather than HJKL
+    // The keyboard line (55 x 16 = 880px, x 200..1080, 40px inside the
+    // panel's sides) runs under the touch d-pad's up arrow; the touch line is
+    // 50 x 16 = 800px (x 240..1040), clear of it and of Z, and names the
+    // d-pad rather than HJKL
     this.hint = scene.add
       .text(
         GAME_WIDTH / 2,
         PANEL_TOP + PANEL_H - 36,
-        isTouchDevice() ? "D-PAD: SELECT/ADJUST   Z: APPLY/CLOSE   ESC: CLOSE" : "ARROWS/HJKL: SELECT/ADJUST  Z: APPLY/CLOSE  ESC/O: CLOSE",
+        isTouchDevice() ? "D-PAD: SELECT/ADJUST   Z: APPLY/CLOSE   ESC: CLOSE" : "JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE",
         retroStyle(4, "#8ecbff"),
       )
       .setOrigin(0.5)

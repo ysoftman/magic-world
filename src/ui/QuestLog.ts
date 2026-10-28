@@ -13,14 +13,14 @@ import { hideTouchButtons } from "./TouchControls";
 // reported, with the slime hunt still open; CATCH EVERY BEAST only shows once
 // the KING SLIME and MOSS GOLEM rewards are paid), 1 HUNTER job (each is
 // offered only after the previous one pays out), the bounty and the
-// delivery: 8. COMPLETED: 5 ELDER steps, the bestiary, 4 HUNTER jobs, the
-// bounty and the delivery: 12. The townsfolk's favors come after all of
+// delivery: 8. COMPLETED: 5 ELDER steps, the bestiary, 5 HUNTER jobs, the
+// bounty and the delivery: 13. The townsfolk's favors come after all of
 // that (up to 3 taken on plus one "need help" row, 3 finished chains): they
 // have no deadline, so when a column overflows they are what gives way to a
 // last "+N MORE" row. A new quest line needs these (and the gaps below, or
 // PANEL_H) bumped, or has to sit behind the favors.
 const ACTIVE_ROWS = 8;
-const DONE_ROWS = 12;
+const DONE_ROWS = 13;
 
 // The panel spans x 60..1220: it ends where the touch menu column starts
 // (x>=1222), like the other panels. Widths (Press Start 2P: chars x size x
@@ -29,12 +29,13 @@ const DONE_ROWS = 12;
 //   x 84..544, leaving 20px before the right-aligned "READY" at 564..664
 // - its detail, retroStyle(4): "ONE MAGMA SLIME, FIRE IMP, SALAMANDER" 37 x
 //   16 = 592, x 84..676, 24px short of the COMPLETED column at 700
-// - COMPLETED, retroStyle(5): "★ DELIVERY: 4 SPIDER SILK" 25 x 20 = 500,
+// - COMPLETED, retroStyle(5): "* DELIVERY: 4 SPIDER SILK" 25 x 20 = 500,
 //   x 700..1200, 20px inside the panel's 1220 edge
 // Heights (Press Start 2P lines measure exactly 1em): 8 two-line rows 56px
 // apart end at PANEL_TOP+576 (the last detail line), 26px clear of the close
-// hint's top (PANEL_TOP+602); 12 one-line rows 36px apart end at
-// PANEL_TOP+556. The 640px panel leaves 40px above and below.
+// hint's top (PANEL_TOP+602); 13 one-line rows 34px apart (36 until the
+// SILK job made it 13) end at PANEL_TOP+568. The 640px panel leaves 40px
+// above and below.
 const PANEL_W = 1160;
 const PANEL_H = 640;
 const PANEL_LEFT = GAME_WIDTH / 2 - PANEL_W / 2;
@@ -46,7 +47,7 @@ const HEADER_Y = PANEL_TOP + 100;
 const ROW_Y = PANEL_TOP + 150;
 const ACTIVE_GAP = 56;
 const DETAIL_DY = 26;
-const DONE_GAP = 36;
+const DONE_GAP = 34;
 
 const PROGRESS_COLOR = "#ffd166";
 const READY_COLOR = "#4ade80";
@@ -312,7 +313,8 @@ export class QuestLog {
       row.detail.setText(o ? (o.ready ? `REPORT TO THE ${o.giver}` : o.hint) : "").setColor(o?.ready ? READY_COLOR : HINT_COLOR);
     });
     const doneText = fit(
-      done.map((o) => `★ ${o.title}`),
+      // "*": a ★ isn't in the bundled (latin) font and fell back to another
+      done.map((o) => `* ${o.title}`),
       DONE_ROWS,
       (n) => `+${n} MORE`,
     );

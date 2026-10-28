@@ -51,8 +51,8 @@ const LOG_GAP = 36;
 
 // touch has no TAB: the page switch is the LOG/BACK chip there (see the
 // constructor), so its hints leave TAB out
-const FISH_HINT = isTouchDevice() ? "Z: REEL  ESC: QUIT" : "Z: REEL  TAB: LOG  ESC: QUIT";
-const LOG_HINT = isTouchDevice() ? "ESC: QUIT" : "TAB: BACK  ESC: QUIT";
+const FISH_HINT = isTouchDevice() ? "Z: REEL   ESC: QUIT" : "Z: REEL   TAB: LOG   ESC: QUIT";
+const LOG_HINT = isTouchDevice() ? "ESC: QUIT" : "TAB: BACK   ESC: QUIT";
 
 // one entry per bonusItem value, so a new one is a compile error here
 // instead of a silently mislabeled toast — same shape as gameState.ts's
@@ -150,9 +150,13 @@ export class FishingUI {
       // Press Start 2P has no built-in leading; without this the reward line
       // sits flush against the fish name above it
       .setLineSpacing(8);
+    // top-anchored (y+252..272, where it was centered at y+262) so a rare
+    // catch's second line grows down, to y+298, 6px above the hint (y+304)
     this.badge = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 262, "", retroStyle(5, "#ffd166"))
-      .setOrigin(0.5)
+      .text(GAME_WIDTH / 2, PANEL_TOP + 252, "", retroStyle(5, "#ffd166"))
+      .setOrigin(0.5, 0)
+      .setAlign("center")
+      .setLineSpacing(6)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);

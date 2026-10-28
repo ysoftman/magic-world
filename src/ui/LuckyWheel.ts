@@ -1,13 +1,13 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { isEventToday } from "../events";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { isTouchDevice } from "./TouchControls";
 
 // Sized by the key hint (retroStyle(4), 16px a glyph): "D-PAD: MOVE   Z:
-// SPIN   ESC: CLOSE" is 34 x 16 = 544px and the keyboard's "J/K: ..." 512,
+// SPIN   ESC: CLOSE" is 34 x 16 = 544px and the keyboard's "JK: ..." 496,
 // both past the 460px this panel had. At 600 (x 340..940) the touch line
 // keeps 28px a side, clear of the d-pad (x<=258) and ESC (x>=960).
 const PANEL_W = 600;
@@ -48,6 +48,15 @@ const LUCKY_TABLE: WheelOutcome[] = [
   { name: "DOUBLE", mult: 2, chance: 0.25 },
   { name: "JACKPOT", mult: 5, chance: 0.03 },
 ];
+
+const todayTable = (): WheelOutcome[] => (isEventToday("lucky") ? LUCKY_TABLE : WHEEL_TABLE);
+
+// A wager whose best win would carry the purse past MAX_GOLD is refused, as
+// one it can't pay for is: gainGold() credits only what fits under the cap,
+// so at 9935G a 1000G JACKPOT paid +64G and the other 936G were gone. Its
+// row dims like an unaffordable one, and Z on it says why ("A WIN WOULD PASS
+// 9999G!", 23 glyphs, 552px: one line of the status's 560px wrap).
+const overflows = (tier: number): boolean => GameState.gold - tier + tier * Math.max(...todayTable().map((o) => o.mult)) > MAX_GOLD;
 
 // the idle line between spins; on a lucky day it says so, broken by hand —
 // left to the 420px wrap it would split as "LUCKY DAY! FEWER / BUSTS"
@@ -141,14 +150,18 @@ export class LuckyWheel {
       // some result/idle lines run wider than the panel — wrap instead of
       // spilling past the border, same fix as Fishing.ts's status text
       .setWordWrapWidth(PANEL_W - 40, true)
-      .setAlign("center");
+      .setAlign("center")
+      // leading for the two-line ones (LUCKY DAY's idle line): 56px, y
+      // 302..358 from the panel's top, clear of the last row (to 286) and
+      // the hint (from 382)
+      .setLineSpacing(8);
     // only UP/DOWN/J/K are bound below — this is a single column, not a
     // grid, so no H/L to advertise; touch moves with the d-pad's arrows
     this.hint = scene.add
       .text(
         GAME_WIDTH / 2,
         PANEL_TOP + PANEL_H - 30,
-        isTouchDevice() ? "D-PAD: MOVE   Z: SPIN   ESC: CLOSE" : "J/K: MOVE   Z: SPIN   ESC: CLOSE",
+        isTouchDevice() ? "D-PAD: MOVE   Z: SPIN   ESC: CLOSE" : "JK: MOVE   Z: SPIN   ESC: CLOSE",
         retroStyle(4, DIM_TEXT),
       )
       .setOrigin(0.5)
@@ -267,9 +280,14 @@ export class LuckyWheel {
       this.status.setText("NOT ENOUGH GOLD!");
       return;
     }
+    if (overflows(tier)) {
+      Sfx.error();
+      this.status.setText(`A WIN WOULD PASS ${MAX_GOLD}G!`);
+      return;
+    }
     GameState.gold -= tier;
     this.wager = tier;
-    this.table = isEventToday("lucky") ? LUCKY_TABLE : WHEEL_TABLE;
+    this.table = todayTable();
     this.dirty = true;
     this.goldText.setText(`G ${GameState.gold}`);
     this.state = "spinning";
@@ -310,7 +328,7 @@ export class LuckyWheel {
   private refresh(): void {
     this.goldText.setText(`G ${GameState.gold}`);
     WAGER_TIERS.forEach((tier, i) => {
-      const affordable = GameState.gold >= tier;
+      const affordable = GameState.gold >= tier && !overflows(tier);
       this.rows[i].setText(`WAGER ${tier}G`).setColor(affordable ? "#ffffff" : DIM_TEXT);
     });
     this.renderCursor();

@@ -8,6 +8,12 @@ import { type Region, type Weather, weatherToday } from "../weather";
 
 export const STATUS_HUD_HEIGHT = 88;
 export const STATUS_HUD_TOAST_Y = STATUS_HUD_HEIGHT + 12;
+// Where a panel that reaches up into the HUD may start, so its top edge cuts
+// no line of HUD glyphs (row 1 at y 14..34, row 2 at 58..78) in half: over
+// both rows, or in the gap under row 1. At 28 and 61 the edge sliced through
+// a row and left half-letters showing above the panel.
+export const PANEL_TOP_OVER_HUD = 8;
+export const PANEL_TOP_UNDER_HUD_ROW1 = 40;
 
 // The single quest slot shows whichever chapter is currently open: the label
 // of objective.ts's current step, the same walk of the chain the minimap's
