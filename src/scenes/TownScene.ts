@@ -729,7 +729,7 @@ export class TownScene extends Phaser.Scene {
       if (!e.repeat) this.zQueued = true;
     });
     // the town's I takes a repeat keydown too, as it always did
-    this.fieldKeys = new FieldKeys(this, { repeatI: true });
+    this.fieldKeys = new FieldKeys(this, { toastY: STATUS_HUD_TOAST_Y, repeatI: true });
     // CTRL+G, +100 gold: a dev server's test key only. A build leaves it out
     // (scripts/build.ts sets NODE_ENV to production), or anyone could buy
     // their way up the RANK BOARD and into TYCOON.
@@ -1369,14 +1369,7 @@ export class TownScene extends Phaser.Scene {
       announceLooks(this, earned, STATUS_HUD_TOAST_Y);
     }
 
-    if (this.fieldKeys.take("S")) this.toggleStatus();
-
-    if (this.fieldKeys.take("CTRL+S")) GameState.save();
-
-    if (this.fieldKeys.take("M")) {
-      const muted = Sfx.toggleMuted();
-      showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", STATUS_HUD_TOAST_Y);
-    }
+    this.fieldKeys.takeSystemKeys(this.hud);
 
     // saved and on the way to the title (quit), or fading out to the new
     // season (turnSeason): nothing else moves. The roamers are kept to their
@@ -1535,13 +1528,6 @@ export class TownScene extends Phaser.Scene {
     // already the complete state
     GameState.pos = { x: this.player.x, y: this.player.y };
     saveAndQuit(this);
-  }
-
-  private toggleStatus(): void {
-    const visible = !this.hud.isVisible();
-    this.hud.setVisible(visible);
-    GameState.hudVisible = visible;
-    GameState.saveSettings();
   }
 
   private updateDayNight(): void {

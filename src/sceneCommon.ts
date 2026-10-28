@@ -4,10 +4,10 @@ import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY,
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
-import { holdToastsWhile, makeTexture, pumpToasts, retroStyle } from "./pixelart";
+import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { DialogueBox } from "./ui/DialogueBox";
-import { STATUS_HUD_HEIGHT } from "./ui/StatusHud";
+import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
 import type { Weather } from "./weather";
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -674,12 +674,17 @@ export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" 
  * A repeat keydown (a key held through the scene switch reaches the fresh Key
  * as one) is dropped, but on S and M, which never checked, and on the town's I
  * (`repeatI`). Built before the scene's TouchControls, so touch gets a button
- * for each of these its MENU has.
+ * for each of these its MENU has. `toastY` is the scene's toast line (the
+ * town's sits under the HUD, the fields' lower).
  */
 export class FieldKeys {
   private readonly queued = new Set<FieldKey>();
+  private readonly scene: Phaser.Scene;
+  private readonly toastY: number;
 
-  constructor(scene: Phaser.Scene, { repeatI = false }: { repeatI?: boolean } = {}) {
+  constructor(scene: Phaser.Scene, { toastY = FIELD_TOAST_Y, repeatI = false }: { toastY?: number; repeatI?: boolean } = {}) {
+    this.scene = scene;
+    this.toastY = toastY;
     const kb = scene.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
     const on = (code: number, key: (e: KeyboardEvent) => FieldKey | null): void => {
@@ -703,6 +708,26 @@ export class FieldKeys {
   /** Whether `key` was pressed since it was last taken; taking it clears it. */
   take(key: FieldKey): boolean {
     return this.queued.delete(key);
+  }
+
+  /**
+   * S, CTRL+S and M, which answer under a panel too, so a scene takes them
+   * ahead of its quit and panel gates: the HUD on or off (kept with the
+   * settings; boundCameraToMap follows it), a save, and the sound, said on
+   * the toast line.
+   */
+  takeSystemKeys(hud: StatusHud): void {
+    if (this.take("S")) {
+      const visible = !hud.isVisible();
+      hud.setVisible(visible);
+      GameState.hudVisible = visible;
+      GameState.saveSettings();
+    }
+    if (this.take("CTRL+S")) GameState.save();
+    if (this.take("M")) {
+      const muted = Sfx.toggleMuted();
+      showToast(this.scene, muted ? "SOUND: OFF" : "SOUND: ON", this.toastY);
+    }
   }
 }
 

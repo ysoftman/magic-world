@@ -345,14 +345,7 @@ export class VolcanoScene extends Phaser.Scene {
       announceLooks(this, earned, FIELD_TOAST_Y);
     }
 
-    if (this.fieldKeys.take("S")) this.toggleStatus();
-
-    if (this.fieldKeys.take("CTRL+S")) GameState.save();
-
-    if (this.fieldKeys.take("M")) {
-      const muted = Sfx.toggleMuted();
-      showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", FIELD_TOAST_Y);
-    }
+    this.fieldKeys.takeSystemKeys(this.hud);
 
     if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
 
@@ -463,13 +456,6 @@ export class VolcanoScene extends Phaser.Scene {
   private quit(): void {
     this.quitting = true;
     saveAndQuit(this);
-  }
-
-  private toggleStatus(): void {
-    const visible = !this.hud.isVisible();
-    this.hud.setVisible(visible);
-    GameState.hudVisible = visible;
-    GameState.saveSettings();
   }
 
   private exitVolcano(): void {
