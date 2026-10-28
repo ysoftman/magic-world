@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "check:art": "bun scripts/check-art.mjs"
+    "check:art": "bun scripts/check-art.mjs",
+    "sim:battle": "bun scripts/sim-battle.ts"
   },
   "dependencies": {
     "phaser": "^4.2.1"
