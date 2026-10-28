@@ -23,6 +23,10 @@ const LABEL_SIZE = 5;
 const LABEL_H = LABEL_SIZE * 4 * 1.3;
 const LABEL_DY = 48;
 const LABEL_MARGIN = 8;
+// the figure's opaque box on its 64px frame (32-cell art at 2px: columns
+// 4..27, rows 2..29 in every frame), centred on the sprite
+const BODY_W = 48;
+const BODY_H = 56;
 
 export interface Rect {
   x: number;
@@ -120,7 +124,9 @@ const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a
 /**
  * Cells a villager may stand on or pass through. Paths only ever step
  * between neighbouring allowed cells, so everything checked at the cell
- * centres here also holds for every point along the way.
+ * centres here also holds for every point along the way (a fixed tag, at
+ * least 80x24, can't fit in the 16px/8px gap between the body's boxes at
+ * two neighbouring cells).
  */
 export function villagerGrid(
   level: readonly (readonly number[])[],
@@ -139,10 +145,14 @@ export function villagerGrid(
       // the whole ring of cells round each zone too (its tall grass reaches
       // into it, levels.ts ZONE_RIMS), so a villager never brushes a roamer
       if (zones.some((z) => Math.abs(cx - z.cx) <= z.w / 2 + TILE / 2 && Math.abs(cy - z.cy) <= z.h / 2 + TILE / 2)) return false;
+      // its own tag and its body both: a villager strolling under a fixed
+      // tag (HOME, FOREST, SNOW PASS) wore it for a moment
       const tag = { x: villagerLabelX(cx, mapW) - LABEL_W / 2, y: villagerLabelY(cy) - LABEL_H / 2, w: LABEL_W, h: LABEL_H };
-      return !labels.some((r) =>
-        overlaps(tag, { x: r.x - LABEL_MARGIN, y: r.y - LABEL_MARGIN, w: r.w + 2 * LABEL_MARGIN, h: r.h + 2 * LABEL_MARGIN }),
-      );
+      const body = { x: cx - BODY_W / 2, y: cy - BODY_H / 2, w: BODY_W, h: BODY_H };
+      return !labels.some((r) => {
+        const near = { x: r.x - LABEL_MARGIN, y: r.y - LABEL_MARGIN, w: r.w + 2 * LABEL_MARGIN, h: r.h + 2 * LABEL_MARGIN };
+        return overlaps(tag, near) || overlaps(body, near);
+      });
     }),
   );
 }

@@ -251,7 +251,7 @@ export class TownScene extends Phaser.Scene {
   // sprites/labels together without waiting for a scene restart
   private landmarkParts: Array<{ name: string; obj: { x: number; y: number }; dx: number; dy: number }> = [];
   // world-space boxes of every fixed name tag (NPCs, signs, exits, HOME, zone
-  // warnings), so the villagers can keep their own tags clear of them
+  // warnings), so the villagers can keep their own tags and bodies clear of them
   private fixedLabels: Rect[] = [];
   // the fixed NPCs' sprites, turned to face the hero who talks to them
   private npcSprites: Phaser.GameObjects.Sprite[] = [];
