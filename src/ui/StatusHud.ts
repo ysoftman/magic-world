@@ -3,7 +3,7 @@ import { GAME_WIDTH } from "../config";
 import { MEALS } from "../cooking";
 import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
 import { currentObjective } from "../objective";
-import { keepBlocky, makeTexture, type PixelMap, retroStyle } from "../pixelart";
+import { makeTexture, type PixelMap, retroStyle } from "../pixelart";
 import { type Region, type Weather, weatherToday } from "../weather";
 
 export const STATUS_HUD_HEIGHT = 88;
@@ -44,50 +44,150 @@ const EXP_BAR_W = 740;
 const MEAL_TAG_RIGHT = 1256;
 const EXP_BAR_W_MEAL = MEAL_TAG_RIGHT - 140 - 16 - EXP_BAR_X;
 
-// Day/night indicator icons (8x8 rows = 32x32px at PIXEL=4): a yellow sun with
-// a circle-ish core and corner/edge rays, and a pale crescent moon. Drawn as a
-// right-anchored image on row 1 so it can't overlap the GOLD segment.
-const SUN_ROWS = [".X....X.", "..X..X..", ".XXXXXX.", "XXXXXXXX", "XXXXXXXX", ".XXXXXX.", "..X..X..", ".X....X."];
-const SUN_PALETTE: PixelMap = { X: 0xfde047 };
+// Day/night indicator icons: 16-cell grids baked through Scale2x to 64px and
+// drawn at half that, so each Scale2x cell is one screen pixel, as the item
+// icons are (BootScene "icon-<key>"). Lit from the top left. A yellow sun with
+// rays, a pale crescent moon with one star. Drawn as a right-anchored image
+// on row 1 so it can't overlap the GOLD segment.
+const SUN_ROWS = [
+  "................",
+  ".......RR.......",
+  "..R....RR....R..",
+  "...R........R...",
+  "......yyYY......",
+  ".....yyYYYY.....",
+  "....yyYYYYYY....",
+  ".RR.yYYYYYYY.RR.",
+  ".RR.YYYYYYYO.RR.",
+  "....YYYYYYOO....",
+  ".....YYYYOO.....",
+  "......YOOO......",
+  "...R........R...",
+  "..R....RR....R..",
+  ".......RR.......",
+  "................",
+];
+const SUN_PALETTE: PixelMap = { y: 0xfef9c3, Y: 0xfde047, O: 0xf59e0b, R: 0xfbbf24 };
 
-const MOON_ROWS = ["..XXXX..", ".XXXXXX.", "XXXXXX..", "XXXX....", "XXXX....", "XXXXXX..", ".XXXXXX.", "..XXXX.."];
-const MOON_PALETTE: PixelMap = { X: 0xcbd5e1 };
+const MOON_ROWS = [
+  "................",
+  "........MMm.....",
+  "......MMmmmd....",
+  ".....MMmmd......",
+  "....MMmmd.......",
+  "...MMmmd........",
+  "...Mmmmd...S....",
+  "...Mmmd...SSS...",
+  "...mmmd....S....",
+  "...mmmmd........",
+  "...mmmdd........",
+  "....mmmdd.......",
+  ".....mmddd......",
+  "......mmdddd....",
+  "........ddd.....",
+  "................",
+];
+const MOON_PALETTE: PixelMap = { M: 0xf8fafc, m: 0xcbd5e1, d: 0x94a3b8, S: 0xfde68a };
 
-// Weather takes the sun/moon's slot (same 8x8 = 32px, same spot) whenever the
-// sky isn't clear: a cloud with rain, a storm cloud with a bolt, a snowflake,
-// a cloud shedding snow for a blizzard, an ash cloud with an ember. The same
-// art day and night — on a rainy night the cloud is the sky, not the moon, and
-// the clock beside it already says which half of the day it is.
+// Weather takes the sun/moon's slot (same 32px, same spot) whenever the sky
+// isn't clear: a cloud with rain, a storm cloud with a bolt, a snowflake, a
+// cloud with gusts and flakes for a blizzard, an ash cloud with an ember. The
+// same art day and night — on a rainy night the cloud is the sky, not the
+// moon, and the clock beside it already says which half of the day it is.
+// Falling bits of one colour never touch corner to corner, or Scale2x joins
+// them into slashes; the rain's streaks do, on purpose.
+const CLOUD_ROWS = [
+  "................",
+  "......hhhh......",
+  ".....hWWWWs.....",
+  "..hh.hWWWWWs....",
+  ".hWWhWWWWWWW.hs.",
+  ".hWWWWWWWWWWWWs.",
+  ".WWWWWWWWWWWWWs.",
+  ".sWWWWWWWWWWsss.",
+  "..GGGGGGGGGGGG..",
+];
+const PALE_CLOUD: PixelMap = { h: 0xf8fafc, W: 0xe2e8f0, s: 0xcbd5e1, G: 0x94a3b8 };
 const WEATHER_ICONS: Partial<Record<Weather, { key: string; rows: string[]; palette: PixelMap }>> = {
   rain: {
     key: "wx-rain",
-    rows: ["...WW...", ".WWWWW..", "WWWWWWW.", "WWWWWWWW", ".GGGGGG.", "..B..B..", ".B..B..B", "B..B..B."],
-    palette: { W: 0xe2e8f0, G: 0x94a3b8, B: 0x60a5fa },
+    rows: [
+      ...CLOUD_ROWS,
+      "................",
+      "....B...B...B...",
+      "...B...B...B....",
+      "................",
+      "..B...B...B...B.",
+      ".B...B...B...B..",
+      "................",
+    ],
+    palette: { ...PALE_CLOUD, B: 0x60a5fa },
   },
   storm: {
     key: "wx-storm",
-    rows: ["...DD...", ".DDDDD..", "DDDDDDD.", "DDDDDDDD", ".DDYYDD.", "...YY...", "..YY....", "..Y....."],
-    palette: { D: 0x64748b, Y: 0xfde047 },
+    rows: [
+      ...CLOUD_ROWS,
+      ".......YY.......",
+      "......YY........",
+      ".....YYYYY......",
+      "..B.....YY...B..",
+      ".B.....YY...B...",
+      ".......Y........",
+      "................",
+    ],
+    palette: { h: 0x94a3b8, W: 0x64748b, s: 0x475569, G: 0x334155, Y: 0xfde047, B: 0x60a5fa },
   },
   snow: {
     key: "wx-snow",
-    rows: ["...C....", ".C.C.C..", "..CCC...", "CCCWCCC.", "..CCC...", ".C.C.C..", "...C....", "........"],
-    palette: { C: 0xbae6fd, W: 0xffffff },
+    rows: [
+      "................",
+      ".......C........",
+      "......cCc.......",
+      "..c....C....c...",
+      "...C...C...C....",
+      "....C..C..C.....",
+      ".....C.C.C......",
+      ".c....CCC....c..",
+      ".cCCCCCWCCCCCc..",
+      ".c....CCC....c..",
+      ".....C.C.C......",
+      "....C..C..C.....",
+      "...C...C...C....",
+      "..c....C....c...",
+      "......cCc.......",
+      ".......C........",
+    ],
+    palette: { C: 0xbae6fd, c: 0x7dd3fc, W: 0xffffff },
   },
   blizzard: {
     key: "wx-blizzard",
-    rows: ["...WW...", ".WWWWW..", "WWWWWWW.", ".GGGGGG.", "S..S..S.", "..S..S..", ".S..S..S", "S..S..S."],
-    palette: { W: 0xe2e8f0, G: 0x94a3b8, S: 0xffffff },
+    rows: [
+      ...CLOUD_ROWS,
+      "................",
+      ".wwwwwwww...S...",
+      ".........w......",
+      "..S....ww...S...",
+      "...............S",
+      "....S..wwwwwww..",
+      "..............w.",
+    ],
+    palette: { ...PALE_CLOUD, S: 0xffffff, w: 0x7dd3fc },
   },
   ashfall: {
     key: "wx-ash",
-    rows: ["...AA...", ".AAAAA..", "AAAAAAA.", ".KKKKKK.", "..g..e..", "g...g...", "..e...g.", ".g..g..."],
-    palette: { A: 0x78716c, K: 0x44403c, g: 0xa8a29e, e: 0xf97316 },
+    rows: [
+      ...CLOUD_ROWS,
+      "................",
+      "..g.....e...g...",
+      "........e.......",
+      "....g..eEe....g.",
+      ".e......e..g....",
+      "...g........e...",
+      "..........g.....",
+    ],
+    palette: { h: 0xa8a29e, W: 0x78716c, s: 0x57534e, G: 0x44403c, g: 0xa8a29e, e: 0xf97316, E: 0xfde68a },
   },
 };
-// blocky, not Scale2x (pixelart.ts): it turned the sun's rays into an X and
-// the blizzard's scattered flakes into solid slashes
-keepBlocky(SUN_ROWS, WEATHER_ICONS.blizzard?.rows ?? []);
 
 // Scene key -> weather region. Scenes without a sky (or a HUD that isn't in
 // this list) keep the plain sun/moon, which is also what the cave's "none" is.
@@ -139,6 +239,7 @@ export class StatusHud {
     this.dayNightIcon = scene.add
       .image(GAME_WIDTH - 24, 26, "sun")
       .setOrigin(1, 0.5)
+      .setScale(0.5)
       .setScrollFactor(0)
       .setDepth(111);
 
