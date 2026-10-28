@@ -63,6 +63,7 @@ finally:
 - 대화창 질문은 타이핑이 끝나기 전 Y/N 을 무시한다. 질문이 뜨면 1.5초쯤 기다린 뒤 누른다. 부엌 COOK, 대장간 FORGE/REFINE, 강화된 장비 판매는 Z 를 두 번 눌러야 한다(확인 질문).
 - `teleport` 직후에는 검·방패·그림자가 옛 자리에 남는다. 스크린샷 전에 한 걸음 걷는다.
 - `scene.start` 에 data 를 빼면 Phaser 가 지난 data 를 다시 쓴다. 하네스의 `start` 는 `{}` 를 기본으로 넘긴다. 마을은 종료 때 `GameState.pos` 를 저장한다.
+- 전투 중에 `scene.start('Battle', ...)` 로 새 전투를 열면 `wait_menu` 가 옛 씬의 `waitingAction` 을 보고 바로 끝난다. 그 상태에서 부른 연출은 재시작에 끊겨 promise 가 끝나지 않는다(게임 버그 아님). 새 `enemySprite` 가 생길 때까지 기다린 뒤 `wait_menu` 를 부른다.
 - `audit()` 의 겹침은 깊이·가림을 보지 않는다. HUD 띠까지 덮는 불투명 패널(가방·도감·업적·상점·대장간 등)을 열면 그 밑의 HUD 글자가 겹침으로 나오므로 스크린샷으로 거른다.
 - 터치: `has_touch` 만으로는 `(pointer: coarse)` 가 켜지지 않아 하네스가 `matchMedia` 를 덮는다. 전투에는 화면 버튼이 없다(메뉴를 바로 탭).
 - 이름 창: `keyboard.type` 은 신뢰된 이벤트라 글자로 들어가고, 패드·터치의 합성 Z 는 칸 선택이다.
