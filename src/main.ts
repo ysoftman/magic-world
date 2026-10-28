@@ -1,3 +1,9 @@
+// Press Start 2P from the bundle, not a font CDN: offline, behind a firewall
+// or when the CDN's name won't resolve, every layout measured as one glyph =
+// 1em (AGENTS.md) fell apart in the fallback font. Latin only: the game draws
+// ASCII and the em dash. A ★ is in none of its subsets (it fell back to
+// another font), so the panels mark earned and done rows with "*" instead.
+import "@fontsource/press-start-2p/latin-400.css";
 import Phaser from "phaser";
 import { Sfx } from "./audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
@@ -13,6 +19,7 @@ import { SnowScene } from "./scenes/SnowScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { TownScene } from "./scenes/TownScene";
 import { VolcanoScene } from "./scenes/VolcanoScene";
+import { startGamepad } from "./ui/Gamepad";
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) Sfx.suspendBgmForHiddenTab();
@@ -41,13 +48,14 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 // Canvas text bakes in whatever font is available at draw time; unlike DOM
-// text it won't repaint when the webfont finishes loading later. Wait for it
-// (bounded, so a slow/broken connection can't stall the game forever) before
+// text it won't repaint when the webfont finishes loading later. The
+// @font-face above only fetches its file when asked, so ask, and wait for it
+// (bounded, so a slow first load can't stall the game forever) before
 // booting Phaser, so the title screen never flashes the fallback font.
 const fontReady = document.fonts.load('16px "Press Start 2P"').catch(() => undefined);
 const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
 Promise.race([fontReady, timeout]).finally(() => {
   GameState.loadSettings();
   loadMapOverride();
-  new Phaser.Game(config);
+  startGamepad(new Phaser.Game(config));
 });

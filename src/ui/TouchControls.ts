@@ -36,13 +36,20 @@ const MENU: Array<[label: string, code: string]> = [
   ["?", "Slash"],
 ];
 // x: 1222..1270, clear of Z (x <= 1180). y: seven buttons (the Town's full
-// set) from 126, under the HUD (88), the y=100 toasts and the map-edited note
-// (to 114), down to 474, above the dialogue box (480) and Z (532) — which is
-// why they're r=24 at a 50px pitch, 2px apart, rather than bigger
+// set) from 126, under the HUD (88) and the y=100 toasts, down to 474, above
+// the dialogue box (480) and Z (532) — which is why they're r=24 at a 50px
+// pitch, 2px apart, rather than bigger. The map-edited note (y 160..180)
+// ends at x=1210, left of the column, so the two never meet.
 const MENU_X = 1246;
 const MENU_TOP = 150;
 const MENU_GAP = 50;
 const MENU_R = 24;
+// The discs' black fill. At 0.25 a map tag under the d-pad (BLACKSMITH, at
+// the new game's spawn) showed through near full strength and its letters
+// ran into the arrows; at 0.5 it reads as dimmed ground behind them, and the
+// map still shows. Pressed, it lightens as before.
+const DISC_ALPHA = 0.5;
+const DISC_PRESSED_ALPHA = 0.2;
 
 export function isTouchDevice(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -70,9 +77,15 @@ interface TouchButton {
   release: () => void;
 }
 
-function sendKey(type: "keydown" | "keyup", code: string): void {
-  const ev = new KeyboardEvent(type, { code, bubbles: true });
-  const keyCode = KEY_CODES[code];
+// Replays one key into the window; the gamepad (Gamepad.ts) sends its
+// buttons through here too, so a letter outside KEY_CODES (a battle's E/F/H)
+// gets its keyCode from the letter. `key` is set along with `code`: the
+// title screen and the look picker read e.key, which a bare code leaves "".
+export function sendKey(type: "keydown" | "keyup", code: string): void {
+  const letter = code.startsWith("Key") ? code[3] : null;
+  const key = letter ? letter.toLowerCase() : code === "Slash" ? "/" : code;
+  const ev = new KeyboardEvent(type, { code, key, bubbles: true });
+  const keyCode = KEY_CODES[code] ?? (letter ? letter.charCodeAt(0) : undefined);
   Object.defineProperty(ev, "keyCode", { get: () => keyCode });
   Object.defineProperty(ev, "which", { get: () => keyCode });
   window.dispatchEvent(ev);
@@ -118,14 +131,25 @@ export class TouchControls {
     }
   }
 
+  // One glyph turned four ways: Press Start 2P's ^ is a small caret and its
+  // v a letter, not the chevron of > and <, so the pad read as two kinds of
+  // key. Quarter turns keep the pixel font's cells square. The > sits off its
+  // cell's middle (one empty column before it, two after, one row under it:
+  // x 6..35, y 0..41 of 48), so each turns about its own centre, 7/16 of the
+  // cell, and all four land in the middle of their discs.
   private dpad(scene: Phaser.Scene): void {
     const cx = 150;
     const cy = 616;
     const gap = 64;
-    this.button(scene, cx, cy - gap, 44, "^", "ArrowUp", undefined, ["dpad", "updown"]);
-    this.button(scene, cx - gap, cy, 44, "<", "ArrowLeft", undefined, ["dpad"]);
-    this.button(scene, cx + gap, cy, 44, ">", "ArrowRight", undefined, ["dpad"]);
-    this.button(scene, cx, cy + gap, 44, "v", "ArrowDown", undefined, ["dpad", "updown"]);
+    const arrow = (x: number, y: number, code: string, angle: number, groups: TouchGroup[]): void => {
+      this.button(scene, x, y, 44, ">", code, undefined, groups)
+        .text.setOrigin(7 / 16)
+        .setAngle(angle);
+    };
+    arrow(cx, cy - gap, "ArrowUp", -90, ["dpad", "updown"]);
+    arrow(cx - gap, cy, "ArrowLeft", 180, ["dpad"]);
+    arrow(cx + gap, cy, "ArrowRight", 0, ["dpad"]);
+    arrow(cx, cy + gap, "ArrowDown", 90, ["dpad", "updown"]);
   }
 
   // Only keys the scene actually registered get a button — every scene builds
@@ -147,25 +171,27 @@ export class TouchControls {
     code: string,
     size = label.length > 1 ? 6 : 12,
     groups: TouchGroup[] = [],
-  ): void {
-    const ring = scene.add.circle(x, y, r, 0x000000, 0.25).setStrokeStyle(2, 0xffffff, 0.45).setScrollFactor(0).setDepth(250);
+  ): TouchButton {
+    const ring = scene.add.circle(x, y, r, 0x000000, DISC_ALPHA).setStrokeStyle(2, 0xffffff, 0.45).setScrollFactor(0).setDepth(250);
     const text = scene.add.text(x, y, label, retroStyle(size, "#ffffff")).setOrigin(0.5).setScrollFactor(0).setDepth(251);
     ring.setInteractive(new Phaser.Geom.Circle(r, r, r), Phaser.Geom.Circle.Contains);
     let held = false;
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
       held = true;
-      ring.setFillStyle(0x000000, 0.05);
+      ring.setFillStyle(0x000000, DISC_PRESSED_ALPHA);
       sendKey("keydown", code);
     });
     // only a press gets a keyup, so hide() can call this on every button
     const release = (): void => {
       if (!held) return;
       held = false;
-      ring.setFillStyle(0x000000, 0.25);
+      ring.setFillStyle(0x000000, DISC_ALPHA);
       sendKey("keyup", code);
     };
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, release);
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, release);
-    this.buttons.push({ ring, text, groups, release });
+    const button = { ring, text, groups, release };
+    this.buttons.push(button);
+    return button;
   }
 }
