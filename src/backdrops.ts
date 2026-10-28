@@ -5,8 +5,9 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
 // backdrops, one per field a fight starts in, baked once at boot
 // (BootScene) as 1280x720 textures: "battle-bg-<region>", and for the town and
 // the forest one per look the season gives their maps ("-autumn", "-winter";
-// BootScene battleBgKey picks). Each is drawn in three depths on 4px cells, a
-// step coarser than the fighters' 2px art, so it reads as further away:
+// art/tilesets.ts battleBgKey picks). Each is drawn in three depths on 4px
+// cells, a step coarser than the fighters' 2px art, so it reads as further
+// away:
 //
 // - far: mountains, a tree wall or a cave wall, close to the sky's colour
 // - mid: hills, trees, rocks or pillars, darker and still muted

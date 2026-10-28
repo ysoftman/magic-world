@@ -97,7 +97,7 @@ const FLY_SHADOW_W = 0.6;
 const SHADOW_FADE_LIFT = 64;
 // where the companion stands, and where a caught monster flies to (catchFx)
 const COMPANION_X = 180;
-// the CANDY icon's light pink (BootScene ICON_CANDY_PALETTE): a catch's glow
+// the CANDY icon's light pink (art/icons.ts ICON_CANDY_PALETTE): a catch's glow
 const CANDY_PINK = 0xf9a8d4;
 // the OS's reduced-motion setting, as fx.ts reads it: no breathing, no hops
 const reducedMotion = (): boolean => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;

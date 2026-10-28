@@ -58,7 +58,8 @@ export const SNOW_TILE_COLORS: Record<number, number> = {
   [T_WATER_B]: 0x2a6690,
   [T_TREE]: 0x1d4a3e,
   [T_PATH]: 0x6b6e75,
-  // the scrub's dry sage (BootScene SNOW_TALL_PALETTE), darkened as the rest
+  // the scrub's dry sage (art/tilesets.ts SNOW_TALL_PALETTE), darkened as the
+  // rest
   [T_TALL]: 0x7c8174,
 };
 
@@ -82,7 +83,7 @@ export const CAVE_TILE_COLORS: Record<number, number> = {
   [T_WATER_B]: 0x1d3b5c,
 };
 
-// The town's and the forest's autumn (BootScene's AUTUMN_SKIN and
+// The town's and the forest's autumn (art/tilesets.ts AUTUMN_SKIN and
 // FOREST_AUTUMN_SKIN): olive grass and rust trees, the paths and water as
 // they were.
 const AUTUMN_TILE_COLORS: Record<number, number> = {
@@ -97,7 +98,7 @@ const FOREST_AUTUMN_TILE_COLORS: Record<number, number> = {
   [T_TALL]: 0x42582f,
 };
 // Which colours the town and the forest take in each season, after
-// BootScene's seasonSkin(): the autumn sets above, and in winter the snow
+// art/tilesets.ts seasonSkin(): the autumn sets above, and in winter the snow
 // field's. A season left out keeps what the scene passed in.
 const SEASON_COLORS: Partial<Record<Region, Partial<Record<Season, Record<number, number>>>>> = {
   town: { autumn: AUTUMN_TILE_COLORS, winter: SNOW_TILE_COLORS },

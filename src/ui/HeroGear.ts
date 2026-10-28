@@ -5,7 +5,7 @@ export type Facing = "down" | "up" | "right" | "left";
 
 interface Place {
   // offset of the gear sprite's centre from the hero's, in screen px at
-  // scale 1: the gear art (BootScene EQUIP_*_32, Blacksmith) puts the hand's
+  // scale 1: the gear art (art/hero.ts EQUIP_*_32, Blacksmith) puts the hand's
   // grip at its centre cell, so this is where the hand is
   x: number;
   y: number;

@@ -266,7 +266,8 @@ function playToast(scene: Phaser.Scene, t: Phaser.GameObjects.Text, state: Toast
 // stair steps come out as diagonals. The whole game then reads at one 2px
 // density, and art redrawn on a 32-cell grid (drawn at ART_PX as it is, no
 // Scale2x) sits beside the rest without a jump in density. keepBlocky() opts a
-// grid out where Scale2x bends what it was drawn to say (see BootScene).
+// grid out where Scale2x bends what it was drawn to say (see its calls in
+// art/tiles.ts, art/npcs.ts and art/landmarks.ts).
 export const ART_PX = PIXEL / 2;
 
 // What Scale2x sees past a grid's edge: nothing for a sprite, so it never

@@ -9,9 +9,9 @@ export const T_PATH = 4;
 export const T_TALL = 5;
 export const T_HOUSE = 6;
 export const T_SOIL = 7;
-// Volcano terrain, appended after BootScene's variation frames (8..22). Lava
-// swaps A/B on a timer the way water does; scorched ground marks the monster
-// zones there the way tall grass does everywhere else.
+// Volcano terrain, appended after art/tilesets.ts's variation frames (8..22).
+// Lava swaps A/B on a timer the way water does; scorched ground marks the
+// monster zones there the way tall grass does everywhere else.
 export const T_ASH = 23;
 export const T_LAVA_A = 24;
 export const T_LAVA_B = 25;
@@ -322,9 +322,9 @@ export const TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
 ];
 
 // The cave's walls and pillars are T_ROCK, the volcano's boulder: a tree
-// skinned grey still read as a tree. BootScene's CAVE_SKIN draws it as plain
-// cave rock with no lava crack. Same solidity as the trees it replaced, so
-// the layout, its reachability and every zone are unchanged.
+// skinned grey still read as a tree. art/tilesets.ts CAVE_SKIN draws it as
+// plain cave rock with no lava crack. Same solidity as the trees it replaced,
+// so the layout, its reachability and every zone are unchanged.
 export function buildDungeon(): number[][] {
   const map: number[][] = Array.from({ length: DUNGEON_H }, () => Array<number>(DUNGEON_W).fill(T_PATH));
 

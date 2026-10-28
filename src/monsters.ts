@@ -41,9 +41,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
   goblin: { name: "GOBLIN", texture: "goblin", hp: 22, atk: 7, def: 1, exp: 14, gold: 9, weakness: "bolt" },
   cursedGoblin: {
     name: "CURSED GOBLIN",
-    // a light violet palette (BootScene CURSED_GOBLIN_PALETTE): an old darker
-    // purple took the goblin down to the cave floor's luma (mean 57 vs 54) and
-    // it vanished there
+    // a light violet palette (art/monsters.ts CURSED_GOBLIN_PALETTE): an old
+    // darker purple took the goblin down to the cave floor's luma (mean 57 vs
+    // 54) and it vanished there
     texture: "cursedGoblin",
     hp: 38,
     atk: 8,

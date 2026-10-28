@@ -734,7 +734,7 @@ export const GameState = {
   // a save from before the tips: the first check seeds it with whatever is
   // already unlocked, so an update doesn't fire every tip at once
   seenTips: [] as string[] | null,
-  // the hero's look, an index into BootScene's HERO_LOOKS (0 = the original
+  // the hero's look, an index into art/hero.ts HERO_LOOKS (0 = the original
   // blue, and what saves from before looks load as); bakeHero() applies it
   heroLook: 0,
   hudVisible: true,

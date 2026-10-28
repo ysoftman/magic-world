@@ -319,7 +319,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   },
 ];
 
-// Hero looks earned with achievements: BootScene's HERO_LOOKS past the first
+// Hero looks earned with achievements: art/hero.ts HERO_LOOKS past the first
 // BASE_LOOKS open one at each count here, the last once every achievement is
 // in. Counted off GameState.achievements (as the trophy board counts them,
 // so an id an old save kept for a since-removed entry adds nothing), so the

@@ -21,7 +21,7 @@ import { isTouchDevice } from "./TouchControls";
 
 // Worn-gear art for the two forged pieces that show up as overlays (the
 // charms are accessories and never drawn). Same 32-cell framing at ART_PX as
-// BootScene's EQUIP_SWORD_32 / EQUIP_SHIELD_32, the grip at the centre cell,
+// art/hero.ts's EQUIP_SWORD_32 / EQUIP_SHIELD_32, the grip at the centre cell,
 // so they sit in the hand where the shop gear does: the drake blade's red
 // edge lit (R), flame marks (o) up it and a gold tip (y); the GLACIER MAIL,
 // worn in the shield's place, as a round ice buckler with a lit rim (h).

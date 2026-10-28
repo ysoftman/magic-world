@@ -44,7 +44,7 @@ export type OtherIds = ReadonlySet<number>;
 
 // ---------------------------------------------------------------------------
 // Texture layout (agreed with impl-art / team-lead — do not renumber without
-// updating BootScene's tileset bakes too):
+// updating art/tilesets.ts's tileset bakes too):
 //
 // Base terrain (grass/water/tree/path/tall/house/soil, plus impl-art's 8..19
 // variation frames) lives in "tiles16", indices this file never touches.

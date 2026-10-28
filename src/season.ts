@@ -35,7 +35,7 @@ export function seasonToday(): Season {
  * How `season` dresses `region`'s ground: the town and the forest (the
  * lowland, one sky) turn in autumn and lie under snow in winter; every other
  * region looks the same all year (null), as do spring and summer. The one
- * table BootScene's map skins and battle backdrops and the footsteps all
+ * table art/tilesets.ts's map skins and battle backdrops and the footsteps all
  * read, so the ground, the fight behind it and the prints on it agree.
  */
 export function seasonLook(region: string, season: Season = seasonToday()): "autumn" | "winter" | null {
