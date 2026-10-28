@@ -146,6 +146,20 @@ export class ForestScene extends Phaser.Scene {
   // left: where they stood, the map as they left it and the sky they saw, and
   // none of an arrival's title, caption or step out of the monster zones
   create(data?: { turn?: { at: { x: number; y: number }; mapOpen: boolean; weather: Weather }; fromBattle?: boolean }): void {
+    // Every entry (back from a fight, quit and continue, a new season) runs this same
+    // instance again, fields and all: a key queued while the last run faded
+    // out would otherwise act on this run's first frame.
+    this.sQueued =
+      this.ctrlSQueued =
+      this.mQueued =
+      this.tQueued =
+      this.iQueued =
+      this.bQueued =
+      this.aQueued =
+      this.uQueued =
+      this.oQueued =
+      this.qQueued =
+        false;
     const turn = data?.turn;
     // back from a fight (takeFightSpot): the same, where the fight began
     const back = takeFightSpot(this, data);

@@ -146,6 +146,21 @@ export class SnowScene extends Phaser.Scene {
   }
 
   create(data?: { fromBattle?: boolean }): void {
+    // Every entry (back from a fight, quit and continue) runs this same
+    // instance again, fields and all: a key queued while the last run faded
+    // out would otherwise act on this run's first frame.
+    this.sQueued =
+      this.ctrlSQueued =
+      this.zQueued =
+      this.mQueued =
+      this.tQueued =
+      this.iQueued =
+      this.bQueued =
+      this.aQueued =
+      this.uQueued =
+      this.oQueued =
+      this.qQueued =
+        false;
     // back from a fight (takeFightSpot): where it began, and none of an
     // arrival's title, caption or wait for the TOWN tag
     const back = takeFightSpot(this, data);

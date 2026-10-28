@@ -361,6 +361,24 @@ export class TownScene extends Phaser.Scene {
   }): void {
     Sfx.playBgm(OVERWORLD_THEME);
     // the title bakes the save's look before it starts the town; this covers
+    // Every entry (back from a fight, quit and continue, a new season) runs this same
+    // instance again, fields and all: a key queued while the last run faded
+    // out would otherwise act on this run's first frame.
+    this.editorQueued =
+      this.zQueued =
+      this.sQueued =
+      this.ctrlSQueued =
+      this.iQueued =
+      this.gCheatQueued =
+      this.mQueued =
+      this.tQueued =
+      this.cQueued =
+      this.bQueued =
+      this.aQueued =
+      this.oQueued =
+      this.qQueued =
+      this.uQueued =
+        false;
     // any other way in (a no-op when that look is already baked)
     bakeHero(this, GameState.heroLook);
     this.roamers = [];

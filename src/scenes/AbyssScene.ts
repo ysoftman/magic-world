@@ -263,6 +263,20 @@ export class AbyssScene extends Phaser.Scene {
   // where the stair offered to pick up (abyssResume: the checkpoint, or the
   // portal, which taking uses up — saved before anything else, quietly)
   create(data?: { fromBattle?: boolean; fromStairs?: boolean; start?: number }): void {
+    // Every entry (back from a fight, quit and continue) runs this same
+    // instance again, fields and all: a key queued while the last run faded
+    // out would otherwise act on this run's first frame.
+    this.sQueued =
+      this.ctrlSQueued =
+      this.mQueued =
+      this.tQueued =
+      this.iQueued =
+      this.bQueued =
+      this.aQueued =
+      this.uQueued =
+      this.oQueued =
+      this.qQueued =
+        false;
     Sfx.playBgm(DUNGEON_THEME);
     const fromBattle = !!data?.fromBattle;
     if (!run || !(fromBattle || data?.fromStairs)) {
