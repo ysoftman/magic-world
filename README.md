@@ -1,8 +1,8 @@
 # MAGIC WORLD
 
-8비트 픽셀 감성의 판타지 RPG 브라우저 게임입니다. [Phaser 4](https://phaser.io/) + TypeScript + Vite 기반으로, 그래픽 에셋 없이 코드로 픽셀아트를 그려 넣은 것이 특징입니다.
+8비트 픽셀 감성의 판타지 RPG 브라우저 게임입니다. [Phaser 4](https://phaser.io/) + TypeScript + Bun 기반으로, 그래픽 에셋 없이 코드로 픽셀아트를 그려 넣은 것이 특징입니다.
 
-![tech](https://img.shields.io/badge/Phaser-4.x-blue) ![tech](https://img.shields.io/badge/TypeScript-7.x-3178c6) ![tech](https://img.shields.io/badge/Vite-8.x-646cff) ![tech](https://img.shields.io/badge/Bun-ready-f472b6)
+![tech](https://img.shields.io/badge/Phaser-4.x-blue) ![tech](https://img.shields.io/badge/TypeScript-7.x-3178c6) ![tech](https://img.shields.io/badge/Bun-ready-f472b6)
 
 ## 게임 기능
 
@@ -130,12 +130,12 @@
 bun install
 
 # 개발 서버 (http://localhost:5199)
-bun run dev --port 5199 --strictPort
+bun run dev
 
-# 프로덕션 빌드 (tsc + vite build → dist/)
+# 프로덕션 빌드 (tsc + Bun.build → dist/)
 bun run build
 
-# 빌드 결과 미리보기
+# 빌드 결과 미리보기 (http://localhost:4173)
 bun run preview
 
 # 보스 전투 밸런스 시뮬 (보스 5종 x 레벨 1~30 승률·라운드·받은 피해, 옵션은 --help)

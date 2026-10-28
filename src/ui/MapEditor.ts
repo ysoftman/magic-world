@@ -391,9 +391,9 @@ export class MapEditor {
   }
 
   // Applying means writing the map file itself: the dev server takes the POST
-  // and saves it, Vite reloads, and the game comes back up on the new layout
-  // with no localStorage override in the way. Without the dev server (a built
-  // page) it falls back to the clipboard and the console.
+  // and saves it, the page reloads, and the game comes back up on the new
+  // layout with no localStorage override in the way. Without the dev server
+  // (a built page) it falls back to the clipboard and the console.
   private exportMap(): void {
     const source = this.mapFileSource();
     const stored = { tiles: mapToRows(this.level), landmarks: structuredClone(EDITABLE_POS) };

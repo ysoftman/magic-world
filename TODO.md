@@ -6,7 +6,6 @@
 
 ## 예정
 
-- Vite 의존성 제거(조사 끝, 보류 중 — 2026-10-28 qa 가 `/tmp` 복사본에서 Bun 만으로 dev·build 를 띄워 타이틀→마을·글꼴·맵 편집기 저장까지 확인). 큰 걸림돌 셋: (1) `bun build` 는 수동 vendor 청크가 없어 Phaser 가 한 번들에 묶임 → 재배포마다 gzip 약 150KB 대신 522KB 를 다시 받음, Phaser 를 external 로 빼고 `node_modules/phaser/dist` 빌드본을 따로 내보내는 안을 먼저 시험, (2) 플레이테스트 하네스가 Vite 의 소스 모듈 서빙(`/src/main.ts` 가로채기, 소스 URL import)에 기댐 → Bun dev 번들(`/_bun/client/*.js`)을 가로채는 안을 먼저 시험(DEV 전용 노출 훅 커밋은 AGENTS 정책 변경이라 마지막 수단), (3) `import.meta.env.DEV` — `--define import.meta.env.DEV:false` 를 빠뜨리면 배포판이 마을 진입에서 죽음(실측). 나머지는 기계적: dev.ts(`Bun.serve` + HTML import + hmr, `/__map` 라우트로 맵 편집기 저장), favicon 경로, woff2 를 파일로 내보내기(`--loader`), preview 스크립트, AGENTS·README·SKILL 의 dev 서버·HMR 소켓 문장. 배포 워크플로는 그대로
 - 밤 조명 라이트맵(RenderTexture): 밤 오버레이를 MULTIPLY 로 바꾼 뒤에도 ADD 글로우가 빛 안의 원래 색을 돌려주지 못하면, 씬마다 1280x720 RT 에 밤 배율 fill + 글로우 stamp 를 매 프레임 그려 MULTIPLY 로 표시(메모리 +3.7MB, NEAREST·2px 계단 글로우 유지) — 2026-10-28 Phaser 스킬 검토(docs) 후보 3
 - 텍스트를 RetroFont BitmapText 로 옮기기(장기): DPR 과 무관하게 선명하고 글자 텍스처 메모리(해상도 3 에서 약 37MB)와 갱신 비용이 거의 사라짐. setStroke 외곽선 미지원이라 외곽선 변형을 따로 구워야 하고 retroStyle(5)(2.5배)는 고르지 않은 픽셀이 됨 — Phaser 스킬 검토(qa) 후보 8
 - 타자기 문장의 텍스처 재업로드: 대화창·전투 메시지가 글자마다 Text 를 다시 구워 해상도 3 에서 타이핑 중 프레임당 약 4MB 를 GPU 로 올림. 실기기(모바일) 프로파일 뒤 무거우면 줄 단위 공개(setCrop)나 BitmapText — qa 후보 6

@@ -5,7 +5,8 @@
 - dev 서버는 **항상 1개만** 띄운다. 포트는 5199 고정.
 - 코드 수정 후에는 **기존 서버를 먼저 종료하고 새로 시작**한다:
   - 종료: `lsof -iTCP:5199-5206 -sTCP:LISTEN -P | awk 'NR>1 {print $2}' | sort -u | xargs kill`
-  - 시작: `nohup bun run dev --port 5199 --strictPort > /tmp/pwcheck/devserver.log 2>&1 &`
+  - 시작: `nohup bun run dev > /tmp/pwcheck/devserver.log 2>&1 &` (포트는 `scripts/dev.ts` 에 고정,
+    이미 쓰이면 다른 포트로 가지 않고 실패한다)
 - 여러 서버가 떠 있으면 사용자가 옛 탭/옛 코드를 볼 수 있어 혼란을 준다(실제 사례: hjkl 미동작 원인이 예전 탭의 예전 번들이었음).
 - 사용자에게는 항상 `http://localhost:5199/` 한 URL만 안내한다.
 
@@ -217,7 +218,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 - 마을 지형과 랜드마크 위치는 **`src/overworldMap.ts` 한 파일**에 있다. 이 파일만 바꾸면
   레이아웃 전체가 바뀐다 (`levels.ts` 는 여기서 읽어 쓴다).
 - 게임 안에서 `F2` 로 맵 편집기를 열고 `X` 를 누르면 dev 서버가 이 파일을 **직접 덮어쓴다**
-  (`vite.config.ts` 의 `overworld-map-writer` 플러그인, dev 전용). 저장 후 Vite 가 리로드하고
+  (`scripts/dev.ts` 의 `/__map` 라우트, dev 전용). 저장 후 dev 서버가 리로드하고
   localStorage 편집본은 지워지므로 파일이 곧 정답이 된다.
 - dev 서버가 없으면(빌드된 페이지) 같은 내용이 클립보드와 콘솔로 나온다.
 - 손으로 고칠 때 주의: 랜드마크는 걸어갈 수 있는 타일 위여야 하고(집 앵커 제외), 상호작용
@@ -263,7 +264,11 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 
 ## 기타
 
-- 빌드: `bun run build` (tsc + vite build)
+- 빌드: `bun run build` (tsc + `scripts/build.ts` 의 `Bun.build` → dist/). Phaser 는 둘째 입구
+  `src/vendor.ts` 덕에 따로 청크가 되어, 게임만 바꾼 배포에서는 해시가 그대로라 플레이어 캐시가
+  남는다. dev 전용 코드는 `process.env.NODE_ENV !== "production"` 으로 가른다. Bun 은 dev 서버와
+  빌드 양쪽에서 이 값을 상수로 바꿔 넣지만 `import.meta.env` 는 그대로 둬서, Vite 를 걷어낼 때
+  `import.meta.env.DEV` 를 남긴 배포판이 마을 진입에서 죽었다.
 - 에셋/디버그 검증 스크립트는 `/tmp/pwcheck/`에 둔다 (png.mjs 디코더는 Paeth 필터 4 버그 수정본 사용)
 - playwright 의 `page.evaluate` 에서 `scene.start(...)` 처럼 Phaser 객체를 돌려주는 호출은
   `void` 로 감싼다. 실제 사례: 반환값(ScenePlugin)을 직렬화하느라 evaluate 가 끝나지 않아
@@ -284,8 +289,8 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   에러와 `Cannot read properties of null (reading 'context')` pageerror 가 나며 게임이 멈춘다
   (실제 사례: 4차 QA 의 KOI FEAST 드롭 강제). 강제가 필요하면 그 호출만 짧게 감싸거나 시드 있는
   의사난수로 바꾼다. 아니면 강제 없이 여러 판 돌린다.
-- 여러 명이 동시에 소스를 고치는 중이면 Vite HMR 이 테스트 페이지를 통째로 다시 불러 전투
-  도중 타이틀로 돌아간다. 테스트 페이지의 init script 에서 프로토콜이 `vite-hmr`/`vite-ping`
+- 여러 명이 동시에 소스를 고치는 중이면 dev 서버의 HMR 이 테스트 페이지를 통째로 다시 불러 전투
+  도중 타이틀로 돌아간다. 테스트 페이지의 init script 에서 URL 이 `/_bun/hmr`
   인 WebSocket 을 가짜 객체(`EventTarget` + 빈 `send`/`close`)로 바꾸면 불러온 시점의 코드로
   끝까지 돈다. 저장소 코드는 건드리지 않는다.
 - 브라우저 점검(playwright)은 `.claude/skills/magic-world-playtest` 의 `scripts/harness.py` 를
