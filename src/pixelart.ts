@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { GAME_HEIGHT, GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
+import { BODY_FONT, GAME_HEIGHT, GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
 
 export interface PixelMap {
   [ch: string]: number;
@@ -31,6 +31,29 @@ export function retroStyle(size = 8, color = "#ffffff"): Phaser.Types.GameObject
   return {
     fontFamily: RETRO_FONT,
     fontSize: `${size * PIXEL}px`,
+    color,
+    align: "left",
+    resolution: TEXT_RESOLUTION,
+  };
+}
+
+// Long text — the dialogue and battle lines, the panels' item info and
+// messages, the help keys, achievement and quest details — is in Departure
+// Mono; short text (titles, HUD, menus, name tags, toasts) stays in
+// retroStyle. Press Start 2P's full-cell glyphs with no leading ran a page
+// of talk into one block, and in mixed case its words lost their shape.
+// Departure Mono is monospace too, a glyph 7/11 em (BODY_GLYPH_W), so a
+// width is still glyphs x width. It's drawn on an 11px grid, so only 22 (2px
+// a dot) and 33 (3px) are sharp at TEXT_RESOLUTION 1. Each is narrower a
+// glyph than the retroStyle it replaces (14px for retroStyle(4)/(5)'s 16/20,
+// 21px for (6)/(8)'s 24/32) but taller a line: 26 and 39 (Phaser's metrics;
+// the caps sit 6 / 8px under the top, room for an accent).
+export type BodySize = 22 | 33;
+export const BODY_GLYPH_W: Record<BodySize, number> = { 22: 14, 33: 21 };
+export function bodyStyle(size: BodySize = 33, color = "#ffffff"): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    fontFamily: BODY_FONT,
+    fontSize: `${size}px`,
     color,
     align: "left",
     resolution: TEXT_RESOLUTION,
