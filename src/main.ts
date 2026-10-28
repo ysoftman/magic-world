@@ -53,6 +53,10 @@ const config: Phaser.Types.Core.GameConfig = {
     // most one step of size (91% of the width there)
     snap: { width: 320, height: 180 },
   },
+  // three touches at once (the mouse has its own pointer besides): the d-pad
+  // held while Z is tapped, and one to spare (TouchControls). Set here once;
+  // each scene used to add two more as it built its buttons, up to the cap
+  input: { activePointers: 3 },
   // every sound is Sfx's (audio.ts), synthesized on its own AudioContext;
   // Phaser's SoundManager went unused but still opened a second context and
   // kept it running from the first key on

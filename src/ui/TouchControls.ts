@@ -101,8 +101,8 @@ export class TouchControls {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    // d-pad held with one finger while tapping Z with another
-    scene.input.addPointer(2);
+    // the d-pad held with one finger while Z is tapped with another needs
+    // more than one touch pointer: main.ts sets input.activePointers
     this.dpad(scene);
     this.button(scene, 1128, 584, 52, "Z", "KeyZ", undefined, ["z"]);
     this.button(scene, 1000, 668, 40, "ESC", "Escape");
