@@ -209,6 +209,10 @@ export class BattleScene extends Phaser.Scene {
   // paused while the hero is frozen or the companion dashes
   private heroIdle?: Phaser.Tweens.Tween;
   private enemyIdle?: Phaser.Tweens.Tween;
+  // the foe's size as made (3 for a boss or giant, else 2), which every throb
+  // grows from and returns to; the throb running now, if any
+  private enemyBaseScale = 2;
+  private enemyPulse?: Phaser.Tweens.Tween;
   private companionIdle?: Phaser.Tweens.Tween;
   private hintText!: Phaser.GameObjects.Text;
 
@@ -415,7 +419,8 @@ export class BattleScene extends Phaser.Scene {
     // under the enemy window (bottom 200) and hid the FLAME DRAKE's horns; at
     // 312 even the 1.15x charge pulse stays below it.
     const big = this.enemy.boss || this.enemy.giant;
-    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, big ? 312 : 280, this.enemy.texture).setScale(big ? 3 : 2);
+    this.enemyBaseScale = big ? 3 : 2;
+    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, big ? 312 : 280, this.enemy.texture).setScale(this.enemyBaseScale);
     this.playerSprite = this.add.sprite(320, 368, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
     // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
@@ -1250,6 +1255,7 @@ export class BattleScene extends Phaser.Scene {
   private async catchFx(): Promise<void> {
     const sprite = this.enemySprite;
     this.enemyIdle?.stop();
+    this.settleEnemyScale();
     sprite.setTint(CANDY_PINK).setTintMode(Phaser.TintModes.FILL);
     this.catchBurst.explode(14, sprite.x, sprite.y);
     const { x: fromX, y: fromY, scale: fromScale } = sprite;
@@ -1667,8 +1673,7 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyStatus();
     Sfx.charge();
     this.enemySprite.setTint(tell.color).setTintMode(Phaser.TintModes.FILL);
-    const scale = this.enemySprite.scale;
-    this.tweens.add({ targets: this.enemySprite, scale: scale * 1.08, duration: this.anim(160), yoyo: true, repeat: 2 });
+    this.pulseEnemy(1.08, 160);
     this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.glowBurst.explode(16);
     shake(this.cameras.main, 200, 0.004);
@@ -1728,9 +1733,35 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyStatus();
     shake(this.cameras.main, 400, 0.015);
     flash(this.cameras.main, 200, 255, 60, 60);
-    const scale = this.enemySprite.scale;
-    this.tweens.add({ targets: this.enemySprite, scale: scale * 1.15, duration: this.anim(120), yoyo: true, repeat: 2 });
+    this.pulseEnemy(1.15, 120);
     await this.say(`${this.enemy.name} is ENRAGED! ATK UP!`);
+  }
+
+  // A wind-up or enrage throb on the foe, from the size it was made at rather
+  // than whatever scale it has now: started over a throb still running (the
+  // messages can be skipped faster than it lasts), the new one took that mid
+  // value as its rest and yoyoed back to it, leaving the foe a size too big
+  // for the rest of the fight.
+  private pulseEnemy(by: number, ms: number): void {
+    this.settleEnemyScale();
+    this.enemyPulse = this.tweens.add({
+      targets: this.enemySprite,
+      scale: this.enemyBaseScale * by,
+      duration: this.anim(ms),
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        this.enemyPulse = undefined;
+      },
+    });
+  }
+
+  // ends a throb at once, back at the foe's own size: before the next throb,
+  // and before the defeat fade or the catch read the size to tween from
+  private settleEnemyScale(): void {
+    this.enemyPulse?.stop();
+    this.enemyPulse = undefined;
+    this.enemySprite.setScale(this.enemyBaseScale);
   }
 
   private async regenerate(): Promise<void> {
@@ -2129,7 +2160,8 @@ export class BattleScene extends Phaser.Scene {
       GameState.player.hp += mealHeal;
       this.updatePlayerStats();
       Sfx.victory();
-      this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, this.anim(350));
+      this.settleEnemyScale();
+      this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
       await this.say(`${this.enemy.name} is defeated!`);
       await this.say(`Gained ${goldGained} gold!`);
       // "The FISH STEW restores 999 HP!", 30 glyphs
@@ -2268,7 +2300,8 @@ export class BattleScene extends Phaser.Scene {
   // Messages stay within one line: "Next: GLACIER GOLEM! +999 HP +999 MP" (36).
   private async arenaVictory(run: ArenaRun): Promise<void> {
     Sfx.victory();
-    this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, this.anim(350));
+    this.settleEnemyScale();
+    this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
     await this.say(`${this.enemy.name} is defeated!`);
     // This bout's share is paid, the record moved up and the game saved right
     // here, so a run cut off from now on (the tab closed, a reload) keeps
