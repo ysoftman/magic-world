@@ -38,7 +38,9 @@ const OPENS: Record<DeliverableKey, (q: QuestState) => boolean> = {
 // A delivery pays DELIVERY_PAY times that, the low end of 1.0-1.3: the fights
 // that dropped the pieces already paid their own gold, so even at 1.0 a
 // delivered piece doubles what its fights earned — capped at one delivery a
-// day, it can't outrun hunting.
+// day, it can't outrun hunting. Retune DROP_TABLE, a region's encounter mix
+// or its foes' gold and these are worked out again by hand: no script in the
+// repo keeps them (sim:battle fights only bosses).
 const PIECE_GOLD: Record<DeliverableKey, number> = {
   slimeGel: 70,
   batWing: 95,

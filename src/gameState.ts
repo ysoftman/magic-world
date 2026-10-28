@@ -659,7 +659,8 @@ export const GameState = {
   } as InventoryState,
   equipped: { weapon: null, armor: null, accessory: null } as Record<EquipSlot, EquipmentKey | null>,
   // the BLACKSMITH's REFINE level of each weapon and armor (drops.ts), kept
-  // per piece, so swapping gear swaps the level with it; absent is +0
+  // per kind, so swapping gear swaps the level with it and a second copy (a
+  // quest's second MYTHRIL SWORD) shares it; absent is +0
   refine: {} as Partial<Record<RefineKey, number>>,
   caught: [] as string[],
   seenMonsters: [] as string[],

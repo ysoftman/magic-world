@@ -33,7 +33,8 @@ export interface Drop {
 // weapon back until the last fight. Rare jackpots (GOLDEN SLIME, CURSED
 // GOBLIN, NIGHT WISP) already pay out in gold and drop nothing; the forest's
 // and the snow field's (SILVER WASP, AURORA MOTH) leave two of their kind's
-// material as well, a sure step toward the BLACKSMITH's REFINE.
+// material as well, a sure step toward the BLACKSMITH's REFINE. The delivery
+// prices (delivery.ts PIECE_GOLD) are worked out from these odds.
 const DROP_TABLE: Record<string, { material: MaterialKey; chance: number; count: number }> = {
   slime: { material: "slimeGel", chance: 0.3, count: 1 },
   king: { material: "slimeGel", chance: 1, count: 3 },
@@ -105,7 +106,8 @@ export const RECIPES: Recipe[] = [
 // fight, its GLACIER 10% to 26% and its DRAKE 1% to 3%; stacked on a full
 // bestiary (+5) and PARTNER (+3), 92%, 50% and 16%. +2 a level made B45 near
 // sure (88%) before either bonus. The B50 DRAKE stays at 0% whatever the
-// refine (still 0% at +30): that wall is the ABYSS's own (abyss.ts).
+// refine (still 0% at +30, and at +5 with both bonuses): that wall is the
+// ABYSS's own (abyss.ts).
 export type RefineKey = "sword" | "shield" | "ironSword" | "ironShield" | "mythrilSword" | "mythrilShield" | "glacierMail" | "drakeBlade";
 export const MAX_REFINE = 5;
 export const REFINE_STEP = 1;

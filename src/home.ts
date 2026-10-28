@@ -15,10 +15,12 @@ import type { MaterialKey } from "./drops";
 // streakless volcano hunting, ~0.9 with the streak, ~0.75 of the ARENA. A
 // real sink once the purse sits at the 9,999 cap with nothing in the shop
 // left to buy, and each step alone still under that cap. The sim's heroes
-// reach the FLAME DRAKE with 1.3-1.7k G, so none is bought before it. The materials send the hero back through the regions
-// once more — the cave and town for the first, the forest for the second,
-// the snow field and the volcano for the last — so the house grows with the
-// adventure rather than with the purse alone.
+// reach the FLAME DRAKE with 1.3-1.7k G, so none is bought before it, and
+// mostly short of the materials there (of 30 runs, 1 held the BAT WINGs, 5
+// the WOLF FANGs, 1 the YETI FUR). The materials send the hero back through
+// the regions once more — the cave and town for the first, the forest for
+// the second, the snow field and the volcano for the last — so the house
+// grows with the adventure rather than with the purse alone.
 
 export interface HouseStage {
   // 12 glyphs at most (HomeUI's BUILD row)

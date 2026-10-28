@@ -1,6 +1,6 @@
 // Monte Carlo boss-fight sim: `bun run sim:battle` (see --help). The
-// numbers in TODO.md and the abyss/cooking/treasure/home comments ("balance
-// sim ...") come from a sim like this; this one lives in the repo so a
+// numbers in the abyss/cooking/treasure/home comments ("balance sim ...")
+// come from a sim like this; this one lives in the repo so a
 // retune can be checked again. It imports the game's own rules
 // (battleRules.ts, monsters.ts, companionSkills.ts, gameState.ts) and
 // replays only what BattleScene keeps to itself — the turn order and the
@@ -73,13 +73,21 @@ type Foe = ReturnType<typeof scaleEnemy>;
 
 // the bosses, their intended level and gear (battleRules.ts BOSS_TELLS note:
 // "KING Lv6 + SHIELD, TROLL Lv8 + IRON SHIELD, MOSS Lv12 + IRON, GLACIER
-// Lv18 + MYTHRIL, DRAKE Lv24 + MYTHRIL"), and TODO.md's observed first
-// levels at a 90% win, which this sim measured with the telegraphed strikes
-// (BOSS_TELLS) on. They sit 2-8 levels above the numbers from before the
-// strikes (WOLF 1/2/4/8/11, solo 3/4/8/10/17): a strike that takes up to 70%
-// of max HP is deadly at a low level. The fights at the intended levels still
-// come out as the monsters.ts and battleRules.ts comments say (rounds, HP
-// lost).
+// Lv18 + MYTHRIL, DRAKE Lv24 + MYTHRIL"), and the first levels at a 90% win
+// this sim measured with the telegraphed strikes (BOSS_TELLS) on (`todo`,
+// first noted in TODO.md; the summary prints them as "noted"). They sit 2-8
+// levels above the numbers from before the strikes (WOLF 1/2/4/8/11, solo
+// 3/4/8/10/17): a strike that takes up to 70% of max HP is deadly at a low
+// level. The fights at the intended levels still come out as the monsters.ts
+// and battleRules.ts comments say: 4.3-8.3 rounds beside the WOLF, 32-40% of
+// max HP taken (heals not subtracted). A boss falling before its intended
+// level is seen, not tuned: those comments aim at a threat, not a win rate,
+// and NEW GAME+ is the challenge. An unarmed Lv8 hero beats the MOSS GOLEM
+// ~90% of the time with the WOLF, ~28% alone (a point or two either way a
+// run). The lost progression sim (a WOLF player who takes each boss on as
+// soon as it reaches 90%: 95-100% against the KING at Lv5, MOSS Lv8,
+// GLACIER Lv13, DRAKE Lv16.5) predates the strikes and wasn't redone; this
+// sim gives GLACIER Lv13 ~60%, DRAKE Lv16 ~70%.
 interface BossCase {
   tag: string;
   key: keyof typeof ENEMIES;
@@ -468,7 +476,7 @@ for (const boss of bosses) {
       (atIntended ? `Lv${boss.level}: ${fmt(atIntended)}` : "-"),
   );
 }
-console.log("\n== first level at 90% wins, intended gear: sim / TODO.md ==");
+console.log("\n== first level at 90% wins, intended gear: sim / noted ==");
 console.log("BOSS     WOLF          SOLO          WOLF+GEAR at the intended level (win rounds dmg)");
 for (const line of summary) console.log(line);
 console.log(`\n${((Date.now() - started) / 1000).toFixed(1)}s`);

@@ -2155,6 +2155,12 @@ const NPC_BLACKSMITH_32 = [
 // green came out olive. The green slime's outline is a near-black green: at
 // 0x11543c every outline pixel sat within RGB distance 40 of the town's grass
 // and scrub (its home) and the forest's, so it had no edge on the field.
+// That darker outline, and the WOLF's and GOBLIN's below, lose more of their
+// 2px edge on the dark battle backdrops (at most 34.9% in the art measure:
+// the foe's spot in the cave and the ABYSS, the companion's on the volcano);
+// the bodies still read there (screenshots). If one ever needs more, lift
+// the backdrop a little behind that spot, weighed against backdrops.ts's
+// nothing-bright-behind-the-characters rule.
 const SLIME_PALETTE = { o: 0x082419, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
 const GOLD_SLIME_PALETTE = { o: 0x6b4508, s: 0xb7791f, g: 0xe8b923, m: 0xfad643, h: 0xfdeea0, w: 0xfffdf0 };
 const KING_SLIME_PALETTE = { o: 0x631028, s: 0x99182f, g: 0xcf2130, m: 0xef4444, h: 0xf98a72, w: 0xfde3cf };

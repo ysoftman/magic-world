@@ -304,6 +304,10 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   남는다. dev 전용 코드는 `process.env.NODE_ENV !== "production"` 으로 가른다. Bun 은 dev 서버와
   빌드 양쪽에서 이 값을 상수로 바꿔 넣지만 `import.meta.env` 는 그대로 둬서, Vite 를 걷어낼 때
   `import.meta.env.DEV` 를 남긴 배포판이 마을 진입에서 죽었다.
+- README "게임 기능" 절의 수치(아레나 상금 비율, 강타 상한, 주문 부가 효과 확률, 제작 장비·REFINE 수치,
+  시간 배속, 심연·밤·NEW GAME+ 배율 등)는 코드 상수를 옮겨 적은 것이다. `battleRules.ts`·`arena.ts`·
+  `abyss.ts`·`drops.ts`·`gameState.ts`·`home.ts`·`cooking.ts`·`events.ts` 의 상수를 바꾸면 같은 커밋에서
+  README 의 그 줄도 고친다.
 - 에셋/디버그 검증 스크립트는 `/tmp/pwcheck/`에 둔다 (png.mjs 디코더는 Paeth 필터 4 버그 수정본 사용)
 - playwright 의 `page.evaluate` 에서 `scene.start(...)` 처럼 Phaser 객체를 돌려주는 호출은
   `void` 로 감싼다. 실제 사례: 반환값(ScenePlugin)을 직렬화하느라 evaluate 가 끝나지 않아

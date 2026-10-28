@@ -37,7 +37,8 @@ const ODDS: Record<Exclude<Climate, "lowland">, Odds> = {
 // so day 0 (spring) still opens on it. The wet days (rain + storm: 45, 42, 40
 // and 25 out of 100) average 38 over the year, the share the single table had
 // (26 + 12), so the rain-fed farm and the faster bites (isWet) pay what they
-// did. Winter has no storms and fewer clear days, and snows instead.
+// did; a retune keeps that average. Winter has no storms and fewer clear
+// days, and snows instead.
 const LOWLAND: Record<Season, Odds> = {
   spring: [
     ["clear", 55],
@@ -95,7 +96,12 @@ export function weatherOn(day: number, region: Region, season: Season = seasonOn
 // Today's sky: the real-time day (econDay) rolled under the season the hero
 // sees (dayIndex, season.ts), so the sky matches the ground it falls on.
 // On the clock's day a x20 player could pull a rainy day up in ~2 minutes,
-// then fish and harvest it at NORMAL for a real 24.
+// then fish and harvest it at NORMAL for a real 24. The season still runs on
+// the clock, so turning only it at x20 drops the same econDay's roll onto
+// another season's table (spring's 55-60 is rain, autumn's clear; winter's
+// 45-75 snow) and can move a wet day. Left in: a season takes a real 4.8
+// minutes at x20 (up to 14.4 to reach a chosen one), not a day's 1.2, and
+// only rolls near a boundary move.
 export function weatherToday(region: Region): Weather {
   return weatherOn(econDay(), region, seasonToday());
 }

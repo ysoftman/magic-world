@@ -37,6 +37,9 @@ export interface AchievementDef {
 
 // A count-up achievement: earned once `have` reaches `need`, with the same
 // count as its progress, so the check and the board's number can't disagree.
+// Where `have` is the state of the moment (the streak for HOT STREAK and
+// UNSTOPPABLE, the gold held for GOLDBAG and TYCOON) the number falls again
+// on a loss or a spend: those ask for a streak or a purse, not a record.
 const atLeast = (have: () => number, need: number): Pick<AchievementDef, "check" | "progress"> => ({
   check: () => have() >= need,
   progress: () => ({ have: have(), need }),

@@ -30,14 +30,15 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 //   still offered when the cycle's harder foes put it out of reach.
 // - The stair up asks before it leaves (STAY first, and on ESC: walking onto
 //   it by mistake ended deep runs), and leaving by it from B2 down opens a
-//   portal there (GameState.abyssPortal, saved the moment LEAVE is picked):
-//   the cave's stair then offers the deeper of it and the checkpoint. The
-//   walk home to rest and back is its price, so it costs nothing else. It
-//   is used up once taken, and gone on a fall anywhere down here, so a death
-//   still costs the floors; a dive from B1 leaves it waiting, and leaving
-//   again keeps the deeper of the two. The floor is built anew and the hero
-//   walks in with HP and MP as they are, as from a checkpoint; NEW GAME+
-//   keeps it on the same terms.
+//   portal there (GameState.abyssPortal, saved the moment LEAVE is picked,
+//   so a reload or a quit to the title leaves none): the cave's stair then
+//   offers the deeper of it and the checkpoint. The walk home to rest and
+//   back is its price, so it costs nothing else. It is used up once taken,
+//   and gone on a fall anywhere down here, so a death still costs the
+//   floors; a dive from B1 leaves it waiting, and leaving again keeps the
+//   deeper of the two. The floor is built anew and the hero walks in with HP
+//   and MP as they are, as from a checkpoint; NEW GAME+ keeps it on the same
+//   terms.
 // - No day or night underground: no night stat/loot shift, no night
 //   encounter rate, a standing gloom instead of the clock's.
 export const ABYSS_W = 22;
@@ -97,10 +98,13 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
 //   (the B25 FLAME DRAKE at x2.44 after nine floors of attrition): ~0.85x
 //   with the deaths' half purses. Met fresh at Lv30 in the forged kit with
 //   the TALISMAN, ten HI-POTIONs, BEAN SOUP and the WOLF, the B25 DRAKE
-//   falls 26% of the time, the B45 GLACIER GOLEM 58% (1% without the
-//   TALISMAN: frozen), the B50 DRAKE never — the floor no dive gets past;
-//   alone, none of the three falls. Those are the repo's sim, not the lost
-//   one: `bun run sim:battle --abyss 25 --level 30 --potions 0
+//   falls 26% of the time (as often without the TALISMAN: it neither
+//   poisons nor freezes), the B45 GLACIER GOLEM 58% (1% without the
+//   TALISMAN: frozen), the B50 DRAKE never — the floor no dive gets past, by
+//   design, even at REFINE +5 (drops.ts); alone, none of the three falls.
+//   That the B25 DRAKE stands firmer than the deeper GOLEM is seen and left
+//   as it is. Those are the repo's sim, not the lost one:
+//   `bun run sim:battle --abyss 25 --level 30 --potions 0
 //   --hipotions 10 --talisman --meal def --n 20000`, its WOLF+GEAR column
 //   (45 and 50 likewise; runs agree within a point). (Steps chosen
 //   on the earlier ~20s-a-fight model: 0.03 with guardians in full made
@@ -110,7 +114,9 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
 //   beat it, and every fight that deep still risks half the purse. The
 //   portal (above) undoes the sim's attrition: a hero low on HP can walk
 //   home to rest and come back to the same floor, so deep floors are easier
-//   to reach than these one-go figures, at the price of the walk.
+//   to reach than these one-go figures, at the price of the walk. Slipping
+//   past roamers instead of fighting them all (there is always a way round,
+//   see the zones below) eases it too, and isn't in the sim either.
 //   Gold also stops at MAX_GOLD (9999) whatever the source.
 // - materials: drops.ts rollDrop as anywhere else, the count x2 from B11 and
 //   x3 from B21. The shop won't buy materials, so this is forge and delivery
