@@ -12,7 +12,7 @@
 
 ## 커밋은 의미 단위로 그때그때
 
-- 기능·수정·문서 한 단위가 끝나고 검증(`bunx tsc --noEmit`, 수정 파일 `biome check --write`,
+- 기능·수정·문서 한 단위가 끝나고 검증(`bunx tsc --noEmit`, `scripts/` 를 고쳤으면 `bunx tsc -p scripts --noEmit`, 수정 파일 `biome check --write`,
   그리드를 고쳤으면 `bun run check:art`)을 통과하면 **그 단위만 바로 커밋**한다. 한 커밋에 여러
   기능을 섞지 않는다. 실제 사례: 한 세션의 작업이 60개 파일 커밋 하나로 들어가, 400여 조각을
   나눠 13개 커밋으로 다시 만들어야 했다.

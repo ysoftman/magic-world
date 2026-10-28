@@ -1,0 +1,9 @@
+{
+  // dev server, build and sims run on Bun; the root config keeps its globals out of src
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"]
+  },
+  "include": ["."]
+}

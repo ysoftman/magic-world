@@ -11,7 +11,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true
+    "noEmit": true,
+    // the game runs in the browser: no Bun or Node globals (scripts/tsconfig.json has them)
+    "types": []
   },
   "include": ["src"]
 }
