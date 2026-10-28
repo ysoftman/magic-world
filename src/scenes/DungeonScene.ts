@@ -631,11 +631,14 @@ export class DungeonScene extends Phaser.Scene {
     const { x, y } = ABYSS_STAIRS_POS;
     bakeAbyssStairs(this);
     this.add.image(x, y, STAIRS_DOWN_KEY).setDepth(3);
+    // at the map tags' 11, over the guide arrow (10.5), unlike the TOWN
+    // marker's 9: from the top of the stair's row the arrow, pointing the way
+    // out, sat on the tag's SS
     const label = this.add
       .text(x, y - TILE + 8, "ABYSS", retroStyle(5, "#c084fc"))
       .setOrigin(0.5, 1)
       .setStroke("#1a1028", 4)
-      .setDepth(9);
+      .setDepth(11);
     this.tweens.add({ targets: label, y: label.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
     const stair = this.add.zone(x, y, TILE, TILE);
     this.physics.add.existing(stair);
