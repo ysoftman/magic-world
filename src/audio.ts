@@ -547,7 +547,10 @@ const MASTER_VOLUME = 2.8;
 const BGM_VOLUME = 0.055;
 // Weather beds at full strength (a storm's rain, a blizzard's hardest gust).
 // They play for minutes at a time, so they sit well under a single blip.
-const RAIN_VOLUME = 0.035;
+// Rain is broadband hiss, which sounds louder than its RMS: at 0.035 a storm
+// metered level with the BGM on the master (-30 vs -31 dBFS, unweighted), so
+// it sits 6dB under that, near the blizzard wind's -38.
+const RAIN_VOLUME = 0.018;
 const WIND_VOLUME = 0.04;
 const THUNDER_VOLUME = 0.14;
 // Area ambience (Sfx.ambience/setDrone): under the weather beds and far under
