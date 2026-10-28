@@ -6,6 +6,11 @@
 
 ## 예정
 
+- Vite 의존성 제거(조사 끝, 보류 중 — 2026-10-28 qa 가 `/tmp` 복사본에서 Bun 만으로 dev·build 를 띄워 타이틀→마을·글꼴·맵 편집기 저장까지 확인). 큰 걸림돌 셋: (1) `bun build` 는 수동 vendor 청크가 없어 Phaser 가 한 번들에 묶임 → 재배포마다 gzip 약 150KB 대신 522KB 를 다시 받음, Phaser 를 external 로 빼고 `node_modules/phaser/dist` 빌드본을 따로 내보내는 안을 먼저 시험, (2) 플레이테스트 하네스가 Vite 의 소스 모듈 서빙(`/src/main.ts` 가로채기, 소스 URL import)에 기댐 → Bun dev 번들(`/_bun/client/*.js`)을 가로채는 안을 먼저 시험(DEV 전용 노출 훅 커밋은 AGENTS 정책 변경이라 마지막 수단), (3) `import.meta.env.DEV` — `--define import.meta.env.DEV:false` 를 빠뜨리면 배포판이 마을 진입에서 죽음(실측). 나머지는 기계적: dev.ts(`Bun.serve` + HTML import + hmr, `/__map` 라우트로 맵 편집기 저장), favicon 경로, woff2 를 파일로 내보내기(`--loader`), preview 스크립트, AGENTS·README·SKILL 의 dev 서버·HMR 소켓 문장. 배포 워크플로는 그대로
+- 밤 조명 라이트맵(RenderTexture): 밤 오버레이를 MULTIPLY 로 바꾼 뒤에도 ADD 글로우가 빛 안의 원래 색을 돌려주지 못하면, 씬마다 1280x720 RT 에 밤 배율 fill + 글로우 stamp 를 매 프레임 그려 MULTIPLY 로 표시(메모리 +3.7MB, NEAREST·2px 계단 글로우 유지) — 2026-10-28 Phaser 스킬 검토(docs) 후보 3
+- 텍스트를 RetroFont BitmapText 로 옮기기(장기): DPR 과 무관하게 선명하고 글자 텍스처 메모리(해상도 3 에서 약 37MB)와 갱신 비용이 거의 사라짐. setStroke 외곽선 미지원이라 외곽선 변형을 따로 구워야 하고 retroStyle(5)(2.5배)는 고르지 않은 픽셀이 됨 — Phaser 스킬 검토(qa) 후보 8
+- 타자기 문장의 텍스처 재업로드: 대화창·전투 메시지가 글자마다 Text 를 다시 구워 해상도 3 에서 타이핑 중 프레임당 약 4MB 를 GPU 로 올림. 실기기(모바일) 프로파일 뒤 무거우면 줄 단위 공개(setCrop)나 BitmapText — qa 후보 6
+- 전체화면 토글: 진입 수단이 없음. 설정에 FULLSCREEN 행 + pointerup 에서 `scale.toggleFullscreen()`(아이폰 Safari 는 요소 전체화면 미지원) — Phaser 스킬 검토(scene-ux) 후보 9
 - ABYSS: 진행 중인 층(만난 몬스터·상자 포함)은 저장되지 않음 — 새로고침·타이틀 복귀 시 마지막 체크포인트(GUARDIAN 처치 다음 층)부터 다시 들어가 최대 5층을 잃음(의도). 포탈은 위 계단에서 LEAVE 를 고른 순간에만 저장되므로 새로고침·타이틀 복귀로는 생기지 않음. 골드 시급·깊이 벽은 밸런스 시뮬 수치로 abyss.ts 주석에 정리(층당 6마리 전부 싸우는 모델, 상자 제외) — 로머를 피해 가는 플레이와 포탈로 마을에서 쉬고 돌아오는 플레이는 시뮬에 없음(포탈이 있으면 깊은 층 도달이 시뮬 수치보다 쉬움)
 - 게임패드(src/ui/Gamepad.ts): 실기기 패드로 확인 필요 — playwright 의 가짜 navigator.getGamepads(standard mapping)로만 검증함(타이틀 A 새 게임·이어하기, D-pad·왼쪽 스틱 이동과 데드존, Select 도움말, L3 미니맵, 전투 A 메시지 넘김·X FIGHT·L3 WARD·R3 NOVA·Select STEAL). standard 가 아닌 배치의 패드는 같은 번호로 짐작해 읽음. 패드 입력은 브라우저 user activation 이 아니라 AudioContext 는 키보드·클릭 뒤에만 깨어남. 패드 매핑 없음: 필드의 S·M·Q·CTRL+S, 타이틀의 C/N/P/D/U 와 그 Y 확인
 - 가을 숲 전투 배경: 진홍 벽을 자두빛 황혼·먼지 낀 황갈색 벽으로 다시 칠해 전투 띠 chroma 0.20→0.14(봄 숲 0.16, 겨울 숲 0.14, 캐릭터 평균 0.35)로 낮춤 — 헤드리스 chromium 측정뿐이라 실기기에서 눈으로 확인 필요
