@@ -10,7 +10,7 @@ const result = await Bun.build({
   splitting: true,
   minify: true,
   // the dev-only code paths (CTRL+G gold) drop out of the bundle
-  define: { "import.meta.env.DEV": "false" },
+  define: { "process.env.NODE_ENV": '"production"' },
 });
 // its own output: nothing loads it
 await rm("dist/src", { recursive: true });

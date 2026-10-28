@@ -403,7 +403,7 @@ export class MapEditor {
     // written to the file, or kept as the override below: either way leaving
     // the editor has nothing left to save over it
     this.dirty = false;
-    // the header vite.config.ts asks for before it writes the file
+    // the header scripts/dev.ts asks for before it writes the file
     fetch("/__map", { method: "POST", headers: { "X-Map-Editor": "1" }, body: source })
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));

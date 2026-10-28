@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun scripts/dev.ts",
     "build": "tsc && bun scripts/build.ts",
     "preview": "bun scripts/preview.ts",
     "check:art": "bun scripts/check-art.mjs",
@@ -15,7 +15,6 @@
     "phaser": "^4.2.1"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "vite": "^8.2.1"
+    "typescript": "^7.0.2"
   }
 }

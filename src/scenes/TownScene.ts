@@ -767,9 +767,9 @@ export class TownScene extends Phaser.Scene {
       this.iQueued = true;
     });
     // CTRL+G, +100 gold: a dev server's test key only. A build leaves it out
-    // (Vite folds import.meta.env.DEV to false), or anyone could buy their way
-    // up the RANK BOARD and into TYCOON.
-    if (import.meta.env.DEV) {
+    // (scripts/build.ts sets NODE_ENV to production), or anyone could buy
+    // their way up the RANK BOARD and into TYCOON.
+    if (process.env.NODE_ENV !== "production") {
       this.keyG = kb.addKey(Phaser.Input.Keyboard.KeyCodes.G);
       this.keyG.on(Phaser.Input.Keyboard.Events.DOWN, () => {
         if (this.keyG.ctrlKey) this.gCheatQueued = true;
@@ -1396,7 +1396,7 @@ export class TownScene extends Phaser.Scene {
     }
     this.minimap.update();
 
-    if (import.meta.env.DEV && this.gCheatQueued) {
+    if (process.env.NODE_ENV !== "production" && this.gCheatQueued) {
       this.gCheatQueued = false;
       const gained = GameState.gainGold(100);
       GameState.save();
