@@ -28,6 +28,5 @@
 - 주민(Villagers) 스프라이트 몸이 고정 이름표(HOME 등)와 잠깐 겹쳐 보임 — 주민이 다닐 칸(`villagerGrid`)은 주민 자기 이름표 사각형만 고정 이름표를 피하게 고르고 몸은 따지지 않음(관찰, 미수정)
 - 토스트가 세 줄 이상으로 줄바꿈되면(이름이 긴 업적 7개 이상이 한꺼번에 뜰 때, 줄당 60글자 기준) 마을의 개발용 `MAP EDITED` 안내(y 160..180, 맵 편집본이 있을 때만)에 닿을 수 있음 — 두 줄 토스트는 y 100..152 라 닿지 않음(드묾, 미수정)
 - 동굴·ABYSS·화산 전투 배경에서 외곽을 어둡게 한 SLIME·WOLF·GOBLIN 의 가장자리 2px 소실이 늘었음(art 측정 최대 34.9%, 동굴·ABYSS 는 적 자리, 화산은 동료 자리) — 몸통 대비로 화면에서는 읽힘(스크린샷 확인). 더 필요하면 배경 쪽에서 그 자리 뒤를 조금 밝히는 방법을 AGENTS 의 "캐릭터 자리 뒤에 밝은 것 금지" 규칙과 함께 판단
-- 심연 B50 DRAKE 가디언은 Lv30·단조 장비·REFINE +5·도감 +5·PARTNER +3 으로도 sim 승률 0% — 끝없는 심연의 깊이 벽으로 의도함(결정). B45 GLACIER 는 +5 에서 약 80%(`bun run sim:battle --abyss 45 --level 30 --potions 0 --hipotions 10 --talisman --meal def --refine 5`, WOLF 81%; +0 은 58%)
-- abyss.ts 주석의 "B45 GLACIER 43%" 는 사라진 /tmp 시뮬 기준이고, 저장소 sim:battle(--abyss 45, 같은 키트)은 +0 에서 59% 근처 — 플레이어 모델 가정 차이(관찰)
+- 심연 B50 DRAKE 가디언은 Lv30·단조 장비·REFINE +5·도감 +5·PARTNER +3 으로도 sim 승률 0% — 끝없는 심연의 깊이 벽으로 의도함(결정). B45 GLACIER 는 +5 에서 약 80%(`bun run sim:battle --abyss 45 --level 30 --potions 0 --hipotions 10 --talisman --meal def --refine 5`, WOLF 81%; +0 은 58%). B25 DRAKE 는 같은 키트 +0 에서 26%(부적 유무 같음)로 B45 보다 낮음 — 관찰, 조정 안 함
 - REFINE 은 장비 키별 기록이라 같은 장비 2개(퀘스트 보상으로 생긴 두 번째 MYTHRIL SWORD 등)가 강화 수치를 함께 씀(관찰)

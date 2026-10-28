@@ -82,7 +82,7 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
 //   ABYSS_GUARDIAN_GOLD_SHARE of its (scaled) gold, as the ARENA pays a cut:
 //   its first kill already paid in full. The yardstick is hunting the
 //   VOLCANO by day: 62.3 G a fight (its 40/35/25 MAGMA SLIME / FIRE IMP /
-//   SALAMANDER mix). The balance sim (/tmp/pwcheck/sim, report.ts and
+//   SALAMANDER mix). The lost balance sim (/tmp/pwcheck/sim, report.ts and
 //   econ.ts: the game's battle rules, a fight's time timed in the live game
 //   — ~10-12s for a two-round volcano fight, ~6-9s for a one-round cave
 //   one) puts a fight every ~26s with the encounter waits, 125-145 an hour:
@@ -95,9 +95,14 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
 //   there), a checkpoint start from B11 to B20 ~1.75x (82%); at Lv24 B1 to
 //   B20 is ~0.8x and only a quarter get there. From B21 it ends in a fall
 //   (the B25 FLAME DRAKE at x2.44 after nine floors of attrition): ~0.85x
-//   with the deaths' half purses. Met fresh at Lv30 with ten HI-POTIONs and
-//   BEAN SOUP, the B25 DRAKE falls 88% of the time, the B45 GLACIER GOLEM
-//   43%, the B50 DRAKE never — the floor a run really ends on. (Steps chosen
+//   with the deaths' half purses. Met fresh at Lv30 in the forged kit with
+//   the TALISMAN, ten HI-POTIONs, BEAN SOUP and the WOLF, the B25 DRAKE
+//   falls 26% of the time, the B45 GLACIER GOLEM 58% (1% without the
+//   TALISMAN: frozen), the B50 DRAKE never — the floor no dive gets past;
+//   alone, none of the three falls. Those are the repo's sim, not the lost
+//   one: `bun run sim:battle --abyss 25 --level 30 --potions 0
+//   --hipotions 10 --talisman --meal def --n 20000`, its WOLF+GEAR column
+//   (45 and 50 likewise; runs agree within a point). (Steps chosen
 //   on the earlier ~20s-a-fight model: 0.03 with guardians in full made
 //   B21-25 2.7x, 0.01 with a quarter share left a dive to B30 no better
 //   than the field.) The ARENA's all-five run pays ~2.2x the streakless
