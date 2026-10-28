@@ -57,6 +57,10 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   그래서 지금은 조우 모자이크(`fx.ts` 의 `encounterOut`)에만 쓴다. 또 필터는 처음 쓸 때 셰이더를
   만드느라 한 프레임이 멈춘다(Blocky 213ms, 300ms 페이드의 대부분). 새 필터를 들이면
   `warmEncounterOut` 처럼 타이틀에서 화면이 바뀌지 않는 값(1px 블록)으로 한 프레임 미리 걸어 둔다.
+- `scene.start`/`scene.restart` 에는 데이터가 없어도 `{}` 를 넘긴다. Phaser 는 데이터 없는 start 에
+  지난번 데이터를 다시 준다(`node_modules/phaser/src/scene/Systems.js:742`,
+  `if (data) settings.data = data`). 받는 쪽에서 비우는 곳(`takeFightSpot`, `EndingScene`)도 있지만,
+  새 씬은 그걸 빠뜨리기 쉽다.
 - 브라우저로 직접 확인하는 일은 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
 
 ## UI 텍스트가 패널/화면을 벗어나지 않는지 확인
@@ -136,13 +140,13 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   값, 1~3)으로 구워진다. 1로 구우면 회색 AA 테두리가 FIT 확대(맥북 DPR2 에서 2.25배)로 번져
   흐려 보였다(20px 줄의 중간 밝기 픽셀 24.7% → 3 에서 0%). 그래서 Text 는 반드시 `retroStyle`
   이나 `bodyStyle` 로 만든다. 텍스처 메모리가 배율의 제곱으로 늘어서 상한이 3이다(마을 431줄 기준 3.9 → 35MB).
+- 화면 배율: 표시 크기는 `main.ts` 의 `scale.snap`(320x180)으로 그 배수까지 내려 잡는다. 그래서
+  아트 1픽셀이 늘 정수 CSS px 이고, 맥북 DPR2 에서는 정확히 2배다. 실제 사례: 2.19배일 때 같은 글자
+  획이 16·17·18 기기픽셀로 섞였다. 대가로 화면이 한 단계까지 작아진다(맥북 91%).
 
 ### 패널 키 안내 표기
 
 패널의 키 안내 줄은 한 형식으로 쓴다. 실제 사례: 패널마다 `J/K: PICK`, `JK: PLOT`,
-- 화면 배율: 표시 크기는 `main.ts` 의 `scale.snap`(320x180)으로 그 배수까지 내려 잡는다. 그래서
-  아트 1픽셀이 늘 정수 CSS px 이고, 맥북 DPR2 에서는 정확히 2배다. 실제 사례: 2.19배일 때 같은 글자
-  획이 16·17·18 기기픽셀로 섞였다. 대가로 화면이 한 단계까지 작아진다(맥북 91%).
 `HJKL: MOVE`, `ARROWS/HJKL: SELECT/ADJUST`, 전투의 `H/L/J/K:NAV` 가 섞여 있었다.
 
 - `키: 동작` 묶음을 공백 3칸으로 잇는다. 예: `JK: MOVE   Z: COOK   ESC: CLOSE`.
