@@ -62,6 +62,7 @@ import {
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
+  FieldKeys,
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
@@ -298,18 +299,8 @@ export class TownScene extends Phaser.Scene {
   private snowOverlapActive = false;
   private volcanoOverlapActive = false;
   private zQueued = false;
-  private sQueued = false;
-  private ctrlSQueued = false;
-  private iQueued = false;
   private gCheatQueued = false;
-  private mQueued = false;
-  private tQueued = false;
   private cQueued = false;
-  private bQueued = false;
-  private aQueued = false;
-  private oQueued = false;
-  private qQueued = false;
-  private uQueued = false;
   // claims achievements at most once per second; the checks read live
   // GameState, so battle/fishing/treasure mutations made while a modal or
   // another scene owns input are caught on the next tick after returning here
@@ -335,14 +326,8 @@ export class TownScene extends Phaser.Scene {
   private keyL!: Phaser.Input.Keyboard.Key;
   private keyZ!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
-  private keyS!: Phaser.Input.Keyboard.Key;
-  private keyI!: Phaser.Input.Keyboard.Key;
   private keyG!: Phaser.Input.Keyboard.Key;
-  private keyM!: Phaser.Input.Keyboard.Key;
-  private keyT!: Phaser.Input.Keyboard.Key;
-  private keyB!: Phaser.Input.Keyboard.Key;
-  private keyA!: Phaser.Input.Keyboard.Key;
-  private keyO!: Phaser.Input.Keyboard.Key;
+  private fieldKeys!: FieldKeys;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -363,22 +348,8 @@ export class TownScene extends Phaser.Scene {
   }): void {
     // Every entry (back from a fight, quit and continue, a new season) runs this same
     // instance again, fields and all: a key queued while the last run faded
-    // out would otherwise act on this run's first frame.
-    this.editorQueued =
-      this.zQueued =
-      this.sQueued =
-      this.ctrlSQueued =
-      this.iQueued =
-      this.gCheatQueued =
-      this.mQueued =
-      this.tQueued =
-      this.cQueued =
-      this.bQueued =
-      this.aQueued =
-      this.oQueued =
-      this.qQueued =
-      this.uQueued =
-        false;
+    // out would otherwise act on this run's first frame (FieldKeys: the rest).
+    this.editorQueued = this.zQueued = this.gCheatQueued = this.cQueued = false;
     Sfx.playBgm(OVERWORLD_THEME);
     // the title bakes the save's look before it starts the town; this covers
     // any other way in (a no-op when that look is already baked)
@@ -757,15 +728,8 @@ export class TownScene extends Phaser.Scene {
     this.keySpace.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.zQueued = true;
     });
-    this.keyS = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keyS.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (e.ctrlKey) this.ctrlSQueued = true;
-      else this.sQueued = true;
-    });
-    this.keyI = kb.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-    this.keyI.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      this.iQueued = true;
-    });
+    // the town's I takes a repeat keydown too, as it always did
+    this.fieldKeys = new FieldKeys(this, { repeatI: true });
     // CTRL+G, +100 gold: a dev server's test key only. A build leaves it out
     // (scripts/build.ts sets NODE_ENV to production), or anyone could buy
     // their way up the RANK BOARD and into TYCOON.
@@ -775,36 +739,9 @@ export class TownScene extends Phaser.Scene {
         if (this.keyG.ctrlKey) this.gCheatQueued = true;
       });
     }
-    this.keyM = kb.addKey(Phaser.Input.Keyboard.KeyCodes.M);
-    this.keyM.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      this.mQueued = true;
-    });
     // C at HOME: a new look (the bubble says so; on touch the bubble is tapped)
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.C).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.cQueued = true;
-    });
-    this.keyT = kb.addKey(Phaser.Input.Keyboard.KeyCodes.T);
-    this.keyT.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.tQueued = true;
-    });
-    this.keyB = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B);
-    this.keyB.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.bQueued = true;
-    });
-    this.keyA = kb.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyA.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.aQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.qQueued = true;
-    });
-    // quest journal: U, since R (restore) and X (export) belong to the map editor
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.uQueued = true;
-    });
-    this.keyO = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
-    this.keyO.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.oQueued = true;
     });
     // dev tool: paint tiles and drag landmarks around, then export the result.
     // On a Mac this needs "F1, F2 as standard function keys" (or fn+F2); the
@@ -1432,18 +1369,11 @@ export class TownScene extends Phaser.Scene {
       announceLooks(this, earned, STATUS_HUD_TOAST_Y);
     }
 
-    if (this.sQueued) {
-      this.sQueued = false;
-      this.toggleStatus();
-    }
+    if (this.fieldKeys.take("S")) this.toggleStatus();
 
-    if (this.ctrlSQueued) {
-      this.ctrlSQueued = false;
-      GameState.save();
-    }
+    if (this.fieldKeys.take("CTRL+S")) GameState.save();
 
-    if (this.mQueued) {
-      this.mQueued = false;
+    if (this.fieldKeys.take("M")) {
       const muted = Sfx.toggleMuted();
       showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", STATUS_HUD_TOAST_Y);
     }
@@ -1457,39 +1387,18 @@ export class TownScene extends Phaser.Scene {
       return;
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the question's ESC would close that panel too
-      if (!this.uiBlocking() && !this.enteringDungeon) askQuitToTitle(this.dialogue, () => this.quit());
-    }
+    // never over an open panel: the question's ESC would close that panel too
+    if (this.fieldKeys.take("Q") && !this.uiBlocking() && !this.enteringDungeon) askQuitToTitle(this.dialogue, () => this.quit());
 
-    if (this.tQueued) {
-      this.tQueued = false;
-      if (!this.uiBlocking()) this.minimap.toggle();
-    }
+    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
 
     if (this.uiBlocking()) {
       this.zQueued = false;
-      if (this.iQueued) {
-        this.iQueued = false;
-        if (this.inventory.isActive()) this.inventory.close();
-      }
-      if (this.bQueued) {
-        this.bQueued = false;
-        if (this.bestiary.isActive()) this.bestiary.close();
-      }
-      if (this.aQueued) {
-        this.aQueued = false;
-        if (this.achievementsUI.isActive()) this.achievementsUI.close();
-      }
-      if (this.uQueued) {
-        this.uQueued = false;
-        if (this.questLog.isActive()) this.questLog.close();
-      }
-      if (this.oQueued) {
-        this.oQueued = false;
-        if (this.settingsUI.isActive()) this.settingsUI.close();
-      }
+      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
+      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
+      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
+      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
+      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.dialogue.update();
@@ -1531,32 +1440,27 @@ export class TownScene extends Phaser.Scene {
       this.announceSeason();
     }
 
-    if (this.iQueued) {
-      this.iQueued = false;
+    if (this.fieldKeys.take("I")) {
       this.inventory.open();
       return;
     }
 
-    if (this.bQueued) {
-      this.bQueued = false;
+    if (this.fieldKeys.take("B")) {
       this.bestiary.open();
       return;
     }
 
-    if (this.aQueued) {
-      this.aQueued = false;
+    if (this.fieldKeys.take("A")) {
       this.achievementsUI.open();
       return;
     }
 
-    if (this.uQueued) {
-      this.uQueued = false;
+    if (this.fieldKeys.take("U")) {
       this.questLog.open();
       return;
     }
 
-    if (this.oQueued) {
-      this.oQueued = false;
+    if (this.fieldKeys.take("O")) {
       this.settingsUI.open();
       return;
     }

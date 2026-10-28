@@ -656,6 +656,56 @@ export function takeFightSpot(scene: Phaser.Scene, data?: { fromBattle?: boolean
   return spot;
 }
 
+/** The keys every map scene reads alike, besides walking (FieldKeys). */
+export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" | "Q";
+
+/**
+ * S (the HUD) and CTRL+S (save), M (mute), T (the minimap), the panels' I B
+ * A U O — the journal is U because the town's map editor has R and X — and Q
+ * (quit). A keydown only queues its key and update() takes it, each at its
+ * own point in the frame, so a frame still handles them in the scene's own
+ * order (the town reads T after its quit guard, the fields before it).
+ *
+ * Built in create(): every entry (back from a fight, quit and continue, a new
+ * season) runs the same scene instance again, and a key queued while the last
+ * run faded out would otherwise act on this run's first frame. The scene's
+ * keys go at its shutdown, these listeners with them.
+ *
+ * A repeat keydown (a key held through the scene switch reaches the fresh Key
+ * as one) is dropped, but on S and M, which never checked, and on the town's I
+ * (`repeatI`). Built before the scene's TouchControls, so touch gets a button
+ * for each of these its MENU has.
+ */
+export class FieldKeys {
+  private readonly queued = new Set<FieldKey>();
+
+  constructor(scene: Phaser.Scene, { repeatI = false }: { repeatI?: boolean } = {}) {
+    const kb = scene.input.keyboard!;
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    const on = (code: number, key: (e: KeyboardEvent) => FieldKey | null): void => {
+      kb.addKey(code).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
+        const pressed = key(e);
+        if (pressed) this.queued.add(pressed);
+      });
+    };
+    const once = (code: number, key: FieldKey, repeats = false): void => on(code, (e) => (repeats || !e.repeat ? key : null));
+    on(K.S, (e) => (e.ctrlKey ? "CTRL+S" : "S"));
+    on(K.M, () => "M");
+    once(K.T, "T");
+    once(K.I, "I", repeatI);
+    once(K.B, "B");
+    once(K.A, "A");
+    once(K.U, "U");
+    once(K.O, "O");
+    once(K.Q, "Q");
+  }
+
+  /** Whether `key` was pressed since it was last taken; taking it clears it. */
+  take(key: FieldKey): boolean {
+    return this.queued.delete(key);
+  }
+}
+
 // long enough for the SAVED toast to be readable before the title
 export const QUIT_SAVE_DELAY = 700;
 

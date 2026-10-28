@@ -14,6 +14,7 @@ import {
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
+  FieldKeys,
   fadeAreaTitle,
   isWalkableCell,
   noteFightSpot,
@@ -89,8 +90,6 @@ export class ForestScene extends Phaser.Scene {
   private roamers: Roamer[] = [];
   private encounterCooldown = 0;
   private exitingForest = false;
-  private sQueued = false;
-  private ctrlSQueued = false;
   private lastMove: LastMove = "down";
 
   private keyLeft!: Phaser.Input.Keyboard.Key;
@@ -101,16 +100,7 @@ export class ForestScene extends Phaser.Scene {
   private keyJ!: Phaser.Input.Keyboard.Key;
   private keyK!: Phaser.Input.Keyboard.Key;
   private keyL!: Phaser.Input.Keyboard.Key;
-  private keyS!: Phaser.Input.Keyboard.Key;
-  private keyM!: Phaser.Input.Keyboard.Key;
-  private mQueued = false;
-  private tQueued = false;
-  private iQueued = false;
-  private bQueued = false;
-  private aQueued = false;
-  private uQueued = false;
-  private oQueued = false;
-  private qQueued = false;
+  private fieldKeys!: FieldKeys;
   private quitting = false;
   // the season the forest was built in (or last turned to in place), and
   // the fade out to building it again once the clock moves it into another
@@ -146,20 +136,6 @@ export class ForestScene extends Phaser.Scene {
   // left: where they stood, the map as they left it and the sky they saw, and
   // none of an arrival's title, caption or step out of the monster zones
   create(data?: { turn?: { at: { x: number; y: number }; mapOpen: boolean; weather: Weather }; fromBattle?: boolean }): void {
-    // Every entry (back from a fight, quit and continue, a new season) runs this same
-    // instance again, fields and all: a key queued while the last run faded
-    // out would otherwise act on this run's first frame.
-    this.sQueued =
-      this.ctrlSQueued =
-      this.mQueued =
-      this.tQueued =
-      this.iQueued =
-      this.bQueued =
-      this.aQueued =
-      this.uQueued =
-      this.oQueued =
-      this.qQueued =
-        false;
     const turn = data?.turn;
     // back from a fight (takeFightSpot): the same, where the fight began
     const back = takeFightSpot(this, data);
@@ -279,37 +255,7 @@ export class ForestScene extends Phaser.Scene {
     this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
     this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
     this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
-    this.keyS = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keyS.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (e.ctrlKey) this.ctrlSQueued = true;
-      else this.sQueued = true;
-    });
-    this.keyM = kb.addKey(Phaser.Input.Keyboard.KeyCodes.M);
-    this.keyM.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      this.mQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.T).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.tQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.I).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.iQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.B).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.bQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.aQueued = true;
-    });
-    // registered before TouchControls is built, so touch gets a U button too
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.uQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.O).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.oQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.qQueued = true;
-    });
+    this.fieldKeys = new FieldKeys(this);
     const help = addHelpPopup(
       this,
       [
@@ -407,26 +353,16 @@ export class ForestScene extends Phaser.Scene {
       announceLooks(this, earned, FIELD_TOAST_Y);
     }
 
-    if (this.sQueued) {
-      this.sQueued = false;
-      this.toggleStatus();
-    }
+    if (this.fieldKeys.take("S")) this.toggleStatus();
 
-    if (this.ctrlSQueued) {
-      this.ctrlSQueued = false;
-      GameState.save();
-    }
+    if (this.fieldKeys.take("CTRL+S")) GameState.save();
 
-    if (this.mQueued) {
-      this.mQueued = false;
+    if (this.fieldKeys.take("M")) {
       const muted = Sfx.toggleMuted();
       showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", FIELD_TOAST_Y);
     }
 
-    if (this.tQueued) {
-      this.tQueued = false;
-      if (!this.uiBlocking()) this.minimap.toggle();
-    }
+    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
 
     // saved and on the way to the title (quit), or fading out to the new
     // season (turnSeason): nothing else moves. The roamers are kept to their
@@ -437,36 +373,18 @@ export class ForestScene extends Phaser.Scene {
       return;
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the question's ESC would close that panel too
-      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
-    }
+    // never over an open panel: the question's ESC would close that panel too
+    if (this.fieldKeys.take("Q") && !this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
 
     // Items and the bestiary are reachable here too now; without them a low-HP
     // run through the cave or forest had no way to drink a potion outside of a
     // battle.
     if (this.uiBlocking()) {
-      if (this.iQueued) {
-        this.iQueued = false;
-        if (this.inventory.isActive()) this.inventory.close();
-      }
-      if (this.bQueued) {
-        this.bQueued = false;
-        if (this.bestiary.isActive()) this.bestiary.close();
-      }
-      if (this.aQueued) {
-        this.aQueued = false;
-        if (this.achievementsUI.isActive()) this.achievementsUI.close();
-      }
-      if (this.uQueued) {
-        this.uQueued = false;
-        if (this.questLog.isActive()) this.questLog.close();
-      }
-      if (this.oQueued) {
-        this.oQueued = false;
-        if (this.settingsUI.isActive()) this.settingsUI.close();
-      }
+      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
+      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
+      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
+      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
+      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.inventory.update();
@@ -493,32 +411,27 @@ export class ForestScene extends Phaser.Scene {
       this.season = season;
     }
 
-    if (this.iQueued) {
-      this.iQueued = false;
+    if (this.fieldKeys.take("I")) {
       this.inventory.open();
       return;
     }
 
-    if (this.bQueued) {
-      this.bQueued = false;
+    if (this.fieldKeys.take("B")) {
       this.bestiary.open();
       return;
     }
 
-    if (this.aQueued) {
-      this.aQueued = false;
+    if (this.fieldKeys.take("A")) {
       this.achievementsUI.open();
       return;
     }
 
-    if (this.uQueued) {
-      this.uQueued = false;
+    if (this.fieldKeys.take("U")) {
       this.questLog.open();
       return;
     }
 
-    if (this.oQueued) {
-      this.oQueued = false;
+    if (this.fieldKeys.take("O")) {
       this.settingsUI.open();
       return;
     }

@@ -27,6 +27,7 @@ import {
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
+  FieldKeys,
   fadeAreaTitle,
   fadeInAfterAreaTitle,
   isWalkableCell,
@@ -216,8 +217,6 @@ export class AbyssScene extends Phaser.Scene {
   private encounterCooldown = 0;
   private leaving = false;
   private sealedToastAt = 0;
-  private sQueued = false;
-  private ctrlSQueued = false;
   private lastMove: LastMove = "down";
 
   private keyLeft!: Phaser.Input.Keyboard.Key;
@@ -228,14 +227,7 @@ export class AbyssScene extends Phaser.Scene {
   private keyJ!: Phaser.Input.Keyboard.Key;
   private keyK!: Phaser.Input.Keyboard.Key;
   private keyL!: Phaser.Input.Keyboard.Key;
-  private mQueued = false;
-  private tQueued = false;
-  private iQueued = false;
-  private bQueued = false;
-  private aQueued = false;
-  private uQueued = false;
-  private oQueued = false;
-  private qQueued = false;
+  private fieldKeys!: FieldKeys;
   private quitting = false;
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second, like every field scene
@@ -263,20 +255,6 @@ export class AbyssScene extends Phaser.Scene {
   // where the stair offered to pick up (abyssResume: the checkpoint, or the
   // portal, which taking uses up — saved before anything else, quietly)
   create(data?: { fromBattle?: boolean; fromStairs?: boolean; start?: number }): void {
-    // Every entry (back from a fight, quit and continue) runs this same
-    // instance again, fields and all: a key queued while the last run faded
-    // out would otherwise act on this run's first frame.
-    this.sQueued =
-      this.ctrlSQueued =
-      this.mQueued =
-      this.tQueued =
-      this.iQueued =
-      this.bQueued =
-      this.aQueued =
-      this.uQueued =
-      this.oQueued =
-      this.qQueued =
-        false;
     Sfx.playBgm(DUNGEON_THEME);
     const fromBattle = !!data?.fromBattle;
     if (!run || !(fromBattle || data?.fromStairs)) {
@@ -438,35 +416,7 @@ export class AbyssScene extends Phaser.Scene {
     this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
     this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
     this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.S).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (e.ctrlKey) this.ctrlSQueued = true;
-      else this.sQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.M).on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      this.mQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.T).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.tQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.I).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.iQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.B).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.bQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.aQueued = true;
-    });
-    // registered before TouchControls is built, so touch gets a U button too
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.uQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.O).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.oQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (!e.repeat) this.qQueued = true;
-    });
+    this.fieldKeys = new FieldKeys(this);
     const help = addHelpPopup(
       this,
       [
@@ -595,26 +545,16 @@ export class AbyssScene extends Phaser.Scene {
       announceLooks(this, earned, FIELD_TOAST_Y);
     }
 
-    if (this.sQueued) {
-      this.sQueued = false;
-      this.toggleStatus();
-    }
+    if (this.fieldKeys.take("S")) this.toggleStatus();
 
-    if (this.ctrlSQueued) {
-      this.ctrlSQueued = false;
-      GameState.save();
-    }
+    if (this.fieldKeys.take("CTRL+S")) GameState.save();
 
-    if (this.mQueued) {
-      this.mQueued = false;
+    if (this.fieldKeys.take("M")) {
       const muted = Sfx.toggleMuted();
       showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", FIELD_TOAST_Y);
     }
 
-    if (this.tQueued) {
-      this.tQueued = false;
-      if (!this.uiBlocking()) this.minimap.toggle();
-    }
+    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
 
     // saved and on the way to the title (quit): nothing else moves. The
     // roamers are kept to their boxes, as under a panel: left on their last
@@ -624,33 +564,15 @@ export class AbyssScene extends Phaser.Scene {
       return;
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the question's ESC would close that panel too
-      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
-    }
+    // never over an open panel: the question's ESC would close that panel too
+    if (this.fieldKeys.take("Q") && !this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
 
     if (this.uiBlocking()) {
-      if (this.iQueued) {
-        this.iQueued = false;
-        if (this.inventory.isActive()) this.inventory.close();
-      }
-      if (this.bQueued) {
-        this.bQueued = false;
-        if (this.bestiary.isActive()) this.bestiary.close();
-      }
-      if (this.aQueued) {
-        this.aQueued = false;
-        if (this.achievementsUI.isActive()) this.achievementsUI.close();
-      }
-      if (this.uQueued) {
-        this.uQueued = false;
-        if (this.questLog.isActive()) this.questLog.close();
-      }
-      if (this.oQueued) {
-        this.oQueued = false;
-        if (this.settingsUI.isActive()) this.settingsUI.close();
-      }
+      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
+      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
+      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
+      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
+      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
       this.inventory.update();
@@ -666,32 +588,27 @@ export class AbyssScene extends Phaser.Scene {
     // stepped off the stair up: the next step onto it asks again
     if (this.stairAsked && !this.physics.overlap(this.player, this.upStair)) this.stairAsked = false;
 
-    if (this.iQueued) {
-      this.iQueued = false;
+    if (this.fieldKeys.take("I")) {
       this.inventory.open();
       return;
     }
 
-    if (this.bQueued) {
-      this.bQueued = false;
+    if (this.fieldKeys.take("B")) {
       this.bestiary.open();
       return;
     }
 
-    if (this.aQueued) {
-      this.aQueued = false;
+    if (this.fieldKeys.take("A")) {
       this.achievementsUI.open();
       return;
     }
 
-    if (this.uQueued) {
-      this.uQueued = false;
+    if (this.fieldKeys.take("U")) {
       this.questLog.open();
       return;
     }
 
-    if (this.oQueued) {
-      this.oQueued = false;
+    if (this.fieldKeys.take("O")) {
       this.settingsUI.open();
       return;
     }
