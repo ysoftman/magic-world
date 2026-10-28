@@ -52,6 +52,11 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
        render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration
   ```
 
+- 카메라 필터(`camera.filters`)는 화면 전체가 바뀌는 전환에만 쓴다. 실제 사례: 시험으로 카메라에 건
+  Blocky 가 HUD 글자까지 모자이크로 만들었다. 필드 씬은 맵과 HUD 를 카메라 하나로 그리기 때문이다.
+  그래서 지금은 조우 모자이크(`fx.ts` 의 `encounterOut`)에만 쓴다. 또 필터는 처음 쓸 때 셰이더를
+  만드느라 한 프레임이 멈춘다(Blocky 213ms, 300ms 페이드의 대부분). 새 필터를 들이면
+  `warmEncounterOut` 처럼 타이틀에서 화면이 바뀌지 않는 값(1px 블록)으로 한 프레임 미리 걸어 둔다.
 - 브라우저로 직접 확인하는 일은 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
 
 ## UI 텍스트가 패널/화면을 벗어나지 않는지 확인
