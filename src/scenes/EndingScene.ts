@@ -1,10 +1,10 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, TOTAL_FISH } from "../achievements";
 import { OVERWORLD_THEME, Sfx, TITLE_THEME } from "../audio";
-import { GAME_HEIGHT, GAME_VERSION, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
 import { dayIndex, GameState } from "../gameState";
 import { CATCHABLE } from "../monsters";
-import { retroStyle } from "../pixelart";
+import { DIM_TEXT, retroStyle } from "../pixelart";
 import { isTouchDevice } from "../ui/TouchControls";
 
 export interface EndingData {
@@ -98,7 +98,10 @@ export class EndingScene extends Phaser.Scene {
     // this scene has no touch controls, so a tap stands in for ENTER
     this.input.on(Phaser.Input.Events.POINTER_DOWN, leave);
 
-    this.add.text(GAME_WIDTH - 16, GAME_HEIGHT - 12, `v${GAME_VERSION}`, retroStyle(4, "#666688")).setOrigin(1, 1);
+    // where the title has it, top right (x 1040..1264, y 12..28): at the
+    // bottom it stood 16px off the epilogue's NEW GAME+ note on the same line
+    // and read as its last word; the headlines start at y 66
+    this.add.text(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
   }
 
   private showEnding(): void {
@@ -178,7 +181,7 @@ export class EndingScene extends Phaser.Scene {
   // Rows: headline 66..114, sub 134..166, summary 182..478, journey 502..522,
   // THE TRUE END 554..626 with its shadow, prompt 652..684, NEW GAME+ note
   // 694..710 — the one band left free, 10px under the prompt and 10px off the
-  // bottom; at x=256..1024 it stays left of the version tag (x>=1168).
+  // bottom (the version tag is top right, out of the way).
   private showEpilogue(): void {
     // embers drifting up and going out behind the text
     for (let i = 0; i < 36; i++) {

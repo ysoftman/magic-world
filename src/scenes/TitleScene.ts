@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Sfx, TITLE_THEME } from "../audio";
-import { GAME_HEIGHT, GAME_VERSION, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
 import { warmEncounterOut } from "../fx";
 import {
   damagedCopyKeys,
@@ -68,8 +68,8 @@ const MENU_Y = 660;
 // = 612px, x=334..946; y=684: "N: NEW GAME" + "D: DELETE" + "O: SETTINGS" =
 // 270 + 222 + 270 + 96 = 858px, x=211..1069. Glyphs run 624..648 (16px under
 // the prompt's 608) and 672..699 (21px off the bottom); the padded hit boxes
-// meet at 660 without overlapping, and row two ends left of the version tag
-// (x>=1168).
+// meet at 660 without overlapping. Row two is also why the version tag is up
+// in the top-right corner (see create()).
 // U: RESTORE (240 + 6 stroke = 246px) joins row one when the slot has a
 // backup: "C: CONTINUE" + "P: NEW GAME+" + "U: RESTORE" = 270 + 294 + 246 +
 // 2 x 48 = 906px (x 187..1093); without NEW GAME+ it is C + U = 564px. A
@@ -120,7 +120,14 @@ export class TitleScene extends Phaser.Scene {
     this.add.text(GAME_WIDTH / 2, 368, "A TALE OF MAGIC", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, 416, "AND ADVENTURE", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
 
-    this.add.text(GAME_WIDTH - 16, GAME_HEIGHT - 12, `v${GAME_VERSION}`, retroStyle(4, "#666688")).setOrigin(1, 1);
+    // Top right, not bottom right: with the commit hash, "v0.1.0-3a09b68" is
+    // 14 x 16 = 224px (x 1040..1264, y 12..28), and down at y 692..708 it ran
+    // into the menu's second row (x 211..1069, y 669..699) — every glyph more
+    // in the hash is 16px further left. Nothing else is drawn up here but the
+    // toast, at most 604px wide centred (x 338..942), and the backdrop keeps its
+    // stars out from behind it (backdrops.ts). DIM_TEXT, not #666688: 3.4:1 on
+    // this sky was too faint to read the hash off.
+    this.add.text(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
 
     // one card per slot; tapping a card picks that slot, tapping the picked
     // one again is ENTER (continue it, or start a new game in it)

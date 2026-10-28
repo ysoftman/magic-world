@@ -145,6 +145,8 @@ bun run preview
 bun run sim:battle
 ```
 
+타이틀·엔딩 오른쪽 위의 버전 표시는 `v0.1.0-<커밋 해시>`(`git rev-parse --short HEAD`)다. dev 서버(`bunfig.toml`)와 `bun run build` 가 같은 플러그인(`scripts/buildInfoPlugin.ts`)으로 번들에 넣고, git 이 없거나 저장소 사본이 아니면(압축본) `v0.1.0` 만 나온다. dev 서버는 처음 번들할 때 읽은 해시를 계속 보여 주니(커밋해도, 다른 파일을 고쳐 다시 번들해도 다시 읽지 않는다) 커밋 뒤에는 다시 띄운다.
+
 ### Claude Code 스킬(선택)
 
 Claude Code 로 이 저장소를 작업할 때 Phaser 공식 에이전트 스킬을 쓰려면 저장소 루트에서 설치한다. 출처는 [phaserjs/phaser](https://github.com/phaserjs/phaser) 저장소의 `skills/`(Phaser 공식, MIT)이고, 그중 이 게임에 쓰는 10개만 고른다.

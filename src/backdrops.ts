@@ -838,8 +838,15 @@ function title(g: G): void {
   blob(g, 580, 250, 240, 26, 0x64d9e8, 0.08);
   // stars, a few bright crosses and one falling
   for (let i = 0; i < 90; i++) {
-    g.fillStyle(0xffffff, 0.15 + rand() * 0.7);
-    g.fillRect(snap(rand() * W), snap(rand() * 420), P, P);
+    const alpha = 0.15 + rand() * 0.7;
+    const x = snap(rand() * W);
+    const y = snap(rand() * 420);
+    // clear of the version tag (x 1040..1264, y 12..28, a glyph further left
+    // for each hash digit past 7) with a glyph's room round it; a skipped star
+    // still takes its three numbers, so the rest stay where they were
+    if (x > 1000 && y < 44) continue;
+    g.fillStyle(0xffffff, alpha);
+    g.fillRect(x, y, P, P);
   }
   for (const [x, y, r] of [
     [520, 60, 12],
@@ -988,7 +995,9 @@ function title(g: G): void {
   for (let i = 0; i < 26; i++) {
     const x = snap(rand() * W);
     const y = snap(560 + rand() * 130);
-    if (x > 1140 && y > 672) continue; // clear of the version tag
+    // the corner the version tag had before it moved up; dropping this would
+    // reshuffle every firefly after the one it skips
+    if (x > 1140 && y > 672) continue;
     blob(g, x, y, 8, 8, 0xffe066, 0.12);
     g.fillStyle(0xffe066, 0.3 + rand() * 0.5);
     g.fillRect(x - P / 2, y - P / 2, P, P);

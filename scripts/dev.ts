@@ -1,5 +1,6 @@
 // Dev server: `bun run dev`, http://localhost:5199/ (AGENTS.md: one server,
-// that port). Bun bundles index.html on request and hot-reloads on save.
+// that port). Bun bundles index.html on request and hot-reloads on save; the
+// bundler's plugin (bunfig.toml [serve.static]) puts the commit hash in.
 import { writeFile } from "node:fs/promises";
 import index from "../index.html";
 

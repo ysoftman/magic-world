@@ -1,6 +1,7 @@
 // Production build: `bun run build` (tsc first). Bundles index.html into
 // dist/ with relative URLs, so the page works under GitHub Pages' /<repo>/.
 import { rm } from "node:fs/promises";
+import buildInfo from "./buildInfoPlugin";
 
 await rm("dist", { recursive: true, force: true });
 const result = await Bun.build({
@@ -11,6 +12,8 @@ const result = await Bun.build({
   minify: true,
   // the dev-only code paths (CTRL+G gold) drop out of the bundle
   define: { "process.env.NODE_ENV": '"production"' },
+  // the commit hash in the version tag, as the dev server has it (bunfig.toml)
+  plugins: [buildInfo],
 });
 // its own output: nothing loads it
 await rm("dist/src", { recursive: true });

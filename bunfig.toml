@@ -1,0 +1,4 @@
+# The dev server's bundler (scripts/dev.ts, `bun run dev`): the commit hash in
+# the version tag. scripts/build.ts passes the same plugin to Bun.build.
+[serve.static]
+plugins = ["./scripts/buildInfoPlugin.ts"]
