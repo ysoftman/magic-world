@@ -5,12 +5,12 @@ Import it from a throwaway script under /tmp/pwcheck/, or run the smoke test:
     python3 -I harness.py smoke [--touch] [--out /tmp/pwcheck/playtest]
 
 What it does for every page, without touching the repo:
-- serves the game's own /src/main.ts with two lines added, so the page gets
-  window.__game (the Phaser.Game) and window.__GS (main.ts's GameState: the
-  same module instance the game uses, unlike a bare import of a module Vite
-  has re-served with ?t=)
-- keeps Vite's HMR socket from opening, so a teammate's edit can't reload
-  the page mid-test
+- serves the Bun dev server's bundle (/_bun/client/*.js) with main.ts's
+  game construction wrapped, so the page gets window.__game (the
+  Phaser.Game) and window.__GS (the GameState instance the game uses; the
+  bundle has no per-module URL to import it from)
+- keeps Bun's HMR socket (/_bun/hmr) from opening, so a teammate's edit
+  can't reload the page mid-test
 - records console errors/warnings and page errors
 """
 
@@ -28,15 +28,16 @@ from playwright.sync_api import sync_playwright
 URL = "http://localhost:5199/"
 OUT = "/tmp/pwcheck/playtest"
 
-# the game's construction in src/main.ts; the patch keeps it and adds the handles
-HOOK = re.compile(r"new Phaser\.Game\(config\)")
-PATCH = "(window.__GS = GameState, window.__game = new Phaser.Game(config))"
+# main.ts's GameState.loadSettings() ... new Phaser.Game(config), with the
+# bundler's names for both (import_gameState.GameState, import_phaser.default.);
+# the patch keeps it and adds the handles
+HOOK = re.compile(r"([\w$.]*\bGameState)\.loadSettings\(\);(.{0,400}?)new ([\w$.]*\.)?Game\(config\)", re.DOTALL)
+PATCH = r"\1.loadSettings();\2(window.__GS = \1, window.__game = new \3Game(config))"
 
 INIT_NO_HMR = """(() => {
   const Real = window.WebSocket;
   window.WebSocket = function (url, protocols) {
-    const p = [].concat(protocols || []);
-    if (p.includes("vite-hmr") || p.includes("vite-ping")) return Object.assign(new EventTarget(), { readyState: 0, send() {}, close() {} });
+    if (String(url).includes("/_bun/hmr")) return Object.assign(new EventTarget(), { readyState: 0, send() {}, close() {} });
     return new Real(url, protocols);
   };
   window.WebSocket.prototype = Real.prototype;
@@ -126,7 +127,7 @@ class Game:
             self.ctx.add_init_script(INIT_COARSE)
         if pad:
             self.ctx.add_init_script(INIT_PAD)
-        self.ctx.route(re.compile(r".*/src/main\.ts(\?.*)?$"), self._patch_main)
+        self.ctx.route(re.compile(r".*/_bun/client/[^/]+\.js(\?.*)?$"), self._patch_main)
         self.page = self.ctx.new_page()
         self.page.set_default_timeout(20000)
         self.errors: list[str] = []
@@ -140,7 +141,7 @@ class Game:
         body = resp.text()
         patched, n = HOOK.subn(PATCH, body)
         if n != 1:
-            print("WARN: main.ts hook line not found; window.__game / __GS missing", file=sys.stderr)
+            print("WARN: main.ts game construction not found in the bundle; window.__game / __GS missing", file=sys.stderr)
         route.fulfill(response=resp, body=patched)
 
     # --- page ---------------------------------------------------------------
@@ -150,14 +151,6 @@ class Game:
     def gs(self, body: str):
         """run `body` with G = the game's GameState; `return` a JSON-able value"""
         return self.ev(f"(() => {{ const G = window.__GS; {body} }})()")
-
-    def mod(self, path: str, body: str):
-        """run `body` with M = another module, imported at the URL the game loaded it from (?t= included)"""
-        url = self.ev(
-            "(p) => { const hits = performance.getEntriesByType('resource').map(e => e.name).filter(n => new URL(n).pathname === p); return hits.length ? hits[hits.length - 1] : p }",
-            path,
-        )
-        return self.ev(f"import({json.dumps(url)}).then(M => {{ {body} }})")
 
     def active(self) -> list[str]:
         return self.ev("window.__game ? window.__game.scene.getScenes(true).map(s => s.scene.key) : []")

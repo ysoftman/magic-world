@@ -5,7 +5,7 @@ description: magic-world 를 실제 브라우저(python playwright, 헤드리스
 
 # magic-world 플레이테스트
 
-`scripts/harness.py` 는 브라우저 실행, main.ts 패치, HMR 차단, 세이브 주입, 씬 시작, 화면 감사, 스크린샷을 한 번에 해 준다. 매번 하네스를 새로 만들지 말고 이것을 import 해서 쓴다. 이번 세션 1~4차 QA 의 스크립트에서 검증된 코드만 모아 두었다.
+`scripts/harness.py` 는 브라우저 실행, dev 번들 패치(main.ts 의 게임 생성), HMR 차단, 세이브 주입, 씬 시작, 화면 감사, 스크린샷을 한 번에 해 준다. 매번 하네스를 새로 만들지 말고 이것을 import 해서 쓴다. 이번 세션 1~4차 QA 의 스크립트에서 검증된 코드만 모아 두었다.
 
 ## 시작 전
 
@@ -46,7 +46,6 @@ finally:
 | `boot(save=None, slot=1, settings=None)` | 타이틀까지 띄움. save 를 주면 localStorage `magic-world-save-<slot>` 에 넣고 다시 불러옴(형식은 `GameState.save()`) |
 | `new_game(name)` | 빈 슬롯에서 Z → 이름 입력 → Enter → 외형 Z → Town |
 | `gs(body)` | `G` = 게임의 GameState 로 JS 실행, `return` 값을 돌려줌 |
-| `mod(path, body)` | `M` = 다른 모듈. 게임이 실제로 받은 URL(`?t=` 포함)로 import |
 | `scene(key, body)` | `s` = 그 씬(비공개 필드도 그냥 읽힘) |
 | `start(key, data)` | 지금 씬에서 `scene.start`(void, data 기본 `{}`) |
 | `press`·`hold`·`pad(button)`·`teleport` | 키 입력, 가짜 패드 버튼(standard: 0 A, 1 B, 2 X, 3 Y, 8 Select, 9 Start, 12~15 D-pad), 순간이동 |
@@ -57,8 +56,8 @@ finally:
 ## 함정 (이번 세션에 실제로 겪은 것)
 
 - 브라우저: python playwright 기본 chromium 이 없을 수 있다. 기본값 `browser="chrome"`(설치된 Chrome)을 쓴다. `browser="shell"` 은 캐시된 headless shell 을 glob 해서 swiftshader 인자로 띄우는데, 드라이버 버전과 어긋나면 screenshot 이 멈춘 적이 있다.
-- GameState 는 `g.gs` 로만 만진다. 다른 사람이 고친 모듈은 Vite 가 `?t=` 를 붙여 내보내므로, `import('/src/gameState.ts')` 를 그대로 하면 다른 인스턴스를 받아 설정이 게임에 안 들어간다(Lv1 로 보스전을 한 사례). 다른 모듈은 `g.mod` 로 import 한다.
-- HMR 소켓(`vite-hmr`/`vite-ping`)은 하네스가 막는다. 막지 않으면 팀원의 수정으로 페이지가 테스트 도중 다시 불려 전투 중에 타이틀로 돌아간다. 그 대신 결과는 페이지를 불러온 시점의 코드 기준이다.
+- GameState 는 `g.gs` 로, 씬은 `g.scene` 으로 만진다. Bun dev 서버는 소스를 한 번들(`/_bun/client/*.js`)로 내보내 `import('/src/...')` 할 모듈 URL 이 없다. 그 밖의 모듈 값은 씬이 들고 있는 필드나 GameState 를 거쳐 읽는다.
+- HMR 소켓(`/_bun/hmr`)은 하네스가 막는다. 막지 않으면 팀원의 수정으로 페이지가 테스트 도중 다시 불려 전투 중에 타이틀로 돌아간다. 그 대신 결과는 페이지를 불러온 시점의 코드 기준이다.
 - `page.evaluate` 가 Phaser 객체를 돌려주면(예: `scene.start(...)`) 직렬화하느라 멈춘다. 직접 쓸 때는 `void` 로 감싼다(AGENTS.md "기타").
 - `Math.random` 을 상수 함수로 덮지 않는다. 텍스처 UUID 가 모두 같아져 게임이 멈춘다(AGENTS.md "기타"). 드롭·포획은 강제하지 말고 여러 판 돌린다.
 - 대화창 질문은 타이핑이 끝나기 전 Y/N 을 무시한다. 질문이 뜨면 1.5초쯤 기다린 뒤 누른다. 부엌 COOK, 대장간 FORGE/REFINE, 강화된 장비 판매는 Z 를 두 번 눌러야 한다(확인 질문).
