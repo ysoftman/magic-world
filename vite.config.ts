@@ -70,17 +70,4 @@ export default defineConfig({
     port: 5199,
     open: true,
   },
-  build: {
-    target: "es2020",
-    rolldownOptions: {
-      output: {
-        // Phaser (the only dependency) in its own chunk: its hash only moves
-        // when the package does, so a deploy that changes just the game keeps
-        // the engine cached in players' browsers
-        codeSplitting: {
-          groups: [{ name: "vendor", test: /[\\/]node_modules[\\/]/ }],
-        },
-      },
-    },
-  },
 });

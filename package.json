@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "build": "tsc && bun scripts/build.ts",
+    "preview": "bun scripts/preview.ts",
     "check:art": "bun scripts/check-art.mjs",
     "sim:battle": "bun scripts/sim-battle.ts"
   },
