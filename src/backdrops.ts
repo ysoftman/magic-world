@@ -16,7 +16,10 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
 // The backdrop loses to the fighters: every layer is less saturated and lower
 // in contrast than the 32-cell sprites in front of it (the same idea as
 // check:art's limit on terrain), and nothing bright sits behind where they
-// stand (hero x 256..384, y 304..432; foe x 864..1056, y 216..408).
+// stand (hero x 256..384, y 304..432; foe x 864..1056, y 216..408), behind
+// the two stat windows (x 32..496 and 784..1248, y 24..200; their 0.85 fill
+// lets the backdrop through) or behind the NIGHT / ARENA / ABYSS note
+// between them (x 520..760, y 40..116).
 //
 // Fixed lines the rest of the battle relies on:
 // - the horizon is y 440: BattleWeather splashes rain below it, and the
@@ -334,9 +337,11 @@ const TOWN_WINTER: TownLook = {
 
 function town(g: G, look: TownLook): void {
   sky(g, look.sky);
-  glow(g, 240, 176, 120, look.halo, 0.45);
-  blob(g, 240, 176, 32, 32, look.sun);
-  cloud(g, 640, 112, 220, look.cloud, look.cloudShade, look.cloudAlpha);
+  // the sun in the clear sky between the stat windows, under the note there:
+  // at 240,176 its 120px halo glowed through the hero's window behind the MP
+  // line, and a cloud that sat at 640,112 lay right behind the note
+  glow(g, 640, 160, 38, look.halo, 0.45);
+  blob(g, 640, 160, 22, 22, look.sun);
   cloud(g, 1160, 244, 150, look.cloud, look.cloudShade, look.cloudAlpha);
   cloud(g, 470, 236, 130, look.cloud, look.cloudShade, look.cloudAlpha * 0.8);
   // far: a blue range under snow
@@ -384,6 +389,8 @@ interface ForestLook {
   midLight: number;
   trunk: number;
   snow?: number;
+  // winter: the low cloud the treetops vanish into (forest())
+  fog?: number;
   frame: number;
   frameLight: number;
   ground: number;
@@ -414,19 +421,24 @@ const FOREST: ForestLook = {
   tuft: 0x14552d,
 };
 
+// Autumn's wall is dusty tan under a plum dusk, not the crimson it was: that
+// band measured chroma 0.20 (y 204..436 minus the fighters' spots, chroma =
+// (max - min) / 255) against the fighters' 0.35, and its red sat on the
+// hero's and the orc's reds. Now 0.14, between spring's 0.16 and winter's
+// 0.14, with the hero's spot at 0.18 and the foe's at 0.16.
 const FOREST_AUTUMN: ForestLook = {
   sky: [
-    [0, 0x260e14],
-    [160, 0x421424],
-    [260, 0x5f1f31],
-    [340, 0x803e2e],
+    [0, 0x1e1219],
+    [160, 0x301a22],
+    [260, 0x44262c],
+    [340, 0x5c3b2e],
   ],
-  shaft: 0xffd89a,
+  shaft: 0xf5dcb0,
   shaftAlpha: 0.07,
-  far: 0x612e29,
-  farLight: 0x6c362c,
-  mid: 0x280e1d,
-  midLight: 0x391725,
+  far: 0x5e4232,
+  farLight: 0x6c4d39,
+  mid: 0x2b1420,
+  midLight: 0x3c1e2a,
   trunk: 0x22091a,
   frame: 0x1a0812,
   frameLight: 0x2a0e1a,
@@ -451,6 +463,7 @@ const FOREST_WINTER: ForestLook = {
   midLight: 0x2e4c48,
   trunk: 0x1c3431,
   snow: 0x9db4bc,
+  fog: 0x4a666f,
   frame: 0x141e22,
   frameLight: 0x22323a,
   ground: 0x173e44,
@@ -483,6 +496,18 @@ function forest(g: G, look: ForestLook): void {
     g.fillStyle(look.trunk, 1);
     g.fillRect(snap(x) - P * 2, snap(GROUND - h * 0.5), P * 4, snap(h * 0.5));
     pine(g, x, GROUND - h * 0.35, h * 0.75, look.mid, look.midLight, look.snow);
+  }
+  // Winter: the treetops vanish into low cloud. Down to just under the stat
+  // windows (rows 24..199) the sky is drawn again over them, then a band of
+  // fog, dithered at both edges, all of it below the windows. Winter's far
+  // wall is paler than its sky and its pines are snowed to the tip, so the
+  // treeline had shown through both windows (their 0.85 fill lets 15% by) as
+  // a jagged band.
+  if (look.fog !== undefined) {
+    sky(g, look.sky.slice(0, 2), 204);
+    g.fillStyle(look.fog, 1);
+    g.fillRect(0, 204, W, P * 4);
+    for (const y of [200, 220, 224]) for (let x = ((y / P) % 2) * P; x < W; x += P * 2) g.fillRect(x, y, P, P);
   }
   // near: two great trunks framing the clearing
   for (const x of [0, W - 64]) {
@@ -641,8 +666,10 @@ function snow(g: G): void {
     [300, 0xa4c8e2],
     [360, 0xb8d8ec],
   ]);
-  glow(g, 240, 176, 100, 0xffffff, 0.4);
-  blob(g, 240, 176, 26, 26, 0xffffff);
+  // between the stat windows as in town(), left of the big peak's white
+  // summit (640,160), which would swallow a white sun
+  glow(g, 560, 160, 34, 0xffffff, 0.4);
+  blob(g, 560, 160, 20, 20, 0xffffff);
   // far: the big peaks, snow to their shoulders
   peaks(
     g,

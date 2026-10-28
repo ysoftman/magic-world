@@ -58,7 +58,8 @@ export const SNOW_TILE_COLORS: Record<number, number> = {
   [T_WATER_B]: 0x2a6690,
   [T_TREE]: 0x1d4a3e,
   [T_PATH]: 0x6b6e75,
-  [T_TALL]: 0x6f8396,
+  // the scrub's dry sage (BootScene SNOW_TALL_PALETTE), darkened as the rest
+  [T_TALL]: 0x7c8174,
 };
 
 // The forest's colours (ForestScene passes this): its darker moss, leaf-litter

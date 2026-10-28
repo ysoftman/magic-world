@@ -1407,9 +1407,10 @@ const heroShades = ({ h, t, p }: { h: number; t: number; p: number }) => {
   return { H: hair[3], d: hair[1], T: tunic[3], u: tunic[1], P: trousers[1] };
 };
 
+// a look's own slots last, so one that names a shade (VIOLET's d) keeps it
 const heroLookPalette = (look: number) => {
   const { name: _name, ...slots } = HERO_LOOKS[look] ?? HERO_LOOKS[0];
-  return { ...HERO_PALETTE, ...slots, ...heroShades(slots) };
+  return { ...HERO_PALETTE, ...heroShades(slots), ...slots };
 };
 
 const flipRows = (rows: string[]): string[] => rows.map((r) => [...r].reverse().join(""));
@@ -2135,8 +2136,10 @@ const NPC_BLACKSMITH_32 = [
 // walks the same 6 chars (outline / shadow / base ramp / specular), so the
 // one grid recolours into the golden, king and magma slimes. The golden slime
 // is its own texture rather than the green one tinted: a multiply tint over
-// green came out olive.
-const SLIME_PALETTE = { o: 0x11543c, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
+// green came out olive. The green slime's outline is a near-black green: at
+// 0x11543c every outline pixel sat within RGB distance 40 of the town's grass
+// and scrub (its home) and the forest's, so it had no edge on the field.
+const SLIME_PALETTE = { o: 0x082419, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
 const GOLD_SLIME_PALETTE = { o: 0x6b4508, s: 0xb7791f, g: 0xe8b923, m: 0xfad643, h: 0xfdeea0, w: 0xfffdf0 };
 const KING_SLIME_PALETTE = { o: 0x631028, s: 0x99182f, g: 0xcf2130, m: 0xef4444, h: 0xf98a72, w: 0xfde3cf };
 const SLIME_32 = [
@@ -2180,9 +2183,11 @@ const SLIME_32 = [
 // The cursed goblin is its own violet palette, as the golden slime is; at a
 // mean luma of ~104 it keeps the old violet tint's lift off the cave floor
 // (54). The TROLL KING and the MOSS GOLEM wore this grid too, scaled up, and
-// read as big goblins; they have their own grids below.
+// read as big goblins; they have their own grids below. K is dark enough to
+// stand off the forest's moss and scrub (at 0x173d2a it was within RGB
+// distance 40 of them all round), and no darker.
 const GOBLIN_PALETTE = {
-  K: 0x173d2a,
+  K: 0x0d261a,
   S: 0x4fae72,
   s: 0x7fdc9c,
   L: 0xa8f0c0,
@@ -2297,9 +2302,10 @@ const TROLL_32 = [
 
 // head-on wolf on a 32-cell grid: tall ears with pink insides, a cheek ruff, a
 // dark mask on the brow, red eyes, a pale muzzle tapering to the nose, fangs
-// and two front legs
+// and two front legs. K just dark enough to clear the forest's scrub, which
+// swallowed the whole outline at 0x1e2433 (a companion follows into it).
 const WOLF_PALETTE = {
-  K: 0x1e2433,
+  K: 0x171c28,
   D: 0x56647a,
   G: 0x75849a,
   g: 0xa0aec0,
@@ -2902,9 +2908,11 @@ const ORC_32 = [
 // forearms, legs) shaded as flat faces lit from the top left -- top H, left
 // L, front s, right and underside S -- under moss (M m n) that drips off
 // every top face, vines with leaves down the chest and an arm, eyes glowing
-// in a dark recess and a glowing crack at its core (it regenerates)
+// in a dark recess and a glowing crack at its core (it regenerates). K just
+// dark enough to clear the forest's scrub, its boss zone, which swallowed the
+// whole outline at 0x1e2620.
 const MOSS_GOLEM_PALETTE = {
-  K: 0x1e2620,
+  K: 0x151c17,
   S: 0x5b6b5c,
   s: 0x7f8f80,
   L: 0xa3b2a4,
@@ -4343,8 +4351,13 @@ function makeHouseLevels(scene: Phaser.Scene): void {
 const SNOW_GRASS_PALETTE = { g: 0xaebfce, h: 0xb5c5d3 };
 // trampled snow over frozen dirt, a clear step darker than the field
 const SNOW_PATH_PALETTE = { p: 0x8c8f96, h: 0x92959c, D: 0x5c5f66, P: 0x7d8087, m: 0x9a9da4, S: 0xa6a9b0 };
-// monster zones: snowed-over scrub, its twigs poking through as darker marks
-const SNOW_TALL_PALETTE = { g: 0xa2b4c4, h: 0x8ea2b3 };
+// monster zones: snowed-over scrub, a dry sage showing through with its twigs
+// as darker marks. It was the field's own blue-grey (0xa2b4c4), and once the
+// winter town and forest took this skin the wasp's pale blue wings (0x8ea2c6)
+// sank into it, 38% of its outline within RGB distance 40 of the scrub; the
+// sage keeps that brightness (so the frost moth's rim still clears it) and
+// sits apart from the wings, the snow and the trodden paths alike.
+const SNOW_TALL_PALETTE = { g: 0xaeb6a6, h: 0x9ca494 };
 // cold dark water under icy foam
 const SNOW_WATER_PALETTE = { d: 0x123a57, B: 0x1b4d72, W: 0x2a6690, l: 0x5d9ac0, h: 0xc4e6f5 };
 // The canopy's lit top-left (H, c) carries the snow and the shaded side stays a
