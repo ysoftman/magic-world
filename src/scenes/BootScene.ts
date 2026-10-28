@@ -2421,6 +2421,21 @@ const FROST_MOTH_PALETTE = {
   e: 0xef4444,
   i: 0xffffff,
 };
+// AURORA MOTH (the snow field's jackpot): the frost moth's wings in the
+// northern lights, violet at the edge through green to a pale pink, a lilac
+// body, gold eyes, on a deep violet outline that holds against the snow
+const AURORA_MOTH_PALETTE = {
+  K: 0x2e1065,
+  d: 0x6d28d9,
+  b: 0x34d399,
+  W: 0xa7f3d0,
+  w: 0xf5d0fe,
+  q: 0xfdf4ff,
+  F: 0x8b7fb5,
+  f: 0xe9d5ff,
+  e: 0xfde047,
+  i: 0xffffff,
+};
 const FROST_MOTH_32 = [
   "................................",
   "................................",
@@ -2773,6 +2788,23 @@ const WASP_PALETTE = {
   y: 0xffdd44,
   z: 0xffec95,
   q: 0xfffbe6,
+  k: 0x141414,
+  j: 0x3d3d3d,
+  i: 0xffffff,
+  v: 0x8ea2c6,
+  w: 0xc7d4ee,
+  W: 0xeef3fb,
+};
+// SILVER WASP (the forest's jackpot): the same wasp in polished steel over
+// near-black bands and glassy wings, its outline near black: a blue-grey
+// 0x1c1d26 lost 39% of it to the forest's dark green scrub
+const SILVER_WASP_PALETTE = {
+  K: 0x141018,
+  O: 0x5f6675,
+  Y: 0x9aa1ae,
+  y: 0xc9ced8,
+  z: 0xe3e7ee,
+  q: 0xf8fafc,
   k: 0x141414,
   j: 0x3d3d3d,
   i: 0xffffff,
@@ -5131,10 +5163,12 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "wolf", WOLF_32, WOLF_PALETTE, ART_PX);
     makeTexture(this, "bat", BAT_32, BAT_PALETTE, ART_PX);
     makeTexture(this, "wasp", WASP_32, WASP_PALETTE, ART_PX);
+    makeTexture(this, "silverWasp", WASP_32, SILVER_WASP_PALETTE, ART_PX);
     makeTexture(this, "spider", SPIDER_32, SPIDER_PALETTE, ART_PX);
     makeTexture(this, "orc", ORC_32, ORC_PALETTE, ART_PX);
     makeTexture(this, "wisp", WISP_32, WISP_PALETTE, ART_PX);
     makeTexture(this, "frostMoth", FROST_MOTH_32, FROST_MOTH_PALETTE, ART_PX);
+    makeTexture(this, "auroraMoth", FROST_MOTH_32, AURORA_MOTH_PALETTE, ART_PX);
     makeTexture(this, "yeti", YETI_32, YETI_PALETTE, ART_PX);
     makeTexture(this, "iceGolem", ICE_GOLEM_32, ICE_GOLEM_PALETTE, ART_PX);
     makeTexture(this, "magmaSlime", SLIME_32, MAGMA_SLIME_PALETTE, ART_PX);

@@ -75,6 +75,7 @@ const STEP_TEXT: Record<QuestStepId, { title: string; hint: string }> = {
   drake: { title: "SLAY THE FLAME DRAKE", hint: "IT RULES THE VOLCANO" },
   bats: { title: "SLAY 4 BATS", hint: "BATS NEST IN THE CAVE" },
   catch: { title: "CATCH 3 NEW BEASTS", hint: "THROW CANDY IN BATTLE" },
+  silk: { title: "BRING 3 SPIDER SILK", hint: "THE FOREST'S SPIDERS DROP IT" },
   yetis: { title: "SLAY 3 YETIS", hint: "YETIS ROAM PAST THE SNOW PASS" },
   fire: { title: "CATCH EACH FIRE BEAST", hint: "ONE MAGMA SLIME, FIRE IMP, SALAMANDER" },
 };

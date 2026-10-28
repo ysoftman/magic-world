@@ -97,6 +97,21 @@ export const ENEMIES: Record<string, EnemyDef> = {
     weakness: "bolt",
     special: { kind: "poison", chance: 0.2 },
   },
+  // The forest's jackpot, as the GOLDEN SLIME is the town's: a WASP in its
+  // own silver palette, 3.5% of the wasps (ForestScene), scaled as the other
+  // jackpots are off their kind (HP x1.7, ATK and DEF +1, EXP x5, gold x12)
+  silverWasp: {
+    name: "SILVER WASP",
+    texture: "silverWasp",
+    hp: 48,
+    atk: 10,
+    def: 2,
+    exp: 110,
+    gold: 168,
+    rare: true, // forest jackpot: big payout, not required for collection
+    weakness: "bolt",
+    special: { kind: "poison", chance: 0.2 },
+  },
   spider: {
     name: "SPIDER",
     texture: "spider",
@@ -140,6 +155,20 @@ export const ENEMIES: Record<string, EnemyDef> = {
     def: 2,
     exp: 58,
     gold: 38,
+    weakness: "fire",
+    special: { kind: "freeze", chance: 0.2 },
+  },
+  // the snow field's jackpot, 3.5% of the frost moths (SnowScene), scaled
+  // as SILVER WASP is
+  auroraMoth: {
+    name: "AURORA MOTH",
+    texture: "auroraMoth",
+    hp: 75,
+    atk: 15,
+    def: 3,
+    exp: 290,
+    gold: 456,
+    rare: true, // snow field jackpot: big payout, not required for collection
     weakness: "fire",
     special: { kind: "freeze", chance: 0.2 },
   },

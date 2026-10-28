@@ -23,10 +23,13 @@ const LABEL_W = 13;
 const ENDING_PROMPT_MS = 4200;
 const EPILOGUE_PROMPT_MS = 5000;
 
-// Final boss victory screen: congratulations, a run summary and THE END,
-// then back to the title. The save is kept so the player can keep roaming.
-// The epilogue variant is the same screen for the post-game's last boss,
-// with a fuller summary and the road travelled.
+// The MOSS GOLEM's fall closes the story's first part: congratulations, a
+// run summary, TO BE CONTINUED and a hint of the snow pass it opens, then
+// back to the town. It used to say THE END and go to the title a tenth of the
+// way through the game, with the snow field, the volcano and the ABYSS still
+// ahead and nothing saying so. The epilogue variant, for the FLAME DRAKE, is
+// the real close: a fuller summary, the road travelled, THE TRUE END, then
+// the title. Both come after the battle has saved.
 export class EndingScene extends Phaser.Scene {
   private leaving = false;
   // set once the prompt shows (ENDING_PROMPT_MS / EPILOGUE_PROMPT_MS)
@@ -81,7 +84,11 @@ export class EndingScene extends Phaser.Scene {
       Sfx.buy();
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-        this.scene.start("Title");
+        // { fromForest }, not {}: GameState.pos is where the hero left the
+        // town, the forest lane's last tile, and set down there they walked
+        // straight back into the forest
+        if (epilogue) this.scene.start("Title");
+        else this.scene.start("Town", { fromForest: true });
       });
     };
     this.input.keyboard!.on("keydown", (e: KeyboardEvent) => {
@@ -101,8 +108,9 @@ export class EndingScene extends Phaser.Scene {
       .text(GAME_WIDTH / 2, 130, "THE MOSS GOLEM IS DEFEATED!", retroStyle(11, "#4ade80"))
       .setOrigin(0.5)
       .setAlpha(0);
+    // the forest, not the world: the snow pass opens on this fight (27 x 32 = 864px)
     const sub = this.add
-      .text(GAME_WIDTH / 2, 190, "PEACE RETURNS TO MAGIC WORLD", retroStyle(8, "#c4b5fd"))
+      .text(GAME_WIDTH / 2, 190, "PEACE RETURNS TO THE FOREST", retroStyle(8, "#c4b5fd"))
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -125,11 +133,20 @@ export class EndingScene extends Phaser.Scene {
       .setLineSpacing(14)
       .setAlpha(0);
 
-    const theEnd = this.add
-      .text(GAME_WIDTH / 2, 520, "THE END", retroStyle(24, "#ffd166"))
+    // 18 x 64 = 1152px (x 64..1216), its shadow 8px more; THE END's
+    // retroStyle(24) would be 1728. Rows: 488..552 and the shadow to 560, the
+    // hint 578..602, the prompt 614..646.
+    const toBeContinued = this.add
+      .text(GAME_WIDTH / 2, 520, "TO BE CONTINUED...", retroStyle(16, "#ffd166"))
       .setOrigin(0.5)
       .setAlpha(0);
-    theEnd.setShadow(8, 8, "#7c2d12", 1, true, true);
+    toBeContinued.setShadow(8, 8, "#7c2d12", 1, true, true);
+    // where it goes on: the SNOW PASS, which thaws with this fall (the town's
+    // snow gate waits on forestBoss); 36 x 24 = 864px, x 208..1072
+    const hint = this.add
+      .text(GAME_WIDTH / 2, 590, "A COLD WIND BLOWS FROM THE SNOW PASS", retroStyle(6, "#a5f3fc"))
+      .setOrigin(0.5)
+      .setAlpha(0);
 
     const prompt = this.add
       .text(GAME_WIDTH / 2, 630, isTouchDevice() ? "TAP TO CONTINUE" : "PRESS ENTER", retroStyle(8, "#ffffff"))
@@ -140,7 +157,8 @@ export class EndingScene extends Phaser.Scene {
     this.tweens.add({ targets: headline, alpha: 1, duration: 900, delay: 400 });
     this.tweens.add({ targets: sub, alpha: 1, duration: 900, delay: 1200 });
     this.tweens.add({ targets: summary, alpha: 1, duration: 900, delay: 2000 });
-    this.tweens.add({ targets: theEnd, alpha: 1, duration: 1200, delay: 3000 });
+    this.tweens.add({ targets: toBeContinued, alpha: 1, duration: 1200, delay: 3000 });
+    this.tweens.add({ targets: hint, alpha: 1, duration: 900, delay: 3600 });
     // From 1, not the 0 it waits at: "alpha: 0" tweened 0 to 0 and the
     // prompt never showed (an onStart setAlpha ran on add, not after delay).
     this.tweens.add({

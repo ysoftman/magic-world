@@ -50,6 +50,9 @@ const TEXT_STROKE = "#1a1028";
 type LastMove = "down" | "up" | "right" | "left";
 
 const ENCOUNTER_COOLDOWN = 600;
+// the share of frost moths that are the snow field's jackpot, AURORA MOTH
+// (monsters.ts), roaming or met in the snow alike
+const AURORA_MOTH_CHANCE = 0.035;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
@@ -65,7 +68,7 @@ interface Roamer {
   targetY: number;
   wait: number;
   speed: number;
-  kind: "frostMoth" | "yeti" | "iceGolem";
+  kind: "frostMoth" | "auroraMoth" | "yeti" | "iceGolem";
 }
 
 const IDLE_TEXTURE: Record<LastMove, string> = {
@@ -644,7 +647,8 @@ export class SnowScene extends Phaser.Scene {
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: Roamer["kind"] = isBoss ? "iceGolem" : (zone.kind ?? "frostMoth");
+        const base: Roamer["kind"] = isBoss ? "iceGolem" : (zone.kind ?? "frostMoth");
+        const kind: Roamer["kind"] = base === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : base;
         const sprite = this.roamerGroup.create(x, y, ENEMIES[kind].texture) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
@@ -747,14 +751,15 @@ export class SnowScene extends Phaser.Scene {
     r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
-  private startBattle(enemy?: "frostMoth" | "yeti" | "iceGolem"): void {
+  private startBattle(enemy?: Roamer["kind"]): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
-      const kind = enemy ?? (roll < 0.5 ? "frostMoth" : "yeti");
+      const rolled = roll < 0.5 ? "frostMoth" : "yeti";
+      const kind = enemy ?? (rolled === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("snow") });
       this.scene.start("Battle", { enemy: kind, from: "Snow" });
     });

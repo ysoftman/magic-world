@@ -342,6 +342,12 @@ export interface QuestState {
   hunterCatchAccepted: boolean;
   caughtAtAccept: number;
   hunterCatchReward: boolean;
+  // the forest-stretch HUNTER job, between CATCH and the YETIs once the KING
+  // SLIME is down: 3 SPIDER SILK handed over (taken from the inventory, so no
+  // counter). A save that took the YETI job before it existed gets it once
+  // that chain has nothing running (TownScene's silkJob, objective.ts).
+  hunterSilkAccepted: boolean;
+  hunterSilkReward: boolean;
   // third HUNTER bounty, offered once the forest boss falls and opens the
   // snow pass: a kill bounty against the SNOW FIELD's YETIs
   hunterYetiAccepted: boolean;
@@ -686,6 +692,8 @@ export const GameState = {
     hunterCatchAccepted: false,
     caughtAtAccept: 0,
     hunterCatchReward: false,
+    hunterSilkAccepted: false,
+    hunterSilkReward: false,
     hunterYetiAccepted: false,
     yetisSlain: 0,
     hunterYetiReward: false,
@@ -1077,6 +1085,8 @@ export const GameState = {
       hunterCatchAccepted: false,
       caughtAtAccept: 0,
       hunterCatchReward: false,
+      hunterSilkAccepted: false,
+      hunterSilkReward: false,
       hunterYetiAccepted: false,
       yetisSlain: 0,
       hunterYetiReward: false,
@@ -1266,6 +1276,9 @@ export const GameState = {
       this.quest.trollDefeated = data.quest?.trollDefeated ?? this.seenMonsters.includes("TROLL KING");
       // ...and the same for HUNTER's fire-beast job, which came with it
       this.quest.hunterFireAccepted = data.quest?.hunterFireAccepted ?? false;
+      // ...and its SPIDER SILK job, which came later still
+      this.quest.hunterSilkAccepted = data.quest?.hunterSilkAccepted ?? false;
+      this.quest.hunterSilkReward = data.quest?.hunterSilkReward ?? false;
       this.quest.fireCaughtAtAccept = data.quest?.fireCaughtAtAccept ?? 0;
       this.quest.hunterFireReward = data.quest?.hunterFireReward ?? false;
       this.bounty = data.bounty ?? null;

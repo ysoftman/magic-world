@@ -2061,6 +2061,7 @@ export class TownScene extends Phaser.Scene {
       this.dialogue.start(["A fine haul! Take", `${gained} gold and 2 ETHERS.`], "HUNTER");
       return;
     }
+    if (this.silkJob()) return;
     if (!q.forestBoss) {
       this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
       return;
@@ -2128,6 +2129,47 @@ export class TownScene extends Phaser.Scene {
       return;
     }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
+  }
+
+  // The HUNTER's SPIDER SILK job, the forest stretch's (Lv6-12) between the
+  // CATCH job and the YETIs: once the KING SLIME opens the forest, 3 SILK
+  // brought in — the TALISMAN's own thread, so it asks before taking any.
+  // A save that took the YETI job before this one existed gets it once that
+  // chain has nothing running or due (objective.ts reads the same). Taken on,
+  // it's what the HUNTER talks about until it's handed in. True when it spoke.
+  private silkJob(): boolean {
+    const q = GameState.quest;
+    if (!q.bossDefeated || q.hunterSilkReward) return false;
+    if (!q.hunterSilkAccepted) {
+      if (q.hunterYetiAccepted && (!q.hunterYetiReward || (q.snowBoss && !q.hunterFireReward))) return false;
+      q.hunterSilkAccepted = true;
+      this.dialogue.start(
+        ["A new job, hero:", "the forest's SPIDERS", "spin a fine SILK.", "Bring me 3 SPIDER SILK", "and I'll pay well."],
+        "HUNTER",
+      );
+      return true;
+    }
+    const have = GameState.inventory.spiderSilk;
+    if (have < 3) {
+      this.dialogue.start([`${have} of 3 SPIDER SILK.`, "The forest's SPIDERS", "drop it. Bring 3!"], "HUNTER");
+      return true;
+    }
+    this.dialogue.ask([`${have} SPIDER SILK!`, "Will you hand 3 over?"], "HUNTER", ["YES", "NO"], (i) => {
+      // re-read: nothing should move it behind the talk, but never take
+      // what isn't there
+      if (i !== 0 || GameState.inventory.spiderSilk < 3) {
+        this.dialogue.start(["Bring it when you're", "ready, hero."], "HUNTER");
+        return;
+      }
+      GameState.inventory.spiderSilk -= 3;
+      q.hunterSilkReward = true;
+      const gained = GameState.gainGold(110);
+      GameState.inventory.hiPotion += 2;
+      GameState.save();
+      Sfx.buy();
+      this.dialogue.start(["Fine silk! Take", `${gained} gold and 2`, "HI-POTIONS."], "HUNTER");
+    });
+    return true;
   }
 
   // The board's two jobs on one talk. The kill bounty rerolls once a new

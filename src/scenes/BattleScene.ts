@@ -231,6 +231,8 @@ export class BattleScene extends Phaser.Scene {
   private comboText!: Phaser.GameObjects.Text;
   // one successful steal per battle; failed attempts don't count against it
   private stolen = false;
+  // whether the bestiary had this species before the fight (see init)
+  private weakKnown = false;
   private poisonTurns = 0;
   private frozen = false;
   private freezeGrace = 0;
@@ -331,6 +333,9 @@ export class BattleScene extends Phaser.Scene {
     this.enemy = scaleEnemy(def, { night: this.night, arena: !!this.arena, abyss: this.abyss, ng: GameState.enemyScale() });
     const from = data?.from;
     this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" || from === "Volcano" || from === "Abyss" ? from : "Town";
+    // read before this fight puts the species in the bestiary, below: the
+    // enemy window shows its weakness only once an earlier fight has
+    this.weakKnown = GameState.seenMonsters.includes(def.name);
     if (!GameState.seenMonsters.includes(def.name)) {
       GameState.seenMonsters.push(def.name);
       // persist immediately: a battle ended by RUN never reaches the
@@ -450,6 +455,21 @@ export class BattleScene extends Phaser.Scene {
       .text(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
       .setOrigin(0, 0);
     this.enemyHpBar = this.add.rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444).setOrigin(0, 0.5);
+    // The foe's weakness worded and coloured as the bestiary has it
+    // (BestiaryUI's "WEAK:FIRE"), once an earlier fight has put the species
+    // there; "WEAK:?" the first time, the book having nothing either, and
+    // "WEAK:-" for one with none. Between the HP bar (to y=132) and the COMBO
+    // line (from 168), y 140..160; "WEAK:FIRE" is 9 x 20 = 180px from x=816,
+    // clear of the status tags' third row (from x=1076).
+    const weak = this.enemy.weakness;
+    this.add
+      .text(
+        GAME_WIDTH - 464,
+        140,
+        !this.weakKnown ? "WEAK:?" : weak ? `WEAK:${weak.toUpperCase()}` : "WEAK:-",
+        retroStyle(5, this.weakKnown && weak ? "#fdba74" : DIM_TEXT),
+      )
+      .setOrigin(0, 0);
 
     // one size smaller than the HP rows so "HP 999/999" (ends x=304) keeps a
     // gap to "PSN FRZ" (x=336..476) when both statuses are up
@@ -2182,7 +2202,8 @@ export class BattleScene extends Phaser.Scene {
       this.coinBurst.explode(10);
     }
     await this.say("Battle won!");
-    // story complete: the forest boss is the final boss — roll the ending
+    // the forest boss closes the story's first part: the ending's TO BE
+    // CONTINUED, then back to the town (EndingScene)
     if (firstMoss) {
       this.cameras.main.fadeOut(1500, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
@@ -2190,7 +2211,8 @@ export class BattleScene extends Phaser.Scene {
       });
       return;
     }
-    // the post-game's last region falls: same fade, the epilogue variant
+    // the volcano's boss is the story's real close: same fade, the epilogue
+    // (THE TRUE END, then the title)
     if (firstDrake) {
       this.cameras.main.fadeOut(1500, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {

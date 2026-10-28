@@ -45,6 +45,9 @@ import { seasonSkin } from "./BootScene";
 type LastMove = "down" | "up" | "right" | "left";
 
 const ENCOUNTER_COOLDOWN = 600;
+// the share of wasps that are the forest's jackpot, SILVER WASP (monsters.ts),
+// roaming or met in the grass alike
+const SILVER_WASP_CHANCE = 0.035;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
@@ -62,7 +65,7 @@ interface Roamer {
   targetY: number;
   wait: number;
   speed: number;
-  kind: "wasp" | "spider" | "orc" | "mossGolem";
+  kind: "wasp" | "silverWasp" | "spider" | "orc" | "mossGolem";
 }
 
 const IDLE_TEXTURE: Record<LastMove, string> = {
@@ -646,7 +649,8 @@ export class ForestScene extends Phaser.Scene {
       for (let i = 0; i < zone.count; i++) {
         const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
         const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: Roamer["kind"] = isBoss ? "mossGolem" : (zone.kind ?? "wasp");
+        const base: Roamer["kind"] = isBoss ? "mossGolem" : (zone.kind ?? "wasp");
+        const kind: Roamer["kind"] = base === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : base;
         const sprite = this.roamerGroup.create(x, y, ENEMIES[kind].texture) as Phaser.Physics.Arcade.Sprite;
         sprite.setDepth(10);
         sprite.body?.setSize(40, 24).setOffset(12, 32);
@@ -748,14 +752,15 @@ export class ForestScene extends Phaser.Scene {
     r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
-  private startBattle(enemy?: "wasp" | "spider" | "orc" | "mossGolem"): void {
+  private startBattle(enemy?: Roamer["kind"]): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
-      const kind = enemy ?? (roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc");
+      const rolled = roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc";
+      const kind = enemy ?? (rolled === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("forest") });
       this.scene.start("Battle", { enemy: kind, from: "Forest" });
     });

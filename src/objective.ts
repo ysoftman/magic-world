@@ -41,7 +41,7 @@ const HUNTER: ObjectiveSpot = { kind: "npc", who: "HUNTER" };
 const boss = (region: FieldRegion): ObjectiveSpot => ({ kind: "boss", region });
 const area = (region: FieldRegion): ObjectiveSpot => ({ kind: "region", region });
 
-export type QuestStepId = "slimes" | "king" | "moss" | "glacier" | "drake" | "bats" | "catch" | "yetis" | "fire";
+export type QuestStepId = "slimes" | "king" | "moss" | "glacier" | "drake" | "bats" | "catch" | "silk" | "yetis" | "fire";
 
 /**
  * What the quest journal lists a step as: `hidden` until its gate opens (a
@@ -74,8 +74,12 @@ export interface QuestStep {
  * dialogue actually takes, so nothing ever sends the player to an NPC that
  * has nothing for them yet: a later boss is listed once the gate the previous
  * one opens is open (the GUARD's forest, the snow pass, the crater), and each
- * HUNTER job is offered on the talk after the previous one pays out (the YETI
- * job also waits for the snow pass, the FIRE job for the volcano).
+ * HUNTER job is offered on the talk after the previous one pays out (the SILK
+ * job waits for the KING SLIME, the YETI job for the snow pass, the FIRE job
+ * for the volcano). The SILK job came later than the rest: a save that had
+ * taken the YETI job already is offered it whenever no other job is running
+ * or due (TownScene's silkJob), and once taken it is the one the HUNTER talks
+ * about until it is handed in, so only one job is ever open.
  */
 export function questSteps(q: QuestState, caught: readonly string[] = GameState.caught): QuestStep[] {
   const elder = (id: QuestStepId, met: boolean, paid: boolean, listed: boolean, have = 0, need = 0): QuestStep => ({
@@ -102,6 +106,10 @@ export function questSteps(q: QuestState, caught: readonly string[] = GameState.
   // counts distinct species, so a second SALAMANDER doesn't fill the set
   const fresh = caught.length - q.caughtAtAccept;
   const fire = fireBeastsCaughtIn(caught, q.fireCaughtAtAccept).length;
+  // a YETI job taken before the SILK job existed, still running or with the
+  // FIRE job still to come after it
+  const laterJobDue = q.hunterYetiAccepted && (!q.hunterYetiReward || (q.snowBoss && !q.hunterFireReward));
+  const silkOpen = q.hunterSilkAccepted && !q.hunterSilkReward;
   return [
     elder("slimes", q.slimes >= 5, q.slimeReward, true, q.slimes, 5),
     elder("king", q.bossDefeated, q.finalReward, true),
@@ -110,8 +118,24 @@ export function questSteps(q: QuestState, caught: readonly string[] = GameState.
     elder("drake", q.volcanoBoss, q.volcanoReward, q.snowBoss),
     hunter("bats", q.hunterBatsAccepted, true, q.batsSlain, 4, q.hunterBatsReward),
     hunter("catch", q.hunterCatchAccepted, q.hunterBatsReward, fresh, 3, q.hunterCatchReward),
-    hunter("yetis", q.hunterYetiAccepted, q.hunterCatchReward && q.forestBoss, q.yetisSlain, 3, q.hunterYetiReward),
-    hunter("fire", q.hunterFireAccepted, q.hunterYetiReward && q.snowBoss, fire, FIRE_BEASTS.length, q.hunterFireReward),
+    // held, not counted: what's in the bag now, as the HUNTER takes it
+    hunter(
+      "silk",
+      q.hunterSilkAccepted,
+      q.hunterCatchReward && q.bossDefeated && !laterJobDue,
+      GameState.inventory.spiderSilk,
+      3,
+      q.hunterSilkReward,
+    ),
+    hunter(
+      "yetis",
+      q.hunterYetiAccepted,
+      q.hunterCatchReward && q.forestBoss && (q.hunterSilkReward || q.hunterYetiAccepted),
+      q.yetisSlain,
+      3,
+      q.hunterYetiReward,
+    ),
+    hunter("fire", q.hunterFireAccepted, q.hunterYetiReward && q.snowBoss && !silkOpen, fire, FIRE_BEASTS.length, q.hunterFireReward),
   ];
 }
 
@@ -128,6 +152,7 @@ const BOSS_GOAL: Array<[QuestStepId, string, FieldRegion]> = [
 const JOB_GOAL: Partial<Record<QuestStepId, [string, FieldRegion | null]>> = {
   bats: ["BATS", "dungeon"],
   catch: ["CATCH", null],
+  silk: ["SILK", "forest"],
   yetis: ["YETIS", "snow"],
   fire: ["FIRE", "volcano"],
 };

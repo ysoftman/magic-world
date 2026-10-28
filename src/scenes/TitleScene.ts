@@ -14,6 +14,7 @@ import {
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { LookPicker } from "../ui/LookPicker";
+import { NameEntry } from "../ui/NameEntry";
 import { SettingsUI } from "../ui/SettingsUI";
 import { questLabel } from "../ui/StatusHud";
 import { isTouchDevice } from "../ui/TouchControls";
@@ -96,6 +97,7 @@ export class TitleScene extends Phaser.Scene {
   private started = false;
   private settingsUI?: SettingsUI;
   private lookPicker?: LookPicker;
+  private nameEntry?: NameEntry;
   private buttons: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -164,6 +166,8 @@ export class TitleScene extends Phaser.Scene {
     this.settingsUI = settings;
     const picker = new LookPicker(this);
     this.lookPicker = picker;
+    const nameEntry = new NameEntry(this);
+    this.nameEntry = nameEntry;
 
     if (!saveFailHooked) {
       saveFailHooked = true;
@@ -416,18 +420,22 @@ export class TitleScene extends Phaser.Scene {
         return;
       }
       GameState.reset();
-      GameState.player.name = (window.prompt("YOUR NAME? (MAX 12)", "HERO") ?? "").trim().toUpperCase().slice(0, 12) || "HERO";
-      // then the look; backing out of it leaves the slot as it was
-      picker.open(GameState.heroLook, (look) => {
-        if (look === null) return showMenu();
-        GameState.heroLook = look;
-        bakeHero(this, look);
-        // the old save becomes the slot's backup (U: RESTORE brings it back)
-        if (!GameState.retireSave()) return storageFull();
-        this.started = true;
-        this.cameras.main.fadeOut(400, 0, 0, 0);
-        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-          this.scene.start("Town", {});
+      // the name in the game's own panel (ui/NameEntry.ts), then the look;
+      // backing out of either leaves the slot as it was
+      nameEntry.open((name) => {
+        if (name === null) return showMenu();
+        GameState.player.name = name;
+        picker.open(GameState.heroLook, (look) => {
+          if (look === null) return showMenu();
+          GameState.heroLook = look;
+          bakeHero(this, look);
+          // the old save becomes the slot's backup (U: RESTORE brings it back)
+          if (!GameState.retireSave()) return storageFull();
+          this.started = true;
+          this.cameras.main.fadeOut(400, 0, 0, 0);
+          this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+            this.scene.start("Town", {});
+          });
         });
       });
     };
@@ -437,7 +445,7 @@ export class TitleScene extends Phaser.Scene {
       // events here and delete the save that was just written
       if (e.repeat) return;
       Sfx.ensure();
-      if (settings.isActive() || picker.isActive()) return;
+      if (settings.isActive() || picker.isActive() || nameEntry.isActive()) return;
       const key = e.key.toLowerCase();
       if (mode !== "menu") {
         // Y confirms; any other key backs out, as DELETE always has
@@ -473,7 +481,7 @@ export class TitleScene extends Phaser.Scene {
     // start fresh when there is none. During a Y/N it backs out instead.
     this.input.on("pointerdown", (_pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       Sfx.ensure();
-      if (settings.isActive() || picker.isActive() || over.length > 0) return;
+      if (settings.isActive() || picker.isActive() || nameEntry.isActive() || over.length > 0) return;
       if (mode !== "menu") showMenu();
       else enter();
     });
@@ -485,6 +493,7 @@ export class TitleScene extends Phaser.Scene {
   // override the panel would open on O and never close again.
   update(): void {
     this.settingsUI?.update();
+    this.nameEntry?.update();
     this.lookPicker?.update();
   }
 }
