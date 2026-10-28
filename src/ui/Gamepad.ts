@@ -37,7 +37,10 @@ const DEADZONE = 0.5;
 // What each button types. A/B are confirm/back everywhere; the panel keys
 // follow the touch column's letters (TouchControls' MENU), L3 its T (the
 // minimap), Start is the settings, Select the "?" help (FORWARD_SLASH, as
-// HelpPopup registers it).
+// HelpPopup registers it). LT is S (the HUD), RT M (mute), R3 Q: the quit
+// question, answered with the d-pad and A, which saves on the way out.
+// CTRL+S stays on the keyboard: sendKey carries no modifiers, and the quit
+// and the autosaves already save.
 const FIELD: Record<number, string> = {
   [BTN.a]: "KeyZ",
   [BTN.b]: "Escape",
@@ -45,7 +48,10 @@ const FIELD: Record<number, string> = {
   [BTN.y]: "KeyI",
   [BTN.lb]: "KeyB",
   [BTN.rb]: "KeyU",
+  [BTN.lt]: "KeyS",
+  [BTN.rt]: "KeyM",
   [BTN.l3]: "KeyT",
+  [BTN.r3]: "KeyQ",
   [BTN.start]: "KeyO",
   [BTN.select]: "Slash",
   [BTN.up]: "ArrowUp",
@@ -70,6 +76,20 @@ const BATTLE: Record<number, string> = {
   [BTN.l3]: "KeyW",
   [BTN.r3]: "KeyN",
   [BTN.select]: "KeyS",
+};
+// The title (TitleScene's keydown): A still continues or starts, the d-pad
+// picks the slot, RB is U (RESTORE), RT M and Start O as in the field. X is
+// N (NEW GAME), LB D (DELETE), LT P (NEW GAME+), and Y types Y, the only key
+// that answers their Y/N: every other button backs out. A press alone never
+// loses a save, and the three that replace one keep it as the slot's backup
+// (U brings it back). X (deleting damaged copies, which keeps nothing) stays
+// on the keyboard. C is left out: A already continues.
+const TITLE: Record<number, string> = {
+  ...FIELD,
+  [BTN.x]: "KeyN",
+  [BTN.y]: "KeyY",
+  [BTN.lb]: "KeyD",
+  [BTN.lt]: "KeyP",
 };
 
 // the key each pressed button sent, so its release sends that same key even
@@ -113,7 +133,7 @@ function poll(game: Phaser.Game): void {
     releaseAll();
     return;
   }
-  const mapping = game.scene.isActive("Battle") ? BATTLE : FIELD;
+  const mapping = game.scene.isActive("Battle") ? BATTLE : game.scene.isActive("Title") ? TITLE : FIELD;
   // at least the d-pad indices, which a stick-only pad may not list
   for (let button = 0; button < Math.max(pad.buttons.length, 16); button++) {
     const down = pad.buttons[button]?.pressed === true || stick(pad, button);
