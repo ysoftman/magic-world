@@ -65,7 +65,7 @@ export const NIGHT_ENCOUNTER_MULT = 1.8;
 type SkyStop = readonly [hour: number, factor: number];
 const OPEN_SKY: readonly SkyStop[] = [
   [5.0, WHITE],
-  [5.5, 0xfff0f0],
+  [5.5, 0xfff2ee],
   [6.0, 0xffd8dc],
   [6.5, 0xfff0d4],
   [7.0, WHITE],
