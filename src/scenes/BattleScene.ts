@@ -70,6 +70,15 @@ import type { EndingData } from "./EndingScene";
 // snappy lunges (out/back) — slow enough to read, fast enough to feel quick
 const LUNGE_OUT_MS = 90;
 const LUNGE_BACK_MS = 110;
+// breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
+const IDLE_BOB_PX = 4;
+// where the companion stands, and where a caught monster flies to (catchFx)
+const COMPANION_X = 180;
+const COMPANION_Y = 440;
+// the CANDY icon's light pink (BootScene ICON_CANDY_PALETTE): a catch's glow
+const CANDY_PINK = 0xf9a8d4;
+// the OS's reduced-motion setting, as fx.ts reads it: no breathing, no hops
+const reducedMotion = (): boolean => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 // BATTLE SPEED (GameState.battleSpeed: 1 / 1.5 / 2) divides every animation
 // in a battle through anim(): lunges, projectiles, NOVA, the boss wind-up,
 // damage pop-ups, the typewriter and the closing fades. What it leaves alone:
@@ -182,6 +191,11 @@ export class BattleScene extends Phaser.Scene {
 
   private pendingSpell!: Spell;
   private companionSprite?: Phaser.GameObjects.Sprite;
+  // the breathing tweens (idleBob), stopped when their fighter falls and
+  // paused while the hero is frozen or the companion dashes
+  private heroIdle?: Phaser.Tweens.Tween;
+  private enemyIdle?: Phaser.Tweens.Tween;
+  private companionIdle?: Phaser.Tweens.Tween;
   private hintText!: Phaser.GameObjects.Text;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
@@ -240,6 +254,7 @@ export class BattleScene extends Phaser.Scene {
   private healBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private levelBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private coinBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private catchBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor() {
     super("Battle");
@@ -386,11 +401,11 @@ export class BattleScene extends Phaser.Scene {
     this.playerSprite = this.add.sprite(320, 368, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
     // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
-    const { weapon, shield } = GEAR_LAYOUT.down;
-    this.weaponOverlay = this.add.sprite(320 + weapon.x * 2, 368 + weapon.y * 2, GameState.weaponTexture()).setScale(2);
-    this.shieldOverlay = this.add.sprite(320 + shield.x * 2, 368 + shield.y * 2, GameState.armorTexture()).setScale(2);
+    this.weaponOverlay = this.add.sprite(0, 0, GameState.weaponTexture()).setScale(2);
+    this.shieldOverlay = this.add.sprite(0, 0, GameState.armorTexture()).setScale(2);
     this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
     this.shieldOverlay.setVisible(!!GameState.equipped.armor);
+    this.syncGear();
 
     const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
     if (companionDef) {
@@ -775,7 +790,7 @@ export class BattleScene extends Phaser.Scene {
           this.resetCombo();
           if (Math.random() < 0.5) {
             Sfx.run();
-            await this.say("You escaped!");
+            await Promise.all([this.runOff(), this.say("You escaped!")]);
             if (GameState.streak >= STREAK_MIN) {
               await this.say(`Win streak of ${GameState.streak} lost!`);
             }
@@ -1104,11 +1119,81 @@ export class BattleScene extends Phaser.Scene {
     if (Math.random() < captureChance(this.enemy.curHp, this.enemy.hp)) {
       GameState.caught.push(this.enemy.name);
       GameState.companion = this.enemy.name;
+      await this.catchFx();
       await this.say(`You caught ${this.enemy.name}! It joins your party!`);
       Sfx.victory();
       return this.victory(true);
     }
-    await this.say("It broke free!");
+    // the shake is awaited too: a Z mashed through the line would otherwise
+    // start the foe's lunge from mid-shake, and the lunge returns to its start
+    await Promise.all([this.headShake(), this.say("It broke free!")]);
+  }
+
+  // A catch: the foe glows candy pink and, shrinking, is drawn into the
+  // companion's place, where it lands as the new companion (in place of any
+  // old one, as GameState.companion now says). Its way (p) starts slow and
+  // speeds up while its size shrinks fast and then slowly, and its 140px
+  // hop peaks late (p * p), over the hero rather than under the foe's stat
+  // window: checked in 0.001 steps for a 2x foe and a 3x giant, no top edge
+  // under either window rises above where the foe stood. It passes behind
+  // the hero's head (the foe is drawn first) for about 40ms. BATTLE SPEED
+  // applies: 0.88s at 1x.
+  private async catchFx(): Promise<void> {
+    const sprite = this.enemySprite;
+    this.enemyIdle?.stop();
+    sprite.setTint(CANDY_PINK).setTintMode(Phaser.TintModes.FILL);
+    this.catchBurst.explode(14, sprite.x, sprite.y);
+    const { x: fromX, y: fromY, scale: fromScale } = sprite;
+    let last = 0;
+    await new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: this.anim(700),
+        onUpdate: (tw) => {
+          const t = tw.getValue() ?? 0;
+          const p = 1 - Math.cos((t * Math.PI) / 2);
+          const x = Phaser.Math.Linear(fromX, COMPANION_X, p);
+          const y = Phaser.Math.Linear(fromY, COMPANION_Y, p) - Math.sin(Math.PI * p * p) * 140;
+          sprite.setPosition(x, y).setScale(Phaser.Math.Linear(fromScale, 0.5, Math.sin((t * Math.PI) / 2)));
+          if (this.time.now - last < this.anim(40)) return;
+          last = this.time.now;
+          this.catchBurst.emitParticleAt(x, y, 1);
+        },
+        onComplete: () => resolve(),
+      });
+    });
+    sprite.setVisible(false);
+    this.catchBurst.explode(16, COMPANION_X, COMPANION_Y);
+    if (this.companionSprite) this.companionSprite.setTexture(this.enemy.texture);
+    else {
+      this.companionSprite = this.add.sprite(COMPANION_X, COMPANION_Y, this.enemy.texture);
+      this.companionIdle = this.idleBob(this.companionSprite, -IDLE_BOB_PX, 1200, 0);
+    }
+    this.companionSprite.setScale(0.5);
+    await this.tweenPromise(this.companionSprite, { scale: 1.5, ease: "Back.easeOut" }, this.anim(180));
+  }
+
+  // "It broke free!": the foe shakes its head, a dying wiggle on x (the
+  // breathing has y) that ends exactly where it stood
+  private headShake(): Promise<void> {
+    const sprite = this.enemySprite;
+    const x = sprite.x;
+    return new Promise((resolve) => {
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: this.anim(360),
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          sprite.setX(x + Math.sin(p * Math.PI * 4) * 8 * (1 - p));
+        },
+        onComplete: () => {
+          sprite.setX(x);
+          resolve();
+        },
+      });
+    });
   }
 
   // one chance per battle to lift bonus gold instead of fighting; costs the
@@ -1173,11 +1258,13 @@ export class BattleScene extends Phaser.Scene {
   // Dash at the foe and back; onHit runs once at the far end of the dash.
   // Once: Phaser fires onYoyo per tweened property, and this tween moves x
   // and y, so the strike used to land twice — two rolls of damage behind a
-  // message that reported one.
+  // message that reported one. The breathing holds meanwhile: it tweens y
+  // too, and would pull the dash off line and snap it at the end.
   private companionLunge(onHit: () => void): Promise<void> {
     const sprite = this.companionSprite;
     if (!sprite) return Promise.resolve();
     let struck = false;
+    this.companionIdle?.pause();
     return new Promise<void>((resolve) => {
       this.tweens.add({
         targets: sprite,
@@ -1192,7 +1279,10 @@ export class BattleScene extends Phaser.Scene {
           struck = true;
           onHit();
         },
-        onComplete: () => resolve(),
+        onComplete: () => {
+          this.companionIdle?.resume();
+          resolve();
+        },
       });
     });
   }
@@ -1380,14 +1470,14 @@ export class BattleScene extends Phaser.Scene {
     const { dmg, note } = this.guardHit(hit.dmg);
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
-    this.playerSprite.setTint(0xff6666).setTintMode(Phaser.TintModes.FILL);
+    this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
     shake(this.cameras.main, crit ? 120 : 80, crit ? 0.012 : 0.006);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, crit);
     await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
-    this.playerSprite.clearTint();
+    this.setPlayerTint(undefined);
     this.updatePlayerStats();
     if (GameState.player.hp <= 0) return;
 
@@ -1439,6 +1529,8 @@ export class BattleScene extends Phaser.Scene {
     this.frozen = true;
     this.updateStatus();
     this.setPlayerTint(FREEZE_TINT);
+    // iced over, the hero stops breathing until thaw()
+    this.heroIdle?.pause();
     this.fxOn(this.playerSprite, "fx-freeze", STATUS_FX_MS, STATUS_POP_MIN_MS);
     this.flashStatus("FRZ", "#67e8f9");
     await this.say("FROZEN! You'll lose your next turn.");
@@ -1474,7 +1566,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.critical();
     const { dmg, note } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
-    this.playerSprite.setTint(0xff6666).setTintMode(Phaser.TintModes.FILL);
+    this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(24);
@@ -1482,7 +1574,7 @@ export class BattleScene extends Phaser.Scene {
     flash(this.cameras.main, 160, (tell.color >> 16) & 0xff, (tell.color >> 8) & 0xff, tell.color & 0xff);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
     await this.say(`${tell.strike}! ${dmg} damage!${note}`);
-    this.playerSprite.clearTint();
+    this.setPlayerTint(undefined);
     this.updatePlayerStats();
     if (GameState.player.hp <= 0 || !canFreeze) return;
     if (GameState.resists("freeze")) {
@@ -1554,15 +1646,17 @@ export class BattleScene extends Phaser.Scene {
     shake(this.cameras.main, 80, 0.004);
     await this.say("Frozen solid! You lose this turn.");
     this.setPlayerTint(undefined);
+    this.heroIdle?.resume();
     this.updateStatus();
   }
 
   // the hero sprite plus its weapon/shield overlays, so a frozen hero reads
-  // as one iced-over figure; undefined clears it
-  private setPlayerTint(color: number | undefined): void {
+  // as one iced-over figure and a struck one as one red flash (fill: the
+  // colour replaces the art instead of shading it); undefined clears it
+  private setPlayerTint(color: number | undefined, fill = false): void {
     for (const s of [this.playerSprite, this.weaponOverlay, this.shieldOverlay]) {
       s.clearTint();
-      if (color !== undefined) s.setTint(color);
+      if (color !== undefined) s.setTint(color).setTintMode(fill ? Phaser.TintModes.FILL : Phaser.TintModes.MULTIPLY);
     }
   }
 
@@ -1649,27 +1743,77 @@ export class BattleScene extends Phaser.Scene {
     const targetX = this.enemySprite.x - 80;
     const hasWeapon = !!GameState.equipped.weapon;
     const trail = this.ghostTrail(this.playerSprite);
-    const syncOverlays = () => {
-      this.weaponOverlay.x = this.playerSprite.x + GEAR_LAYOUT.down.weapon.x * 2;
-      this.shieldOverlay.x = this.playerSprite.x + GEAR_LAYOUT.down.shield.x * 2;
-    };
-    this.playerSprite.x = startX;
-    syncOverlays();
     if (hasWeapon) {
       // wind-up, then swing down through the lunge
       this.weaponOverlay.setAngle(-20);
       this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
     }
-    await this.tweenPromise(this.playerSprite, { x: targetX }, this.anim(LUNGE_OUT_MS), () => {
-      syncOverlays();
-      trail();
-    });
-    syncOverlays();
+    await this.tweenPromise(this.playerSprite, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
     if (hasWeapon) {
       this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
     }
-    await this.tweenPromise(this.playerSprite, { x: startX }, this.anim(LUNGE_BACK_MS), syncOverlays);
-    syncOverlays();
+    await this.tweenPromise(this.playerSprite, { x: startX }, this.anim(LUNGE_BACK_MS));
+  }
+
+  // The weapon and the shield at the hero's hands (ui/HeroGear.ts's layout
+  // facing the camera, at the battle's 2x) wherever the lunge or the
+  // breathing has carried it; every frame, from update(), after the tweens
+  // have moved the hero for this one.
+  private syncGear(): void {
+    const { weapon, shield } = GEAR_LAYOUT.down;
+    this.weaponOverlay.setPosition(this.playerSprite.x + weapon.x * 2, this.playerSprite.y + weapon.y * 2);
+    this.shieldOverlay.setPosition(this.playerSprite.x + shield.x * 2, this.playerSprite.y + shield.y * 2);
+  }
+
+  update(): void {
+    this.syncGear();
+  }
+
+  // A slow rise and fall on y, each fighter at its own pace and offset so
+  // none breathe in step. Only y: a hit tell and a boss's heal tween scale,
+  // the death pop scale and alpha, a lunge x, so none of them fights this.
+  // Real time, not anim(): BATTLE SPEED hurries the fight, not a fighter's
+  // breathing (as the WARD ring's pulse). The OS's reduced-motion setting
+  // (fx.ts) keeps the fighters still.
+  private idleBob(sprite: Phaser.GameObjects.Sprite, dy: number, ms: number, delay: number): Phaser.Tweens.Tween | undefined {
+    if (reducedMotion()) return undefined;
+    return this.tweens.add({ targets: sprite, y: sprite.y + dy, duration: ms, delay, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+  }
+
+  // A win: the hero hops twice, the companion a beat behind. On y, so each
+  // one's breathing holds meanwhile and takes up again where it left off (as
+  // for the companion's dash). Left out under reduced motion, as the
+  // breathing is. 0.52s at 1x.
+  private victoryHop(): void {
+    if (reducedMotion()) return;
+    const hop = (sprite: Phaser.GameObjects.Sprite, idle: Phaser.Tweens.Tween | undefined, height: number, delay: number) => {
+      idle?.pause();
+      this.tweens.add({
+        targets: sprite,
+        y: sprite.y - height,
+        duration: this.anim(130),
+        delay,
+        ease: "Quad.easeOut",
+        yoyo: true,
+        repeat: 1,
+        onComplete: () => idle?.resume(),
+      });
+    };
+    hop(this.playerSprite, this.heroIdle, 24, 0);
+    if (this.companionSprite) hop(this.companionSprite, this.companionIdle, 18, this.anim(90));
+  }
+
+  // A RUN that works: the hero darts off the left edge as it would lunge
+  // (afterimages and all, the gear along with it), the companion a beat
+  // behind, while "You escaped!" types. Still facing the camera, as in a
+  // lunge. 0.32s at 1x.
+  private runOff(): Promise<void> {
+    this.heroIdle?.stop();
+    this.companionIdle?.stop();
+    if (this.companionSprite) {
+      this.tweens.add({ targets: this.companionSprite, x: -120, delay: this.anim(60), duration: this.anim(320), ease: "Sine.easeIn" });
+    }
+    return this.tweenPromise(this.playerSprite, { x: -120, ease: "Sine.easeIn" }, this.anim(320), this.ghostTrail(this.playerSprite));
   }
 
   private async castProjectile(spell: Spell): Promise<void> {
@@ -1821,6 +1965,8 @@ export class BattleScene extends Phaser.Scene {
 
   private async victory(caught = false): Promise<void> {
     this.running = false;
+    this.enemyIdle?.stop();
+    this.victoryHop();
     // before anything below: no quest flag, counter, loot, EXP or ending
     if (this.arena) return this.arenaVictory(this.arena);
     // the TROLL KING's flag (arena.ts: what puts it in the ARENA lineup) for
@@ -1854,6 +2000,7 @@ export class BattleScene extends Phaser.Scene {
         Math.ceil(GameState.effMaxHp() * (this.meal?.def.effect.heal ?? 0)),
       );
       GameState.player.hp += mealHeal;
+      this.updatePlayerStats();
       Sfx.victory();
       this.tweenPromise(this.enemySprite, { scale: this.enemySprite.scale * 1.15, alpha: 0 }, this.anim(350));
       await this.say(`${this.enemy.name} is defeated!`);
@@ -1920,6 +2067,9 @@ export class BattleScene extends Phaser.Scene {
         msg = `LEVEL UP! LV ${GameState.player.level}`;
       }
       if (newRank > 0) msg += `  RANK #${newRank}!`;
+      // the stat window takes the new HP/MP with the burst and the line, not
+      // only once the hero is back in the field
+      this.updatePlayerStats();
       await this.say(msg);
       if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`);
     }
@@ -1953,6 +2103,7 @@ export class BattleScene extends Phaser.Scene {
   // gold and your win streak, with everything else intact.
   private async defeat(): Promise<void> {
     this.running = false;
+    this.heroIdle?.stop();
     if (this.arena) return this.arenaDefeat(this.arena);
     Sfx.gameover();
     await this.say("You have fallen...");
