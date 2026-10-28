@@ -370,9 +370,12 @@ export class BattleScene extends Phaser.Scene {
     // the open-ground sky of the field the fight started in (the ARENA's is
     // the Town's), dawn and dusk colours included, so it carries straight on
     // from the field; static, since the clock doesn't advance during a battle.
-    // The ABYSS has no sky and no night (see init).
+    // MULTIPLY, as on the field (NightOverlay). The ABYSS has no sky and no
+    // night (see init).
     const sky = skyOverlay(this.origin);
-    if (sky.alpha > 0 && !this.abyss) this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, sky.color, sky.alpha);
+    if (sky !== 0xffffff && !this.abyss) {
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, sky).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    }
 
     // STREAK/COMBO live on the free line inside each stat window (below the
     // MP/HP rows) — at (16,24)/(GAME_WIDTH-16,24) they sat on top of the

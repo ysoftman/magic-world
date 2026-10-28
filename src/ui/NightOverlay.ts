@@ -2,56 +2,92 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { GameState, nightFactor } from "../gameState";
 import { TILE } from "../levels";
+import { seasonLook } from "../season";
 
 // One night look shared by every scene. Before this, the overworld faded a
 // 0x1a1a4a wash in and out with the clock while the cave and the forest sat
 // under a fixed 0x0a0a2a that ignored the time of day entirely.
-export const NIGHT_TINT = 0x1a1a4a;
+//
+// The night is one MULTIPLY-blended rectangle: each channel of what's under it
+// scaled by the rectangle's colour. It used to be that navy laid on at 0.45
+// (NORMAL blend), which also lifted every dark pixel toward the navy, so an
+// outline, an eye or a name tag's stroke greyed out and the hero went flat on
+// the grass (skin 2.88:1 against it, the tunic 1.41). A multiply darkens
+// without the haze, so what was darker stays darker: at the same grass
+// brightness skin is 3.58:1, the tunic 1.73 (1.75 by day), a name tag
+// 1.4-1.5x its old contrast with its stroke.
+const WHITE = 0xffffff;
 
-// How dark full night gets on open ground. Enclosed scenes pass a smaller
-// range and carry a constant `ambient` instead, so their own gloom stays but
-// dusk and dawn still read the same way everywhere.
+// Full night on open ground: the cast at a gloom of NIGHT_RANGE, chosen so
+// the grass ends up as bright as under the old navy. Blue over green over
+// red, as moonlight, but no more blue than 1.3x the green: past that the
+// red and blue left in a face outweigh its green and skin turns mauve (the
+// first try, 0x9ea8ff, did). Here skin is a warm grey (hue 12) and white a
+// pale steel blue.
+const NIGHT_CAST = 0xa1b5eb;
+
+// How dark full night gets on open ground, as `gloom`. Enclosed scenes pass a
+// smaller range and carry a constant `ambient` instead, so their own gloom
+// stays but dusk and dawn still read the same way everywhere. Up to it the
+// cast comes up linearly from white; past it (the forest's 0.55, the cave's
+// 0.6, the snow field's 0.75 with SNOW_EXTRA_GLOOM) the cast only dims,
+// keeping its hue, by DEEP_DIM per unit of gloom: about as dark as the old
+// navy, a shade lighter at the deepest, where every extra step of darkness
+// costs the fighters more contrast (the cave's skin is 3.2:1 to the old 2.19).
 export const NIGHT_RANGE = 0.45;
+const DEEP_DIM = 0.7;
+
+// Light ground and open sky keep more of their brightness under a multiply
+// than they did under the old navy, which pulled the brightest pixels down
+// the most: matched on the grass, snow (the snow field, the town in winter)
+// and the town's battle sky came out 1.2-1.5x as bright as before at night,
+// nearer a blue evening than night. They take this much more gloom at full
+// night, which brings them back to about their old brightness.
+const SNOW_EXTRA_GLOOM = 0.2;
+const SKY_EXTRA_GLOOM = 0.15;
+const snowy = (sceneKey: string): boolean => sceneKey === "Snow" || seasonLook(sceneKey.toLowerCase()) === "winter";
 
 // Encounters get riskier after dark by the same factor in every scene.
 export const NIGHT_ENCOUNTER_MULT = 1.8;
 
-// The sky's colour through the day, under the night's darkness: [hour,
-// colour, alpha], interpolated in between, nothing outside 05:00..20:00 (the
-// night alone) or across 07:00..18:00 (clear daylight, as before). Dusk goes
-// gold, orange, rose, purple and hands over to the night's navy as the dark
-// comes up at 19:30..20:00; dawn comes up pink under the last of the night
-// and leaves gold. A colour stop at alpha 0 repeats its neighbour, so the hue
-// never drifts through grey while it fades. Alpha peaks at 0.22, half the
-// night's 0.45: a uniform overlay scales every difference between two pixels
-// by 1 - alpha whatever its colour, so an orange WASP on orange dusk keeps
-// more contrast than it has at night.
-type SkyStop = readonly [hour: number, color: number, alpha: number];
+// The sky through the day, multiplied in with the night's cast: [hour,
+// factor], interpolated in between, white (nothing) outside 05:00..20:00 (the
+// night alone) or across 07:00..18:00 (clear daylight). Dusk goes gold,
+// orange, rose, purple and hands over to the night's cast as the dark comes
+// up at 19:30..20:00; dawn comes up pink under the last of the night and
+// leaves gold. Every factor keeps green over blue or red over green, so a
+// face stays warm (hue 8..31) at every hour, and each takes off a little more
+// than the one before it toward the night: a mid-grey keeps 90% at 18:15,
+// 72% at 19:00, 60% at 19:30, 49% under the night's cast, never darker than
+// the night it hands over to. The old NORMAL wash's pinks and purples, made
+// into factors, took so much green off that 19:15 came out nearly as dark as
+// the night, and the dawn's purple under the night's cast turned faces mauve.
+type SkyStop = readonly [hour: number, factor: number];
 const OPEN_SKY: readonly SkyStop[] = [
-  [5.0, 0x6a3a8a, 0],
-  [5.5, 0xa0507f, 0.14],
-  [6.0, 0xff8a9a, 0.16],
-  [6.5, 0xffc060, 0.1],
-  [7.0, 0xffc060, 0],
-  [18.0, 0xffb040, 0],
-  [18.5, 0xff7a30, 0.16],
-  [19.0, 0xe0506a, 0.2],
-  [19.5, 0x7a3c9a, 0.22],
-  [20.0, 0x7a3c9a, 0],
+  [5.0, WHITE],
+  [5.5, 0xfff0f0],
+  [6.0, 0xffd8dc],
+  [6.5, 0xfff0d4],
+  [7.0, WHITE],
+  [18.0, WHITE],
+  [18.5, 0xffe4c4],
+  [19.0, 0xffcfcf],
+  [19.5, 0xdcc0e6],
+  [20.0, WHITE],
 ];
 // The crater's sky through its ash: the same hours pulled red, so sunset
 // reads as the smog catching fire rather than a pastel sky over lava.
 const EMBER_SKY: readonly SkyStop[] = [
-  [5.0, 0x5a1a3a, 0],
-  [5.5, 0x8a2a40, 0.14],
-  [6.0, 0xe0603a, 0.16],
-  [6.5, 0xf09040, 0.1],
-  [7.0, 0xf09040, 0],
-  [18.0, 0xf08a3a, 0],
-  [18.5, 0xe04a2a, 0.18],
-  [19.0, 0xa02434, 0.2],
-  [19.5, 0x5a1a40, 0.22],
-  [20.0, 0x5a1a40, 0],
+  [5.0, WHITE],
+  [5.5, 0xfff0e8],
+  [6.0, 0xffd0bc],
+  [6.5, 0xffe0bc],
+  [7.0, WHITE],
+  [18.0, WHITE],
+  [18.5, 0xffd4b8],
+  [19.0, 0xf8bcb0],
+  [19.5, 0xd8b4c4],
+  [20.0, WHITE],
 ];
 // Which scenes see the sky, and how much of it. The cave has none and keeps
 // the plain night; the forest sees it through the canopy, a little fainter.
@@ -76,40 +112,45 @@ function mix(a: number, b: number, t: number): number {
   return ch(16) | ch(8) | ch(0);
 }
 
-function skyAt(stops: readonly SkyStop[], h: number): { color: number; alpha: number } {
+function multiply(a: number, b: number): number {
+  const ch = (shift: number): number => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255) << shift;
+  return ch(16) | ch(8) | ch(0);
+}
+
+function skyAt(stops: readonly SkyStop[], h: number): number {
   for (let i = 0; i + 1 < stops.length; i++) {
-    const [h0, c0, a0] = stops[i];
-    const [h1, c1, a1] = stops[i + 1];
-    if (h >= h0 && h < h1) {
-      const t = (h - h0) / (h1 - h0);
-      return { color: mix(c0, c1, t), alpha: a0 + (a1 - a0) * t };
-    }
+    const [h0, c0] = stops[i];
+    const [h1, c1] = stops[i + 1];
+    if (h >= h0 && h < h1) return mix(c0, c1, (h - h0) / (h1 - h0));
   }
-  return { color: NIGHT_TINT, alpha: 0 };
+  return WHITE;
+}
+
+// the night's multiply factor at `gloom` (see NIGHT_RANGE)
+function nightCast(gloom: number): number {
+  if (gloom <= NIGHT_RANGE) return mix(WHITE, NIGHT_CAST, gloom / NIGHT_RANGE);
+  return multiply(NIGHT_CAST, mix(0, WHITE, 1 - DEEP_DIM * (gloom - NIGHT_RANGE)));
 }
 
 const clockHour = (): number => (GameState.minutes / 60) % 24;
 
-// The sky's colour under the night's navy (`gloom` alpha), flattened into one
-// rectangle: the two layers' combined alpha, and the colour weighted by what
-// each one contributes.
-function overlayAt(sceneKey: string, h: number, gloom: number): { color: number; alpha: number } {
+// The sky's tint times the night's cast: two multiplies are one, so a single
+// rectangle carries both.
+function overlayAt(sceneKey: string, h: number, gloom: number): number {
   const sky = SKY_BY_SCENE[sceneKey];
-  const { color, alpha: skyAlpha } = sky ? skyAt(sky.stops, h) : { color: NIGHT_TINT, alpha: 0 };
-  const tint = skyAlpha * (sky?.strength ?? 0);
-  const alpha = 1 - (1 - tint) * (1 - gloom);
-  return { color: alpha > 0 ? mix(color, NIGHT_TINT, gloom / alpha) : NIGHT_TINT, alpha };
+  return multiply(sky ? mix(WHITE, skyAt(sky.stops, h), sky.strength) : WHITE, nightCast(gloom));
 }
 
 /**
- * The open-ground overlay over `sceneKey`'s sky right now: transparent by day,
- * NIGHT_TINT at NIGHT_RANGE by night, the scene's dawn or dusk in between.
+ * The open-ground MULTIPLY factor over `sceneKey`'s sky right now: white (no
+ * change) by day, NIGHT_CAST by night, the scene's dawn or dusk in between.
  * For the battle screen's backdrop, so a fight picks up the sky of the field
  * it started in.
  */
-export function skyOverlay(sceneKey: string): { color: number; alpha: number } {
+export function skyOverlay(sceneKey: string): number {
   const h = clockHour();
-  return overlayAt(sceneKey, h, darkness(h) * NIGHT_RANGE);
+  const extra = snowy(sceneKey) ? SNOW_EXTRA_GLOOM : sceneKey === "Town" ? SKY_EXTRA_GLOOM : 0;
+  return overlayAt(sceneKey, h, darkness(h) * (NIGHT_RANGE + extra));
 }
 
 // A lamp someone lights (NightLight.lamp) comes up across late dusk,
@@ -121,7 +162,8 @@ function lampLevel(h: number, dark: number): number {
 
 // Lights (addLights) draw just over the overlay so they shine through the dark
 // instead of being dimmed with everything else, and under Ambient's fireflies
-// and embers (90.5) and the area title (95).
+// and embers (90.5) and the area title (95). ADD over the multiply: a glow
+// lifts what the night took off, the windows' and the lava's colour with it.
 const LIGHT_DEPTH = 90.4;
 // The swell of a pulsing light: slow and shallow, a glow breathing rather
 // than anything that reads as a flicker or a flash.
@@ -182,12 +224,12 @@ export class NightOverlay {
   constructor(scene: Phaser.Scene, ambient = 0, range = NIGHT_RANGE) {
     this.scene = scene;
     this.ambient = ambient;
-    this.range = range;
+    this.range = range + (snowy(scene.sys.settings.key) ? SNOW_EXTRA_GLOOM : 0);
     this.rect = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, NIGHT_TINT, 1)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, nightCast(ambient))
+      .setBlendMode(Phaser.BlendModes.MULTIPLY)
       .setScrollFactor(0)
-      .setDepth(90)
-      .setAlpha(ambient);
+      .setDepth(90);
   }
 
   // Call every frame; the dark ramps across dusk and dawn and the sky's colour
@@ -196,8 +238,8 @@ export class NightOverlay {
   update(): number {
     const h = clockHour();
     const gloom = this.ambient + darkness(h) * this.range;
-    const { color, alpha } = overlayAt(this.scene.sys.settings.key, h, gloom);
-    this.rect.setFillStyle(color).setAlpha(alpha);
+    const color = overlayAt(this.scene.sys.settings.key, h, gloom);
+    this.rect.setFillStyle(color).setVisible(color !== WHITE);
     // Lights follow this overlay's own darkness, not the clock alone, and not
     // the sky: outdoors that's the night's ramp, while the always-dim cave
     // and crater keep a standing glow that grows after dark. Lamps come on a
