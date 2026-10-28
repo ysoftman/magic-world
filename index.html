@@ -14,15 +14,34 @@
         background: #0b0b2b;
         overflow: hidden;
       }
+      /* no flex centring here: Phaser's autoCenter sets the canvas margins,
+         and a centring body on top of them pushed the game off centre (80px
+         at 1600x720, 156px on an upright phone) */
       body {
-        display: flex;
-        align-items: center;
-        justify-content: center;
         font-family: "Press Start 2P", monospace;
       }
       canvas {
         image-rendering: pixelated;
         image-rendering: crisp-edges;
+      }
+      /* An upright phone shrinks the 16:9 game to a strip a third of the
+         screen tall, its d-pad a fingertip wide. The note sits in the empty
+         band above it: the canvas is centred and at most 9/16 of the width
+         tall, so upright it never starts above 22% of the height, and an
+         eighth of the way down is clear of it. */
+      @media (orientation: portrait) and (pointer: coarse) {
+        body::after {
+          content: "ROTATE YOUR DEVICE";
+          position: fixed;
+          left: 0;
+          right: 0;
+          top: 12.5%;
+          transform: translateY(-50%);
+          text-align: center;
+          font-size: 16px;
+          color: #f5f5f5;
+          pointer-events: none;
+        }
       }
     </style>
   </head>

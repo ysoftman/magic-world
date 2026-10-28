@@ -46,6 +46,12 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    // the display steps down to a multiple of the 320x180 art, so every art
+    // pixel is a whole number of CSS pixels: a MacBook (DPR 2) shows the game
+    // at exactly 2 device pixels per game pixel rather than 2.19, where the
+    // same glyph stroke came out 16, 17 or 18 device pixels wide. It costs at
+    // most one step of size (91% of the width there)
+    snap: { width: 320, height: 180 },
   },
   // every sound is Sfx's (audio.ts), synthesized on its own AudioContext;
   // Phaser's SoundManager went unused but still opened a second context and
