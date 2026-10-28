@@ -89,3 +89,56 @@ export const RECIPES: Recipe[] = [
   { key: "glacierMail", name: "GLACIER MAIL", fee: 400, needs: { yetiFur: 4, frostScale: 3, wolfFang: 4 } },
   { key: "drakeBlade", name: "DRAKE BLADE", fee: 500, needs: { drakeScale: 1, magmaCore: 4, wolfFang: 4 } },
 ];
+
+// REFINE: the BLACKSMITH's +1..+5 on the worn weapon or armor, a sink for the
+// gold and materials the late game piles up with nothing left to buy (gold
+// stops at MAX_GOLD, the forge and the house are one-time). Each level adds
+// REFINE_STEP to the piece's ATK (weapon) or DEF (armor), kept per piece.
+// The balance sim set the size (bun run sim:battle --refine N; the deep kit
+// is --abyss 45 --level 30 --potions 0 --hipotions 10 --talisman --meal def):
+// at +5 a Lv30 hero in the forged kit with a WOLF takes the ABYSS's B45
+// GLACIER GOLEM from 59% to 80%, and NEW GAME+3 (--forged --ng 3) stays a
+// fight, its GLACIER 10% to 26% and its DRAKE 1% to 3%; stacked on a full
+// bestiary (+5) and PARTNER (+3), 92%, 50% and 16%. +2 a level made B45 near
+// sure (88%) before either bonus. The B50 DRAKE stays at 0% whatever the
+// refine (still 0% at +30): that wall is the ABYSS's own (abyss.ts).
+export type RefineKey = "sword" | "shield" | "ironSword" | "ironShield" | "mythrilSword" | "mythrilShield" | "glacierMail" | "drakeBlade";
+export const MAX_REFINE = 5;
+export const REFINE_STEP = 1;
+// the fee to reach each level, +1 first; the last under MAX_GOLD, so every
+// level is one trip's savings at most
+export const REFINE_FEES = [500, 1000, 2000, 3500, 5000];
+// What each piece is refined with: its tier's region, as the shop and the
+// forge send the player there. The top weapons take the volcano's MAGMA CORE
+// and, for the last two levels, a DRAKE SCALE; the top armor the snow's.
+export const REFINE_MATS: Record<RefineKey, [MaterialKey, MaterialKey]> = {
+  sword: ["slimeGel", "batWing"],
+  shield: ["slimeGel", "batWing"],
+  ironSword: ["wolfFang", "spiderSilk"],
+  ironShield: ["wolfFang", "spiderSilk"],
+  mythrilSword: ["magmaCore", "drakeScale"],
+  mythrilShield: ["frostScale", "yetiFur"],
+  drakeBlade: ["magmaCore", "drakeScale"],
+  glacierMail: ["frostScale", "yetiFur"],
+};
+// pieces of each material per level, +1 first: 20 and 9 for a piece's +5.
+// A DRAKE SCALE comes one to a FLAME DRAKE (three on the ABYSS's B25), so
+// only the last two levels ask for one.
+const MAIN_PIECES = [2, 3, 4, 5, 6];
+const SECOND_PIECES = [1, 1, 2, 2, 3];
+const SCALE_PIECES = [0, 0, 0, 1, 1];
+
+export function isRefinable(key: string | null): key is RefineKey {
+  // an own key only: an imported "toString" is `in` every object
+  return key !== null && Object.keys(REFINE_MATS).includes(key);
+}
+
+/** What taking `key` to refine level `to` (1..MAX_REFINE) costs. */
+export function refineCost(key: RefineKey, to: number): { fee: number; needs: Partial<Record<MaterialKey, number>> } {
+  const i = to - 1;
+  const [main, second] = REFINE_MATS[key];
+  const needs: Partial<Record<MaterialKey, number>> = { [main]: MAIN_PIECES[i] };
+  const n = second === "drakeScale" ? SCALE_PIECES[i] : SECOND_PIECES[i];
+  if (n > 0) needs[second] = n;
+  return { fee: REFINE_FEES[i], needs };
+}

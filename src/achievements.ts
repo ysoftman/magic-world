@@ -1,10 +1,13 @@
+import type Phaser from "phaser";
 import { ARENA_BOSSES } from "./arena";
 import { MAX_GOLD, MAX_LEVEL } from "./config";
 import { RECIPES } from "./drops";
 import { FAVOR_GIVERS, FAVORS } from "./favors";
 import { ALL_FISH, GameState } from "./gameState";
+import { MAX_HOUSE } from "./home";
 import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS, VOLCANO_TREASURE_POS } from "./levels";
 import { CATCHABLE } from "./monsters";
+import { showToast } from "./pixelart";
 
 // Every chest across the dungeon, forest, snow field and volcano — a new map
 // only needs its list added here. treasure-hunter checks each id instead of
@@ -265,7 +268,88 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     desc: "Dig up 10 treasure maps",
     ...atLeast(() => GameState.mapsDug, 10),
   },
+  {
+    // meals served at HOME's KITCHEN (ui/Kitchen.ts): ten is 50-70 battles
+    // eaten through, a habit rather than a first try
+    id: "chef",
+    name: "CHEF",
+    desc: "Cook 10 meals at HOME",
+    ...atLeast(() => GameState.mealsCooked, 10),
+  },
+  {
+    // every extension, built in order (home.ts); "3/3" on the locked row
+    id: "homebuilder",
+    name: "HOMEBUILDER",
+    desc: `Build all ${MAX_HOUSE} HOME extensions`,
+    ...atLeast(() => GameState.houseLevel, MAX_HOUSE),
+  },
+  {
+    // one bounty a day: the days gone by are folded into bountiesDone when
+    // the board rolls (GameState.rollBountyIfStale), today's counts as soon
+    // as it is claimed, so the trophy lands at the board, not a day later
+    id: "bounty-hunter",
+    name: "BOUNTY HUNTER",
+    desc: "Complete 5 daily bounties",
+    ...atLeast(() => GameState.bountiesDone + (GameState.bounty?.claimed ? 1 : 0), 5),
+  },
+  {
+    // the board's daily delivery (delivery.ts deliver()), one a day too
+    id: "courier",
+    name: "COURIER",
+    desc: "Make 5 BOUNTY BOARD deliveries",
+    ...atLeast(() => GameState.deliveriesDone, 5),
+  },
+  {
+    // the LUCKY WHEEL's top outcome (ui/LuckyWheel.ts), 3-5% a spin
+    id: "jackpot",
+    name: "JACKPOT",
+    desc: "Hit the LUCKY WHEEL's JACKPOT",
+    check: () => GameState.jackpots >= 1,
+  },
+  {
+    // 5 is companionBondBonus's cap (gameState.ts): 50 rounds fought beside
+    // one species; the locked row shows the best bond so far
+    id: "best-friends",
+    name: "BEST FRIENDS",
+    desc: "Raise a companion's bond to +5",
+    ...atLeast(() => Math.max(0, ...Object.keys(GameState.companionBond).map((n) => GameState.companionBondBonus(n))), 5),
+  },
 ];
+
+// Hero looks earned with achievements: BootScene's HERO_LOOKS past the first
+// BASE_LOOKS open one at each count here, the last once every achievement is
+// in. Counted off GameState.achievements (as the trophy board counts them,
+// so an id an old save kept for a since-removed entry adds nothing), so the
+// save holds nothing new.
+export const BASE_LOOKS = 4;
+export const LOOK_MILESTONES = [10, 20, 30, ACHIEVEMENTS.length];
+
+export function earnedCount(): number {
+  return ACHIEVEMENTS.filter((a) => GameState.achievements.includes(a.id)).length;
+}
+
+/** How many achievements HERO_LOOKS[look] takes: 0 for the first four. */
+export function lookNeeds(look: number): number {
+  return look < BASE_LOOKS ? 0 : (LOOK_MILESTONES[look - BASE_LOOKS] ?? Number.POSITIVE_INFINITY);
+}
+
+export function lookUnlocked(look: number): boolean {
+  return earnedCount() >= lookNeeds(look);
+}
+
+/** The count the next locked look opens at, or undefined once all are open. */
+export function nextLookNeeds(): number | undefined {
+  const have = earnedCount();
+  return LOOK_MILESTONES.find((n) => have < n);
+}
+
+// Called after claimAchievements() with what it returned: when the claim
+// reached a look's count, says so. Shown after the achievement's own toast,
+// as the queue keeps news ("!") in order. 37 glyphs at retroStyle(5), 740px.
+export function announceLooks(scene: Phaser.Scene, earned: readonly string[], y: number): void {
+  const have = earnedCount();
+  if (LOOK_MILESTONES.some((n) => have >= n && have - earned.length < n)) showToast(scene, "NEW LOOK UNLOCKED: TRY IT ON AT HOME!", y);
+}
 
 // Returns the ids of achievements that the current state newly satisfies.
 export function claimAchievements(): string[] {

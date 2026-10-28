@@ -1,10 +1,11 @@
-import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "./drops";
+import { isRefinable, MATERIAL_KEYS, MATERIALS, type MaterialKey, REFINE_STEP } from "./drops";
 import {
   EQUIP_BONUS,
   EQUIP_MAXHP,
   EQUIP_RESIST,
   EQUIP_SLOT,
   type EquipmentKey,
+  GameState,
   type InventoryState,
   RESIST_KINDS,
   type ResistKind,
@@ -27,12 +28,13 @@ const RESIST_NAME: Record<ResistKind, string> = { poison: "POISON", freeze: "FRE
 // ATK and only the armor's DEF (GameState.effAtk/effDef); an accessory's
 // EQUIP_BONUS is 0 and never applied. A piece blocking every ailment says so
 // in one phrase: "TALISMAN: ACCESSORY, BLOCKS ALL AILMENTS" is 40 glyphs,
-// where naming both would overrun the info line.
-function equipInfo(key: EquipmentKey): string {
+// where naming both would overrun the info line. `refine`, the BLACKSMITH's
+// level on it, goes into the total and after it: "ATK +11 (+3)".
+function equipInfo(key: EquipmentKey, refine = 0): string {
   const slot = EQUIP_SLOT[key];
   const parts = [slot.toUpperCase()];
-  const bonus = EQUIP_BONUS[key];
-  if (bonus > 0 && slot !== "accessory") parts.push(`${slot === "weapon" ? "ATK" : "DEF"} +${bonus}`);
+  const bonus = EQUIP_BONUS[key] + refine * REFINE_STEP;
+  if (bonus > 0 && slot !== "accessory") parts.push(`${slot === "weapon" ? "ATK" : "DEF"} +${bonus}${refine > 0 ? ` (+${refine})` : ""}`);
   const resists = EQUIP_RESIST[key] ?? [];
   if (resists.length === RESIST_KINDS.length) parts.push("BLOCKS ALL AILMENTS");
   else for (const r of resists) parts.push(`BLOCKS ${RESIST_NAME[r]}`);
@@ -76,3 +78,14 @@ export const ITEM_INFO: Record<keyof InventoryState, string> = {
   drakeBlade: equipInfo("drakeBlade"),
   ...materialInfo,
 };
+
+/**
+ * An item's line as the panels show it ("NAME: INFO"): ITEM_INFO's, but a
+ * refined weapon or armor says what it really adds, the BLACKSMITH's share
+ * after the total. The name stays bare, since the "(+5)" already says it:
+ * "MYTHRIL SHIELD: ARMOR, DEF +11 (+5)" is 35 glyphs at the longest.
+ */
+export function itemInfo(key: keyof InventoryState): string {
+  const refine = isRefinable(key) ? GameState.refineOf(key) : 0;
+  return refine > 0 ? equipInfo(key as EquipmentKey, refine) : ITEM_INFO[key];
+}

@@ -5,6 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { CATCHABLE, ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 const SPECIES = Object.values(ENEMIES);
@@ -17,32 +18,41 @@ const COLS = 2;
 const ROWS = 5;
 const PER_PAGE = COLS * ROWS;
 const PAGES = Math.max(1, Math.ceil(SPECIES.length / PER_PAGE));
-// a row is a 40px block (24px name over a 16px note) centered on its y, so
-// 52 leaves 12px between rows
-const ROW_GAP = 52;
-const ROW_HALF = 20;
+// a row is a 44px block (24px name, 4px, a 16px note) centered on its y, so
+// 56 leaves 12px between rows, three times the gap under a name: a note
+// reads as its own name's. Name and note used to touch (a 40px block at 52)
+const ROW_GAP = 56;
+const ROW_HALF = 22;
 const ICON_SCALE = (ROW_GAP / 80) * 0.9;
 // not wider: a touch device's menu-button strip starts at x=1220
 const PANEL_W = 1160;
 const COL_W = 560;
-// per column: icon, then the name far enough right to clear the widest sprite
+// per column: the cursor, the icon (40px at this scale), then the name far
+// enough right to clear the widest sprite. The cursor stands left of the
+// icon: between icon and name it sat on the icon's right edge. Its ink (x
+// 93..108 in the left column) keeps 30px inside the panel; in the right
+// column (from x=653) it keeps 13px clear of a left-column line at NAME_W
 const COL_X = GAME_WIDTH / 2 - PANEL_W / 2 + 40;
-const ICON_DX = 30;
-const NAME_DX = 80;
+const CURSOR_DX = 2;
+const ICON_DX = 40;
+const NAME_DX = 84;
 // a name line's room before the next column (col 2: before the panel edge)
 const NAME_W = COL_W - NAME_DX - 20;
 
-// Pinned near the top like AchievementsUI and laid out top to bottom: title
-// (32px), hint (16px), the rows, the pager (20px), then the counter sized for
-// its worst case, three lines (with a companion) 8px apart. It all ends at
-// y=504, above the touch d-pad (y>=508) and Z (y>=532).
-const PANEL_TOP = 28;
+// Pinned over the HUD (statusHud.ts) like AchievementsUI and laid out top to
+// bottom: title (32px), hint (16px), the rows, the pager (20px), then the
+// counter sized for its worst case, four lines (with a companion) 8px apart:
+// y 416..536. The first three end at y=504, above the touch d-pad (y>=508)
+// and Z (y>=532); the last, the short PARTNERS line ("PARTNERS 16 (BOND+5)
+// ATK+3 DEF+3", 33 x 24 = 792px, x 244..1036), sits between them at y
+// 512..536, where the d-pad's up arrow reaches x=191 and Z starts at x=1108.
+const PANEL_TOP = PANEL_TOP_OVER_HUD;
 const TITLE_Y = PANEL_TOP + 36;
 const HINT_Y = PANEL_TOP + 72;
 const ROW_Y = HINT_Y + 8 + 16 + ROW_HALF;
 const PAGER_Y = ROW_Y + (ROWS - 1) * ROW_GAP + ROW_HALF + 12 + 10;
 const COUNTER_LINE_SPACING = 8;
-const COUNTER_H = 3 * 24 + 2 * COUNTER_LINE_SPACING;
+const COUNTER_H = 4 * 24 + 3 * COUNTER_LINE_SPACING;
 const COUNTER_TOP = PAGER_Y + 10 + 12;
 const PANEL_H = COUNTER_TOP + COUNTER_H + 20 - PANEL_TOP;
 
@@ -52,8 +62,8 @@ const PANEL_H = COUNTER_TOP + COUNTER_H + 20 - PANEL_TOP;
 // y 100 on the hint, the fields' at y 176 on the first rows). retroStyle(5)
 // is 20px a glyph: the longest, "ALL CAUGHT! SEE THE ELDER" (25, 500px: x
 // 390..890) and "COMPANION: " + an 11-glyph MAGMA SLIME (22, 440px), sit well
-// inside the panel (x 60..1220), and the line (y 90..110) clears the title
-// (to y 80) and the first row (from y 124).
+// inside the panel (x 60..1220), and the line (y 70..90) clears the title
+// (to y 60) and the first row (from y 104).
 const MSG_HOLD_MS = 1400;
 const NEWS_HOLD_MS = 2600;
 
@@ -61,21 +71,33 @@ const NEWS_HOLD_MS = 2600;
 // small second line under its name. Sharing the name's line meant
 // abbreviating and then measure-and-dropping them, and once specials were
 // added most of the roster ran out of column width.
-const NAME_DY = -8;
-const NOTE_DY = 12;
+const NAME_DY = -10;
+const NOTE_DY = 14;
 const SPECIAL_NOTE: Record<EnemySpecial["kind"], string> = { poison: "POISON", freeze: "FREEZE", regen: "REGEN" };
 
-// longest is "WEAK:FIRE  FREEZE  ENRAGE" (25 x 16 = 400px), well inside
-// NAME_W
-function speciesNote(def: EnemyDef): string {
-  return [
-    def.weakness ? `WEAK:${def.weakness.toUpperCase()}` : "",
+// The note is two parts, told apart by label and color: what hurts the
+// monster ("WEAK:FIRE", orange) and what it does ("CAN:FREEZE,ENRAGE", dim).
+// As one line, "WEAK:BOLT  POISON" read as weak to bolt and to poison. The
+// CAN part starts on a column of its own, past the widest WEAK part (9 x 16
+// = 144px) and a glyph; the longest, "CAN:FREEZE,ENRAGE" (17 x 16 = 272px),
+// ends at 432px, inside NAME_W.
+const WEAK_COLOR = "#fdba74";
+const CAN_DX = 160;
+// A PARTNER (BOND+5, GameState.isPartner) says so in gold at the note line's
+// right end, NAME_W (x 344..456 past the name's x for its 112px). Only a
+// caught species can be one, and its CAN part ends by 320 ("CAN:POISON",
+// "CAN:FREEZE", "CAN:ENRAGE" past a WEAK one), 24px short of the tag.
+const PARTNER_COLOR = "#ffd166";
+function speciesNotes(def: EnemyDef): { weak: string; can: string } {
+  const can = [
     def.special ? SPECIAL_NOTE[def.special.kind] : "",
     // every boss/giant enrages once at low HP (BattleScene.enemyTurn)
     def.boss || def.giant ? "ENRAGE" : "",
-  ]
-    .filter(Boolean)
-    .join("  ");
+  ].filter(Boolean);
+  return {
+    weak: def.weakness ? `WEAK:${def.weakness.toUpperCase()}` : "",
+    can: can.length > 0 ? `CAN:${can.join(",")}` : "",
+  };
 }
 
 const slotX = (s: number): number => COL_X + Math.floor(s / ROWS) * COL_W;
@@ -100,7 +122,9 @@ export class BestiaryUI {
   // one icon/name/note set per slot on a page, refilled on every page turn
   private icons: Phaser.GameObjects.Sprite[] = [];
   private rows: Phaser.GameObjects.Text[] = [];
-  private notes: Phaser.GameObjects.Text[] = [];
+  private weakNotes: Phaser.GameObjects.Text[] = [];
+  private canNotes: Phaser.GameObjects.Text[] = [];
+  private partnerTags: Phaser.GameObjects.Text[] = [];
   private cursor: Phaser.GameObjects.Text;
 
   private keyEsc: Phaser.Input.Keyboard.Key;
@@ -145,7 +169,9 @@ export class BestiaryUI {
       .text(
         GAME_WIDTH / 2,
         HINT_Y,
-        isTouchDevice() ? "TAP OR D-PAD+Z A CAUGHT MONSTER TO SET COMPANION" : "CLICK OR HJKL+Z A CAUGHT MONSTER TO SET COMPANION",
+        // the key line, in the other panels' form (B/ESC closed it unsaid);
+        // 50 glyphs at most, 800px (x 240..1040)
+        isTouchDevice() ? "D-PAD: MOVE   Z/TAP: SET COMPANION   B/ESC: CLOSE" : "HJKL: MOVE   Z/CLICK: SET COMPANION   B/ESC: CLOSE",
         retroStyle(4, DIM_TEXT),
       )
       .setOrigin(0.5)
@@ -168,8 +194,8 @@ export class BestiaryUI {
     this.pager.setInteractive({ useHandCursor: true }).on("pointerdown", (p: Phaser.Input.Pointer) => {
       this.turnPage(p.x < this.pager.x ? -1 : 1);
     });
-    // top-anchored at its reserved slot, so a two-line counter (no companion)
-    // just ends higher instead of creeping up toward the pager
+    // top-anchored at its reserved slot, so a three-line counter (no
+    // companion) just ends higher instead of creeping up toward the pager
     this.counter = scene.add
       .text(GAME_WIDTH / 2, COUNTER_TOP, "", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5, 0)
@@ -198,13 +224,22 @@ export class BestiaryUI {
         .setDepth(152)
         .setVisible(false);
       this.rows.push(row);
-      const note = scene.add
-        .text(x + NAME_DX, y + NOTE_DY, "", retroStyle(4, "#9f9fd0"))
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(152)
-        .setVisible(false);
-      this.notes.push(note);
+      const note = (color: string) =>
+        scene.add
+          .text(x + NAME_DX, y + NOTE_DY, "", retroStyle(4, color))
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(152)
+          .setVisible(false);
+      const weak = note(WEAK_COLOR);
+      const can = note(DIM_TEXT);
+      this.weakNotes.push(weak);
+      this.canNotes.push(can);
+      this.partnerTags.push(
+        note(PARTNER_COLOR)
+          .setOrigin(1, 0.5)
+          .setX(x + NAME_DX + NAME_W),
+      );
 
       // click/tap a caught species to make it the battle companion (HJKL+Z
       // does the same thing via trySelectCompanion, see update()); a click on
@@ -213,7 +248,8 @@ export class BestiaryUI {
       const select = () => this.selectSlot(s);
       icon.setInteractive({ useHandCursor: true }).on("pointerdown", select);
       row.setInteractive({ useHandCursor: true }).on("pointerdown", select);
-      note.setInteractive({ useHandCursor: true }).on("pointerdown", select);
+      weak.setInteractive({ useHandCursor: true }).on("pointerdown", select);
+      can.setInteractive({ useHandCursor: true }).on("pointerdown", select);
     }
     this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
 
@@ -312,7 +348,7 @@ export class BestiaryUI {
     this.pager.setVisible(true);
     this.counter.setVisible(true);
     for (const t of this.rows) t.setVisible(true);
-    for (const t of this.notes) t.setVisible(true);
+    for (const t of [...this.weakNotes, ...this.canNotes, ...this.partnerTags]) t.setVisible(true);
     this.cursor.setVisible(true);
     this.refresh();
   }
@@ -328,7 +364,7 @@ export class BestiaryUI {
     this.counter.setVisible(false);
     for (const s of this.icons) s.setVisible(false);
     for (const t of this.rows) t.setVisible(false);
-    for (const t of this.notes) t.setVisible(false);
+    for (const t of [...this.weakNotes, ...this.canNotes, ...this.partnerTags]) t.setVisible(false);
     this.cursor.setVisible(false);
   }
 
@@ -390,8 +426,8 @@ export class BestiaryUI {
   }
 
   private renderCursor(): void {
-    const target = this.rows[this.index % PER_PAGE];
-    this.cursor.setPosition(target.x - 26, target.y);
+    const s = this.index % PER_PAGE;
+    this.cursor.setPosition(slotX(s) + CURSOR_DX, slotY(s));
   }
 
   private refresh(): void {
@@ -409,9 +445,13 @@ export class BestiaryUI {
     const companionLine = GameState.companion
       ? `\nCOMPANION: ${GameState.companion}  BOND+${GameState.companionBondBonus(GameState.companion)}${skill ? `  SKILL:${skill.name}` : ""}`
       : "";
+    // last, as the short line that fits between the touch buttons; it says
+    // what makes a PARTNER, as the rows' gold tags only show the ones made
+    const partners = GameState.partnerBonus();
     this.counter.setText(
       `SEEN ${seen}/${SPECIES.length}  CAUGHT ${caught}/${CATCHABLE.length}${title ? `  RANK:${title}` : ""}\n` +
-        `COMPLETION BONUS ATK+${bonus} DEF+${bonus}${companionLine}`,
+        `COMPLETION BONUS ATK+${bonus} DEF+${bonus}${companionLine}\n` +
+        `PARTNERS ${GameState.partnerCount()} (BOND+5)  ATK+${partners} DEF+${partners}`,
     );
     if (caught === CATCHABLE.length && !this.allCaughtShown) {
       this.allCaughtShown = true;
@@ -427,25 +467,31 @@ export class BestiaryUI {
       if (!def) {
         icon.setVisible(false);
         row.setText("");
-        this.notes[s].setText("");
+        this.weakNotes[s].setText("");
+        this.canNotes[s].setText("");
+        this.partnerTags[s].setText("");
         continue;
       }
       const rowSeen = GameState.seenMonsters.includes(def.name);
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
       icon.setTexture(def.texture).setVisible(rowSeen);
-      const note = rowSeen ? speciesNote(def) : "";
+      const { weak, can } = rowSeen ? speciesNotes(def) : { weak: "", can: "" };
+      const partner = rowCaught > 0 && GameState.isPartner(def.name);
       // a row without a note (unseen, or a plain SLIME) keeps its name
       // centered on the icon instead of floating above an empty line
-      row.setY(slotY(s) + (note ? NAME_DY : 0)).setColor(!rowSeen ? DIM_TEXT : isCompanion ? "#4ade80" : "#ffffff");
-      this.notes[s].setText(note);
+      row.setY(slotY(s) + (weak || can || partner ? NAME_DY : 0)).setColor(!rowSeen ? DIM_TEXT : isCompanion ? "#4ade80" : "#ffffff");
+      this.weakNotes[s].setText(weak);
+      this.canNotes[s].setText(can).setX(slotX(s) + NAME_DX + (weak ? CAN_DX : 0));
+      this.partnerTags[s].setText(partner ? "PARTNER" : "");
       if (!rowSeen) {
         row.setText("???");
         continue;
       }
-      // "★ CURSED GOBLIN (x1)" ran 17px past NAME_W; the count sheds its
-      // parentheses first ("x1" fits every current name), then goes
-      const star = isCompanion ? "★ " : "";
+      // "* CURSED GOBLIN (x1)" (20 glyphs, 480px) runs past NAME_W; the
+      // count sheds its parentheses first ("x1" fits every current name),
+      // then goes. "*", not "★": the bundled font is latin only
+      const star = isCompanion ? "* " : "";
       const labels = rowCaught > 0 ? [`${star}${def.name} (x${rowCaught})`, `${star}${def.name} x${rowCaught}`] : [];
       labels.push(`${star}${def.name}`);
       for (const label of labels) {
@@ -467,7 +513,7 @@ export class BestiaryUI {
     this.counter.destroy();
     for (const s of this.icons) s.destroy();
     for (const t of this.rows) t.destroy();
-    for (const t of this.notes) t.destroy();
+    for (const t of [...this.weakNotes, ...this.canNotes, ...this.partnerTags]) t.destroy();
     this.cursor.destroy();
     // keys are shared instances from kb.addKey (same keycode → same object);
     // destroying them would wipe other panels' listeners. Scene shutdown

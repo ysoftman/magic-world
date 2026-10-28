@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { TOTAL_FISH } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { addIngredient } from "../cooking";
+import { addIngredient, isRareFish } from "../cooking";
 import { DERBY_MULT, isEventToday } from "../events";
 import { ARCTIC_FISH, type FishDef, GameState, isNight, POND_FISH } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
@@ -416,6 +416,8 @@ export class FishingUI {
     const gold = GameState.gainGold(derby ? Math.round(roll * DERBY_MULT) : roll);
     GameState.fishCaught += 1;
     addIngredient(GameState.pantry, "fish");
+    const rare = isRareFish(fish);
+    if (rare) addIngredient(GameState.pantry, "rareFish");
     // the log keeps the fish's own roll, so a derby can't inflate a record
     const logged = GameState.logFish(fish.name, roll);
     this.dirty = true;
@@ -428,9 +430,12 @@ export class FishingUI {
     }
     this.status.setText(`CAUGHT: ${fish.name}!\n${reward}`);
     // under the reward, the ingredient for the kitchen (cooking.ts) and any
-    // log news: "+1 FISH TO COOK  NEW BEST!" is 26 x 20 = 520px of the 600
-    const news = logged === "new" ? "  NEW!" : logged === "best" ? "  NEW BEST!" : "";
-    this.badge.setText(`+1 FISH TO COOK${news}`).setVisible(true);
+    // log news: "+1 FISH TO COOK  NEW BEST!" is 26 x 20 = 520px of the 600.
+    // A rare bite's "+1 FISH +1 RARE FISH TO COOK" is 28 (560px), so its
+    // news takes a line of its own below.
+    const news = logged === "new" ? "NEW!" : logged === "best" ? "NEW BEST!" : "";
+    const sep = news && (rare ? "\n" : "  ");
+    this.badge.setText(`${rare ? "+1 FISH +1 RARE FISH" : "+1 FISH"} TO COOK${sep}${news}`).setVisible(true);
     // a new species gets the bestiary's capture jingle — same "added to the
     // book" moment — over the usual catch sounds
     if (logged === "new") Sfx.capture();

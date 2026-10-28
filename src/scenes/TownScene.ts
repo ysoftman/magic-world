@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ACHIEVEMENTS, claimAchievements } from "../achievements";
+import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
@@ -1372,6 +1372,7 @@ export class TownScene extends Phaser.Scene {
       if (names.length > 0) {
         showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, STATUS_HUD_TOAST_Y);
       }
+      announceLooks(this, earned, STATUS_HUD_TOAST_Y);
     }
 
     if (this.sQueued) {

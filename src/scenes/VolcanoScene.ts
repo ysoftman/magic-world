@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ACHIEVEMENTS, claimAchievements } from "../achievements";
+import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { Sfx, VOLCANO_THEME } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
@@ -377,6 +377,7 @@ export class VolcanoScene extends Phaser.Scene {
       if (names.length > 0) {
         showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, FIELD_TOAST_Y);
       }
+      announceLooks(this, earned, FIELD_TOAST_Y);
     }
 
     if (this.sQueued) {

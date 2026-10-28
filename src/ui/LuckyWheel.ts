@@ -309,6 +309,8 @@ export class LuckyWheel {
     // gainGold()'s return value, not the raw payout — a jackpot rolled near
     // MAX_GOLD must report what actually landed, not the full 5x
     const gained = GameState.gainGold(this.wager * outcome.mult);
+    // spun is spun, whatever the purse could take of it (achievements.ts)
+    if (outcome.name === "JACKPOT") GameState.jackpots += 1;
     this.goldText.setText(`G ${GameState.gold}`);
     if (outcome.mult === 0) {
       Sfx.error();

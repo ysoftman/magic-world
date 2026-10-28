@@ -1,11 +1,12 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
-import { type EquipmentKey, GameState } from "../gameState";
-import { ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
+import { type EquipmentKey, GameState, refinedName } from "../gameState";
+import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
+import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 import { drawTreasureMap } from "./TreasureDig";
 
@@ -37,8 +38,8 @@ interface MapItem {
 }
 type InventoryItem = UseItem | EquipItem | MaterialItem | MapItem;
 
-// a map's region in the count column, 7 glyphs at most so it ends (x 470..638)
-// short of the chart drawn beside it from x=680
+// a map's region in its own count column, 7 glyphs at most so it ends (x
+// 508..676) short of the chart drawn beside it from x=680
 const MAP_TAG: Record<TreasureRegion, string> = { town: "TOWN", dungeon: "CAVE", forest: "FOREST", snow: "SNOW", volcano: "VOLCANO" };
 
 const INVENTORY_ROW_GAP = 44;
@@ -159,43 +160,70 @@ const pageOf = (i: number): number => Math.floor(SLOTS[i].col / 2);
 // SHIELD can't push its count into the next column the way one combined
 // "LABEL xN" string did. The panel stays 1160 wide so its right edge
 // (x=1220) clears the touch menu strip (x>=1222). The longest name (14 x 24 =
-// 336px from x=720) ends 12px short of its count; the widest count, "x99 E"
-// (5 x 24 = 120px, x 1068..1188), 32px inside the panel, and the left
-// column's (x 508..628) 14px short of the right column's cursor (x>=642).
+// 336px from x=720) ends a glyph (24px) short of its count: at 12px
+// "ANTIDOTE CHARMx0" read as one word. The widest count, "x99 E" (5 x 24 =
+// 120px, x 1080..1200), keeps 20px inside the panel; in the left column
+// (x 520..640) it would reach the right column's cursor (x>=642), but only a
+// hand-made save holds 99 of a worn piece — "x1 E" ends at 616, "x99" at 592.
 // Worn gear says "E", not "(E)": the 168px of the old "x99 (E)" ran into
 // that cursor once the names moved over for the icons; it's gold anyway.
 // The height grows with the rows: 130 to the first row, 116 from the last
-// row to the bottom (message line). The pager shares the header row, right
-// aligned: "< PAGE 1/2 >" (12 x 20 = 240px, x 940..1180) stays 40px clear of
-// the longest right-column header, ACCESSORIES (11 x 20 = 220px from x=680).
+// row to the bottom (info, message and key lines, as in the shop). The pager
+// shares the header row, right aligned: "< PAGE 1/2 >" (12 x 20 = 240px,
+// x 940..1180) stays 40px clear of the longest right-column header,
+// ACCESSORIES (11 x 20 = 220px from x=680).
 const PANEL_W = 1160;
 const PANEL_H = 202 + INVENTORY_ROWS * INVENTORY_ROW_GAP;
-// Centered on a keyboard. On touch it's pinned near the top instead, so the
-// last row (8 rows: y 442..466) ends well above the Z button (y>=532). The msg
-// then sits at y 536..560, bounded by the d-pad (x<=258) and Z (x>=1076): 31
-// glyphs at most; the longest, "Take it to the BLACKSMITH!" and "HP and MP
-// are already full!", are 27.
-const PANEL_TOP = isTouchDevice() ? 28 : GAME_HEIGHT / 2 - PANEL_H / 2;
+// Centered on a keyboard (y 83..637, just under the HUD's second row). On
+// touch it's pinned over the HUD instead (statusHud.ts), so the last row (8
+// rows: y 434..458) ends well above the Z button (y>=532). The msg then sits
+// at y 500..524, bounded by the d-pad's up arrow (x<=194) and Z (x>=1076):
+// 36 glyphs at most; the longest, "Take it to the BLACKSMITH!" and "HP and
+// MP are already full!", are 27.
+const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : GAME_HEIGHT / 2 - PANEL_H / 2;
 const COL_W = 560;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 60;
 // a row's icon starts at NAME_X, its name ICON_DX after
 const ICON_DX = 40;
-const COUNT_DX = 388;
+const COUNT_DX = 400;
+// a map row's region tag, a glyph further in than the counts so "VOLCANO"
+// still ends before the chart
+const MAP_TAG_DX = 388;
 // an icon for none of it (count 0, an empty map slot), dimmed with its name
 const ICON_NONE_ALPHA = 0.35;
+// A refined piece's name carries its "+3" (refinedName). Past 14 glyphs at
+// retroStyle(6) a name runs into its count ("MYTHRIL SHIELD+5", 16 x 24 =
+// 384px from x=720, to 1104, over the count from 1080), and the panel can't
+// widen (the touch strip), so such a name drops to retroStyle(5): 320px, to
+// 1040, a glyph and more short of the count.
+const NAME_GLYPHS = 14;
 const STATUS_RIGHT_X = GAME_WIDTH / 2 + PANEL_W / 2 - 40;
 // room for the widest value ("110/110") plus the label beside it
 const STATUS_VALUE_W = 240;
-// The cursor item's "NAME: INFO" line, on its own row halfway between the
-// last item row and the msg (19px gap to each at 20px tall), so a use/equip
-// message never covers it. At retroStyle(5) the longest, 40 glyphs, is 800px
-// (x 240..1040): inside the panel on a keyboard, and on touch (y 497..517)
-// clear of the d-pad's up arrow (x<=194) and above Z (y>=532).
-const INFO_Y = PANEL_TOP + PANEL_H - 75;
+// the HP/MP block's centre under the panel's top, 2px over the title's
+const STATUS_Y = 38;
+// ATK/DEF, the sums effAtk/effDef apply (level, gear and its REFINE, the
+// bestiary and PARTNER bonuses), mirror HP/MP on the title row's left: no
+// other screen showed them. A third line in the HP/MP block (88px tall)
+// would have run into the pager under it. Labels from the columns' x
+// (120), values right-aligned 168px on (a 3-digit value, a glyph's gap):
+// x 120..288, well clear of the title (x>=560).
+const ATK_DEF_W = 168;
+// The cursor item's "NAME: INFO" line, on its own row between the last item
+// row and the msg (11px gap to each at 20px tall), so a use/equip message
+// never covers it. At retroStyle(5) the longest, 40 glyphs, is 800px
+// (x 240..1040): inside the panel on a keyboard, and on touch (y 469..489)
+// above the d-pad (y>=508) and Z (y>=532).
+const INFO_Y = PANEL_TOP + PANEL_H - 83;
+// The key line under the msg, like every other panel's: without one nothing
+// said Z wears a piece. At retroStyle(4) the touch one, 39 glyphs, is 624px
+// (x 328..952; on touch y 534..550, clear of the d-pad's up arrow, x<=194,
+// and of Z, x>=1089 that high), the keyboard's 38.
+const HINT = isTouchDevice() ? "D-PAD: MOVE   Z: USE/EQUIP   ESC: CLOSE" : "HJKL: MOVE   Z: USE/EQUIP   ESC: CLOSE";
 // The chart of the cursor's map (ui/TreasureDig.ts), in the right half of
 // the maps page: x 680..1180 under the column header (to y 94) and 16px over
 // the info line, less its 6px frame. At 16px a cell the town's 28 x 20 is
-// 448 x 320, the biggest region, centred in 488 x 331.
+// 448 x 320, the biggest region, centred in 488 x 333.
 const MAP_AREA = {
   x: NAME_X + COL_W + 6,
   y: PANEL_TOP + 110 + 6,
@@ -219,8 +247,11 @@ export class InventoryUI {
   private cursor: Phaser.GameObjects.Text;
   private statusLabels: Phaser.GameObjects.Text;
   private statusValues: Phaser.GameObjects.Text;
+  private atkDefLabels: Phaser.GameObjects.Text;
+  private atkDefValues: Phaser.GameObjects.Text;
   private msg: Phaser.GameObjects.Text;
   private info: Phaser.GameObjects.Text;
+  private hint: Phaser.GameObjects.Text;
   private pager: Phaser.GameObjects.Text;
   private mapView: Phaser.GameObjects.Graphics;
   private mapTitle: Phaser.GameObjects.Text;
@@ -300,7 +331,7 @@ export class InventoryUI {
       );
       this.counts.push(
         scene.add
-          .text(x + COUNT_DX, y, "x0", retroStyle(6, "#ffffff"))
+          .text(x + (item.kind === "map" ? MAP_TAG_DX : COUNT_DX), y, "x0", retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -311,22 +342,47 @@ export class InventoryUI {
 
     // HP/MP is justified: the labels share a left edge, the values a right
     // one. A single right-aligned "HP n/n\nMP n/n" text left the shorter MP
-    // label hanging inward.
+    // label hanging inward. 8px of leading, as Press Start 2P has none (the
+    // two lines sat 3px apart): 56px, y 10..66 under the panel's top, 10px
+    // inside its edge and 8px over the pager on the header row (from 74)
     this.statusLabels = scene.add
-      .text(STATUS_RIGHT_X - STATUS_VALUE_W, PANEL_TOP + 40, "HP\nMP", retroStyle(6, "#8ecbff"))
+      .text(STATUS_RIGHT_X - STATUS_VALUE_W, PANEL_TOP + STATUS_Y, "HP\nMP", retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0.5)
+      .setLineSpacing(8)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.statusValues = scene.add
-      .text(STATUS_RIGHT_X, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff"))
+      .text(STATUS_RIGHT_X, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
       .setOrigin(1, 0.5)
       .setAlign("right")
+      .setLineSpacing(8)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.atkDefLabels = scene.add
+      .text(NAME_X, PANEL_TOP + STATUS_Y, "ATK\nDEF", retroStyle(6, "#8ecbff"))
+      .setOrigin(0, 0.5)
+      .setLineSpacing(8)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.atkDefValues = scene.add
+      .text(NAME_X + ATK_DEF_W, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
+      .setOrigin(1, 0.5)
+      .setAlign("right")
+      .setLineSpacing(8)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 34, "", retroStyle(6, "#f5f5f5"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", retroStyle(6, "#f5f5f5"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.hint = scene.add
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, HINT, retroStyle(4, DIM_TEXT))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -404,8 +460,11 @@ export class InventoryUI {
     this.title.setVisible(true);
     this.statusLabels.setVisible(true);
     this.statusValues.setVisible(true);
+    this.atkDefLabels.setVisible(true);
+    this.atkDefValues.setVisible(true);
     this.msg.setVisible(true);
     this.info.setVisible(true);
+    this.hint.setVisible(true);
     this.pager.setVisible(true);
     this.cursor.setVisible(true);
     this.showPage();
@@ -527,6 +586,7 @@ export class InventoryUI {
   private refresh(): void {
     const p = GameState.player;
     this.statusValues.setText(`${p.hp}/${GameState.effMaxHp()}\n${p.mp}/${p.maxMp}`);
+    this.atkDefValues.setText(`${GameState.effAtk()}\n${GameState.effDef()}`);
     for (let i = 0; i < INVENTORY_ITEMS.length; i++) {
       const item = INVENTORY_ITEMS[i];
       if (item.kind === "map") {
@@ -538,6 +598,10 @@ export class InventoryUI {
       }
       const count = GameState.inventory[item.key];
       const equipped = item.kind === "equip" && GameState.isEquipped(item.key);
+      if (item.kind === "equip") {
+        const name = refinedName(item.label, item.key);
+        this.items[i].setText(name).setFontSize(`${(name.length > NAME_GLYPHS ? 5 : 6) * PIXEL}px`);
+      }
       const color = equipped ? "#ffd166" : count > 0 ? "#ffffff" : DIM_TEXT;
       this.items[i].setColor(color);
       this.icons[i].setAlpha(count > 0 ? 1 : ICON_NONE_ALPHA);
@@ -579,7 +643,7 @@ export class InventoryUI {
     this.cursor.setPosition(target.x - ICON_DX - 26, target.y);
     const item = INVENTORY_ITEMS[this.index];
     if (item.kind !== "map") {
-      this.info.setText(`${item.label}: ${ITEM_INFO[item.key]}`);
+      this.info.setText(`${item.label}: ${itemInfo(item.key)}`);
       this.mapView.setVisible(false);
       this.mapTitle.setVisible(false);
       return;
@@ -600,9 +664,12 @@ export class InventoryUI {
     this.title.setVisible(false);
     this.statusLabels.setVisible(false);
     this.statusValues.setVisible(false);
+    this.atkDefLabels.setVisible(false);
+    this.atkDefValues.setVisible(false);
     this.msg.setVisible(false);
     this.msg.setText("");
     this.info.setVisible(false);
+    this.hint.setVisible(false);
     this.pager.setVisible(false);
     this.mapView.setVisible(false);
     this.mapTitle.setVisible(false);
@@ -620,8 +687,11 @@ export class InventoryUI {
     this.title.destroy();
     this.statusLabels.destroy();
     this.statusValues.destroy();
+    this.atkDefLabels.destroy();
+    this.atkDefValues.destroy();
     this.msg.destroy();
     this.info.destroy();
+    this.hint.destroy();
     this.pager.destroy();
     this.mapView.destroy();
     this.mapTitle.destroy();

@@ -1,9 +1,9 @@
 import { ABYSS_FLOOR_MAX } from "./abyss";
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
-import { type CraftedKey, MATERIAL_KEYS, type MaterialKey, RECIPES } from "./drops";
+import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
 import { MAX_HOUSE } from "./home";
-import { CATCHABLE, type EnemyDef } from "./monsters";
+import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { recordRank } from "./ranking";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
 
@@ -152,6 +152,28 @@ const laterInventory = (from?: Record<string, unknown>): Record<(typeof LATER_IN
     (typeof LATER_INVENTORY_KEYS)[number],
     number
   >;
+
+// the PARTNER bonus's cap (GameState.partnerBonus): six PARTNER species
+export const PARTNER_BONUS_MAX = 3;
+
+// An old save holds no REFINE levels; an imported or hand-edited one keeps
+// only whole levels of a piece that can be refined, at most MAX_REFINE (a
+// renamed or removed piece's key is dropped).
+export function loadRefine(data: unknown): Partial<Record<RefineKey, number>> {
+  const out: Partial<Record<RefineKey, number>> = {};
+  if (!data || typeof data !== "object") return out;
+  for (const [key, n] of Object.entries(data)) {
+    if (isRefinable(key) && typeof n === "number" && Number.isInteger(n) && n > 0) out[key] = Math.min(MAX_REFINE, n);
+  }
+  return out;
+}
+
+// A piece's name as the bag, the shop and the BLACKSMITH list it: "+3" on
+// the end once refined ("MYTHRIL SHIELD+5" is the longest, 16 glyphs).
+export function refinedName(name: string, key: string): string {
+  const n = isRefinable(key) ? GameState.refineOf(key) : 0;
+  return n > 0 ? `${name}+${n}` : name;
+}
 
 export const FARM_PLOTS = 4;
 
@@ -600,6 +622,14 @@ export const GameState = {
   // the season (season.ts, counted from day 0) the town last announced,
   // -1 for none yet, so a reload doesn't announce it again
   seasonSeen: -1,
+  // records for the trophy board (achievements.ts), kept through NEW GAME+
+  // like fishCaught: meals served at HOME, BOUNTY BOARD bounties finished on
+  // days gone by (today's claimed one counts live, see achievements.ts),
+  // deliveries handed in, LUCKY WHEEL jackpots spun
+  mealsCooked: 0,
+  bountiesDone: 0,
+  deliveriesDone: 0,
+  jackpots: 0,
   farm: Array.from({ length: FARM_PLOTS }, () => null) as Array<FarmPlot | null>,
   achievements: [] as string[],
   inventory: {
@@ -622,6 +652,9 @@ export const GameState = {
     ...laterInventory(),
   } as InventoryState,
   equipped: { weapon: null, armor: null, accessory: null } as Record<EquipSlot, EquipmentKey | null>,
+  // the BLACKSMITH's REFINE level of each weapon and armor (drops.ts), kept
+  // per piece, so swapping gear swaps the level with it; absent is +0
+  refine: {} as Partial<Record<RefineKey, number>>,
   caught: [] as string[],
   seenMonsters: [] as string[],
   companion: null as string | null,
@@ -765,6 +798,21 @@ export const GameState = {
     if (!name) return 0;
     return Math.min(5, Math.floor((this.companionBond[name] ?? 0) / 10));
   },
+  // A species raised to that cap (BOND+5) is a PARTNER for good, and every
+  // two PARTNERs add ATK +1 and DEF +1 to the hero, up to +3 (six): once one
+  // companion's bond stopped growing there was no reason to raise another,
+  // and the other species' skills went untried. Read off companionBond, the
+  // per-species record, so nothing new is saved; counted over ENEMIES, so a
+  // renamed species left in an old save can't inflate it (as fishLogged).
+  isPartner(name: string): boolean {
+    return this.companionBondBonus(name) >= 5;
+  },
+  partnerCount(): number {
+    return Object.values(ENEMIES).filter((e) => this.isPartner(e.name)).length;
+  },
+  partnerBonus(): number {
+    return Math.min(PARTNER_BONUS_MAX, Math.floor(this.partnerCount() / 2));
+  },
   // eligible bounty targets: every catchable species except the TROLL KING
   // (a rare 35%-per-load Town roamer — could make that day's bounty
   // impossible), gated by the same quest flags that unlock their area
@@ -796,6 +844,10 @@ export const GameState = {
     if (this.bounty && !this.bounty.claimed && this.bounty.have >= this.bounty.need) {
       this.gainGold(this.bounty.reward);
     }
+    // ...and a finished bounty, claimed at the board or paid out here, goes
+    // on the record as it is discarded (achievements.ts BOUNTY HUNTER counts
+    // today's claimed one on top, so the trophy lands at the board)
+    if (this.bounty && (this.bounty.claimed || this.bounty.have >= this.bounty.need)) this.bountiesDone += 1;
     const pool = this.bountyPool();
     const target = pool[Math.floor(Math.random() * pool.length)];
     const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive
@@ -809,16 +861,31 @@ export const GameState = {
     };
   },
   effAtk(): number {
-    return this.player.atk + (this.equipped.weapon ? EQUIP_BONUS[this.equipped.weapon] : 0) + this.bestiaryBonus();
+    const weapon = this.equipped.weapon;
+    return (
+      this.player.atk +
+      (weapon ? EQUIP_BONUS[weapon] : 0) +
+      this.refineOf(weapon) * REFINE_STEP +
+      this.bestiaryBonus() +
+      this.partnerBonus()
+    );
   },
   effDef(): number {
-    return this.player.def + (this.equipped.armor ? EQUIP_BONUS[this.equipped.armor] : 0) + this.bestiaryBonus();
+    const armor = this.equipped.armor;
+    return (
+      this.player.def + (armor ? EQUIP_BONUS[armor] : 0) + this.refineOf(armor) * REFINE_STEP + this.bestiaryBonus() + this.partnerBonus()
+    );
   },
   weaponTexture(): string {
     return this.equipped.weapon ? EQUIP_TEXTURE[this.equipped.weapon] : "equip-sword";
   },
   armorTexture(): string {
     return this.equipped.armor ? EQUIP_TEXTURE[this.equipped.armor] : "equip-shield";
+  },
+  // a piece's REFINE level, 0 for one that can't be refined (an accessory) or
+  // none at all
+  refineOf(key: EquipmentKey | null): number {
+    return isRefinable(key) ? Math.min(MAX_REFINE, this.refine[key] ?? 0) : 0;
   },
   isEquipped(key: EquipmentKey): boolean {
     return this.equipped[EQUIP_SLOT[key]] === key;
@@ -896,10 +963,16 @@ export const GameState = {
       // the new cycle hasn't reopened yet waits until it has
       treasureMaps: this.treasureMaps,
       mapsDug: this.mapsDug,
+      // records of what the hero did, like fishCaught above
+      mealsCooked: this.mealsCooked,
+      bountiesDone: this.bountiesDone,
+      deliveriesDone: this.deliveriesDone,
+      jackpots: this.jackpots,
       // the house is the hero's for good; its garden starts the new day over
       houseLevel: this.houseLevel,
       achievements: this.achievements,
       equipped: this.equipped,
+      refine: this.refine,
       caught: this.caught,
       seenMonsters: this.seenMonsters,
       companion: this.companion,
@@ -950,6 +1023,10 @@ export const GameState = {
     this.gardenDay = -1;
     this.rested = false;
     this.seasonSeen = -1;
+    this.mealsCooked = 0;
+    this.bountiesDone = 0;
+    this.deliveriesDone = 0;
+    this.jackpots = 0;
     this.farm = Array.from({ length: FARM_PLOTS }, () => null);
     this.achievements = [];
     this.inventory = {
@@ -972,6 +1049,7 @@ export const GameState = {
       ...laterInventory(),
     };
     this.equipped = { weapon: null, armor: null, accessory: null };
+    this.refine = {};
     this.caught = [];
     this.seenMonsters = [];
     this.companion = null;
@@ -1057,10 +1135,15 @@ export const GameState = {
           gardenDay: this.gardenDay,
           rested: this.rested,
           seasonSeen: this.seasonSeen,
+          mealsCooked: this.mealsCooked,
+          bountiesDone: this.bountiesDone,
+          deliveriesDone: this.deliveriesDone,
+          jackpots: this.jackpots,
           farm: this.farm,
           achievements: this.achievements,
           inventory: this.inventory,
           equipped: this.equipped,
+          refine: this.refine,
           caught: this.caught,
           seenMonsters: this.seenMonsters,
           companion: this.companion,
@@ -1136,6 +1219,11 @@ export const GameState = {
       this.gardenDay = Number.isInteger(data.gardenDay) ? data.gardenDay : -1;
       this.rested = data.rested === true;
       this.seasonSeen = Number.isInteger(data.seasonSeen) ? data.seasonSeen : -1;
+      // none on saves from before these records
+      this.mealsCooked = Number.isInteger(data.mealsCooked) && data.mealsCooked > 0 ? data.mealsCooked : 0;
+      this.bountiesDone = Number.isInteger(data.bountiesDone) && data.bountiesDone > 0 ? data.bountiesDone : 0;
+      this.deliveriesDone = Number.isInteger(data.deliveriesDone) && data.deliveriesDone > 0 ? data.deliveriesDone : 0;
+      this.jackpots = Number.isInteger(data.jackpots) && data.jackpots > 0 ? data.jackpots : 0;
       // rebuilt slot by slot so an old save (no farm), a shorter array or an
       // unknown crop key can't leave a plot the farm panel would read as
       // undefined
@@ -1161,6 +1249,7 @@ export const GameState = {
         armor: data.shield ? "shield" : null,
         accessory: null,
       };
+      this.refine = loadRefine(data.refine);
       this.caught = data.caught ?? [];
       this.seenMonsters = data.seenMonsters ?? [];
       this.companion = data.companion ?? null;

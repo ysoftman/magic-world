@@ -1,7 +1,9 @@
 // Cooking at HOME (ui/Kitchen.ts). Every harvest and every catch still pays
 // its gold as before and leaves one ingredient on top (ui/Farm.ts,
 // ui/Fishing.ts): the crop itself, or a FISH — one kind for every species,
-// so the pantry stays five numbers and a recipe never waits on a rare bite.
+// so the five everyday recipes never wait on a rare bite. The four rare
+// bites (isRareFish) leave a RARE FISH as well, for the one dish that does:
+// the KOI FEAST, whose doubled material drops feed the BLACKSMITH's REFINE.
 // A meal cooked from them lasts MEAL_BATTLES battles, counted per battle
 // rather than by the clock, which TIME SPEED would run twenty times as fast.
 // One meal at a time; cooking another replaces it. BattleScene takes a
@@ -14,7 +16,14 @@
 // only the battle's own payout (not loot or the bounty), so the farm and pond
 // economy sits where it was.
 
-export const INGREDIENTS = { corn: "CORN", bean: "BEAN", pumpkin: "PUMPKIN", moonflower: "MOONFLOWER", fish: "FISH" } as const;
+export const INGREDIENTS = {
+  corn: "CORN",
+  bean: "BEAN",
+  pumpkin: "PUMPKIN",
+  moonflower: "MOONFLOWER",
+  fish: "FISH",
+  rareFish: "RARE FISH",
+} as const;
 export type IngredientKey = keyof typeof INGREDIENTS;
 export type Pantry = Record<IngredientKey, number>;
 // a two-digit count for the kitchen's columns
@@ -34,6 +43,9 @@ export interface MealEffect {
   gold?: number;
   // the chance a poison or freeze that lands is shrugged off
   resist?: number;
+  // more of the monster material a won battle drops (drops.ts rollDrop),
+  // multiplied in with the ABYSS's own depth multiplier
+  drops?: number;
 }
 
 export interface MealDef {
@@ -58,6 +70,7 @@ export const MEALS = {
     info: "EXP +20%  GOLD +10%",
   },
   moonTea: { name: "MOON TEA", tag: "TEA", needs: { moonflower: 1 }, effect: { resist: 0.5 }, info: "HALF OF POISON & FREEZE BLOCKED" },
+  koiFeast: { name: "KOI FEAST", tag: "FEAST", needs: { rareFish: 1, pumpkin: 1 }, effect: { drops: 1 }, info: "MATERIAL DROPS x2" },
 } satisfies Record<string, MealDef>;
 
 export type MealKey = keyof typeof MEALS;
@@ -69,10 +82,16 @@ export interface Meal {
   left: number;
 }
 
-export const newPantry = (): Pantry => ({ corn: 0, bean: 0, pumpkin: 0, moonflower: 0, fish: 0 });
+export const newPantry = (): Pantry => ({ corn: 0, bean: 0, pumpkin: 0, moonflower: 0, fish: 0, rareFish: 0 });
 
-// A save from before cooking has no pantry and starts empty; a hand-edited
-// or imported one keeps only whole counts, clamped to 0..PANTRY_MAX.
+// The four rare bites, by what makes them rare in gameState.ts's tables: the
+// top tier that also gives a potion (GOLDEN FISH, AURORA KOI, 8%) and the
+// night-only species (MOON EEL, GHOST ICEFISH)
+export const isRareFish = (fish: { bonusItem?: unknown; night?: boolean }): boolean => !!fish.bonusItem || !!fish.night;
+
+// A save from before cooking has no pantry and starts empty, and one from
+// before the RARE FISH has none of it; a hand-edited or imported one keeps
+// only whole counts, clamped to 0..PANTRY_MAX.
 export function loadPantry(data: unknown): Pantry {
   const pantry = newPantry();
   const raw = (data ?? {}) as Record<string, unknown>;

@@ -1320,22 +1320,37 @@ export class BattleScene extends Phaser.Scene {
     // one more round fought together — grows this companion's permanent
     // bond bonus (see GameState.companionBondBonus); this fires once per
     // surviving round, so a long fight builds bond faster than a one-shot kill
+    const wasPartner = GameState.isPartner(name);
+    const partnerBonus = GameState.partnerBonus();
     GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
     const bond = GameState.companionBondBonus(name);
     const atk = companionAtk(def, GameState.player.level, bond);
     const skill = COMPANION_SKILLS[name];
     if (skill && this.companionSkillUseful(skill) && Math.random() < companionSkillChance(bond)) {
       await this.companionSkill(name, skill, atk);
-      return;
+    } else {
+      Sfx.attack();
+      let dmg = 0;
+      let crit = false;
+      await this.companionLunge(() => {
+        ({ dmg, crit } = rollDamage(atk, this.enemy.def));
+        this.companionHit(dmg, crit);
+      });
+      await this.say(crit ? `CRITICAL! ${name} helps for ${dmg}!` : `${name} attacks for ${dmg}!`);
     }
-    Sfx.attack();
-    let dmg = 0;
-    let crit = false;
-    await this.companionLunge(() => {
-      ({ dmg, crit } = rollDamage(atk, this.enemy.def));
-      this.companionHit(dmg, crit);
-    });
-    await this.say(crit ? `CRITICAL! ${name} helps for ${dmg}!` : `${name} attacks for ${dmg}!`);
+    if (!wasPartner && GameState.isPartner(name)) await this.announcePartner(name, GameState.partnerBonus() > partnerBonus);
+  }
+
+  // This round's strike took the bond to +5: the species is a PARTNER for
+  // good (GameState.partnerBonus), said at the end of the companion's turn
+  // so the strike plays out first. The second line only when it made an even
+  // count, which is what raises the hero's ATK/DEF. "MAGMA SLIME IS NOW A
+  // PARTNER!" (the longest catchable name) is 29 glyphs of a row's 36.
+  private async announcePartner(name: string, raised: boolean): Promise<void> {
+    Sfx.levelup();
+    if (this.companionSprite) this.glowBurst.setPosition(this.companionSprite.x, this.companionSprite.y).explode(16);
+    const line = `${name} IS NOW A PARTNER!`;
+    await this.say(raised ? `${line}\nATK/DEF +1 (${GameState.partnerCount()} PARTNERS)` : line);
   }
 
   // Dash at the foe and back; onHit runs once at the far end of the dash.
@@ -2113,6 +2128,8 @@ export class BattleScene extends Phaser.Scene {
       // the ABYSS (abyss.ts, at most x3); the ARENA returned above
       const drop = rollDrop(this.enemy);
       if (drop && this.abyss) drop.count *= abyssDropMult(this.abyss.floor);
+      // the KOI FEAST's doubling (cooking.ts), on top of the depth's
+      if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
       if (drop) GameState.inventory[drop.material] += drop.count;
       // one line for both, at most "Found a HI-POTION & 3 FROST SCALE!" (34)
       const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);

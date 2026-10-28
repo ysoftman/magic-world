@@ -1,15 +1,37 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD, PIXEL } from "../config";
+import { isRefinable } from "../drops";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
-import { EQUIP_SLOT, econDay, GameState } from "../gameState";
-import { ITEM_INFO } from "../itemInfo";
+import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
+import { itemInfo } from "../itemInfo";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
+import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // half the buy price, floored, never free
 const sellPrice = (price: number): number => Math.max(1, Math.floor(price / 2));
+// how long a sale that wipes a REFINE level waits on its second Z
+const CONFIRM_HOLD_MS = 2400;
+
+// A bought piece goes straight on when its slot is empty or it beats what's
+// worn on every count the stats read (effAtk/effDef's EQUIP_BONUS,
+// effMaxHp's EQUIP_MAXHP, resists()' EQUIP_RESIST) and on one of them by
+// more. Bought and not worn, a SWORD left ATK where it was until the player
+// found Z on page 2 of ITEMS. A charm for the AMULET is a trade (poison
+// against +10 max HP), so that one stays the player's call.
+function outclassesWorn(key: EquipmentKey): boolean {
+  const worn = GameState.equipped[EQUIP_SLOT[key]];
+  if (!worn) return true;
+  const hp = (k: EquipmentKey): number => EQUIP_MAXHP[k] ?? 0;
+  const resists = (k: EquipmentKey) => EQUIP_RESIST[k] ?? [];
+  const noWorse = EQUIP_BONUS[key] >= EQUIP_BONUS[worn] && hp(key) >= hp(worn) && resists(worn).every((r) => resists(key).includes(r));
+  return noWorse && (EQUIP_BONUS[key] > EQUIP_BONUS[worn] || hp(key) > hp(worn) || resists(key).length > resists(worn).length);
+}
+
+// "MYTHRIL SHIELD" -> "Mythril Shield", the case the shop's messages use
+const titleCase = (name: string): string => name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 // One column per kind (supplies left, equipment right) rather than splitting
 // the list in half, so the headers stay true once the two kinds differ in
@@ -31,12 +53,14 @@ const slotOf = (i: number): { col: number; row: number } => (i < SUPPLY_COUNT ? 
 // 130 to the first row, 116 from the last row to the bottom (msg + hint).
 const PANEL_W = 1160;
 const PANEL_H = 202 + SHOP_ROWS * SHOP_ROW_GAP;
-// Centered on a keyboard. On touch it's pinned near the top instead, so the
-// last equipment row (y 498..522) ends above the Z button (y>=532) instead of
-// under it. The msg then sits at y 564..588, and centered it's bounded by the
+// Up in the HUD either way (statusHud.ts): centered on a keyboard it would
+// start at y=61, through the HUD's second row, so it starts under the first
+// instead (y 40..638). On touch it's pinned over the HUD instead, so the last
+// equipment row (y 478..502) ends above the Z button (y>=532) instead of
+// under it. The msg then sits at y 544..568, and centered it's bounded by the
 // nearer obstacle, the d-pad (x<=258): 30 glyphs (720px, x 280..1000) at
 // most — the longest message, "Antidote Charm: blocks poison!", is 30.
-const PANEL_TOP = isTouchDevice() ? 28 : GAME_HEIGHT / 2 - PANEL_H / 2;
+const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : PANEL_TOP_UNDER_HUD_ROW1;
 const COL_W = 520;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 60;
 // a row's icon starts at its column's x, its name ICON_DX after, its price
@@ -44,15 +68,18 @@ const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 60;
 const ICON_DX = 40;
 const PRICE_DX = [370, 410];
 // a sell row ("IRON SHIELD (x1) (E)") may run past the price column; drop
-// the count, then the (E) — the gold color still marks it as worn
+// the count, then the (E) — the gold color still marks it as worn. A refined
+// piece keeps its "+3" (refinedName) to the last: "MYTHRIL SHIELD+5" alone
+// (16 x 24 = 384px) is past the equipment column's 362px, so it drops to
+// retroStyle(5) (320px) rather than lose the level.
 const sellNameW = (col: number): number => PRICE_DX[col] - ICON_DX - 8;
 // an icon for what can't be had here and now (LOCKED, SOLD, none to sell)
 const ICON_NONE_ALPHA = 0.35;
 // The cursor item's "NAME: INFO" line, on its own row halfway between the
 // last item row and the msg (12px gap to each at 20px tall), so a buy/sell
 // message never covers it. At retroStyle(5) the longest, 40 glyphs, is 800px
-// (x 240..1040): inside the panel on a keyboard, and on touch (y 533..553)
-// clear of the d-pad's up arrow (x<=194) and Z (x>=1086 at that height).
+// (x 240..1040): inside the panel on a keyboard, and on touch (y 513..533)
+// clear of the d-pad's up arrow (x<=194) and above Z (y>=532 at x=1128).
 const INFO_Y = PANEL_TOP + PANEL_H - 83;
 
 export class ShopUI {
@@ -77,6 +104,8 @@ export class ShopUI {
   private hint: Phaser.GameObjects.Text;
   private modeChip?: Phaser.GameObjects.Text;
   private msgTimer?: Phaser.Time.TimerEvent;
+  // the row whose sale waits on a second Z (see sell()), -1 for none
+  private pendingSell = -1;
 
   private keyUp: Phaser.Input.Keyboard.Key;
   private keyDown: Phaser.Input.Keyboard.Key;
@@ -251,6 +280,7 @@ export class ShopUI {
     this.active = true;
     this.index = 0;
     this.mode = "buy";
+    this.pendingSell = -1;
     this.upQueued = false;
     this.downQueued = false;
     this.leftQueued = false;
@@ -291,6 +321,7 @@ export class ShopUI {
     if (this.tabQueued) {
       this.tabQueued = false;
       this.mode = this.mode === "buy" ? "sell" : "buy";
+      this.pendingSell = -1;
       Sfx.move();
       this.refresh();
     }
@@ -311,6 +342,7 @@ export class ShopUI {
       this.index = col === 0 ? SUPPLY_COUNT + Math.min(row, SHOP_ITEMS.length - SUPPLY_COUNT - 1) : Math.min(row, SUPPLY_COUNT - 1);
     }
     if (this.index !== prev) {
+      this.pendingSell = -1;
       Sfx.move();
       this.renderCursor();
     }
@@ -341,9 +373,13 @@ export class ShopUI {
     }
     GameState.gold -= price;
     GameState.inventory[item.invKey] += 1;
+    // "Antidote Charm equipped!" and "Mythril Shield equipped!", the
+    // longest, are 24 glyphs; the info line still says what it does
+    const worn = item.key !== undefined && outclassesWorn(item.key);
+    if (item.key && worn) GameState.equipToggle(item.key);
     Sfx.buy();
     GameState.save();
-    this.showMsg(item.msg);
+    this.showMsg(worn ? `${titleCase(item.name)} equipped!` : item.msg);
     this.refresh();
   }
 
@@ -355,15 +391,32 @@ export class ShopUI {
       this.showMsg("Nothing to sell!");
       return;
     }
-    if (GameState.gold >= MAX_GOLD) {
+    // refused whenever the price won't all fit under the cap: at 9998G a
+    // 160G MYTHRIL SWORD went for the 1G that did
+    if (GameState.gold + sellPrice(item.price) > MAX_GOLD) {
       Sfx.error();
       this.showMsg("Gold is full!");
       return;
     }
+    // The last copy of a refined piece takes its REFINE level with it (bought
+    // back, it starts at +0), so that sale asks for a second Z first: "Its +5
+    // will be lost! Z: sell" is 28 glyphs, 672px (x 304..976), inside the
+    // touch msg line's 720. A second copy keeps the level, so it sells at once.
+    const lost = item.key && count === 1 ? GameState.refineOf(item.key) : 0;
+    if (lost > 0 && this.pendingSell !== this.index) {
+      this.pendingSell = this.index;
+      Sfx.error();
+      this.showMsg(`Its +${lost} will be lost! Z: sell`, CONFIRM_HOLD_MS);
+      return;
+    }
+    this.pendingSell = -1;
     // only unequip when this was the last copy — a duplicate from a quest
     // reward (e.g. a second MYTHRIL SWORD) should stay worn
     if (item.key && count === 1 && GameState.isEquipped(item.key)) GameState.unequip(EQUIP_SLOT[item.key]);
     GameState.inventory[item.invKey] -= 1;
+    if (isRefinable(item.invKey) && GameState.inventory[item.invKey] === 0 && !GameState.isEquipped(item.invKey)) {
+      delete GameState.refine[item.invKey];
+    }
     const gold = GameState.gainGold(sellPrice(item.price));
     Sfx.buy();
     GameState.save();
@@ -371,12 +424,16 @@ export class ShopUI {
     this.refresh();
   }
 
-  private showMsg(text: string): void {
+  private showMsg(text: string, hold = 1200): void {
     this.msgTimer?.remove();
     this.msg.setText(text);
     this.msgTimer = this.scene.time.addEvent({
-      delay: 1200,
-      callback: () => this.msg.setText(""),
+      delay: hold,
+      // a sale waiting on its second Z lapses with the line that asked
+      callback: () => {
+        this.msg.setText("");
+        this.pendingSell = -1;
+      },
     });
   }
 
@@ -397,11 +454,14 @@ export class ShopUI {
         const equipped = item.key ? GameState.isEquipped(item.key) : false;
         const color = equipped ? "#ffd166" : count > 0 ? "#ffffff" : DIM_TEXT;
         const worn = equipped ? " (E)" : "";
-        const labels = count > 0 ? [`${item.name} (x${count})${worn}`, `${item.name}${worn}`, item.name] : [item.name];
+        const name = count > 0 ? refinedName(item.name, item.invKey) : item.name;
+        const labels = count > 0 ? [`${name} (x${count})${worn}`, `${name}${worn}`, name] : [name];
+        this.items[i].setFontSize(`${6 * PIXEL}px`);
         for (const label of labels) {
           this.items[i].setText(label);
           if (this.items[i].width <= sellNameW(slotOf(i).col)) break;
         }
+        if (this.items[i].width > sellNameW(slotOf(i).col)) this.items[i].setFontSize(`${5 * PIXEL}px`);
         this.items[i].setColor(color);
         this.icons[i].setAlpha(count > 0 ? 1 : ICON_NONE_ALPHA);
         this.prices[i].setText(count > 0 ? `+${sellPrice(item.price)}G` : "NONE").setColor(color);
@@ -410,7 +470,10 @@ export class ShopUI {
       const locked = item.unlocked ? !item.unlocked() : false;
       const owned = item.key ? GameState.inventory[item.key] > 0 : false;
       const color = locked ? "#8b5cf6" : owned ? DIM_TEXT : "#ffffff";
-      this.items[i].setText(item.name).setColor(color);
+      this.items[i]
+        .setFontSize(`${6 * PIXEL}px`)
+        .setText(item.name)
+        .setColor(color);
       this.icons[i].setAlpha(locked || owned ? ICON_NONE_ALPHA : 1);
       // a market-day price is green, so the cut reads at a glance
       this.prices[i]
@@ -427,7 +490,7 @@ export class ShopUI {
     const target = this.items[this.index];
     this.cursor.setPosition(target.x - ICON_DX - 26, target.y);
     const item = SHOP_ITEMS[this.index];
-    this.info.setText(`${item.name}: ${ITEM_INFO[item.invKey]}`);
+    this.info.setText(`${item.name}: ${itemInfo(item.invKey)}`);
   }
 
   private close(): void {

@@ -5,14 +5,18 @@ import { canCook, cook, INGREDIENTS, type IngredientKey, MEAL_KEYS, MEALS, type 
 import { GameState } from "../gameState";
 import { mealBattles } from "../home";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // HOME's kitchen (cooking.ts), laid out like the BLACKSMITH's panel. Top to
 // bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph, in a 960 x 480
-// panel: the title (y+40); the whole pantry on one line (y+74, "CORN 99
-// BEAN 99  PUMPKIN 99  MOONFLOWER 99  FISH 99", 52 x 16 = 832px, x 224..1056);
-// five recipe rows from y+112 at a 38px pitch, the dish's icon (32px,
-// BootScene "icon-<key>", x 230..262), its name 8px after (12 glyphs at most,
+// panel: the title (y+38, y+22..54); the pantry on two lines centered at y+76
+// (y+58..94), the farm's ("CORN 99  BEAN 99  PUMPKIN 99  MOONFLOWER 99", 43 x
+// 16 = 688px) over the pond's ("FISH 99  RARE FISH 99", 336px) — on one line
+// the six came to 1056px, past the 920 inside the panel; six recipe rows
+// from y+114 at a 32px pitch (to y+286; the rows' 24px glyphs keep 8px apart
+// and the icons' art its middle 28px), the dish's icon (32px, BootScene
+// "icon-<key>", x 230..262), its name 8px after (12 glyphs at most,
 // "GRILLED FISH" = 288px from x=270) and its status ("NEED FOOD" 216px from
 // x=600); the picked recipe's effect centered at y+306 (the longest, "HALF OF
 // POISON & FREEZE BLOCKED - 5 BATTLES", 43 x 20 = 860px, x 210..1070); its
@@ -23,17 +27,23 @@ import { isTouchDevice } from "./TouchControls";
 // y+412 (the longest, "GRILLED FISH IS
 // SERVED! 5 BATTLES", 33 x 24 = 792px, x 244..1036) and the key hint at
 // y+450. Every line keeps 20px inside the panel's 160..1120. Centered on a
-// keyboard; on touch pinned to y=28, so it ends by y=508, above the d-pad.
+// keyboard; on touch pinned over the HUD (statusHud.ts), so it ends by
+// y=488, above the d-pad.
 const PANEL_W = 960;
 const PANEL_H = 480;
-const PANEL_TOP = isTouchDevice() ? 28 : GAME_HEIGHT / 2 - PANEL_H / 2;
+const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : GAME_HEIGHT / 2 - PANEL_H / 2;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 70;
 // a row's icon starts at NAME_X, its text ICON_DX after
 const ICON_DX = 40;
 const STATUS_X = NAME_X + ICON_DX + 330;
 const TABLE_X = GAME_WIDTH / 2;
-const ROW_Y = PANEL_TOP + 112;
-const ROW_GAP = 38;
+const ROW_Y = PANEL_TOP + 114;
+const ROW_GAP = 32;
+// the pantry's two lines: what the farm grows, then what the pond gives
+const PANTRY_LINES: IngredientKey[][] = [
+  ["corn", "bean", "pumpkin", "moonflower"],
+  ["fish", "rareFish"],
+];
 const INFO_Y = PANEL_TOP + 306;
 const NEED_Y = PANEL_TOP + 342;
 const NEED_GAP = 28;
@@ -94,8 +104,14 @@ export class KitchenUI {
       scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
       151,
     );
-    this.title = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "KITCHEN", retroStyle(8, "#fdba74")).setOrigin(0.5));
-    this.pantryText = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 74, "", retroStyle(4, "#a3e635")).setOrigin(0.5));
+    this.title = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 38, "KITCHEN", retroStyle(8, "#fdba74")).setOrigin(0.5));
+    this.pantryText = fixed(
+      scene.add
+        .text(GAME_WIDTH / 2, PANEL_TOP + 76, "", retroStyle(4, "#a3e635"))
+        .setOrigin(0.5)
+        .setAlign("center")
+        .setLineSpacing(4),
+    );
     MEAL_KEYS.forEach((k, i) => {
       const y = ROW_Y + i * ROW_GAP;
       this.icons.push(fixed(scene.add.image(NAME_X + 16, y, `icon-${k}`).setScale(0.5)));
@@ -110,13 +126,13 @@ export class KitchenUI {
     }
     this.table = fixed(scene.add.text(TABLE_X, NEED_Y, "", retroStyle(5, "#fdba74")).setOrigin(0, 0.5));
     this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 412, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
-    // touch names the d-pad rather than J/K (the arrows it sends move here too)
+    // touch names the d-pad rather than JK (the arrows it sends move here too)
     this.hint = fixed(
       scene.add
         .text(
           GAME_WIDTH / 2,
           PANEL_TOP + 450,
-          isTouchDevice() ? "D-PAD: PICK   Z: COOK   ESC: CLOSE" : "J/K: PICK   Z: COOK   ESC: CLOSE",
+          isTouchDevice() ? "D-PAD: MOVE   Z: COOK   ESC: CLOSE" : "JK: MOVE   Z: COOK   ESC: CLOSE",
           retroStyle(4, DIM_TEXT),
         )
         .setOrigin(0.5),
@@ -209,6 +225,7 @@ export class KitchenUI {
       this.refuse("Can't cook that now!");
       return;
     }
+    GameState.mealsCooked += 1;
     GameState.save();
     Sfx.buy();
     this.showMsg(`${MEALS[key].name} IS SERVED! ${battles} BATTLES`);
@@ -234,7 +251,7 @@ export class KitchenUI {
 
   private refresh(): void {
     const p = GameState.pantry;
-    this.pantryText.setText((Object.keys(INGREDIENTS) as IngredientKey[]).map((k) => `${INGREDIENTS[k]} ${p[k]}`).join("  "));
+    this.pantryText.setText(PANTRY_LINES.map((keys) => keys.map((k) => `${INGREDIENTS[k]} ${p[k]}`).join("  ")).join("\n"));
     MEAL_KEYS.forEach((k, i) => {
       const [label, color] = STATUS_LABEL[statusOf(k)];
       this.statuses[i].setText(label).setColor(color);

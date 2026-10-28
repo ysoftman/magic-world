@@ -117,6 +117,7 @@ export function deliver(d: DeliveryState): { gold: number; bomb: boolean } | nul
   GameState.inventory[d.material] -= d.need;
   if (reward.bomb) GameState.inventory.bomb += 1;
   d.done = true;
+  GameState.deliveriesDone += 1;
   return { gold, bomb: reward.bomb };
 }
 

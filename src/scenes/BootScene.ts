@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { lookUnlocked } from "../achievements";
 import { makeBattleBgs, makeTitleBg } from "../backdrops";
 import { ART_PX, buildRamp, keepBlocky, makeTexture, makeTilesetTexture, smoothBoundaryOnly } from "../pixelart";
 import type { TileSkin } from "../sceneCommon";
@@ -1393,12 +1394,26 @@ const HERO_LEGS_IDLE_32 = [
 // so picking it again restores the original. Each tunic keeps at least the
 // default blue's contrast against every ground (grass 1.7-3.0:1, cave/ash
 // 2.5-4.5:1); where one fades (GREEN on snow, 1.4:1) its dark trousers
-// (5.8:1) and hair still outline the hero.
+// (5.8:1) and hair still outline the hero. The hair's darker shade (d) is the
+// head's outline; VIOLET names its own, as the silver ramp's (0xaeb0c5) sat
+// within RGB distance 40 of the snow and left the head no top edge there.
+// Any mid shade landed on the trodden snow or a battle backdrop instead, so
+// it is a dark violet grey, as dark as the other looks' outlines.
+// The last four are earned with achievements (achievements.ts
+// LOOK_MILESTONES: 10, 20, 30 and all 38), GOLD the showiest; the pale-haired
+// two name a dark outline as VIOLET does. Names stay within 7 glyphs, the
+// picker's 144px frames at retroStyle(5).
 export const HERO_LOOKS = [
   { name: "BLUE", h: 0x6b4226, t: 0x3b6ef0, b: 0x8a5a2b, p: 0x2f3a56 },
   { name: "RED", h: 0xe0b354, t: 0xd23c3c, b: 0x5a3a20, p: 0x3d2b2b },
   { name: "GREEN", h: 0x9c4a1e, t: 0x34b55e, b: 0x7a5530, p: 0x34402a },
-  { name: "VIOLET", h: 0xcfd2dc, t: 0x9258dc, b: 0x5b3a6e, p: 0x2c2645 },
+  { name: "VIOLET", h: 0xcfd2dc, t: 0x9258dc, b: 0x5b3a6e, p: 0x2c2645, d: 0x4a4266 },
+  { name: "TEAL", h: 0x2b2118, t: 0x14b8a6, b: 0x6b4a2a, p: 0x253244 },
+  { name: "CRIMSON", h: 0x1c1917, t: 0xb91c3c, b: 0xd4a24c, p: 0x1f2937 },
+  { name: "NIGHT", h: 0xe7e5f0, t: 0x3730a3, b: 0xa1a1aa, p: 0x18181b, d: 0x3f3d56 },
+  // its outline a deep brown: a gold-brown 0x6b4a14 lost 47% of it on the
+  // forest's leaf-litter path
+  { name: "GOLD", h: 0xfde68a, t: 0xf2b705, b: 0x7f1d1d, p: 0x3b2410, d: 0x4a2e0a },
 ] as const;
 
 // a look's hair, tunic and trouser shading, off its own colours
@@ -1456,10 +1471,11 @@ let bakedLook = 0;
  * so each one is cleared first; the Texture and Frame objects stay the same,
  * which keeps the walk animations' frame references valid. The villagers
  * share the leg rows but have textures of their own, so they're untouched.
- * A no-op when that look is already baked.
+ * A no-op when that look is already baked. A look the save's achievements
+ * haven't earned (lookUnlocked) is BLUE too, though the count never drops.
  */
 export function bakeHero(scene: Phaser.Scene, look: number): void {
-  const index = HERO_LOOKS[look] ? look : 0;
+  const index = HERO_LOOKS[look] && lookUnlocked(look) ? look : 0;
   if (index === bakedLook) return;
   Object.assign(HERO_PALETTE, heroLookPalette(index));
   for (const key of scene.textures.getTextureKeys()) {
@@ -3831,6 +3847,21 @@ const ICON_BEAN_PALETTE = { b: 0x1d1424, g: 0x86efac, G: 0x16a34a, l: 0xd9f99d, 
 const ICON_PUMPKIN_PALETTE = { b: 0x1d1424, o: 0xfb923c, O: 0xc2410c, Y: 0xfdba74, g: 0x4ade80, G: 0x166534 };
 const ICON_MOONFLOWER_PALETTE = { b: 0x1d1424, w: 0xffffff, W: 0xc7d2fe, y: 0xfde047, Y: 0xfbbf24, g: 0x4ade80, G: 0x166534 };
 const ICON_FISH_PALETTE = { b: 0x1d1424, l: 0x9fd4ff, L: 0x5b9bd5, D: 0x2c5f8a, w: 0xffffff, k: 0x1d1424, s: 0x7aa9cf };
+// the RARE FISH (cooking.ts): the same fish in a koi's gold and orange, red
+// fins, so it never reads as the everyday blue FISH beside it
+const ICON_RARE_FISH_PALETTE = { b: 0x1d1424, l: 0xfde68a, L: 0xf59e0b, D: 0xb45309, w: 0xffffff, k: 0x1d1424, s: 0xef4444 };
+// the KOI FEAST: that koi on the GRILLED FISH's plate, its grill marks red
+// koi spots
+const ICON_KOI_FEAST_PALETTE = {
+  b: 0x1d1424,
+  l: 0xfde68a,
+  L: 0xf59e0b,
+  D: 0xb45309,
+  k: 0xdc2626,
+  w: 0xffffff,
+  s: 0xef4444,
+  W: 0xc8d0dc,
+};
 const ICON_GRILLED_FISH_PALETTE = {
   b: 0x1d1424,
   l: 0xe8b07a,
@@ -5162,6 +5193,8 @@ export class BootScene extends Phaser.Scene {
     makeTexture(this, "icon-fishStew", ICON_BOWL, ICON_FISH_STEW_PALETTE);
     makeTexture(this, "icon-pumpkinPie", ICON_PIE, ICON_PUMPKIN_PIE_PALETTE);
     makeTexture(this, "icon-moonTea", ICON_CUP, ICON_MOON_TEA_PALETTE);
+    makeTexture(this, "icon-rareFish", ICON_FISH, ICON_RARE_FISH_PALETTE);
+    makeTexture(this, "icon-koiFeast", ICON_PLATE_FISH, ICON_KOI_FEAST_PALETTE);
     makeTexture(this, "icon-map", ICON_MAP, ICON_MAP_PALETTE);
     makeTexture(this, "cave", CAVE_TILE, CAVE_PALETTE);
     makeTexture(this, "farm-field", FARM_FIELD_TILE, FARM_FIELD_PALETTE);

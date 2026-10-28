@@ -1,9 +1,11 @@
 import Phaser from "phaser";
-import { ACHIEVEMENTS } from "../achievements";
+import { ACHIEVEMENTS, earnedCount, nextLookNeeds } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { PANEL_TOP_OVER_HUD } from "./StatusHud";
+import { isTouchDevice } from "./TouchControls";
 
 // Fixed pages of two columns x seven rows. Shrinking the row gap to fit one
 // page stopped working at 23 entries (a name's glyphs touched its own desc),
@@ -12,13 +14,13 @@ const COLS = 2;
 const ROWS = 7;
 const PER_PAGE = COLS * ROWS;
 const PAGES = Math.max(1, Math.ceil(ACHIEVEMENTS.length / PER_PAGE));
-// a name's caps cover y-12..y+8 (the ★ reaches y+11) and a desc line's glyphs
+// a name's caps cover y-12..y+8 (its "*" too) and a desc line's glyphs
 // y+D-8..y+D+7, so D=24 leaves 4-7px under the name and 12px before the next
 // row's name — close enough that each desc reads as its own name's
 const ROW_GAP = 56;
 const DESC_DY = 24;
 // widest line a column has to hold, measured from the data at 4px x font size
-// a glyph: a size-4 desc, a size-6 "★ NAME", or a locked count-up's size-6
+// a glyph: a size-4 desc, a size-6 "* NAME", or a locked count-up's size-6
 // NAME, a 16px gap and its size-4 "need/need" right-aligned at the column's
 // end ("TREASURE HUNTER" + "13/13" is the widest, 456px). A longer entry
 // widens the panel instead of running into the next column; past a 36-glyph
@@ -36,14 +38,23 @@ const TEXT_W = Math.max(
 const COL_W = TEXT_W + 20;
 const PANEL_W = COL_W + TEXT_W + 48;
 const COL_X = GAME_WIDTH / 2 - PANEL_W / 2 + 24;
-// Pinned near the top instead of centered: the rows then end at y=479, above
-// the touch d-pad (y>=508) and Z button (y>=532) that would otherwise sit on
-// the bottom rows; only the centered pager/counter go lower, between them.
-const PANEL_TOP = 28;
+// Pinned over the HUD (statusHud.ts) instead of centered: the rows then end
+// at y=459, above the touch d-pad (y>=508) and Z button (y>=532) that would
+// otherwise sit on the bottom rows; only the centered pager/counter go
+// lower, between them.
+const PANEL_TOP = PANEL_TOP_OVER_HUD;
 const ROW_Y = PANEL_TOP + 84;
 const PAGER_Y = ROW_Y + (ROWS - 1) * ROW_GAP + DESC_DY + 48;
 const COUNTER_Y = PAGER_Y + 36;
-const PANEL_H = COUNTER_Y + 34 - PANEL_TOP;
+// The next hero look the count opens (achievements.ts LOOK_MILESTONES) under
+// the counter, then the key line (y 562..578 and 596..612, 14px apart, as the
+// counter and the key line were). At retroStyle(4) the longer, "NEXT LOOK: 38
+// ACHIEVEMENTS", is 26 glyphs, 416px, as is the touch key line (x 432..848):
+// between the d-pad (x<=258) and Z (x>=1076) at that height.
+const NEXT_Y = COUNTER_Y + 34;
+const HINT_Y = NEXT_Y + 34;
+const HINT = isTouchDevice() ? "D-PAD: PAGE   A/ESC: CLOSE" : "HL: PAGE   A/ESC: CLOSE";
+const PANEL_H = HINT_Y + 28 - PANEL_TOP;
 
 // Trophy board shown with A, listing every achievement as name + description,
 // gold when earned and gray when still locked. Same dim + panel modal pattern
@@ -58,6 +69,8 @@ export class AchievementsUI {
   private title: Phaser.GameObjects.Text;
   private pager: Phaser.GameObjects.Text;
   private counter: Phaser.GameObjects.Text;
+  private next: Phaser.GameObjects.Text;
+  private hint: Phaser.GameObjects.Text;
   // one name/desc pair per slot on a page, refilled on every page turn
   private names: Phaser.GameObjects.Text[] = [];
   private descs: Phaser.GameObjects.Text[] = [];
@@ -96,6 +109,18 @@ export class AchievementsUI {
       .setVisible(false);
     this.counter = scene.add
       .text(GAME_WIDTH / 2, COUNTER_Y, "", retroStyle(6, "#8ecbff"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.next = scene.add
+      .text(GAME_WIDTH / 2, NEXT_Y, "", retroStyle(4, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
+    this.hint = scene.add
+      .text(GAME_WIDTH / 2, HINT_Y, HINT, retroStyle(4, DIM_TEXT))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -191,14 +216,17 @@ export class AchievementsUI {
     this.title.setVisible(shown);
     this.pager.setVisible(shown);
     this.counter.setVisible(shown);
+    this.next.setVisible(shown);
+    this.hint.setVisible(shown);
     for (const t of this.names) t.setVisible(shown);
     for (const t of this.descs) t.setVisible(shown);
     for (const t of this.counts) t.setVisible(shown);
   }
 
   private refresh(): void {
-    const earned = ACHIEVEMENTS.filter((a) => GameState.achievements.includes(a.id)).length;
-    this.counter.setText(`EARNED ${earned}/${ACHIEVEMENTS.length}`);
+    this.counter.setText(`EARNED ${earnedCount()}/${ACHIEVEMENTS.length}`);
+    const next = nextLookNeeds();
+    this.next.setText(next === undefined ? "ALL LOOKS UNLOCKED" : `NEXT LOOK: ${next} ACHIEVEMENTS`);
     this.pager.setText(PAGES > 1 ? `< PAGE ${this.page + 1}/${PAGES} >` : `PAGE 1/1`);
     for (let i = 0; i < PER_PAGE; i++) {
       const a = ACHIEVEMENTS[this.page * PER_PAGE + i];
@@ -213,7 +241,9 @@ export class AchievementsUI {
       const got = GameState.achievements.includes(a.id);
       const p = got ? undefined : a.progress?.();
       this.counts[i].setText(p && p.need > 1 ? progressLabel(p.have, p.need) : "");
-      this.names[i].setText(got ? `★ ${a.name}` : a.name);
+      // "*", not "★": the bundled Press Start 2P is latin only, and a ★ came
+      // from a fallback font at its own width and height
+      this.names[i].setText(got ? `* ${a.name}` : a.name);
       this.names[i].setColor(got ? "#ffd166" : DIM_TEXT);
       this.descs[i].setText(a.desc);
       this.descs[i].setColor(got ? "#8ecbff" : DIM_TEXT);
@@ -226,6 +256,8 @@ export class AchievementsUI {
     this.title.destroy();
     this.pager.destroy();
     this.counter.destroy();
+    this.next.destroy();
+    this.hint.destroy();
     for (const t of this.names) t.destroy();
     for (const t of this.descs) t.destroy();
     for (const t of this.counts) t.destroy();
