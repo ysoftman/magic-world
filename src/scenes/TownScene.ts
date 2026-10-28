@@ -284,6 +284,8 @@ export class TownScene extends Phaser.Scene {
   private homeLabel!: Phaser.GameObjects.Text;
   private homeBubble!: Phaser.GameObjects.Container;
   private homeBubbleText!: Phaser.GameObjects.Text;
+  // the bubble box's height (buildHomeBubble), for homeBubbleY
+  private homeBubbleH = 0;
   private bubbleVisible = false;
   private resting = false;
   private enteringDungeon = false;
@@ -359,8 +361,6 @@ export class TownScene extends Phaser.Scene {
     mapOpen?: boolean;
     rested?: boolean;
   }): void {
-    Sfx.playBgm(OVERWORLD_THEME);
-    // the title bakes the save's look before it starts the town; this covers
     // Every entry (back from a fight, quit and continue, a new season) runs this same
     // instance again, fields and all: a key queued while the last run faded
     // out would otherwise act on this run's first frame.
@@ -379,6 +379,8 @@ export class TownScene extends Phaser.Scene {
       this.qQueued =
       this.uQueued =
         false;
+    Sfx.playBgm(OVERWORLD_THEME);
+    // the title bakes the save's look before it starts the town; this covers
     // any other way in (a no-op when that look is already baked)
     bakeHero(this, GameState.heroLook);
     this.roamers = [];
@@ -1143,15 +1145,31 @@ export class TownScene extends Phaser.Scene {
       .triangle(0, h / 2 + 4, -24, 0, 24, 0, 0, 28, 0x0b0b2b)
       .setStrokeStyle(2, 0xffffff)
       .setOrigin(0.5);
+    this.homeBubbleH = h;
+    // a new bubble starts hidden (create), and so does the flag that tells
+    // updateHomeBubble it's up: kept from the last town (Phaser reuses the
+    // scene), a restart by the door (a season's turn, back from the title)
+    // left the bubble hidden and the HOME tag up until the hero walked off
+    this.bubbleVisible = false;
     // The camera never scrolls past the map's left, right or bottom edge, so
     // clamping the bubble to the map there keeps it fully on screen even for a
-    // house in a far corner. The top is different: boundCameraToMap lets the
-    // camera rise STATUS_HUD_HEIGHT above the map (an empty strip behind the
-    // HUD). Keeping the bubble's top at least that far into the map still
-    // clears the HUD — at the camera's highest it just sits lower on screen.
+    // house in a far corner. The top is homeBubbleY's.
     const x = Phaser.Math.Clamp(HOUSE_POS.x + TILE, w / 2 + 8, MAP_W * TILE - w / 2 - 8);
-    const y = Phaser.Math.Clamp(HOUSE_POS.y + TILE - h / 2 - 32, STATUS_HUD_HEIGHT + h / 2, MAP_H * TILE - h / 2 - 8);
-    return this.add.container(x, y, [border, box, text, tail]).setDepth(12);
+    return this.add.container(x, this.homeBubbleY(), [border, box, text, tail]).setDepth(12);
+  }
+
+  // The bubble's spot over the house, read from HOUSE_POS each time so a map
+  // editor move (moveLandmark) carries over. boundCameraToMap lets the camera
+  // rise STATUS_HUD_HEIGHT above the map (an empty strip behind the HUD), and
+  // the bubble's top stays at least that far into the map. That clears the
+  // HUD only with the camera at its highest, though: the bubble shows up to
+  // 144px below the door (nearHouse), the camera follows the hero down, and
+  // the bubble rose into the toast line and then under the HUD, its first
+  // line hidden. So with the HUD up, updateHomeBubble also keeps it under
+  // the HUD on screen.
+  private homeBubbleY(): number {
+    const h = this.homeBubbleH;
+    return Phaser.Math.Clamp(HOUSE_POS.y + TILE - h / 2 - 32, STATUS_HUD_HEIGHT + h / 2, MAP_H * TILE - h / 2 - 8);
   }
 
   private openLookPicker(): void {
@@ -1171,6 +1189,14 @@ export class TownScene extends Phaser.Scene {
   }
 
   private updateHomeBubble(): void {
+    // its spot, or lower when the camera has followed the hero down, so the
+    // first line starts 4px under the HUD (the text is the box less its 20px
+    // padding). The padding and border may tuck under the HUD bar: holding
+    // the whole border clear of it put the box's bottom over the FARM sign's
+    // tag, up to 16px of it, at the south edge of nearHouse's radius
+    const spot = this.homeBubbleY();
+    const underHud = this.cameras.main.scrollY + STATUS_HUD_HEIGHT + 4 + (this.homeBubbleH - 40) / 2;
+    this.homeBubble.y = GameState.hudVisible ? Math.max(spot, underHud) : spot;
     const near = this.nearHouse();
     // dusk or dawn can pass while the hero stands by the door
     if (near) this.homeBubbleText.setText(this.homeBubbleLines());
