@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { Sfx, SNOW_THEME } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
 import { buildSnow, escapeFromZones, SNOW_ENTRY, SNOW_FISH_POS, SNOW_H, SNOW_TREASURE_POS, SNOW_W, SNOW_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
@@ -9,18 +9,23 @@ import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixela
 import {
   addBorderDressing,
   addTownExitSign,
+  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   fadeAreaTitle,
   isWalkableCell,
+  noteFightSpot,
+  saveAndQuit,
   startWaterAnimation,
+  takeFightSpot,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { DialogueBox } from "../ui/DialogueBox";
 import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
@@ -35,6 +40,7 @@ import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { showUnlockTip } from "../unlockTips";
+import { weatherToday } from "../weather";
 import { SNOW_SKIN } from "./BootScene";
 
 // Floating text over the snow gets the same dark rim as the TOWN marker: the
@@ -46,8 +52,6 @@ type LastMove = "down" | "up" | "right" | "left";
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
-// long enough for the SAVED confirmation to be readable before the title
-const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 
@@ -110,7 +114,6 @@ export class SnowScene extends Phaser.Scene {
   private uQueued = false;
   private oQueued = false;
   private qQueued = false;
-  private quitConfirm = false;
   private quitting = false;
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second so earned-here achievements
@@ -121,13 +124,6 @@ export class SnowScene extends Phaser.Scene {
   // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
   // object (showToast reuses one per scene)
   private suppressSavedToast = false;
-  private yQueued = false;
-  private nQueued = false;
-  private escQueued = false;
-  private keyY!: Phaser.Input.Keyboard.Key;
-  private keyN!: Phaser.Input.Keyboard.Key;
-  private keyEsc!: Phaser.Input.Keyboard.Key;
-  private quitConfirmText!: Phaser.GameObjects.Text;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -136,6 +132,7 @@ export class SnowScene extends Phaser.Scene {
   private achievementsUI!: AchievementsUI;
   private questLog!: QuestLog;
   private settingsUI!: SettingsUI;
+  private dialogue!: DialogueBox;
   private fishing!: FishingUI;
   private night!: NightOverlay;
   private touch?: TouchControls;
@@ -144,7 +141,10 @@ export class SnowScene extends Phaser.Scene {
     super("Snow");
   }
 
-  create(): void {
+  create(data?: { fromBattle?: boolean }): void {
+    // back from a fight (takeFightSpot): where it began, and none of an
+    // arrival's title, caption or wait for the TOWN tag
+    const back = takeFightSpot(this, data);
     Sfx.playBgm(SNOW_THEME);
     this.roamers = [];
     // Every entry gets a grace period, not just a return from battle: nothing
@@ -153,7 +153,6 @@ export class SnowScene extends Phaser.Scene {
     this.encounterCooldown = ENTRY_GRACE;
     this.lastMove = "down";
     this.exitingSnow = false;
-    this.quitConfirm = false;
     this.quitting = false;
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
@@ -179,15 +178,18 @@ export class SnowScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, SNOW_W * TILE, SNOW_H * TILE);
 
-    const title = this.add
-      .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "SNOW FIELD", retroStyle(8, "#a5f3fc"))
-      .setOrigin(0.5)
-      .setStroke(TEXT_STROKE, 6)
-      .setScrollFactor(0)
-      .setDepth(95);
-    fadeAreaTitle(this, title);
+    if (!back) {
+      const title = this.add
+        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "SNOW FIELD", retroStyle(8, "#a5f3fc"))
+        .setOrigin(0.5)
+        .setStroke(TEXT_STROKE, 6)
+        .setScrollFactor(0)
+        .setDepth(95);
+      fadeAreaTitle(this, title);
+    }
 
-    this.player = this.physics.add.sprite(SNOW_ENTRY.x, SNOW_ENTRY.y + TILE * 2, "hero-idle-down");
+    const at = back ?? { x: SNOW_ENTRY.x, y: SNOW_ENTRY.y + TILE * 2 };
+    this.player = this.physics.add.sprite(at.x, at.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
@@ -201,7 +203,7 @@ export class SnowScene extends Phaser.Scene {
 
     this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
-    this.treasure = new TreasureDigger(this, "snow", this.player, { toastY: FIELD_TOAST_Y });
+    this.treasure = new TreasureDigger(this, "snow", this.player, { toastY: FIELD_TOAST_Y, dug: () => this.holdFights() });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
@@ -209,7 +211,7 @@ export class SnowScene extends Phaser.Scene {
     createWalkAnimations(this);
 
     addFootsteps(this, this.player, level, "snow");
-    addGuideArrow(this, this.player, "snow", () => this.quitConfirm || this.uiBlocking());
+    addGuideArrow(this, this.player, "snow", () => this.quitting || this.uiBlocking());
 
     this.fireflies = this.add.particles(0, 0, "firefly", {
       speed: { min: 12, max: 40 },
@@ -226,7 +228,7 @@ export class SnowScene extends Phaser.Scene {
 
     // snowfall swept by the odd gust: heavier on blizzard days, none on clear
     // ones; caption names the day's weather under the area title
-    addAmbient(this, "snow", { caption: true });
+    addAmbient(this, "snow", { caption: true, since: back?.weather });
 
     this.spawnMonsters();
 
@@ -241,8 +243,8 @@ export class SnowScene extends Phaser.Scene {
     this.fishing = new FishingUI(this, true);
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      // nor under the quit prompt, whose Y would then race the battle's fade
-      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitConfirm) return;
+      // nor on the way to the title, which would then race the battle's fade
+      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitting) return;
       const r = this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
@@ -254,7 +256,7 @@ export class SnowScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, exit, () => {
       if (!this.exitingSnow) this.exitSnow();
     });
-    addTownExitSign(this, this.player, SNOW_ENTRY.x, SNOW_ENTRY.y);
+    addTownExitSign(this, this.player, SNOW_ENTRY.x, SNOW_ENTRY.y, !back);
 
     startWaterAnimation(this, this.layer);
 
@@ -305,21 +307,6 @@ export class SnowScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
-    // only while the quit prompt is up: a Y pressed earlier would otherwise
-    // sit queued and answer the next prompt the moment it opens
-    this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
-    this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.yQueued = true;
-    });
-    this.keyN = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N);
-    this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.nQueued = true;
-    });
-    this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.escQueued = true;
-    });
-
     const help = addHelpPopup(
       this,
       [
@@ -338,7 +325,7 @@ export class SnowScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "BEWARE THE GLACIER GOLEM!",
-      () => this.uiBlocking() || this.quitConfirm,
+      () => this.uiBlocking() || this.quitting,
     );
 
     // exit + unopened chests; the golem's basin is deliberately not marked
@@ -365,25 +352,18 @@ export class SnowScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
     this.questLog = new QuestLog(this);
-    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
-    this.settingsUI = new SettingsUI(this, () => {
-      this.quitConfirm = this.yQueued = true;
-      this.quitConfirmText.setVisible(true);
-    });
+    // the quit question (askQuitToTitle)
+    this.dialogue = new DialogueBox(this, []);
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
+    this.settingsUI = new SettingsUI(this, () => this.quit());
 
-    // under a panel, the fishing hole's or the help the map's tags go, toasts wait
+    // under a panel, the fishing hole's, the quit question or the help the
+    // map's tags go, toasts wait
     whilePanelUp(this, () => this.uiBlocking());
 
     this.hud = new StatusHud(this);
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
-
-    this.quitConfirmText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(300)
-      .setVisible(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
@@ -393,11 +373,11 @@ export class SnowScene extends Phaser.Scene {
       this.achievementsUI.destroy();
       this.questLog.destroy();
       this.settingsUI.destroy();
+      this.dialogue.destroy();
       this.fishing.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
-      this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
   }
@@ -448,56 +428,18 @@ export class SnowScene extends Phaser.Scene {
       if (!this.uiBlocking()) this.minimap.toggle();
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the prompt's ESC would close that panel too
-      if (!this.uiBlocking()) {
-        this.quitConfirm = true;
-        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-        Sfx.error();
-      }
+    // saved and on the way to the title (quit): nothing else moves. The
+    // roamers are kept to their boxes, as under a panel: left on their last
+    // velocity they walked off across the map until the title came
+    if (this.quitting) {
+      this.updateRoamers(delta);
+      return;
     }
 
-    if (this.quitConfirm) {
-      // kept to their boxes, as under a panel: left on their last velocity
-      // they walked off across the map until the prompt closed
-      this.updateRoamers(delta);
-      if (this.quitting) return;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      // a panel key pressed while the prompt is up would otherwise open
-      // that panel the moment the prompt is dismissed
-      this.ctrlSQueued =
-        this.mQueued =
-        this.zQueued =
-        this.iQueued =
-        this.bQueued =
-        this.aQueued =
-        this.uQueued =
-        this.oQueued =
-        this.tQueued =
-          false;
-      if (this.yQueued) {
-        this.yQueued = false;
-        // Save here rather than leaning on the SHUTDOWN handler: that one runs
-        // after the toast subscription is torn down, so the player never sees
-        // the confirmation. The SHUTDOWN save then just repeats this one.
-        this.quitting = true;
-        // the quit prompt itself reports the save, so drop the toast that
-        // GameState.save() would otherwise stack on top of it
-        this.unsubSaved();
-        GameState.save();
-        this.quitConfirmText.setText("SAVED").setColor("#4ade80");
-        this.time.delayedCall(QUIT_SAVE_DELAY, () => this.scene.start("Title"));
-        return;
-      }
-      if (this.nQueued || this.escQueued) {
-        this.nQueued = false;
-        this.escQueued = false;
-        this.quitConfirm = false;
-        this.quitConfirmText.setVisible(false);
-      }
-      return;
+    if (this.qQueued) {
+      this.qQueued = false;
+      // never over an open panel: the question's ESC would close that panel too
+      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
     }
 
     // Items and the bestiary are reachable here too now; without them a low-HP
@@ -533,6 +475,7 @@ export class SnowScene extends Phaser.Scene {
       this.questLog.update();
       this.settingsUI.update();
       this.fishing.update();
+      this.dialogue.update();
       this.updateRoamers(delta);
       return;
     }
@@ -613,7 +556,7 @@ export class SnowScene extends Phaser.Scene {
     this.fireflies.emitting = nightFade > 0.05;
     this.fireflies.setAlpha(nightFade);
     this.minimap.update();
-    this.checkEncounter(delta);
+    this.checkEncounter(delta, moving);
   }
 
   private updateEquipOverlays(): void {
@@ -628,8 +571,15 @@ export class SnowScene extends Phaser.Scene {
       this.questLog.isActive() ||
       this.settingsUI.isActive() ||
       this.fishing.isActive() ||
+      this.dialogue.isActive() ||
       helpOpen(this)
     );
+  }
+
+  // YES to the quit question, or the settings' QUIT chip on touch
+  private quit(): void {
+    this.quitting = true;
+    saveAndQuit(this);
   }
 
   private toggleStatus(): void {
@@ -654,7 +604,14 @@ export class SnowScene extends Phaser.Scene {
     });
   }
 
-  private checkEncounter(delta: number): void {
+  // A find (a chest, a treasure map's dig) gets the grace a fight's return
+  // does, so a roamer can't drag the hero into a fight before the toast that
+  // says what came out has been read.
+  private holdFights(): void {
+    this.encounterCooldown = Math.max(this.encounterCooldown, ENTRY_GRACE);
+  }
+
+  private checkEncounter(delta: number, moving: boolean): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
       // load (~1.2s), which drained the entry grace in a single tick and
@@ -662,6 +619,9 @@ export class SnowScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // only while the hero walks: stood still (by a chest, over a map, at the
+    // ice hole, deciding the way) a fight still came every ~17s
+    if (!moving) return;
     const nearExit =
       Math.abs(this.player.x - SNOW_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - SNOW_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
@@ -731,6 +691,7 @@ export class SnowScene extends Phaser.Scene {
     if (GameState.openedTreasures.includes(id)) return;
     GameState.openedTreasures.push(id);
     chest.setTexture("chest-open");
+    this.holdFights();
     Sfx.chest();
     const gold = GameState.gainGold(15 + Math.floor(Math.random() * 16));
     let loot = "";
@@ -793,6 +754,7 @@ export class SnowScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.5 ? "frostMoth" : "yeti");
+      noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("snow") });
       this.scene.start("Battle", { enemy: kind, from: "Snow" });
     });
   }

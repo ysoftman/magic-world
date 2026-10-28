@@ -173,6 +173,35 @@ export function currentObjective(q: QuestState, caught: readonly string[] = Game
   return { label: "QUEST DONE", spot: null };
 }
 
+// where a step's region is, for the help popup's goal line
+const REGION_NAME: Record<FieldRegion, string> = {
+  dungeon: "THE CAVE",
+  forest: "THE FOREST",
+  snow: "THE SNOW PASS",
+  volcano: "THE VOLCANO",
+};
+
+/**
+ * The help popup's goal line: the HUD slot's label and, after a dash, where
+ * it points (a map, the tall grass, or the NPC who pays), unless the label
+ * already says (SEE ELDER). At most 36 glyphs ("GOAL: SLIMES 5/5 - IN THE
+ * TALL GRASS"): 720px at the popup's retroStyle(5), inside its 860px.
+ */
+export function objectiveLine(q: QuestState, caught: readonly string[] = GameState.caught): string {
+  const { label, spot } = currentObjective(q, caught);
+  const where =
+    spot?.kind === "npc"
+      ? label.startsWith("SEE")
+        ? ""
+        : `SEE THE ${spot.who}`
+      : spot?.kind === "slimes"
+        ? "IN THE TALL GRASS"
+        : spot
+          ? `IN ${REGION_NAME[spot.region]}`
+          : "";
+  return where ? `GOAL: ${label} - ${where}` : `GOAL: ${label}`;
+}
+
 // each region's doorway on the town map, and the way back out of it
 const ENTRANCE: Record<FieldRegion, { x: number; y: number }> = {
   dungeon: CAVE_POS,

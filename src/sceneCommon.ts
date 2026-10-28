@@ -1,11 +1,14 @@
 import Phaser from "phaser";
+import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
 import { holdToastsWhile, makeTexture, pumpToasts, retroStyle } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
+import type { DialogueBox } from "./ui/DialogueBox";
 import { STATUS_HUD_HEIGHT } from "./ui/StatusHud";
+import type { Weather } from "./weather";
 
 type LastMove = "down" | "up" | "right" | "left";
 
@@ -461,9 +464,9 @@ export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObj
  * Every exit is on row 1, so the label is set 8px lower than a tile above the
  * exit: at the top of its 8px bob it used to touch the map's top edge (y=0),
  * past the label-inside-the-map rule now that row 0 can scroll into view.
- * It fades in as the area title fades out: on entry the camera is at the top
- * and the two would print over each other, while the hero is standing right
- * by the exit anyway.
+ * It comes in after the area title (fadeInAfterAreaTitle), while the hero is
+ * standing right by the exit anyway; with `titled` false (back from a fight,
+ * no title shown) it is just there.
  */
 export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titled = true): void {
   const label = scene.add
@@ -619,4 +622,66 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): voi
 export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text): void {
   title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+}
+
+// Where a field's last fight began, and the sky over it: the battle comes back
+// with { fromBattle } and the field puts the hero there again, rather than at
+// its entrance, which every fight used to send them back to, long walks to a
+// chest, a treasure map's X or the boss cut short each time. Held per scene
+// (Phaser reuses the instance) and not in GameState.pos, which is the town's.
+export interface FightSpot {
+  x: number;
+  y: number;
+  weather: Weather;
+}
+const fightSpots = new WeakMap<Phaser.Scene, FightSpot>();
+
+/** Notes where `scene`'s hero is as a fight starts (as its fade ends). */
+export function noteFightSpot(scene: Phaser.Scene, spot: FightSpot): void {
+  fightSpots.set(scene, spot);
+}
+
+/**
+ * The spot noteFightSpot() kept, when this start is the battle's return
+ * ({ fromBattle }); undefined for any other way in, and taken once. A fall
+ * goes to the town instead and leaves it, so the next way in drops it. Also
+ * empties the start's data: Phaser hands a start that passes none the last
+ * one's, and the town's walk-ins pass none, so they would replay this
+ * { fromBattle } and set the hero down at an old fight.
+ */
+export function takeFightSpot(scene: Phaser.Scene, data?: { fromBattle?: boolean }): FightSpot | undefined {
+  const spot = data?.fromBattle ? fightSpots.get(scene) : undefined;
+  fightSpots.delete(scene);
+  scene.sys.settings.data = {};
+  return spot;
+}
+
+// long enough for the SAVED toast to be readable before the title
+export const QUIT_SAVE_DELAY = 700;
+
+/**
+ * Q on a field: its dialogue box asks, so a touch can tap YES or NO, and Y,
+ * N and ESC (the last choice) still answer as the old centre prompt took
+ * them. YES runs `quit`, the scene's own (saveAndQuit below); NO just closes
+ * the box. The box counts as the scene's uiBlocking(), so the hero and the
+ * panel keys stand still under it as under any talk, and the map's tags go.
+ */
+export function askQuitToTitle(dialogue: DialogueBox, quit: () => void): void {
+  Sfx.error();
+  dialogue.ask(["QUIT TO TITLE?"], "", ["YES", "NO"], (i) => {
+    if (i === 0) quit();
+  });
+}
+
+/**
+ * Save, let the SAVED toast show, then back to the title: YES above, or the
+ * settings' QUIT chip on touch, which has no Q. Saved here rather than by the
+ * scene's SHUTDOWN handler: that one runs after the toast subscription is
+ * torn down, so the player never saw the confirmation. The SHUTDOWN save
+ * then just repeats this one. The scene sets its `quitting` first, which
+ * keeps its update() from moving the hero or opening a panel meanwhile.
+ */
+export function saveAndQuit(scene: Phaser.Scene): void {
+  GameState.save();
+  scene.time.delayedCall(QUIT_SAVE_DELAY, () => scene.scene.start("Title"));
 }

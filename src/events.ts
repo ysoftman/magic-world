@@ -1,8 +1,10 @@
-import { dayIndex } from "./gameState";
+import { econDay } from "./gameState";
 
 // Town events: some days the village runs something special, a reason to
 // drop back in. Worked out from the day number alone, so nothing is saved
-// and every load agrees on what today is.
+// and every load agrees on what today is. The day is econDay(), the
+// real-time one: on the clock's day a x20 player could pull a market day
+// up in minutes, then shop it at NORMAL for a real 24.
 export type TownEventKind = "market" | "derby" | "harvest" | "lucky";
 
 export interface TownEvent {
@@ -54,7 +56,7 @@ export function eventOn(day: number): TownEvent | null {
 }
 
 export function eventToday(): TownEvent | null {
-  return eventOn(dayIndex());
+  return eventOn(econDay());
 }
 
 export function isEventToday(kind: TownEventKind): boolean {

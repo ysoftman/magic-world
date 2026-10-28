@@ -9,7 +9,7 @@ import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, mate
 import {
   cropProgress,
   type DeliveryState,
-  dayIndex,
+  econDay,
   FARM_PLOTS,
   FIRE_BEASTS,
   GameState,
@@ -53,20 +53,23 @@ import {
   WORKPLACE_LANDMARKS,
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
+import { objectiveLine } from "../objective";
 import { addGroundShadow, retroStyle, showToast } from "../pixelart";
 import {
   addExitArrow,
+  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
+  saveAndQuit,
   startWaterAnimation,
   type TileLayers,
   whilePanelUp,
 } from "../sceneCommon";
-import { seasonLook, seasonNews } from "../season";
+import { type Season, seasonLook, seasonNews, seasonToday } from "../season";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
@@ -109,9 +112,9 @@ const ENCOUNTER_RATE = 0.18;
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
-// long enough for the SAVED confirmation to be readable before the title
-const QUIT_SAVE_DELAY = 700;
 const TROLL_KING_SPAWN_CHANCE = 0.35;
+// the fade out to the town built again for a new season, a fight's length
+const SEASON_FADE = 300;
 // Exits to another map are marked in the world rather than with a box: FOREST,
 // SNOW PASS and VOLCANO are roads running off the map's edge with a signpost
 // beside them (addMapExit), the CAVE is its mouth art with the name over it.
@@ -308,17 +311,16 @@ export class TownScene extends Phaser.Scene {
   // GameState, so battle/fishing/treasure mutations made while a modal or
   // another scene owns input are caught on the next tick after returning here
   private achievementCheckAccum = 0;
-  private quitConfirm = false;
   private quitting = false;
+  // the season the town was built in, and the fade out to building it again
+  // once the clock moves it into another look (turnSeason)
+  private season: Season = "spring";
+  private turningSeason = false;
   private unsubSaved: () => void = () => {};
   // true while an achievement save is in flight; the onSaved "SAVED" toast is
   // skipped so it doesn't queue up behind the "ACHIEVEMENT: ...!" toast for
   // the same save (showToast shows one toast at a time per scene)
   private suppressSavedToast = false;
-  private yQueued = false;
-  private nQueued = false;
-  private escQueued = false;
-  private quitConfirmText!: Phaser.GameObjects.Text;
 
   private keyLeft!: Phaser.Input.Keyboard.Key;
   private keyRight!: Phaser.Input.Keyboard.Key;
@@ -337,9 +339,6 @@ export class TownScene extends Phaser.Scene {
   private keyT!: Phaser.Input.Keyboard.Key;
   private keyB!: Phaser.Input.Keyboard.Key;
   private keyA!: Phaser.Input.Keyboard.Key;
-  private keyY!: Phaser.Input.Keyboard.Key;
-  private keyN!: Phaser.Input.Keyboard.Key;
-  private keyEsc!: Phaser.Input.Keyboard.Key;
   private keyO!: Phaser.Input.Keyboard.Key;
 
   private hud!: StatusHud;
@@ -350,7 +349,15 @@ export class TownScene extends Phaser.Scene {
     super("Town");
   }
 
-  create(data?: { fromDungeon?: boolean; fromBattle?: boolean; fromForest?: boolean; fromSnow?: boolean; fromVolcano?: boolean }): void {
+  create(data?: {
+    fromDungeon?: boolean;
+    fromBattle?: boolean;
+    fromForest?: boolean;
+    fromSnow?: boolean;
+    fromVolcano?: boolean;
+    mapOpen?: boolean;
+    rested?: boolean;
+  }): void {
     Sfx.playBgm(OVERWORLD_THEME);
     // the title bakes the save's look before it starts the town; this covers
     // any other way in (a no-op when that look is already baked)
@@ -369,8 +376,8 @@ export class TownScene extends Phaser.Scene {
     this.forestOverlapActive = false;
     this.snowOverlapActive = false;
     this.volcanoOverlapActive = false;
-    this.quitConfirm = false;
     this.quitting = false;
+    this.turningSeason = false;
     this.wispRoamer = undefined;
     this.landmarkParts = [];
     this.fixedLabels = [];
@@ -400,6 +407,7 @@ export class TownScene extends Phaser.Scene {
     const level = buildLevel();
     this.level = level;
     // the season's skin (BootScene's seasonSkin): green, autumn or snowed in
+    this.season = seasonToday();
     this.layers = buildTileLayers(this, level, { skin: seasonSkin("town") });
 
     this.physics.world.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
@@ -590,7 +598,7 @@ export class TownScene extends Phaser.Scene {
 
     this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
-    this.treasure = new TreasureDigger(this, "town", this.player, { toastY: STATUS_HUD_TOAST_Y });
+    this.treasure = new TreasureDigger(this, "town", this.player, { toastY: STATUS_HUD_TOAST_Y, dug: () => this.holdFights() });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
     this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
@@ -598,7 +606,7 @@ export class TownScene extends Phaser.Scene {
     createWalkAnimations(this);
 
     addFootsteps(this, this.player, level, "town");
-    addGuideArrow(this, this.player, "town", () => this.quitConfirm || this.uiBlocking());
+    addGuideArrow(this, this.player, "town", () => this.quitting || this.uiBlocking());
 
     // petals and butterflies by day, fireflies at night; this replaces the
     // town's own player-following fireflies, which would double up with it
@@ -626,8 +634,8 @@ export class TownScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;
-      // nor under the quit prompt, whose Y would then race the battle's fade
-      if (this.uiBlocking() || this.quitConfirm) return;
+      // nor on the way to the title, which would then race the battle's fade
+      if (this.uiBlocking() || this.quitting) return;
       // the monster zones are cramped enough that a slime can overlap the
       // player at the same moment as the troll; always let the rare one win
       // the tie instead of whichever roamer the physics engine happened to
@@ -773,17 +781,6 @@ export class TownScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.U).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.uQueued = true;
     });
-    // Y/N only count while the quit prompt is up, same as ESC below: a Y
-    // pressed any earlier sat queued and answered the next Q prompt the
-    // moment it opened, quitting to the title without asking
-    this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
-    this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.yQueued = true;
-    });
-    this.keyN = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N);
-    this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.nQueued = true;
-    });
     this.keyO = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.keyO.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.oQueued = true;
@@ -797,11 +794,7 @@ export class TownScene extends Phaser.Scene {
         if (!e.repeat) this.editorQueued = true;
       },
     );
-    this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.escQueued = true;
-    });
-
+    // every talk, and the quit question (askQuitToTitle)
     this.dialogue = new DialogueBox(this, []);
     this.shop = new ShopUI(this);
     this.inventory = new InventoryUI(this);
@@ -825,11 +818,8 @@ export class TownScene extends Phaser.Scene {
     this.achievementsUI = new AchievementsUI(this);
     this.questLog = new QuestLog(this);
     this.lookPicker = new LookPicker(this);
-    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
-    this.settingsUI = new SettingsUI(this, () => {
-      this.quitConfirm = this.yQueued = true;
-      this.quitConfirmText.setVisible(true);
-    });
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
+    this.settingsUI = new SettingsUI(this, () => this.quit());
 
     const help = addHelpPopup(
       this,
@@ -852,10 +842,10 @@ export class TownScene extends Phaser.Scene {
         ["Q", "QUIT"],
         ["?", "HELP"],
       ],
-      // no goal line: the keyboard list's 8 rows run down to y 506, where
-      // the goal line's row starts at 504 (the fields' 6 rows leave room)
-      "",
-      () => this.uiBlocking() || this.quitConfirm,
+      // the chain's current step, read when the popup opens: the ELDER pays
+      // out and the HUNTER hires without the scene restarting
+      () => objectiveLine(GameState.quest),
+      () => this.uiBlocking() || this.quitting,
     );
 
     // key landmarks in world px, drawn as colored dots over the tile map
@@ -893,10 +883,16 @@ export class TownScene extends Phaser.Scene {
     for (const { landmark, light } of this.workplaceLights) for (const glow of this.night.addLights([light])) this.track(landmark, glow);
 
     this.hud = new StatusHud(this);
-    // "AUTUMN HAS COME!" (16 x 20 = 320px) on the first visit of a new season,
-    // after the arrival fade like the town event's toast, queued with it
-    const news = seasonNews();
-    if (news) this.time.delayedCall(EVENT_TOAST_DELAY, () => showToast(this, news, STATUS_HUD_TOAST_Y));
+    // on the first visit of a new season, after the arrival fade like the
+    // town event's toast, queued with it
+    this.announceSeason(EVENT_TOAST_DELAY);
+    // built again for a new season (turnSeason, or a night slept into one):
+    // the map as the hero left it, and the waking a rest ends in
+    if (data?.mapOpen) this.minimap.toggle();
+    if (data?.rested) {
+      this.cameras.main.fadeIn(400, 0, 0, 0);
+      this.restedNote();
+    }
 
     // An edited map silently outranks the code, which reads as "my changes
     // didn't deploy" — say so on screen instead, and say how to undo it.
@@ -916,13 +912,6 @@ export class TownScene extends Phaser.Scene {
     }
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
-
-    this.quitConfirmText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(300)
-      .setVisible(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.pos = { x: this.player.x, y: this.player.y };
@@ -948,7 +937,6 @@ export class TownScene extends Phaser.Scene {
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
-      this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
   }
@@ -1200,7 +1188,10 @@ export class TownScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Forest");
+      // {} rather than nothing: Phaser keeps the last start's data when the
+      // next passes none, and a forest last built for a season's turn would
+      // set the hero back where they stood then, untitled
+      this.scene.start("Forest", {});
     });
   }
 
@@ -1315,12 +1306,13 @@ export class TownScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     GameState.minutes += (delta / 1000) * GameState.timeSpeed;
 
-    // A town event is announced once a day: on the first arrival that day, or
-    // when the clock (or a rest) turns the day over here. Held back while a
-    // panel is up so it doesn't land on one. Its longest line, "FISHING
-    // DERBY! POND CATCHES PAY x1.5 TODAY", is 42 x 20 = 840px (x 220..1060)
-    // under the HUD, clear of the touch menu strip (x>=1222).
-    const day = dayIndex();
+    // A town event is announced once a day (econDay, the day the event itself
+    // goes by): on the first arrival that day, or when the clock (or a rest)
+    // turns the day over here. Held back while a panel is up so it doesn't
+    // land on one. Its longest line, "FISHING DERBY! POND CATCHES PAY x1.5
+    // TODAY", is 42 x 20 = 840px (x 220..1060) under the HUD, clear of the
+    // touch menu strip (x>=1222).
+    const day = econDay();
     if (day !== announcedDay && !this.eventToastPending && !this.uiBlocking()) {
       const event = eventToday();
       if (!event) {
@@ -1398,57 +1390,19 @@ export class TownScene extends Phaser.Scene {
       showToast(this, muted ? "SOUND: OFF" : "SOUND: ON", STATUS_HUD_TOAST_Y);
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      if (!this.uiBlocking() && !this.enteringDungeon) {
-        this.quitConfirm = true;
-        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-        Sfx.error();
-      }
+    // saved and on the way to the title (quit), or fading out to the new
+    // season (turnSeason): nothing else moves. The roamers are kept to their
+    // boxes, as under a panel: left on their last velocity they walked off
+    // across the map until the title came
+    if (this.quitting || this.turningSeason) {
+      this.updateRoamers(delta);
+      return;
     }
 
-    if (this.quitConfirm) {
-      // kept to their boxes, as under a panel: left on their last velocity
-      // they walked off across the map until the prompt closed
-      this.updateRoamers(delta);
-      if (this.quitting) return;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      this.zQueued =
-        this.ctrlSQueued =
-        this.iQueued =
-        this.gCheatQueued =
-        this.mQueued =
-        this.bQueued =
-        this.tQueued =
-        this.aQueued =
-        this.oQueued =
-        this.uQueued =
-          false;
-      if (this.yQueued) {
-        this.yQueued = false;
-        // Save here rather than leaning on the SHUTDOWN handler: that one runs
-        // after the toast subscription is torn down, so the player never sees
-        // the confirmation. The SHUTDOWN save then just repeats this one.
-        this.quitting = true;
-        // the quit prompt itself reports the save, so drop the toast that
-        // GameState.save() would otherwise stack on top of it
-        this.unsubSaved();
-        // same pos the SHUTDOWN handler would record, so what SAVED reports is
-        // already the complete state
-        GameState.pos = { x: this.player.x, y: this.player.y };
-        GameState.save();
-        this.quitConfirmText.setText("SAVED").setColor("#4ade80");
-        this.time.delayedCall(QUIT_SAVE_DELAY, () => this.scene.start("Title"));
-        return;
-      }
-      if (this.nQueued || this.escQueued) {
-        this.nQueued = false;
-        this.escQueued = false;
-        this.quitConfirm = false;
-        this.quitConfirmText.setVisible(false);
-      }
-      return;
+    if (this.qQueued) {
+      this.qQueued = false;
+      // never over an open panel: the question's ESC would close that panel too
+      if (!this.uiBlocking() && !this.enteringDungeon) askQuitToTitle(this.dialogue, () => this.quit());
     }
 
     if (this.tQueued) {
@@ -1500,6 +1454,23 @@ export class TownScene extends Phaser.Scene {
       // the town keeps living behind a panel; whoever is talking stands still
       this.villagers.update(delta, this.player, this.dialogue.isActive());
       return;
+    }
+
+    // The clock moved the town into a new season while the hero stood in it:
+    // not under a panel or a talk (above), nor while a fight, a rest or
+    // another map is already fading the screen out (encounterCooldown covers
+    // the fight's fade, and the entry grace). A new look of the ground
+    // (seasonLook) builds the town again; spring into summer, the same
+    // ground, only brings the news.
+    const leaving = this.resting || this.enteringDungeon || this.enteringForest || this.enteringSnow || this.enteringVolcano;
+    const season = seasonToday();
+    if (season !== this.season && !leaving && this.encounterCooldown <= 0) {
+      if (seasonLook("town", season) !== seasonLook("town", this.season)) {
+        this.turnSeason();
+        return;
+      }
+      this.season = season;
+      this.announceSeason();
     }
 
     if (this.iQueued) {
@@ -1574,7 +1545,7 @@ export class TownScene extends Phaser.Scene {
     this.updateEquipOverlays();
     this.updateRoamers(delta);
     this.villagers.update(delta, this.player, this.dialogue.isActive());
-    this.checkEncounter(delta);
+    this.checkEncounter(delta, moving);
   }
 
   private flashNote(text: string): void {
@@ -1593,6 +1564,15 @@ export class TownScene extends Phaser.Scene {
 
   private updateEquipOverlays(): void {
     placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
+  }
+
+  // YES to the quit question, or the settings' QUIT chip on touch
+  private quit(): void {
+    this.quitting = true;
+    // same pos the SHUTDOWN handler would record, so what SAVED reports is
+    // already the complete state
+    GameState.pos = { x: this.player.x, y: this.player.y };
+    saveAndQuit(this);
   }
 
   private toggleStatus(): void {
@@ -1855,22 +1835,66 @@ export class TownScene extends Phaser.Scene {
         GameState.minutes = GameState.minutes < dawn ? dawn : dawn + 1440;
       }
       GameState.save();
+      // slept into a new season's look: the screen is dark already, so wake
+      // in the town built again for it (create() fades in and says RESTED)
+      if (seasonLook("town") !== seasonLook("town", this.season)) {
+        this.scene.restart({ mapOpen: this.minimap.isVisible(), rested: true });
+        return;
+      }
       this.hud.forceRefresh();
       this.cameras.main.fadeIn(400, 0, 0, 0);
       this.resting = false;
-      const note = this.add
-        .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "RESTED! HP/MP FULL", retroStyle(8, "#ffd166"))
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(120);
-      this.tweens.add({
-        targets: note,
-        y: GAME_HEIGHT / 2 - 60,
-        alpha: 0,
-        delay: 800,
-        duration: 600,
-        onComplete: () => note.destroy(),
-      });
+      this.restedNote();
+    });
+  }
+
+  // "AUTUMN HAS COME!" (16 x 20 = 320px) once per season (seasonNews), and
+  // saved on the spot: the season last announced rides in the save, and one
+  // shown after the last save came round again on a reload. Without the
+  // SAVED toast, as for an achievement's save.
+  private announceSeason(delay = 0): void {
+    const news = seasonNews();
+    if (!news) return;
+    this.suppressSavedToast = true;
+    GameState.save();
+    this.suppressSavedToast = false;
+    this.time.delayedCall(delay, () => showToast(this, news, STATUS_HUD_TOAST_Y));
+  }
+
+  private restedNote(): void {
+    const note = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "RESTED! HP/MP FULL", retroStyle(8, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(120);
+    this.tweens.add({
+      targets: note,
+      y: GAME_HEIGHT / 2 - 60,
+      alpha: 0,
+      delay: 800,
+      duration: 600,
+      onComplete: () => note.destroy(),
+    });
+  }
+
+  // Everything the season changes is picked in create(): the ground's skin,
+  // the snow on the house and the workplaces, the meadow's flowers, the
+  // footprints, the air (Ambient) and the minimap's colours. So rather than
+  // repaint each, fade out and build the town again where the hero stands
+  // (GameState.pos, saved on shutdown), which also brings the season's news.
+  // The roamers are rolled afresh, as after any fight.
+  private turnSeason(): void {
+    this.turningSeason = true;
+    // the roamers still wander (update) and would start a fight on contact
+    this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+    this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
+    this.cameras.main.fadeOut(SEASON_FADE, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      // never without data: a restart with none replays the last, and a town
+      // entered { fromForest } would set the hero back at the lane
+      this.scene.restart({ mapOpen: this.minimap.isVisible() });
     });
   }
 
@@ -1895,17 +1919,16 @@ export class TownScene extends Phaser.Scene {
       const errand = q.slimeReward
         ? ["The KING SLIME waits", "in the cave up north!"]
         : ["Slimes lurk in the grass.", "Hunt 5 slimes first.", "Then face the KING SLIME", "in the cave up north!"];
-      // the TROLL KING (TownScene's roaming giant) can wander the very
-      // meadows the slime hunt sends a new hero to, and no Lv1-3 hero wins
-      // that fight
-      const troll = q.trollDefeated ? [] : ["A crowned TROLL KING", "roams the grass too.", "RUN until you're strong!"];
-      this.dialogue.start([...greeting, ...errand, ...troll], "ELDER");
+      this.dialogue.start([...greeting, ...errand], "ELDER");
       return;
     }
     if (!q.finalReward) {
       q.finalReward = true;
       const gained = GameState.gainGold(100);
       Sfx.buy();
+      // the TROLL KING (TownScene's roaming giant) walks the meadows from
+      // the KING SLIME's fall on (spawnMonsters), and hits harder than it did
+      const troll = q.trollDefeated ? [] : ["A crowned TROLL KING", "roams the grass too.", "RUN until you're strong!"];
       this.dialogue.start(
         [
           "You are our hero!",
@@ -1915,6 +1938,7 @@ export class TownScene extends Phaser.Scene {
           "a deeper threat now.",
           "The GUARD by the woods",
           "knows more.",
+          ...troll,
         ],
         "ELDER",
       );
@@ -2169,7 +2193,14 @@ export class TownScene extends Phaser.Scene {
     this.dialogue.start([`DELIVERED ${d.need} ${name}!`, `TAKE ${paid.gold} GOLD${paid.bomb ? " AND A BOMB" : ""}.`], "BOUNTY BOARD");
   }
 
-  private checkEncounter(delta: number): void {
+  // A treasure map's dig gets the grace a fight's return does, so a roamer
+  // can't drag the hero into a fight before the toast that says what came
+  // out has been read (the fields' holdFights, for their chests too).
+  private holdFights(): void {
+    this.encounterCooldown = Math.max(this.encounterCooldown, ENTRY_GRACE);
+  }
+
+  private checkEncounter(delta: number, moving: boolean): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
       // load (~1.2s), which drained the entry grace in a single tick and
@@ -2177,6 +2208,9 @@ export class TownScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // only while the hero walks, as in the fields: stood in the tall grass
+    // (over a treasure map, deciding the way) a fight still came every ~6s
+    if (!moving) return;
     // Off the logical grid, not the rendered index: the render layer paints a
     // variation frame (8..22) wherever a terrain has one, so an index compare
     // there only works while tall grass happens to have none — and it would
@@ -2234,7 +2268,12 @@ export class TownScene extends Phaser.Scene {
       }
     }
 
-    if (Math.random() < TROLL_KING_SPAWN_CHANCE) {
+    // Only once the KING SLIME is down: sim:battle --boss TROLL has a new
+    // hero (Lv1-3, no gear, no companion) winning 0-3% (90% takes Lv4 with a
+    // WOLF, Lv6 alone), and the giant could stand in the slime hunt's own
+    // meadows, so a first hour could neither dodge it nor win and lost half
+    // its gold.
+    if (GameState.quest.bossDefeated && Math.random() < TROLL_KING_SPAWN_CHANCE) {
       const zone = MONSTER_ZONES[Math.floor(Math.random() * MONSTER_ZONES.length)];
       const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
       const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;

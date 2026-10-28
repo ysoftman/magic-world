@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
-import { dayIndex, EQUIP_SLOT, GameState } from "../gameState";
+import { EQUIP_SLOT, econDay, GameState } from "../gameState";
 import { ITEM_INFO } from "../itemInfo";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
@@ -287,7 +287,7 @@ export class ShopUI {
     }
     // the town clock keeps running behind the panel; re-price the moment a
     // market day starts or ends rather than charging what isn't shown
-    if (dayIndex() !== this.day) this.refresh();
+    if (econDay() !== this.day) this.refresh();
     if (this.tabQueued) {
       this.tabQueued = false;
       this.mode = this.mode === "buy" ? "sell" : "buy";
@@ -381,7 +381,7 @@ export class ShopUI {
   }
 
   private refresh(): void {
-    this.day = dayIndex();
+    this.day = econDay();
     // Only buying is discounted (sell prices stay at half the list price),
     // so the tag rides on the buy title alone. "SHOP - MARKET DAY -20%" is
     // 22 x 32 = 704px (x 288..992): clear of the gold readout (x>=1036) and

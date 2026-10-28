@@ -169,14 +169,21 @@ interface Effect {
  * Adds the area's weather and ambient particles to `scene`: one call from
  * create(), and it tears itself down on SHUTDOWN. The weather is today's for
  * `kind` (see weather.ts); `caption` flashes its name under the area title on
- * entry and whenever the day turns while the player is here.
+ * entry and whenever the day turns while the player is here. On entry only if
+ * it isn't still `since`, the weather the player last saw here: a scene built
+ * again round a hero who never left (a season's turn) says it only if the sky
+ * changed with it.
  *
  * The emitters are screen-space (scrollFactor 0) so the effect always covers
  * the view, but every particle is shifted against the camera's own movement
  * each frame, so it reads as hanging in the world rather than stuck to the
  * lens, and wraps round the edges so walking never empties the screen.
  */
-export function addAmbient(scene: Phaser.Scene, kind: AmbientKind, { caption = false } = {}): void {
+export function addAmbient(
+  scene: Phaser.Scene,
+  kind: AmbientKind,
+  { caption = false, since }: { caption?: boolean; since?: Weather } = {},
+): void {
   bakeSheet(scene);
   let weather = weatherToday(kind);
   // today's weather starts in full; only a change while here eases in
@@ -187,7 +194,7 @@ export function addAmbient(scene: Phaser.Scene, kind: AmbientKind, { caption = f
   // layers that are actually on right now (no daytime fireflies).
   for (const { emitter } of effect.layers) if (emitter.emitting) emitter.fastForward(PREWARM_MS);
   const label = caption ? addCaption(scene) : undefined;
-  label?.(weather);
+  if (weather !== since) label?.(weather);
   // fireworks, shooting stars and the aurora, over the sky regions
   addNightSky(scene, kind);
 

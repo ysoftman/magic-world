@@ -1,4 +1,4 @@
-import { dayIndex } from "./gameState";
+import { dayIndex, GameState } from "./gameState";
 
 export type Season = "spring" | "summer" | "autumn" | "winter";
 
@@ -43,24 +43,22 @@ export function seasonLook(region: string, season: Season = seasonToday()): "aut
   return season === "autumn" || season === "winter" ? season : null;
 }
 
-// The season (counted from day 0, so each year's autumn is a new one) the
-// town last announced. Module scope, like TownScene's announcedDay: it
-// outlives a Town restart (every battle ends in one) but not a page load.
-let announced = -1;
-
 /**
- * "AUTUMN HAS COME!" the first time the town is entered in a new season;
- * null otherwise. Without a save to remember what was last seen, a fresh
- * page load only calls it news on the season's first day; within a session,
- * any first entry into the new season is. Never on day 0: the game has only
- * just begun, nothing has come.
+ * "AUTUMN HAS COME!" the first time the town is entered in a new season, or
+ * the season turns while the hero is in it; null otherwise. The season
+ * (counted from day 0, so each year's autumn is a new one) last announced
+ * rides in the save (GameState.seasonSeen), which the town writes as soon as
+ * it has the news, so a reload doesn't call the same one news again. A save
+ * from before it (-1) only calls it news on the season's first day, as any
+ * later entry may be a return. Never on day 0: the game has only just begun,
+ * nothing has come.
  */
 export function seasonNews(): string | null {
   const day = dayIndex();
   const index = Math.floor(day / SEASON_DAYS);
-  const first = announced < 0;
-  if (index === announced) return null;
-  announced = index;
+  const first = GameState.seasonSeen < 0;
+  if (index === GameState.seasonSeen) return null;
+  GameState.seasonSeen = index;
   if (day <= 0 || (first && day % SEASON_DAYS !== 0)) return null;
   return `${SEASON_LABEL[seasonOn(day)]} HAS COME!`;
 }

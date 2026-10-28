@@ -14,7 +14,7 @@ import {
 } from "../abyss";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_WIDTH } from "../config";
 import { GameState, onSaved } from "../gameState";
 import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
@@ -22,11 +22,14 @@ import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } fr
 import {
   addBorderDressing,
   addTownExitLabel,
+  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   fadeAreaTitle,
+  fadeInAfterAreaTitle,
   isWalkableCell,
+  saveAndQuit,
   startWaterAnimation,
   whilePanelUp,
 } from "../sceneCommon";
@@ -52,8 +55,6 @@ type LastMove = "down" | "up" | "right" | "left";
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
-// long enough for the SAVED confirmation to be readable before the title
-const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 // every field's chance a second, with no night bump: no night down here
@@ -234,7 +235,6 @@ export class AbyssScene extends Phaser.Scene {
   private uQueued = false;
   private oQueued = false;
   private qQueued = false;
-  private quitConfirm = false;
   private quitting = false;
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second, like every field scene
@@ -242,10 +242,6 @@ export class AbyssScene extends Phaser.Scene {
   // true while a quiet save is in flight (a trophy, a depth record), so the
   // onSaved "SAVED" toast doesn't clobber the toast announcing it
   private suppressSavedToast = false;
-  private yQueued = false;
-  private nQueued = false;
-  private escQueued = false;
-  private quitConfirmText!: Phaser.GameObjects.Text;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -290,7 +286,6 @@ export class AbyssScene extends Phaser.Scene {
     this.lastMove = "down";
     this.leaving = false;
     this.sealedToastAt = 0;
-    this.quitConfirm = false;
     this.quitting = false;
     // back from a fight the hero stands where it began, which can be the
     // stair up: no question until a step off it
@@ -338,13 +333,16 @@ export class AbyssScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, ABYSS_W * TILE, ABYSS_H * TILE);
 
-    // "ABYSS B999" is 10 x 32 = 320px
-    const title = this.add
-      .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, `ABYSS B${r.floor}`, retroStyle(8, DOWN_COLOR))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(95);
-    fadeAreaTitle(this, title);
+    // "ABYSS B999" is 10 x 32 = 320px; not back from a fight, as no field's
+    // title is: the hero never left the floor
+    if (!back) {
+      const title = this.add
+        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, `ABYSS B${r.floor}`, retroStyle(8, DOWN_COLOR))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(95);
+      fadeAreaTitle(this, title);
+    }
 
     bakeAbyssStairs(this);
     const up = cellCenter(floor.up);
@@ -382,8 +380,8 @@ export class AbyssScene extends Phaser.Scene {
     this.spawnChest();
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, sprite) => {
-      // nor under the quit prompt, whose Y would then race the battle's fade
-      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitConfirm) return;
+      // nor on the way to the title, which would then race the battle's fade
+      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitting) return;
       const roamer = this.roamers.find((x) => x.sprite === sprite);
       // BattleScene.runBattle() already plays the boss fanfare for a guardian
       if (roamer) this.startBattle(roamer.kind, roamer);
@@ -393,7 +391,7 @@ export class AbyssScene extends Phaser.Scene {
     this.upStair = this.add.zone(up.x, up.y, TILE, TILE);
     this.physics.add.existing(this.upStair);
     this.physics.add.overlap(this.player, this.upStair, () => this.askLeave());
-    addTownExitLabel(this, up.x, up.y);
+    addTownExitLabel(this, up.x, up.y, !back);
 
     const stair = this.add.zone(down.x, down.y, TILE, TILE);
     this.physics.add.existing(stair);
@@ -407,6 +405,8 @@ export class AbyssScene extends Phaser.Scene {
       .setStroke("#1a1028", 4)
       .setDepth(9);
     this.tweens.add({ targets: this.downLabel, y: this.downLabel.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    // a stair down by the way in sat under the floor's title (1 floor in 400)
+    if (!back) fadeInAfterAreaTitle(this, this.downLabel);
     this.refreshDownLabel();
 
     startWaterAnimation(this, this.layer);
@@ -452,21 +452,6 @@ export class AbyssScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
-    // only while the quit prompt is up: a Y pressed earlier would otherwise
-    // sit queued and answer the next prompt the moment it opens
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.yQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.N).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.nQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (this.quitConfirm && !e.repeat) this.escQueued = true;
-      },
-    );
-
     const help = addHelpPopup(
       this,
       [
@@ -485,7 +470,7 @@ export class AbyssScene extends Phaser.Scene {
       ],
       // built per visit, so back from felling the guardian it says what's next
       floor.guardian && !r.guardianDown ? "DEFEAT THE GUARDIAN!" : "FIND THE STAIRS DOWN!",
-      () => this.uiBlocking() || this.quitConfirm,
+      () => this.uiBlocking() || this.quitting,
     );
 
     // both stairs and an unopened chest; the zones show on the map already
@@ -512,13 +497,10 @@ export class AbyssScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
     this.questLog = new QuestLog(this);
-    // the stair up's question (askLeave)
+    // the stair up's question (askLeave) and the quit question (askQuitToTitle)
     this.dialogue = new DialogueBox(this, []);
-    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
-    this.settingsUI = new SettingsUI(this, () => {
-      this.quitConfirm = this.yQueued = true;
-      this.quitConfirmText.setVisible(true);
-    });
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
+    this.settingsUI = new SettingsUI(this, () => this.quit());
 
     // under a panel, the stair's question or the help the map's tags (TOWN,
     // the stair down's) go and toasts wait
@@ -527,13 +509,6 @@ export class AbyssScene extends Phaser.Scene {
     this.hud = new StatusHud(this);
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
-
-    this.quitConfirmText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(300)
-      .setVisible(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
@@ -547,7 +522,6 @@ export class AbyssScene extends Phaser.Scene {
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
-      this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
 
@@ -620,47 +594,18 @@ export class AbyssScene extends Phaser.Scene {
       if (!this.uiBlocking()) this.minimap.toggle();
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the prompt's ESC would close that panel too
-      if (!this.uiBlocking()) {
-        this.quitConfirm = true;
-        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-        Sfx.error();
-      }
+    // saved and on the way to the title (quit): nothing else moves. The
+    // roamers are kept to their boxes, as under a panel: left on their last
+    // velocity they walked off across the map until the title came
+    if (this.quitting) {
+      this.updateRoamers(delta);
+      return;
     }
 
-    if (this.quitConfirm) {
-      // kept to their boxes, as under a panel: left on their last velocity
-      // they walked off across the map until the prompt closed
-      this.updateRoamers(delta);
-      if (this.quitting) return;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      // a panel key pressed while the prompt is up would otherwise open
-      // that panel the moment the prompt is dismissed
-      this.ctrlSQueued = this.mQueued = this.iQueued = this.bQueued = this.aQueued = this.uQueued = this.oQueued = this.tQueued = false;
-      if (this.yQueued) {
-        this.yQueued = false;
-        // Save here rather than leaning on the SHUTDOWN handler: that one runs
-        // after the toast subscription is torn down, so the player never sees
-        // the confirmation. The SHUTDOWN save then just repeats this one.
-        this.quitting = true;
-        // the quit prompt itself reports the save, so drop the toast that
-        // GameState.save() would otherwise stack on top of it
-        this.unsubSaved();
-        GameState.save();
-        this.quitConfirmText.setText("SAVED").setColor("#4ade80");
-        this.time.delayedCall(QUIT_SAVE_DELAY, () => this.scene.start("Title"));
-        return;
-      }
-      if (this.nQueued || this.escQueued) {
-        this.nQueued = false;
-        this.escQueued = false;
-        this.quitConfirm = false;
-        this.quitConfirmText.setVisible(false);
-      }
-      return;
+    if (this.qQueued) {
+      this.qQueued = false;
+      // never over an open panel: the question's ESC would close that panel too
+      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
     }
 
     if (this.uiBlocking()) {
@@ -761,7 +706,7 @@ export class AbyssScene extends Phaser.Scene {
     this.updateRoamers(delta);
     this.night.update();
     this.minimap.update();
-    this.checkEncounter(delta);
+    this.checkEncounter(delta, moving);
   }
 
   private updateEquipOverlays(): void {
@@ -790,7 +735,7 @@ export class AbyssScene extends Phaser.Scene {
   // box's 28, all a touch question holds (DialogueBox); STAY and LEAVE are
   // five glyphs at most, as its choice row is laid out for.
   private askLeave(): void {
-    if (this.leaving || this.stairAsked || this.uiBlocking() || this.quitConfirm || !run) return;
+    if (this.leaving || this.stairAsked || this.uiBlocking() || this.quitting || !run) return;
     this.stairAsked = true;
     this.player.setVelocity(0, 0);
     const portal = portalOnLeave(run.floor, GameState.abyssPortal);
@@ -817,6 +762,12 @@ export class AbyssScene extends Phaser.Scene {
       },
       0,
     );
+  }
+
+  // YES to the quit question, or the settings' QUIT chip on touch
+  private quit(): void {
+    this.quitting = true;
+    saveAndQuit(this);
   }
 
   private toggleStatus(): void {
@@ -862,7 +813,14 @@ export class AbyssScene extends Phaser.Scene {
     });
   }
 
-  private checkEncounter(delta: number): void {
+  // The chest's find gets the grace a fight's return does, so a roamer can't
+  // drag the hero into a fight before its note has been read (the fields'
+  // holdFights).
+  private holdFights(): void {
+    this.encounterCooldown = Math.max(this.encounterCooldown, ENTRY_GRACE);
+  }
+
+  private checkEncounter(delta: number, moving: boolean): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
       // load (~1.2s), which drained the entry grace in a single tick and
@@ -870,6 +828,9 @@ export class AbyssScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // only while the hero walks, as in every other field: stood still a
+    // fight still came every ~17s
+    if (!moving) return;
     // a guardian's hall holds its guardian and nothing else
     if (this.floor.guardian || this.leaving || !run) return;
     const up = cellCenter(this.floor.up);
@@ -960,6 +921,7 @@ export class AbyssScene extends Phaser.Scene {
     if (!run || run.chestOpened) return;
     run.chestOpened = true;
     chest.setTexture("chest-open");
+    this.holdFights();
     Sfx.chest();
     const loot = abyssScale(run.floor, GameState.enemyScale()).loot;
     const gold = GameState.gainGold(Math.round((CHEST_GOLD_MIN + Math.floor(Math.random() * CHEST_GOLD_SPREAD)) * loot));

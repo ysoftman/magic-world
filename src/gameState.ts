@@ -501,13 +501,15 @@ export function dayIndex(): number {
   return Math.floor(GameState.minutes / 1440);
 }
 
-// The day a daily reward counts by: the farm's clock (farmMinutes, game
-// minutes / TIME SPEED) in days, so a day's worth of reward takes a NORMAL
-// day of real time — 24 minutes — at every speed. At NORMAL it is dayIndex();
-// at VERY FAST the sky turns 20 days in one of these. Only what a day hands
-// out goes by it, the BOUNTY BOARD's bounty and delivery; the town events and
-// the weather stay on dayIndex(), as they only colour the day the hero sees
-// (a share of the time, whatever its pace).
+// The calendar day: the farm's clock (farmMinutes, game minutes / TIME
+// SPEED) in days, so a day takes a NORMAL day of real time — 24 minutes —
+// at every speed. At NORMAL it is dayIndex(); at VERY FAST the sky turns 20
+// days in one of these. What a day hands out (the BOUNTY BOARD's bounty and
+// delivery, the herb garden) and what colours it (the town events, the
+// weather) all go by it: TIME SPEED is a toggle anyone can flip, and on
+// dayIndex() a rain or market day could be pulled up at x20 in minutes and
+// used at NORMAL for a real 24. Only the season (season.ts) and the
+// ending's DAY count the days the hero saw, dayIndex().
 export function econDay(): number {
   return Math.floor(GameState.farmMinutes / 1440);
 }
@@ -595,6 +597,9 @@ export const GameState = {
   houseLevel: 0,
   gardenDay: -1,
   rested: false,
+  // the season (season.ts, counted from day 0) the town last announced,
+  // -1 for none yet, so a reload doesn't announce it again
+  seasonSeen: -1,
   farm: Array.from({ length: FARM_PLOTS }, () => null) as Array<FarmPlot | null>,
   achievements: [] as string[],
   inventory: {
@@ -936,6 +941,7 @@ export const GameState = {
     this.houseLevel = 0;
     this.gardenDay = -1;
     this.rested = false;
+    this.seasonSeen = -1;
     this.farm = Array.from({ length: FARM_PLOTS }, () => null);
     this.achievements = [];
     this.inventory = {
@@ -1042,6 +1048,7 @@ export const GameState = {
           houseLevel: this.houseLevel,
           gardenDay: this.gardenDay,
           rested: this.rested,
+          seasonSeen: this.seasonSeen,
           farm: this.farm,
           achievements: this.achievements,
           inventory: this.inventory,
@@ -1120,6 +1127,7 @@ export const GameState = {
       this.houseLevel = Number.isInteger(data.houseLevel) ? Math.min(MAX_HOUSE, Math.max(0, data.houseLevel)) : 0;
       this.gardenDay = Number.isInteger(data.gardenDay) ? data.gardenDay : -1;
       this.rested = data.rested === true;
+      this.seasonSeen = Number.isInteger(data.seasonSeen) ? data.seasonSeen : -1;
       // rebuilt slot by slot so an old save (no farm), a shorter array or an
       // unknown crop key can't leave a plot the farm panel would read as
       // undefined

@@ -22,13 +22,15 @@ const GLINT_DEPTH = 4.5;
  * itself, tryDig(), for the scene's Z. A scene whose Z already does
  * something (talk, the ice hole) calls tryDig() first and stops if it dug;
  * one where Z does nothing passes `ownKey` and this listens for Z itself,
- * held off while `blocked()` says a panel or dialogue is up.
+ * held off while `blocked()` says a panel or dialogue is up. `dug` runs after
+ * a dig, for the scene to hold off its fights while the find is read.
  */
 export class TreasureDigger {
   private scene: Phaser.Scene;
   private region: TreasureRegion;
   private hero: { x: number; y: number };
   private toastY: number;
+  private dug?: () => void;
   private glints: Phaser.GameObjects.Image[] = [];
   private readonly calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
@@ -36,7 +38,7 @@ export class TreasureDigger {
     scene: Phaser.Scene,
     region: TreasureRegion,
     hero: { x: number; y: number },
-    opts: { toastY: number; ownKey?: boolean; blocked?: () => boolean },
+    opts: { toastY: number; ownKey?: boolean; blocked?: () => boolean; dug?: () => void },
   ) {
     this.scene = scene;
     this.region = region;
@@ -75,6 +77,7 @@ export class TreasureDigger {
     // holding it up
     showToast(this.scene, line, this.toastY);
     GameState.save();
+    this.dug?.();
     return true;
   }
 

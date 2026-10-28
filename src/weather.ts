@@ -1,5 +1,5 @@
-import { dayIndex } from "./gameState";
-import { type Season, seasonOn } from "./season";
+import { econDay } from "./gameState";
+import { type Season, seasonOn, seasonToday } from "./season";
 
 export type Region = "town" | "forest" | "snow" | "dungeon" | "volcano";
 export type Weather = "clear" | "rain" | "storm" | "snow" | "blizzard" | "ashfall" | "none";
@@ -75,13 +75,14 @@ export const WEATHER_LABEL: Record<Weather, string> = {
 };
 
 /**
- * The weather in `region` on in-game day `day`. Pure and deterministic: the
- * day number is hashed, so the same day always gets the same sky and nothing
+ * The weather in `region` on day `day`, under the lowland odds of `season`
+ * (that day's own unless told otherwise). Pure and deterministic: the day
+ * number is hashed, so the same day always gets the same sky and nothing
  * needs saving.
  */
-export function weatherOn(day: number, region: Region): Weather {
+export function weatherOn(day: number, region: Region, season: Season = seasonOn(day)): Weather {
   const climate = CLIMATE[region];
-  const odds = climate === "lowland" ? LOWLAND[seasonOn(day)] : ODDS[climate];
+  const odds = climate === "lowland" ? LOWLAND[season] : ODDS[climate];
   if (day <= 0) return odds[0][0];
   let roll = hash01(day, SALT[climate]) * 100;
   for (const [weather, pct] of odds) {
@@ -91,8 +92,12 @@ export function weatherOn(day: number, region: Region): Weather {
   return odds[0][0];
 }
 
+// Today's sky: the real-time day (econDay) rolled under the season the hero
+// sees (dayIndex, season.ts), so the sky matches the ground it falls on.
+// On the clock's day a x20 player could pull a rainy day up in ~2 minutes,
+// then fish and harvest it at NORMAL for a real 24.
 export function weatherToday(region: Region): Weather {
-  return weatherOn(dayIndex(), region);
+  return weatherOn(econDay(), region, seasonToday());
 }
 
 // Rain or storm. The hook for systems that should care about a wet day

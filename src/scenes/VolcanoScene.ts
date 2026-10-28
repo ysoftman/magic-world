@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { Sfx, VOLCANO_THEME } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_WIDTH } from "../config";
 import { GameState, isNight, onSaved } from "../gameState";
 import {
   buildVolcano,
@@ -21,18 +21,23 @@ import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixela
 import {
   addBorderDressing,
   addTownExitSign,
+  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   fadeAreaTitle,
   isWalkableCell,
+  noteFightSpot,
+  saveAndQuit,
   startWaterAnimation,
+  takeFightSpot,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
@@ -45,6 +50,7 @@ import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
+import { weatherToday } from "../weather";
 
 type LastMove = "down" | "up" | "right" | "left";
 type VolcanoKind = "magmaSlime" | "fireImp" | "salamander" | "flameDrake";
@@ -52,8 +58,6 @@ type VolcanoKind = "magmaSlime" | "fireImp" | "salamander" | "flameDrake";
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
-// long enough for the SAVED confirmation to be readable before the title
-const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 // lava churns slower than water ripples (WATER_ANIM_DELAY is 400)
@@ -115,7 +119,6 @@ export class VolcanoScene extends Phaser.Scene {
   private uQueued = false;
   private oQueued = false;
   private qQueued = false;
-  private quitConfirm = false;
   private quitting = false;
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second so ones earned here (the
@@ -125,10 +128,6 @@ export class VolcanoScene extends Phaser.Scene {
   // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
   // object (showToast reuses one per scene)
   private suppressSavedToast = false;
-  private yQueued = false;
-  private nQueued = false;
-  private escQueued = false;
-  private quitConfirmText!: Phaser.GameObjects.Text;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -137,6 +136,7 @@ export class VolcanoScene extends Phaser.Scene {
   private achievementsUI!: AchievementsUI;
   private questLog!: QuestLog;
   private settingsUI!: SettingsUI;
+  private dialogue!: DialogueBox;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -144,7 +144,10 @@ export class VolcanoScene extends Phaser.Scene {
     super("Volcano");
   }
 
-  create(): void {
+  create(data?: { fromBattle?: boolean }): void {
+    // back from a fight (takeFightSpot): where it began, and none of an
+    // arrival's title, caption or wait for the TOWN tag
+    const back = takeFightSpot(this, data);
     Sfx.playBgm(VOLCANO_THEME);
     this.roamers = [];
     // same entry grace as every other area, so a zone near the entry can't
@@ -152,7 +155,6 @@ export class VolcanoScene extends Phaser.Scene {
     this.encounterCooldown = ENTRY_GRACE;
     this.lastMove = "down";
     this.exitingVolcano = false;
-    this.quitConfirm = false;
     this.quitting = false;
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
@@ -178,14 +180,17 @@ export class VolcanoScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, VOLCANO_W * TILE, VOLCANO_H * TILE);
 
-    const title = this.add
-      .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "VOLCANO", retroStyle(8, "#fb923c"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(95);
-    fadeAreaTitle(this, title);
+    if (!back) {
+      const title = this.add
+        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "VOLCANO", retroStyle(8, "#fb923c"))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(95);
+      fadeAreaTitle(this, title);
+    }
 
-    this.player = this.physics.add.sprite(VOLCANO_ENTRY.x, VOLCANO_ENTRY.y + TILE * 2, "hero-idle-down");
+    const at = back ?? { x: VOLCANO_ENTRY.x, y: VOLCANO_ENTRY.y + TILE * 2 };
+    this.player = this.physics.add.sprite(at.x, at.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
@@ -202,7 +207,8 @@ export class VolcanoScene extends Phaser.Scene {
     new TreasureDigger(this, "volcano", this.player, {
       toastY: FIELD_TOAST_Y,
       ownKey: true,
-      blocked: () => this.quitConfirm || this.uiBlocking(),
+      blocked: () => this.quitting || this.uiBlocking(),
+      dug: () => this.holdFights(),
     });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
@@ -211,19 +217,19 @@ export class VolcanoScene extends Phaser.Scene {
     createWalkAnimations(this);
 
     addFootsteps(this, this.player, level, "volcano");
-    addGuideArrow(this, this.player, "volcano", () => this.quitConfirm || this.uiBlocking());
+    addGuideArrow(this, this.player, "volcano", () => this.quitting || this.uiBlocking());
 
     // embers and ash on the crater's updraft with a faint heat shimmer, and
     // ash raining down on ashfall days; caption names the day's weather
-    addAmbient(this, "volcano", { caption: true });
+    addAmbient(this, "volcano", { caption: true, since: back?.weather });
 
     this.spawnMonsters();
 
     this.spawnTreasures();
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      // nor under the quit prompt, whose Y would then race the battle's fade
-      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitConfirm) return;
+      // nor on the way to the title, which would then race the battle's fade
+      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitting) return;
       const r = this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
@@ -235,7 +241,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, exit, () => {
       if (!this.exitingVolcano) this.exitVolcano();
     });
-    addTownExitSign(this, this.player, VOLCANO_ENTRY.x, VOLCANO_ENTRY.y);
+    addTownExitSign(this, this.player, VOLCANO_ENTRY.x, VOLCANO_ENTRY.y, !back);
 
     startWaterAnimation(this, this.layer, [[T_LAVA_A, T_LAVA_B]], LAVA_ANIM_DELAY);
 
@@ -280,21 +286,6 @@ export class VolcanoScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
-    // only while the quit prompt is up: a Y pressed earlier would otherwise
-    // sit queued and answer the next prompt the moment it opens
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.yQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.N).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.nQueued = true;
-    });
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on(
-      Phaser.Input.Keyboard.Events.DOWN,
-      (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        if (this.quitConfirm && !e.repeat) this.escQueued = true;
-      },
-    );
-
     const help = addHelpPopup(
       this,
       [
@@ -312,7 +303,7 @@ export class VolcanoScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "BEWARE THE FLAME DRAKE!",
-      () => this.uiBlocking() || this.quitConfirm,
+      () => this.uiBlocking() || this.quitting,
     );
 
     // exit + unopened chests; the drake's crater is deliberately not marked
@@ -336,25 +327,17 @@ export class VolcanoScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
     this.questLog = new QuestLog(this);
-    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
-    this.settingsUI = new SettingsUI(this, () => {
-      this.quitConfirm = this.yQueued = true;
-      this.quitConfirmText.setVisible(true);
-    });
+    // the quit question (askQuitToTitle)
+    this.dialogue = new DialogueBox(this, []);
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
+    this.settingsUI = new SettingsUI(this, () => this.quit());
 
-    // under a panel or the help the map's tags go and toasts wait
+    // under a panel, the quit question or the help the map's tags go and toasts wait
     whilePanelUp(this, () => this.uiBlocking());
 
     this.hud = new StatusHud(this);
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
-
-    this.quitConfirmText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(300)
-      .setVisible(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
@@ -364,10 +347,10 @@ export class VolcanoScene extends Phaser.Scene {
       this.achievementsUI.destroy();
       this.questLog.destroy();
       this.settingsUI.destroy();
+      this.dialogue.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
-      this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
   }
@@ -417,47 +400,18 @@ export class VolcanoScene extends Phaser.Scene {
       if (!this.uiBlocking()) this.minimap.toggle();
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the prompt's ESC would close that panel too
-      if (!this.uiBlocking()) {
-        this.quitConfirm = true;
-        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-        Sfx.error();
-      }
+    // saved and on the way to the title (quit): nothing else moves. The
+    // roamers are kept to their boxes, as under a panel: left on their last
+    // velocity they walked off across the map until the title came
+    if (this.quitting) {
+      this.updateRoamers(delta);
+      return;
     }
 
-    if (this.quitConfirm) {
-      // kept to their boxes, as under a panel: left on their last velocity
-      // they walked off across the map until the prompt closed
-      this.updateRoamers(delta);
-      if (this.quitting) return;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      // a panel key pressed while the prompt is up would otherwise open
-      // that panel the moment the prompt is dismissed
-      this.ctrlSQueued = this.mQueued = this.iQueued = this.bQueued = this.aQueued = this.uQueued = this.oQueued = this.tQueued = false;
-      if (this.yQueued) {
-        this.yQueued = false;
-        // Save here rather than leaning on the SHUTDOWN handler: that one runs
-        // after the toast subscription is torn down, so the player never sees
-        // the confirmation. The SHUTDOWN save then just repeats this one.
-        this.quitting = true;
-        // the quit prompt itself reports the save, so drop the toast that
-        // GameState.save() would otherwise stack on top of it
-        this.unsubSaved();
-        GameState.save();
-        this.quitConfirmText.setText("SAVED").setColor("#4ade80");
-        this.time.delayedCall(QUIT_SAVE_DELAY, () => this.scene.start("Title"));
-        return;
-      }
-      if (this.nQueued || this.escQueued) {
-        this.nQueued = false;
-        this.escQueued = false;
-        this.quitConfirm = false;
-        this.quitConfirmText.setVisible(false);
-      }
-      return;
+    if (this.qQueued) {
+      this.qQueued = false;
+      // never over an open panel: the question's ESC would close that panel too
+      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
     }
 
     if (this.uiBlocking()) {
@@ -488,6 +442,7 @@ export class VolcanoScene extends Phaser.Scene {
       this.achievementsUI.update();
       this.questLog.update();
       this.settingsUI.update();
+      this.dialogue.update();
       this.updateRoamers(delta);
       return;
     }
@@ -552,7 +507,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.updateRoamers(delta);
     this.night.update();
     this.minimap.update();
-    this.checkEncounter(delta);
+    this.checkEncounter(delta, moving);
   }
 
   private updateEquipOverlays(): void {
@@ -566,8 +521,15 @@ export class VolcanoScene extends Phaser.Scene {
       this.achievementsUI.isActive() ||
       this.questLog.isActive() ||
       this.settingsUI.isActive() ||
+      this.dialogue.isActive() ||
       helpOpen(this)
     );
+  }
+
+  // YES to the quit question, or the settings' QUIT chip on touch
+  private quit(): void {
+    this.quitting = true;
+    saveAndQuit(this);
   }
 
   private toggleStatus(): void {
@@ -588,7 +550,14 @@ export class VolcanoScene extends Phaser.Scene {
     });
   }
 
-  private checkEncounter(delta: number): void {
+  // A find (a chest, a treasure map's dig) gets the grace a fight's return
+  // does, so a roamer can't drag the hero into a fight before the toast that
+  // says what came out has been read.
+  private holdFights(): void {
+    this.encounterCooldown = Math.max(this.encounterCooldown, ENTRY_GRACE);
+  }
+
+  private checkEncounter(delta: number, moving: boolean): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
       // load (~1.2s), which drained the entry grace in a single tick and
@@ -596,6 +565,9 @@ export class VolcanoScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // only while the hero walks: stood still (by a chest, over a map, at the
+    // ice hole, deciding the way) a fight still came every ~17s
+    if (!moving) return;
     const nearExit =
       Math.abs(this.player.x - VOLCANO_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - VOLCANO_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
@@ -665,6 +637,7 @@ export class VolcanoScene extends Phaser.Scene {
     if (GameState.openedTreasures.includes(id)) return;
     GameState.openedTreasures.push(id);
     chest.setTexture("chest-open");
+    this.holdFights();
     Sfx.chest();
     const gold = GameState.gainGold(25 + Math.floor(Math.random() * 26));
     let loot = "";
@@ -730,6 +703,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
+      noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
       this.scene.start("Battle", { enemy: kind, from: "Volcano" });
     });
   }

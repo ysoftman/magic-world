@@ -1,26 +1,32 @@
 import Phaser from "phaser";
 import { ACHIEVEMENTS, claimAchievements } from "../achievements";
 import { FOREST_THEME, Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { GameState, isNight, onSaved } from "../gameState";
+import { GAME_WIDTH } from "../config";
+import { econDay, GameState, isNight, onSaved } from "../gameState";
 import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import {
   addBorderDressing,
   addTownExitSign,
+  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
   fadeAreaTitle,
   isWalkableCell,
+  noteFightSpot,
+  saveAndQuit,
   startWaterAnimation,
+  takeFightSpot,
   whilePanelUp,
 } from "../sceneCommon";
+import { type Season, seasonLook, seasonToday } from "../season";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
@@ -33,6 +39,7 @@ import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
+import { type Weather, weatherOn, weatherToday } from "../weather";
 import { seasonSkin } from "./BootScene";
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -40,10 +47,10 @@ type LastMove = "down" | "up" | "right" | "left";
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
-// long enough for the SAVED confirmation to be readable before the title
-const QUIT_SAVE_DELAY = 700;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
+// the fade out to the forest built again for a new season, a fight's length
+const SEASON_FADE = 300;
 
 interface Roamer {
   sprite: Phaser.Physics.Arcade.Sprite;
@@ -100,8 +107,12 @@ export class ForestScene extends Phaser.Scene {
   private uQueued = false;
   private oQueued = false;
   private qQueued = false;
-  private quitConfirm = false;
   private quitting = false;
+  // the season the forest was built in (or last turned to in place), and
+  // the fade out to building it again once the clock moves it into another
+  // look (turnSeason)
+  private season: Season = "spring";
+  private turningSeason = false;
   private unsubSaved: () => void = () => {};
   // claims achievements at most once per second so earned-here achievements
   // (e.g. defeating a boss) toast immediately instead of waiting for the
@@ -111,13 +122,6 @@ export class ForestScene extends Phaser.Scene {
   // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
   // object (showToast reuses one per scene)
   private suppressSavedToast = false;
-  private yQueued = false;
-  private nQueued = false;
-  private escQueued = false;
-  private keyY!: Phaser.Input.Keyboard.Key;
-  private keyN!: Phaser.Input.Keyboard.Key;
-  private keyEsc!: Phaser.Input.Keyboard.Key;
-  private quitConfirmText!: Phaser.GameObjects.Text;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -126,6 +130,7 @@ export class ForestScene extends Phaser.Scene {
   private achievementsUI!: AchievementsUI;
   private questLog!: QuestLog;
   private settingsUI!: SettingsUI;
+  private dialogue!: DialogueBox;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -133,7 +138,13 @@ export class ForestScene extends Phaser.Scene {
     super("Forest");
   }
 
-  create(): void {
+  // `turn`: built again for a new season (turnSeason) round a hero who never
+  // left: where they stood, the map as they left it and the sky they saw, and
+  // none of an arrival's title, caption or step out of the monster zones
+  create(data?: { turn?: { at: { x: number; y: number }; mapOpen: boolean; weather: Weather }; fromBattle?: boolean }): void {
+    const turn = data?.turn;
+    // back from a fight (takeFightSpot): the same, where the fight began
+    const back = takeFightSpot(this, data);
     Sfx.playBgm(FOREST_THEME);
     this.roamers = [];
     // Every entry gets a grace period, not just a return from battle: nothing
@@ -142,8 +153,8 @@ export class ForestScene extends Phaser.Scene {
     this.encounterCooldown = ENTRY_GRACE;
     this.lastMove = "down";
     this.exitingForest = false;
-    this.quitConfirm = false;
     this.quitting = false;
+    this.turningSeason = false;
 
     // Registered before the SHUTDOWN handler below that calls GameState.save()
     // — SHUTDOWN listeners fire in registration order, so this unsubscribes
@@ -162,6 +173,7 @@ export class ForestScene extends Phaser.Scene {
     // forest-palette copies of the shared tilesets (BootScene's FOREST_SKIN)
     // rather than a tint over the town's grass, which only ever darkened it;
     // in autumn and winter the season's (seasonSkin)
+    this.season = seasonToday();
     const layers = buildTileLayers(this, level, { skin: seasonSkin("forest") });
     // the wall of trees round the glade, thickened; clear of the way out and its sign
     addBorderDressing(this, level, seasonSkin("forest"), [FOREST_ENTRY, { x: FOREST_ENTRY.x - 2 * TILE, y: FOREST_ENTRY.y }]);
@@ -170,14 +182,17 @@ export class ForestScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, FOREST_W * TILE, FOREST_H * TILE);
 
-    const title = this.add
-      .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE FOREST", retroStyle(8, "#4ade80"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(95);
-    fadeAreaTitle(this, title);
+    if (!turn && !back) {
+      const title = this.add
+        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE FOREST", retroStyle(8, "#4ade80"))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(95);
+      fadeAreaTitle(this, title);
+    }
 
-    this.player = this.physics.add.sprite(FOREST_ENTRY.x, FOREST_ENTRY.y + TILE * 2, "hero-idle-down");
+    const at = turn?.at ?? back ?? { x: FOREST_ENTRY.x, y: FOREST_ENTRY.y + TILE * 2 };
+    this.player = this.physics.add.sprite(at.x, at.y, "hero-idle-down");
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body?.setSize(40, 32).setOffset(12, 32);
@@ -186,8 +201,8 @@ export class ForestScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.layer);
     this.physics.add.collider(this.player, this.objectLayer);
 
-    // Step clear of every monster zone on entry, the same as the cave.
-    this.escapeMonsterZone();
+    // Step clear of every monster zone on entry, the same as the cave
+    if (!turn) this.escapeMonsterZone();
 
     this.playerShadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
@@ -195,7 +210,8 @@ export class ForestScene extends Phaser.Scene {
     new TreasureDigger(this, "forest", this.player, {
       toastY: FIELD_TOAST_Y,
       ownKey: true,
-      blocked: () => this.quitConfirm || this.uiBlocking(),
+      blocked: () => this.quitting || this.uiBlocking(),
+      dug: () => this.holdFights(),
     });
 
     this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
@@ -204,19 +220,20 @@ export class ForestScene extends Phaser.Scene {
     createWalkAnimations(this);
 
     addFootsteps(this, this.player, level, "forest");
-    addGuideArrow(this, this.player, "forest", () => this.quitConfirm || this.uiBlocking());
+    addGuideArrow(this, this.player, "forest", () => this.quitting || this.uiBlocking());
 
     // falling leaves by day, fireflies by night, rain on wet days; caption
-    // names the day's weather under the area title
-    addAmbient(this, "forest", { caption: true });
+    // names the day's weather under the area title (on a season's turn only
+    // if the sky changed with it)
+    addAmbient(this, "forest", { caption: true, since: turn?.weather ?? back?.weather });
 
     this.spawnMonsters();
 
     this.spawnTreasures();
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
-      // nor under the quit prompt, whose Y would then race the battle's fade
-      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitConfirm) return;
+      // nor on the way to the title, which would then race the battle's fade
+      if (this.encounterCooldown > 0 || this.uiBlocking() || this.quitting) return;
       const r = this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
@@ -228,7 +245,7 @@ export class ForestScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, exit, () => {
       if (!this.exitingForest) this.exitForest();
     });
-    addTownExitSign(this, this.player, FOREST_ENTRY.x, FOREST_ENTRY.y);
+    addTownExitSign(this, this.player, FOREST_ENTRY.x, FOREST_ENTRY.y, !turn && !back);
 
     startWaterAnimation(this, this.layer);
 
@@ -275,21 +292,6 @@ export class ForestScene extends Phaser.Scene {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.qQueued = true;
     });
-    // only while the quit prompt is up: a Y pressed earlier would otherwise
-    // sit queued and answer the next prompt the moment it opens
-    this.keyY = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y);
-    this.keyY.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.yQueued = true;
-    });
-    this.keyN = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N);
-    this.keyN.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.nQueued = true;
-    });
-    this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    this.keyEsc.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-      if (this.quitConfirm && !e.repeat) this.escQueued = true;
-    });
-
     const help = addHelpPopup(
       this,
       [
@@ -307,7 +309,7 @@ export class ForestScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "FIND THE MOSS GOLEM!",
-      () => this.uiBlocking() || this.quitConfirm,
+      () => this.uiBlocking() || this.quitting,
     );
 
     // exit + unopened chests; the golem's clearing is deliberately not marked
@@ -325,6 +327,7 @@ export class ForestScene extends Phaser.Scene {
       ],
       FOREST_TILE_COLORS,
     );
+    if (turn?.mapOpen) this.minimap.toggle();
 
     // canopy shade all day, and a proper night on top of it
     this.night = new NightOverlay(this, 0.15, 0.4);
@@ -333,25 +336,17 @@ export class ForestScene extends Phaser.Scene {
     this.bestiary = new BestiaryUI(this);
     this.achievementsUI = new AchievementsUI(this);
     this.questLog = new QuestLog(this);
-    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as Y
-    this.settingsUI = new SettingsUI(this, () => {
-      this.quitConfirm = this.yQueued = true;
-      this.quitConfirmText.setVisible(true);
-    });
+    // the quit question (askQuitToTitle)
+    this.dialogue = new DialogueBox(this, []);
+    // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
+    this.settingsUI = new SettingsUI(this, () => this.quit());
 
-    // under a panel or the help the map's tags go, toasts wait
+    // under a panel, the quit question or the help the map's tags go, toasts wait
     whilePanelUp(this, () => this.uiBlocking());
 
     this.hud = new StatusHud(this);
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
-
-    this.quitConfirmText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", retroStyle(8, "#ff5555"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(300)
-      .setVisible(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
@@ -361,10 +356,10 @@ export class ForestScene extends Phaser.Scene {
       this.achievementsUI.destroy();
       this.questLog.destroy();
       this.settingsUI.destroy();
+      this.dialogue.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
-      this.quitConfirmText.destroy();
       this.touch?.destroy();
     });
   }
@@ -414,47 +409,19 @@ export class ForestScene extends Phaser.Scene {
       if (!this.uiBlocking()) this.minimap.toggle();
     }
 
-    if (this.qQueued) {
-      this.qQueued = false;
-      // never over an open panel: the prompt's ESC would close that panel too
-      if (!this.uiBlocking()) {
-        this.quitConfirm = true;
-        this.quitConfirmText.setText("QUIT TO TITLE? Y/N").setVisible(true);
-        Sfx.error();
-      }
+    // saved and on the way to the title (quit), or fading out to the new
+    // season (turnSeason): nothing else moves. The roamers are kept to their
+    // boxes, as under a panel: left on their last velocity they walked off
+    // across the map until the title came
+    if (this.quitting || this.turningSeason) {
+      this.updateRoamers(delta);
+      return;
     }
 
-    if (this.quitConfirm) {
-      // kept to their boxes, as under a panel: left on their last velocity
-      // they walked off across the map until the prompt closed
-      this.updateRoamers(delta);
-      if (this.quitting) return;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      // a panel key pressed while the prompt is up would otherwise open
-      // that panel the moment the prompt is dismissed
-      this.ctrlSQueued = this.mQueued = this.iQueued = this.bQueued = this.aQueued = this.uQueued = this.oQueued = this.tQueued = false;
-      if (this.yQueued) {
-        this.yQueued = false;
-        // Save here rather than leaning on the SHUTDOWN handler: that one runs
-        // after the toast subscription is torn down, so the player never sees
-        // the confirmation. The SHUTDOWN save then just repeats this one.
-        this.quitting = true;
-        // the quit prompt itself reports the save, so drop the toast that
-        // GameState.save() would otherwise stack on top of it
-        this.unsubSaved();
-        GameState.save();
-        this.quitConfirmText.setText("SAVED").setColor("#4ade80");
-        this.time.delayedCall(QUIT_SAVE_DELAY, () => this.scene.start("Title"));
-        return;
-      }
-      if (this.nQueued || this.escQueued) {
-        this.nQueued = false;
-        this.escQueued = false;
-        this.quitConfirm = false;
-        this.quitConfirmText.setVisible(false);
-      }
-      return;
+    if (this.qQueued) {
+      this.qQueued = false;
+      // never over an open panel: the question's ESC would close that panel too
+      if (!this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
     }
 
     // Items and the bestiary are reachable here too now; without them a low-HP
@@ -488,8 +455,23 @@ export class ForestScene extends Phaser.Scene {
       this.achievementsUI.update();
       this.questLog.update();
       this.settingsUI.update();
+      this.dialogue.update();
       this.updateRoamers(delta);
       return;
+    }
+
+    // The clock moved the forest into a new season while the hero was in it:
+    // not under a panel (above), nor on the way out or into a fight
+    // (encounterCooldown covers its fade, and the entry grace). A new look of
+    // the ground (seasonLook) builds the forest again; spring into summer,
+    // the same ground, needs nothing (the air turns its sky itself).
+    const season = seasonToday();
+    if (season !== this.season && !this.exitingForest && this.encounterCooldown <= 0) {
+      if (seasonLook("forest", season) !== seasonLook("forest", this.season)) {
+        this.turnSeason();
+        return;
+      }
+      this.season = season;
     }
 
     if (this.iQueued) {
@@ -552,7 +534,7 @@ export class ForestScene extends Phaser.Scene {
     this.updateRoamers(delta);
     this.night.update();
     this.minimap.update();
-    this.checkEncounter(delta);
+    this.checkEncounter(delta, moving);
   }
 
   private updateEquipOverlays(): void {
@@ -566,8 +548,15 @@ export class ForestScene extends Phaser.Scene {
       this.achievementsUI.isActive() ||
       this.questLog.isActive() ||
       this.settingsUI.isActive() ||
+      this.dialogue.isActive() ||
       helpOpen(this)
     );
+  }
+
+  // YES to the quit question, or the settings' QUIT chip on touch
+  private quit(): void {
+    this.quitting = true;
+    saveAndQuit(this);
   }
 
   private toggleStatus(): void {
@@ -581,6 +570,31 @@ export class ForestScene extends Phaser.Scene {
     this.hud.update();
   }
 
+  // The skin, the border trees, the footprints, the air (Ambient) and the
+  // minimap's colours are all picked in create(), so rather than repaint each,
+  // fade out and build the forest again with the hero where they stand. The
+  // roamers are rolled afresh, as after any fight.
+  private turnSeason(): void {
+    this.turningSeason = true;
+    // the roamers still wander (update) and would start a fight on contact
+    this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+    this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
+    this.cameras.main.fadeOut(SEASON_FADE, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.restart({
+        // the sky as it was under the old season's odds: weatherToday() has
+        // already turned with the clock
+        turn: {
+          at: { x: this.player.x, y: this.player.y },
+          mapOpen: this.minimap.isVisible(),
+          weather: weatherOn(econDay(), "forest", this.season),
+        },
+      });
+    });
+  }
+
   private exitForest(): void {
     if (this.exitingForest) return;
     this.exitingForest = true;
@@ -592,7 +606,14 @@ export class ForestScene extends Phaser.Scene {
     });
   }
 
-  private checkEncounter(delta: number): void {
+  // A find (a chest, a treasure map's dig) gets the grace a fight's return
+  // does, so a roamer can't drag the hero into a fight before the toast that
+  // says what came out has been read.
+  private holdFights(): void {
+    this.encounterCooldown = Math.max(this.encounterCooldown, ENTRY_GRACE);
+  }
+
+  private checkEncounter(delta: number, moving: boolean): void {
     if (this.encounterCooldown > 0) {
       // A scene transition hands the first frame a delta as large as the whole
       // load (~1.2s), which drained the entry grace in a single tick and
@@ -600,6 +621,9 @@ export class ForestScene extends Phaser.Scene {
       this.encounterCooldown -= Math.min(delta, MAX_COOLDOWN_STEP);
       return;
     }
+    // only while the hero walks: stood still (by a chest, over a map,
+    // deciding the way) a fight still came every ~17s
+    if (!moving) return;
     const nearExit =
       Math.abs(this.player.x - FOREST_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - FOREST_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
@@ -669,6 +693,7 @@ export class ForestScene extends Phaser.Scene {
     if (GameState.openedTreasures.includes(id)) return;
     GameState.openedTreasures.push(id);
     chest.setTexture("chest-open");
+    this.holdFights();
     Sfx.chest();
     const gold = GameState.gainGold(15 + Math.floor(Math.random() * 16));
     let loot = "";
@@ -730,6 +755,7 @@ export class ForestScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc");
+      noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("forest") });
       this.scene.start("Battle", { enemy: kind, from: "Forest" });
     });
   }
