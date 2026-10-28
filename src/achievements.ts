@@ -139,10 +139,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: "collector",
     name: "COLLECTOR",
     desc: "Catch every catchable monster",
-    ...atLeast(
-      counted(CATCHABLE, (def) => GameState.caught.includes(def.name)),
-      CATCHABLE.length,
-    ),
+    ...atLeast(() => GameState.caughtSpecies(), CATCHABLE.length),
   },
   {
     id: "boss-slayer",

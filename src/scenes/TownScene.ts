@@ -2009,7 +2009,7 @@ export class TownScene extends Phaser.Scene {
       return;
     }
     if (!q.bestiaryReward) {
-      const caught = CATCHABLE.filter((e) => GameState.caught.includes(e.name)).length;
+      const caught = GameState.caughtSpecies();
       this.dialogue.start(
         ["The forest is at peace.", `You have caught ${caught} of`, `${CATCHABLE.length} beasts. Catch them`, "all and I will reward you!"],
         "ELDER",

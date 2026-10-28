@@ -109,7 +109,9 @@ export class EndingScene extends Phaser.Scene {
     // The in-game day, 1-based as on the title's save cards, not hours: the
     // clock runs at TIME SPEED and jumps a night's sleep, so the "PLAY TIME"
     // it used to read started at 6H and was never time played. The widest
-    // row is still the NAME one, 22 x 32 = 704px (x 288..992).
+    // row is still the NAME one, 22 x 32 = 704px (x 288..992). Left-aligned
+    // inside a centered block, as the epilogue's: centred row by row, rows of
+    // unlike length started at unlike x and the padded values didn't line up.
     const stats = [
       `NAME      ${GameState.player.name}`,
       `LEVEL     ${GameState.player.level}`,
@@ -120,7 +122,6 @@ export class EndingScene extends Phaser.Scene {
     const summary = this.add
       .text(GAME_WIDTH / 2, 330, stats.join("\n"), retroStyle(8, "#f5f5f5"))
       .setOrigin(0.5)
-      .setAlign("center")
       .setLineSpacing(14)
       .setAlpha(0);
 
@@ -185,7 +186,7 @@ export class EndingScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    const caught = CATCHABLE.filter((e) => GameState.caught.includes(e.name)).length;
+    const caught = GameState.caughtSpecies();
     // checked as well as claimed: the field scenes claim on a once-a-second
     // tick, so DRAKE SLAYER (earned by the fight that led here) isn't in
     // GameState.achievements yet — reading check() leaves the claim, and its

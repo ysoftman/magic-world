@@ -115,10 +115,12 @@ export function questSteps(q: QuestState, caught: readonly string[] = GameState.
   ];
 }
 
-// the HUD's word for a boss still to fell, and where it lairs
+// the HUD's word for a boss still to fell, and where it lairs. The GLACIER
+// GOLEM (13 glyphs) goes by its first word: "FIND GLACIER" is 12, past the
+// slot's 10, and "ICE GOLEM" named a monster the game doesn't have.
 const BOSS_GOAL: Array<[QuestStepId, string, FieldRegion]> = [
   ["moss", "FIND GOLEM", "forest"],
-  ["glacier", "ICE GOLEM", "snow"],
+  ["glacier", "GLACIER", "snow"],
   ["drake", "FIND DRAKE", "volcano"],
 ];
 // a HUNTER job's slot word and its hunting ground; a catch can happen

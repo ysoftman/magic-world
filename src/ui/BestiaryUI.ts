@@ -398,7 +398,7 @@ export class BestiaryUI {
     // CAUGHT is scored against CATCHABLE — bosses appear in the list but can
     // never be caught, so counting them would make 100% unreachable.
     const seen = SPECIES.filter((def) => GameState.seenMonsters.includes(def.name)).length;
-    const caught = CATCHABLE.filter((def) => GameState.caught.includes(def.name)).length;
+    const caught = GameState.caughtSpecies();
     const title = GameState.bestiaryTitle();
     const bonus = GameState.bestiaryBonus();
     // "BOND+n ATK" lost its " ATK" to make room for the skill: at 24px a

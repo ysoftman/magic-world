@@ -139,12 +139,15 @@ export class DialogueBox {
     for (const code of ["RIGHT", "DOWN", "L", "J"] as const) {
       kb.addKey(Phaser.Input.Keyboard.KeyCodes[code]).on(Phaser.Input.Keyboard.Events.DOWN, step(1));
     }
-    // Y takes the first choice and N the last, as the old Y/N prompts did
+    // Y takes the first choice and N the last, as the old Y/N prompts did:
+    // also while the question's own page is still typing, which they cut
+    // short. Dropped there, an N pressed before the choices showed left the
+    // question up, and the ABYSS's stair took that for STAY.
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.Y).on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      if (this.choosing) this.pickQueued = 0;
+      if (this.choosing || this.typingQuestion()) this.pickQueued = 0;
     });
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.N).on(Phaser.Input.Keyboard.Events.DOWN, () => {
-      if (this.choosing) this.pickQueued = this.choices.length - 1;
+      if (this.choosing || this.typingQuestion()) this.pickQueued = this.choices.length - 1;
     });
     const choiceX = this.touch ? TOUCH_CHOICE_X : 48;
     for (let i = 0; i < MAX_CHOICES; i++) {
@@ -168,7 +171,8 @@ export class DialogueBox {
   /**
    * Like start(), then a row of 2-3 choices under the last page: LEFT/RIGHT
    * (or UP/DOWN, H/J/K/L) moves, Z/ENTER/SPACE takes the marked one, Y the
-   * first and N the last; ESC, on any page, takes the last, so put the "no"
+   * first and N the last (on the last page even before it has finished
+   * typing); ESC, on any page, takes the last, so put the "no"
    * there — or `escPick`, when the safe answer must also be the marked one
    * (the first) and so can't be last. On touch the d-pad's < and > move and
    * a tap on a choice takes it. A Z or tap in the first CHOICE_GUARD_MS is
@@ -285,6 +289,14 @@ export class DialogueBox {
       this.tapQueued = null;
       return;
     }
+    // a Y/N while the question's page types: the rest of it would only be
+    // read past, so the answer stands now
+    if (this.pickQueued !== null) {
+      this.typing = false;
+      this.timer?.remove();
+      this.pick(this.pickQueued);
+      return;
+    }
     if (!this.advanceQueued) return;
     this.advanceQueued = false;
 
@@ -303,12 +315,17 @@ export class DialogueBox {
     }
   }
 
+  // a question's last page, still typing (Y/N are already answers there)
+  private typingQuestion(): boolean {
+    return this.active && this.typing && this.choices.length > 0 && this.index + this.pageSize >= this.lines.length;
+  }
+
   // the last page of a question has finished typing: show its choices
   private showChoicesIfLast(): void {
     if (this.choices.length === 0 || this.index + this.pageSize < this.lines.length) return;
     this.choosing = true;
     this.choiceStep = 0;
-    this.pickQueued = null;
+    // pickQueued is left as it is: a Y/N pressed while this page typed
     this.tapQueued = null;
     this.confirmAfter = this.scene.time.now + CHOICE_GUARD_MS;
     // < and > back for the choices (close() brings back the rest)

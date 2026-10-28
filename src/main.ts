@@ -8,6 +8,7 @@ import Phaser from "phaser";
 import { Sfx } from "./audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 import { GameState } from "./gameState";
+import { installKeyboardQueueFix } from "./keyboardQueueFix";
 import { loadMapOverride } from "./levels";
 import { AbyssScene } from "./scenes/AbyssScene";
 import { BattleScene } from "./scenes/BattleScene";
@@ -57,5 +58,6 @@ const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
 Promise.race([fontReady, timeout]).finally(() => {
   GameState.loadSettings();
   loadMapOverride();
+  installKeyboardQueueFix();
   startGamepad(new Phaser.Game(config));
 });

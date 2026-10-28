@@ -146,13 +146,19 @@ export class TitleScene extends Phaser.Scene {
     });
 
     const prompt = this.add.text(GAME_WIDTH / 2, 592, "", retroStyle(8, "#ffffff")).setOrigin(0.5);
-    this.tweens.add({
-      targets: prompt,
-      alpha: 0,
-      duration: 500,
-      yoyo: true,
-      repeat: -1,
-    });
+    // The line blinks only as the menu's own (PRESS ENTER, TAP TO START); a
+    // question, a refusal or the DAMAGED warning put in it holds still.
+    // Blinking, it was gone half the time, and "RESTORE QA2 LV25? Y/N" is the
+    // one place that says which save comes back.
+    let blinking = false;
+    const blink = (on: boolean) => {
+      if (on === blinking) return;
+      blinking = on;
+      this.tweens.killTweensOf(prompt);
+      prompt.setAlpha(1);
+      if (on) this.tweens.add({ targets: prompt, alpha: 0, duration: 500, yoyo: true, repeat: -1 });
+    };
+    blink(true);
 
     const settings = new SettingsUI(this);
     this.settingsUI = settings;
@@ -259,6 +265,7 @@ export class TitleScene extends Phaser.Scene {
       renderCards();
       const hasSave = GameState.hasSave();
       const damaged = isSaveDamaged();
+      blink(!damaged);
       prompt
         .setText(
           damaged
@@ -297,6 +304,7 @@ export class TitleScene extends Phaser.Scene {
       showMenu();
       Sfx.error();
       prompt.setText(why).setColor("#ff5555");
+      blink(false);
     };
     const storageFull = () => refuse(`STORAGE FULL - SLOT ${GameState.saveSlot} KEPT`);
 
@@ -314,6 +322,7 @@ export class TitleScene extends Phaser.Scene {
       mode = next;
       Sfx.error();
       prompt.setText(question).setColor("#ff5555");
+      blink(false);
       setButtons([
         [
           [yesLabel, yes],

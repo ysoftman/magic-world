@@ -221,7 +221,11 @@ export class StatusHud {
     this.setSegment(4, `G ${GameState.gold}`, COLORS.gold);
     this.setSegment(5, clock(), COLORS.time);
     this.setSegment(6, questLabel(q), COLORS.quest);
-    this.setSegment(7, `CAUGHT ${GameState.caught.length}`, COLORS.caught);
+    // species caught, counted as the bestiary's "CAUGHT n/13" counts them —
+    // the number of catches (repeats and rare ones too) read 15 beside its
+    // 12/13. No "/13" here: "CAUGHT 13/13" (240px from x=248) would run
+    // into EXP at 452; "CAUGHT 13" ends at 428
+    this.setSegment(7, `CAUGHT ${GameState.caughtSpecies()}`, COLORS.caught);
     this.setSegment(8, "EXP", COLORS.exp);
     const meal = GameState.meal;
     this.setSegment(9, meal ? `${MEALS[meal.key].tag} ${meal.left}` : "", COLORS.meal);

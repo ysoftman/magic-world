@@ -111,7 +111,7 @@ function objectives(): Objective[] {
   // the ELDER neither mentions nor pays the bestiary reward until the forest
   // reward is handed over, even if every beast is already caught
   if (q.forestReward) {
-    const caught = CATCHABLE.filter((e) => GameState.caught.includes(e.name)).length;
+    const caught = GameState.caughtSpecies();
     list.push({
       title: "CATCH EVERY BEAST",
       done: q.bestiaryReward,

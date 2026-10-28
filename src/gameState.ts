@@ -720,10 +720,18 @@ export const GameState = {
     this.gold += added;
     return added;
   },
+  // The CATCHABLE species caught (monsters.ts): what the bestiary's CAUGHT,
+  // the HUD's, the COLLECTOR achievement and the completion below all count.
+  // Not every name in `caught`: the rare jackpots (GOLDEN SLIME and the like)
+  // are caught but never required, and counting them gave a late save 15/13,
+  // ATK+5 with 12 of 13 caught and MONSTER MASTER from 10.
+  caughtSpecies(): number {
+    return CATCHABLE.filter((e) => this.caught.includes(e.name)).length;
+  },
   // bestiary completion rewards: +1 ATK/+1 DEF per 20% of catchable species
   // caught, plus a rank title shown in the bestiary
   bestiaryCompletion(): number {
-    return new Set(this.caught).size / CATCHABLE.length;
+    return this.caughtSpecies() / CATCHABLE.length;
   },
   bestiaryBonus(): number {
     return Math.floor(this.bestiaryCompletion() * 5);
