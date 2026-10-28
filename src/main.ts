@@ -12,6 +12,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 import { GameState } from "./gameState";
 import { installKeyboardQueueFix } from "./keyboardQueueFix";
 import { loadMapOverride } from "./levels";
+import { watchTextResolution } from "./pixelart";
 import { AbyssScene } from "./scenes/AbyssScene";
 import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
@@ -77,5 +78,7 @@ Promise.race([fontReady, timeout]).finally(() => {
   GameState.loadSettings();
   loadMapOverride();
   installKeyboardQueueFix();
-  startGamepad(new Phaser.Game(config));
+  const game = new Phaser.Game(config);
+  watchTextResolution(game);
+  startGamepad(game);
 });

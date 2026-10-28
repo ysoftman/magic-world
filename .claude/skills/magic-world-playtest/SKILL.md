@@ -42,6 +42,7 @@ finally:
 
 | 함수 | 하는 일 |
 | --- | --- |
+| `Game(..., viewport=(1280, 720), dpr=1)` | 창 크기와 장치 배율. 도중 변경은 `g.page.set_viewport_size(...)`, DPR 은 CDP `Emulation.setDeviceMetricsOverride`(`g.ctx.new_cdp_session(g.page)`) |
 | `boot(save=None, slot=1, settings=None)` | 타이틀까지 띄움. save 를 주면 localStorage `magic-world-save-<slot>` 에 넣고 다시 불러옴(형식은 `GameState.save()`) |
 | `new_game(name)` | 빈 슬롯에서 Z → 이름 입력 → Enter → 외형 Z → Town |
 | `gs(body)` | `G` = 게임의 GameState 로 JS 실행, `return` 값을 돌려줌 |

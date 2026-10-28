@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { BODY_FONT, GAME_HEIGHT, GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
+import { BODY_FONT, GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
 
 export interface PixelMap {
   [ch: string]: number;
@@ -11,21 +11,49 @@ export interface PixelMap {
 // and #444444 (1.97:1) it replaces were the UI's least legible lines.
 export const DIM_TEXT = "#808096";
 
-// Text is baked at the scale the screen shows the 1280x720 canvas at (device
-// pixels per game pixel, rounded up, 1 to 3), then drawn back down with the
-// game's nearest filtering. Baked at 1, a glyph's anti-aliased grey edge was
-// what the FIT scaling blew up into the blur: on a MacBook (DPR2 1440x900,
-// 2.25x) the in-between pixels of a 20px line went from 24.7% to 0% at 3,
-// 33.8% to 10.7% for 24px, at no FPS cost. The price is texture memory, the
-// square of it: the town's 431 texts take 3.9MB at 1, 15MB at 2, ~35MB at 3,
-// hence the cap. Read once at load — a window resized later keeps it. Every
-// Text goes through retroStyle; one styled by hand must use this too.
+// Text is baked bigger than it's drawn (TEXT_RESOLUTION, 1 to 3), then drawn
+// down into the 1280x720 canvas with the game's nearest filtering. The canvas
+// stays 1280x720 on any screen, so a bigger bake never maps onto device
+// pixels; what it buys is cleaner samples for the nearest filter, fewer of a
+// glyph's anti-aliased grey edge pixels. Those show once the screen blows a
+// game pixel up to 2 device pixels or more: on a MacBook (DPR 2, the display
+// snapped to exactly 2x) a 20px line keeps 8.5% in-between pixels baked at 3,
+// 17.8% at 2, 30.2% at 1. So from 2x up it's the cap, and below that the
+// scale rounded up. The price is texture memory, the square of it: the
+// town's 431 texts took 3.9MB at 1, 15MB at 2, ~35MB at 3, hence the cap.
+// Every Text goes through retroStyle or bodyStyle; one styled by hand must
+// use this too.
 const TEXT_RESOLUTION_MAX = 3;
-export const TEXT_RESOLUTION = ((): number => {
-  if (typeof window === "undefined") return 1;
-  const shown = (window.devicePixelRatio || 1) * Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
-  return Math.min(TEXT_RESOLUTION_MAX, Math.max(1, Math.ceil(shown - 1e-6)));
-})();
+export let TEXT_RESOLUTION = 1;
+
+// Every Text in `list`, and in the containers in it, baked again at `n`. By
+// type name: this file keeps clear of Phaser's runtime, as check:art loads it.
+function rebakeTexts(list: readonly Phaser.GameObjects.GameObject[], n: number): void {
+  for (const o of list) {
+    if (o.type === "Text") (o as Phaser.GameObjects.Text).setResolution(n);
+    else if (o.type === "Container") rebakeTexts((o as Phaser.GameObjects.Container).list, n);
+  }
+}
+
+/**
+ * Keeps TEXT_RESOLUTION at what the screen shows the game at: a resized
+ * window, the browser's zoom or a move to a screen of another pixel density
+ * re-bakes the Text up in every scene, and new Text takes the new value.
+ * Before this it was read once at load, from the window rather than the
+ * snapped display, and kept for good. Checked every frame, two numbers: a
+ * density change alone resizes nothing, and its media query's change event
+ * never came in headless Chrome, so nothing here could be shown to catch it.
+ */
+export function watchTextResolution(game: Phaser.Game): void {
+  // Phaser.Core.Events.POST_STEP: after the scale manager's resize, before the render
+  game.events.on("poststep", () => {
+    const shown = (window.devicePixelRatio || 1) * (game.scale.displaySize.width / GAME_WIDTH);
+    const n = shown >= 2 - 1e-6 ? TEXT_RESOLUTION_MAX : Math.max(1, Math.ceil(shown - 1e-6));
+    if (n === TEXT_RESOLUTION) return;
+    TEXT_RESOLUTION = n;
+    for (const scene of game.scene.getScenes(false)) rebakeTexts(scene.children.list, n);
+  });
+}
 
 export function retroStyle(size = 8, color = "#ffffff"): Phaser.Types.GameObjects.Text.TextStyle {
   return {

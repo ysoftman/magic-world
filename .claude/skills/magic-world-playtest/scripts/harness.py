@@ -28,9 +28,9 @@ from playwright.sync_api import sync_playwright
 URL = "http://localhost:5199/"
 OUT = "/tmp/pwcheck/playtest"
 
-# main.ts ends with this line (src/main.ts); the patch keeps it and adds the handles
-HOOK = re.compile(r"startGamepad\(new Phaser\.Game\(config\)\);?")
-PATCH = "window.__game = new Phaser.Game(config); window.__GS = GameState; startGamepad(window.__game);"
+# the game's construction in src/main.ts; the patch keeps it and adds the handles
+HOOK = re.compile(r"new Phaser\.Game\(config\)")
+PATCH = "(window.__GS = GameState, window.__game = new Phaser.Game(config))"
 
 INIT_NO_HMR = """(() => {
   const Real = window.WebSocket;
@@ -109,12 +109,15 @@ def _browser_kwargs(kind: str) -> dict:
 
 
 class Game:
-    def __init__(self, name: str = "run", touch: bool = False, pad: bool = False, browser: str = "chrome", out: str = OUT):
+    def __init__(
+        self, name: str = "run", touch: bool = False, pad: bool = False, browser: str = "chrome", out: str = OUT,
+        viewport: tuple[int, int] = (1280, 720), dpr: float = 1,
+    ):
         self.name, self.out = name, out
         Path(out).mkdir(parents=True, exist_ok=True)
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch(headless=True, **_browser_kwargs(browser))
-        opts: dict = {"viewport": {"width": 1280, "height": 720}}
+        opts: dict = {"viewport": {"width": viewport[0], "height": viewport[1]}, "device_scale_factor": dpr}
         if touch:
             opts.update(has_touch=True, is_mobile=True)
         self.ctx = self.browser.new_context(**opts)
