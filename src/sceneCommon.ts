@@ -7,6 +7,7 @@ import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_T
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { DialogueBox } from "./ui/DialogueBox";
+import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
 import type { Weather } from "./weather";
 
@@ -728,6 +729,19 @@ export class FieldKeys {
       const muted = Sfx.toggleMuted();
       showToast(this.scene, muted ? "SOUND: OFF" : "SOUND: ON", this.toastY);
     }
+  }
+
+  /** T: the minimap, unless `blocked()` — a panel, a talk or the help is up. */
+  takeMapKey(minimap: Minimap, blocked: () => boolean): void {
+    if (this.take("T") && !blocked()) minimap.toggle();
+  }
+
+  /**
+   * Q: the quit question (askQuitToTitle), never while `blocked()` — over an
+   * open panel the question's ESC would close that panel too.
+   */
+  takeQuitKey(dialogue: DialogueBox, blocked: () => boolean, quit: () => void): void {
+    if (this.take("Q") && !blocked()) askQuitToTitle(dialogue, quit);
   }
 }
 

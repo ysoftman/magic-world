@@ -58,7 +58,6 @@ import { objectiveLine } from "../objective";
 import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
 import {
   addExitArrow,
-  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -1380,10 +1379,14 @@ export class TownScene extends Phaser.Scene {
       return;
     }
 
-    // never over an open panel: the question's ESC would close that panel too
-    if (this.fieldKeys.take("Q") && !this.uiBlocking() && !this.enteringDungeon) askQuitToTitle(this.dialogue, () => this.quit());
+    // the question waits as under a panel, and once the walk into the cave has begun its fade
+    this.fieldKeys.takeQuitKey(
+      this.dialogue,
+      () => this.uiBlocking() || this.enteringDungeon,
+      () => this.quit(),
+    );
 
-    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
+    this.fieldKeys.takeMapKey(this.minimap, () => this.uiBlocking());
 
     if (this.uiBlocking()) {
       this.zQueued = false;

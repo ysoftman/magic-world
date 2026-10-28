@@ -26,7 +26,6 @@ import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixela
 import {
   addBorderDressing,
   addTownExitLabel,
-  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -392,7 +391,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.fieldKeys.takeSystemKeys(this.hud);
 
-    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
+    this.fieldKeys.takeMapKey(this.minimap, () => this.uiBlocking());
 
     // saved and on the way to the title (quit): nothing else moves. The
     // roamers are kept to their boxes, as under a panel: left on their last
@@ -402,8 +401,11 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    // never over an open panel: the question's ESC would close that panel too
-    if (this.fieldKeys.take("Q") && !this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
+    this.fieldKeys.takeQuitKey(
+      this.dialogue,
+      () => this.uiBlocking(),
+      () => this.quit(),
+    );
 
     // Items and the bestiary are reachable here too now; without them a low-HP
     // run through the cave or forest had no way to drink a potion outside of a

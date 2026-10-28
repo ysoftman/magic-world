@@ -23,7 +23,6 @@ import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } fr
 import {
   addBorderDressing,
   addTownExitLabel,
-  askQuitToTitle,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -547,7 +546,7 @@ export class AbyssScene extends Phaser.Scene {
 
     this.fieldKeys.takeSystemKeys(this.hud);
 
-    if (this.fieldKeys.take("T") && !this.uiBlocking()) this.minimap.toggle();
+    this.fieldKeys.takeMapKey(this.minimap, () => this.uiBlocking());
 
     // saved and on the way to the title (quit): nothing else moves. The
     // roamers are kept to their boxes, as under a panel: left on their last
@@ -557,8 +556,11 @@ export class AbyssScene extends Phaser.Scene {
       return;
     }
 
-    // never over an open panel: the question's ESC would close that panel too
-    if (this.fieldKeys.take("Q") && !this.uiBlocking()) askQuitToTitle(this.dialogue, () => this.quit());
+    this.fieldKeys.takeQuitKey(
+      this.dialogue,
+      () => this.uiBlocking(),
+      () => this.quit(),
+    );
 
     if (this.uiBlocking()) {
       if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
