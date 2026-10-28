@@ -918,7 +918,7 @@ export class TownScene extends Phaser.Scene {
     // An edited map silently outranks the code, which reads as "my changes
     // didn't deploy" — say so on screen instead, and say how to undo it.
     if (hasMapOverride()) {
-      this.add
+      const note = this.add
         // top right, under the HUD: the top left is where the HOME bubble
         // opens and the bottom corners are the minimap and the key hints.
         // Below a two-line toast (y 100..152): level with the toast line, a
@@ -930,6 +930,12 @@ export class TownScene extends Phaser.Scene {
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(120);
+      // A burst of achievements wraps to three lines or more (y 100..172 for
+      // three, past this line's top at 160), with no bound on how many, so
+      // like the HOME bubble it steps aside while a toast is up (~1.3s).
+      const stepAside = () => note.setVisible(!toastShowing(this));
+      this.events.on(Phaser.Scenes.Events.UPDATE, stepAside);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.UPDATE, stepAside));
     }
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
