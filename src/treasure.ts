@@ -235,6 +235,34 @@ export function rollTreasureMap(maps: TreasureMap[], quest: QuestState, rand: ()
   return map;
 }
 
+/**
+ * Moves each held map whose X no longer passes spotsFor() to a cell that
+ * does, in the same region and clear of the other maps as a new one would
+ * be. The map editor (F2) rewrites the town, and an X it walled in, flooded
+ * or paved over could never be dug. Run by every field scene's
+ * TreasureDigger, so on ground that is final, edits and all. The new cell is
+ * the allowed one nearest the old (straight-line; a tie goes to the first in
+ * spotsFor's row order): a hero who saw the X before the edit finds it close
+ * by, and as nothing is random a reload before the next save moves the map to
+ * the same place again. A map with nowhere left to go (an edit that cut its
+ * region off from the way in) keeps its X rather than being lost, and moves
+ * once the ground is mended. Returns how many moved.
+ */
+export function resettleTreasureMaps(maps: TreasureMap[]): number {
+  let moved = 0;
+  for (const map of maps) {
+    const spots = spotsFor(
+      map.region,
+      maps.filter((m) => m !== map),
+    );
+    if (spots.length === 0 || spots.some(([x, y]) => x === map.tx && y === map.ty)) continue;
+    const away = ([x, y]: [number, number]): number => (x - map.tx) ** 2 + (y - map.ty) ** 2;
+    [map.tx, map.ty] = spots.reduce((best, s) => (away(s) < away(best) ? s : best));
+    moved++;
+  }
+  return moved;
+}
+
 // shop gear a dig can turn up, first one not yet owned; once all are, a HI-POTION
 const GEAR_FINDS = ["sword", "shield", "ironSword", "ironShield"] as const;
 const GEAR_NAME: Record<(typeof GEAR_FINDS)[number], string> = {
@@ -289,8 +317,9 @@ export function digUp(map: TreasureMap, state: DigState, rand: () => number = Ma
 
 // A save from before treasure maps holds none; an imported or hand-edited one
 // keeps only well-formed maps to a known region, inside its grid, at most
-// MAX_MAPS. The cell itself isn't re-judged: a map is only ever made by
-// spotsFor(), and a later map change shouldn't throw one away.
+// MAX_MAPS. The cell itself isn't re-judged here: a later map change
+// shouldn't throw one away, and resettleTreasureMaps() moves an X the ground
+// no longer allows.
 export function loadTreasureMaps(data: unknown): TreasureMap[] {
   if (!Array.isArray(data)) return [];
   const out: TreasureMap[] = [];

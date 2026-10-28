@@ -4,7 +4,16 @@ import { PIXEL } from "../config";
 import { GameState } from "../gameState";
 import { SOLID, T_LAVA_A, T_LAVA_B, T_PATH, T_SOIL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { makeTexture, showToast } from "../pixelart";
-import { DIG_RADIUS, digUp, HINT_RADIUS, MAX_MAPS, REGIONS, type TreasureMap, type TreasureRegion } from "../treasure";
+import {
+  DIG_RADIUS,
+  digUp,
+  HINT_RADIUS,
+  MAX_MAPS,
+  REGIONS,
+  resettleTreasureMaps,
+  type TreasureMap,
+  type TreasureRegion,
+} from "../treasure";
 
 const GLINT_KEY = "treasure-glint";
 // a small four-point twinkle, pale gold, drawn blocky (no Scale2x)
@@ -44,6 +53,11 @@ export class TreasureDigger {
     this.region = region;
     this.hero = hero;
     this.toastY = opts.toastY;
+    this.dug = opts.dug;
+    // the ground is final now, a map edit included (closing the editor
+    // restarts the scene): move any X it no longer allows, in every region,
+    // so the item window's charts agree too
+    resettleTreasureMaps(GameState.treasureMaps);
     if (!scene.textures.exists(GLINT_KEY)) makeTexture(scene, GLINT_KEY, GLINT, GLINT_PALETTE, PIXEL);
     for (let i = 0; i < MAX_MAPS; i++) this.glints.push(scene.add.image(0, 0, GLINT_KEY).setDepth(GLINT_DEPTH).setVisible(false));
     const onUpdate = (time: number): void => this.glow(time);
