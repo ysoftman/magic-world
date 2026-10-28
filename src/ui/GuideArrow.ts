@@ -43,9 +43,12 @@ const RADIUS = 56;
 // HUD while that's up): an NPC or exit label right at the edge is already
 // in sight, and the arrow would only point at what's on screen.
 const IN_VIEW_INSET = 64;
-// above the night shade (90) and its lights and glows (90.4/90.5), under the
-// area title (95), the minimap (96) and the HUD (110)
-const DEPTH = 91;
+// over the hero and the NPCs (10), under the map's labels (11): orbiting at
+// RADIUS it crosses the label of whatever the hero walks past, and at 91 it
+// sat on the letters (a magenta blot over the A of CAVE). Under the labels it
+// is also under the night shade (90), so it dims with the map after dark,
+// as the labels do.
+const DEPTH = 10.5;
 // faint and breathing, like the minimap's ring (900ms each way)
 const ALPHA_LOW = 0.4;
 const ALPHA_HIGH = 0.8;

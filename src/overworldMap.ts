@@ -43,7 +43,7 @@ export const OVERWORLD_MAP = {
     FISH_POS: { x: 9 * T + T / 2, y: 2 * T + T / 2 },
     FISH_SIGN_POS: { x: 9 * T + T / 2, y: 1 * T + T / 2 },
     FARM_POS: { x: 6 * T + T / 2, y: 2 * T + T / 2 },
-    FARM_SIGN_POS: { x: 4 * T + T / 2, y: 1 * T + T / 2 },
+    FARM_SIGN_POS: { x: 5 * T + T / 2, y: 4 * T + T / 2 },
     FOREST_POS: { x: 27 * T + T / 2, y: 9 * T + T / 2 },
     SNOW_POS: { x: 0 * T + T / 2, y: 16 * T + T / 2 },
     VOLCANO_POS: { x: 25 * T + T / 2, y: 19 * T + T / 2 },

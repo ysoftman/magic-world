@@ -445,6 +445,17 @@ const AREA_TITLE_HOLD_MS = 2600;
 const AREA_TITLE_FADE_MS = 600;
 
 /**
+ * Fades a map tag in once the area title (fadeAreaTitle) has faded out. On
+ * entry the camera is at the top of the map or by the stair the hero came
+ * in on, where a tag there and the title would print over each other;
+ * fading in as the title faded out, both showed half through.
+ */
+export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObjects.Text): void {
+  target.setAlpha(0);
+  scene.tweens.add({ targets: target, alpha: 1, delay: AREA_TITLE_HOLD_MS + AREA_TITLE_FADE_MS, duration: AREA_TITLE_FADE_MS });
+}
+
+/**
  * Floating "TOWN" marker over a sub-map's exit zone, so the way back home is
  * visible from a distance. Sits under the player (depth 10) but over terrain.
  * Every exit is on row 1, so the label is set 8px lower than a tile above the
@@ -454,15 +465,14 @@ const AREA_TITLE_FADE_MS = 600;
  * and the two would print over each other, while the hero is standing right
  * by the exit anyway.
  */
-export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number): void {
+export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titled = true): void {
   const label = scene.add
     .text(x, y - TILE + 8, "TOWN", retroStyle(5, "#ffd166"))
     .setOrigin(0.5, 1)
     .setStroke("#1a1028", 4)
-    .setDepth(9)
-    .setAlpha(0);
+    .setDepth(9);
   scene.tweens.add({ targets: label, y: label.y - 8, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
-  scene.tweens.add({ targets: label, alpha: 1, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+  if (titled) fadeInAfterAreaTitle(scene, label);
 }
 
 /**
@@ -510,18 +520,19 @@ export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () 
  * The way back to town from a field (forest, snow, volcano): the entry path
  * runs out through a gap in the top border, a signpost two tiles west of the
  * entry names it, and addExitArrow marks the gap once the hero is close. The
- * tag fades in as the area title fades out, for the same reason as above.
+ * tag comes in after the area title, as above; with `titled` false (a field
+ * built again round a hero who never left, a fight's or a season's, no title
+ * shown) it is just there.
  */
-export function addTownExitSign(scene: Phaser.Scene, hero: { x: number; y: number }, x: number, y: number): void {
+export function addTownExitSign(scene: Phaser.Scene, hero: { x: number; y: number }, x: number, y: number, titled = true): void {
   const signX = x - 2 * TILE;
   scene.add.image(signX, y, "sign").setDepth(9);
   const tag = scene.add
     .text(signX, y - 48, "TOWN", retroStyle(5, "#ffd166"))
     .setOrigin(0.5)
     .setStroke("#1a1028", 4)
-    .setDepth(11)
-    .setAlpha(0);
-  scene.tweens.add({ targets: tag, alpha: 1, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+    .setDepth(11);
+  if (titled) fadeInAfterAreaTitle(scene, tag);
   // the gap is the two path tiles left of the entry's centre, on row 0
   addExitArrow(scene, hero, x - TILE / 2, TILE / 2, -90);
 }
@@ -601,8 +612,11 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): voi
  * Fades an area's title out a few seconds after entry. With the camera able
  * to rise above the map, the title would otherwise sit over rows 0-1 for good.
  * Timed to leave with Ambient's weather caption beneath it (0.3s in, 2.6s
- * held, 0.3s out) and with the TOWN marker coming in.
+ * held, 0.3s out), and before the TOWN marker comes in. Outlined like that
+ * caption: it lies straight on the map's top rows, and the bare green of THE
+ * FOREST sank into the forest's canopy at night.
  */
 export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text): void {
+  title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
 }

@@ -464,7 +464,9 @@ export class TownScene extends Phaser.Scene {
     this.addSign("BOUNTY_BOARD_POS", BOUNTY_BOARD_POS, "BOUNTY BOARD", "#facc15");
     // fishing dock: signpost on the pond's bank, one tile from the cast spot
     this.addSign("FISH_SIGN_POS", FISH_SIGN_POS, "FISHING", "#38bdf8");
-    // farm field: signpost on the grass beside the plots
+    // farm field: signpost on the grass south of the plots, by the spot the
+    // hero farms from. Beside them on the north row its tag lay under the HOME
+    // bubble, which every new game and continue opens with.
     this.addSign("FARM_SIGN_POS", FARM_SIGN_POS, "FARM", "#a3e635");
 
     // the tilled rows and their fence over the 3x2 soil; FARM_POS is the
@@ -482,13 +484,14 @@ export class TownScene extends Phaser.Scene {
     this.addMapExit("FOREST_POS", FOREST_POS, "FOREST");
 
     // gatekeeper who lets nobody through until the KING SLIME falls: on the
-    // signpost's side of the lane, two tiles further in. Across the lane his
+    // signpost's side of the lane, three tiles further in. Across the lane his
     // tag hung over the hero walking out; this keeps it off the lane and
-    // clear of the sign's.
+    // clear of the sign's. Two tiles in, the tags shared a line 18px apart
+    // (under a glyph, a word space) and read as one: "GUARD FOREST".
     const gate = inwardOf(FOREST_POS);
     this.guardPos = {
-      x: Phaser.Math.Clamp(FOREST_POS.x + gate.dx * 3 * TILE - (gate.dy ? TILE : 0), TILE, (MAP_W - 1) * TILE),
-      y: Phaser.Math.Clamp(FOREST_POS.y + gate.dy * 3 * TILE - (gate.dx ? TILE : 0), TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
+      x: Phaser.Math.Clamp(FOREST_POS.x + gate.dx * 4 * TILE - (gate.dy ? TILE : 0), TILE, (MAP_W - 1) * TILE),
+      y: Phaser.Math.Clamp(FOREST_POS.y + gate.dy * 4 * TILE - (gate.dx ? TILE : 0), TILE * 1.5, (MAP_H - 1) * TILE - TILE * 0.5),
     };
     this.addNpc("FOREST_POS", this.guardPos, "GUARD", 0x67e8f9);
 
@@ -900,8 +903,13 @@ export class TownScene extends Phaser.Scene {
     if (hasMapOverride()) {
       this.add
         // top right, under the HUD: the top left is where the HOME bubble
-        // opens and the bottom corners are the minimap and the key hints
-        .text(GAME_WIDTH - 12, STATUS_HUD_HEIGHT + 10, "MAP EDITED - F2 THEN R TO RESTORE", retroStyle(4, "#ffd166"))
+        // opens and the bottom corners are the minimap and the key hints.
+        // Below a two-line toast (y 100..152): level with the toast line, a
+        // long one ran into it ("MARKET DAY! SHOP PRICES ..." over "MAP
+        // EDITED"). Clear of the touch menu strip (x >= 1222), outlined like
+        // the other text over the map.
+        .text(GAME_WIDTH - 70, STATUS_HUD_TOAST_Y + 60, "MAP EDITED - F2 THEN R TO RESTORE", retroStyle(4, "#ffd166"))
+        .setStroke("#1a1028", 4)
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(120);
@@ -950,7 +958,9 @@ export class TownScene extends Phaser.Scene {
   // colours, and the CAVE's name sat below its entrance instead of above).
   // A name tag above its spot hides under the status HUD when the spot is
   // near the top of the map: the camera clamps there, so it can never scroll
-  // clear. Flip the tag below the spot in that band instead.
+  // clear. Flip the tag below the spot in that band instead. (The camera can
+  // rise to show row 0 under the HUD now, but a tag there sat in the toast
+  // line just under it: FARM and FISHING read into "MARKET DAY! SHOP ...".)
   private labelY(y: number, offset: number): number {
     return y - offset < STATUS_HUD_HEIGHT + 20 ? y + offset : y - offset;
   }
