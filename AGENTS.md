@@ -24,6 +24,36 @@
   쓰지 않고, 끝난 단위와 바꾼 파일을 보고한다. 동시에 같은 파일을 고치는 중이면 리더가 끝난
   단위의 조각만 올린다.
 
+## 에이전트 스킬(Phaser 공식)
+
+Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식 스킬(`phaserjs/phaser` 저장소의
+`skills/`, MIT)을 먼저 불러 참고한다. 실제 사례: `scene.start` 를 data 없이 부르면 이전 data 가
+다시 쓰이는 동작과 Phaser 4.2.1 의 키 큐 재전달 버그를 추측으로 다루다 각각 두 번씩 걸렸다.
+
+| 주제 | 스킬 |
+| --- | --- |
+| 키보드·마우스·터치·게임패드 입력 | `input-keyboard-mouse-touch` |
+| 씬 시작·재시작·data 전달·병렬 씬 | `scenes` |
+| Text 스타일·웹폰트·줄바꿈 | `text-and-bitmaptext` |
+| 화면 배율·FIT·선명도 | `scale-and-responsive` |
+| tween·easing | `tweens` |
+| 텍스처 굽기(RenderTexture/DynamicTexture) | `render-textures` |
+| 필터·후처리 | `filters-and-postfx` |
+| 사운드 | `audio-and-sound` |
+| Phaser 4 새 기능, v3 습관 피하기 | `v4-new-features`, `v3-to-v4-migration` |
+
+- 설치는 저장소 루트에서 아래 명령으로 한다(사용자가 설치한 그대로). 출처와 내용 해시는
+  `skills-lock.json` 에 남는다. `.claude` 가 개인 전역 gitignore 에 걸린 환경이면 스킬 파일은 git 에
+  안 잡히니 체크아웃마다 다시 설치한다(README "Claude Code 스킬(선택)" 절).
+
+  ```bash
+  DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add phaserjs/phaser -a claude-code --copy -y \
+    -s input-keyboard-mouse-touch scenes text-and-bitmaptext scale-and-responsive tweens \
+       render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration
+  ```
+
+- 브라우저로 직접 확인하는 일은 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
+
 ## UI 텍스트가 패널/화면을 벗어나지 않는지 확인
 
 패널·라벨·힌트 문구를 새로 넣거나 고칠 때는 **구현 시점에 폭을 계산해서** 확인한다.

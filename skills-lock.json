@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "audio-and-sound": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/audio-and-sound/SKILL.md",
+      "computedHash": "0ac3d8b80936f93f78e437cdaa8399efa6054f08244d90eb78de7b5f5ddec337"
+    },
+    "filters-and-postfx": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/filters-and-postfx/SKILL.md",
+      "computedHash": "ed35388be4933697fc56db45d68f3f890fc59f55db9ddaba046cf067dd165e60"
+    },
+    "input-keyboard-mouse-touch": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/input-keyboard-mouse-touch/SKILL.md",
+      "computedHash": "dee585dd36d5c96ecb7a0bf49fece4c74fcdd58518723e1ecf17231d5e189ed3"
+    },
+    "render-textures": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/render-textures/SKILL.md",
+      "computedHash": "569e0f6daf751a7b28b3e71a6e1fb94cd1e1bda5a45e88e81c05d3bae5ff336d"
+    },
+    "scale-and-responsive": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/scale-and-responsive/SKILL.md",
+      "computedHash": "a0a25c250fd0e4348c302d2f839a829767626d1dd961babeb9063ccb3849928d"
+    },
+    "scenes": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/scenes/SKILL.md",
+      "computedHash": "3bcf15713cc8dcabe2df26f7eb1fa22b24c0a467a436c35b691ea3baf6677400"
+    },
+    "text-and-bitmaptext": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/text-and-bitmaptext/SKILL.md",
+      "computedHash": "8be79e05d2a6c524894f098d22336f28f49b7e108fe533af61d0b74638f84911"
+    },
+    "tweens": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/tweens/SKILL.md",
+      "computedHash": "58187d8638dd5168b9d78be6d54b82ef57571214c2d17b8ca9b1bdbae484259e"
+    },
+    "v3-to-v4-migration": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/v3-to-v4-migration/SKILL.md",
+      "computedHash": "e59c926ec124da4d9931527b881529a91654a47c27af24a389968211c1d013f6"
+    },
+    "v4-new-features": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/v4-new-features/SKILL.md",
+      "computedHash": "6a4e403e919172172ebb9ad41cc639dc0aeb529fb0a7c86415510bab77e25fde"
+    }
+  }
+}
