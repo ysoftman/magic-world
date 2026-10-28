@@ -4,12 +4,13 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { canCook, cook, INGREDIENTS, type IngredientKey, MEAL_KEYS, MEALS, type MealKey, needsOf } from "../cooking";
 import { GameState } from "../gameState";
 import { mealBattles } from "../home";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // HOME's kitchen (cooking.ts), laid out like the BLACKSMITH's panel. Top to
-// bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph, in a 960 x 480
+// bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph (the effect line
+// and the message in bodyStyle(22), 14px a glyph), in a 960 x 480
 // panel: the title (y+38, y+22..54); the pantry on two lines centered at y+76
 // (y+58..94), the farm's ("CORN 99  BEAN 99  PUMPKIN 99  MOONFLOWER 99", 43 x
 // 16 = 688px) over the pond's ("FISH 99  RARE FISH 99", 336px) — on one line
@@ -19,13 +20,13 @@ import { isTouchDevice } from "./TouchControls";
 // "icon-<key>", x 230..262), its name 8px after (12 glyphs at most,
 // "GRILLED FISH" = 288px from x=270) and its status ("NEED FOOD" 216px from
 // x=600); the picked recipe's effect centered at y+306 (the longest, "HALF OF
-// POISON & FREEZE BLOCKED - 5 BATTLES", 43 x 20 = 860px, x 210..1070); its
+// POISON & FREEZE BLOCKED - 5 BATTLES", 43 x 14 = 602px, x 339..941); its
 // ingredients from y+342 at a 28px pitch, each the ingredient's icon and its
 // line from x=270 ("MOONFLOWER  99/1", 320px, to 590; the icons' art keeps
 // to their middle 28px, so the pitch holds) beside what's on the table
 // (from x=640, "NOW: GRILLED FISH x5", 400px, to 1040); the message at
-// y+412 (the longest, "GRILLED FISH IS
-// SERVED! 5 BATTLES", 33 x 24 = 792px, x 244..1036) and the key hint at
+// y+412 (the longest, "GRILLED FISH IS SERVED! 5 BATTLES", 33 x 14 = 462px,
+// x 409..871) and the key hint at
 // y+450. Every line keeps 20px inside the panel's 160..1120. Centered on a
 // keyboard; on touch pinned over the HUD (statusHud.ts), so it ends by
 // y=488, above the d-pad.
@@ -119,13 +120,13 @@ export class KitchenUI {
       this.statuses.push(fixed(scene.add.text(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
     });
     this.cursor = fixed(scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
-    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0")).setOrigin(0.5));
+    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
     for (let i = 0; i < MAX_NEEDS; i++) {
       this.needIcons.push(fixed(scene.add.image(NAME_X + 16, NEED_Y + i * NEED_GAP, "icon-corn").setScale(0.5)));
       this.needs.push(fixed(scene.add.text(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
     }
     this.table = fixed(scene.add.text(TABLE_X, NEED_Y, "", retroStyle(5, "#fdba74")).setOrigin(0, 0.5));
-    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 412, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
+    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 412, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
     // touch names the d-pad rather than JK (the arrows it sends move here too)
     this.hint = fixed(
       scene.add

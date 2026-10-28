@@ -5,7 +5,7 @@ import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
 import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { hideTouchButtons } from "./TouchControls";
 
 // Rows are pooled, sized to the most each column can ever hold at once.
@@ -24,16 +24,18 @@ const DONE_ROWS = 13;
 
 // The panel spans x 60..1220: it ends where the touch menu column starts
 // (x>=1222), like the other panels. Widths (Press Start 2P: chars x size x
-// 4px), against at least a 20px inner margin:
+// 4px; the details' bodyStyle(22): 14px a glyph), against at least a 20px
+// inner margin:
 // - IN PROGRESS title, retroStyle(5): "DELIVERY: 4 SPIDER SILK" 23 x 20 = 460,
 //   x 84..544, leaving 20px before the right-aligned "READY" at 564..664
-// - its detail, retroStyle(4): "ONE MAGMA SLIME, FIRE IMP, SALAMANDER" 37 x
-//   16 = 592, x 84..676, 24px short of the COMPLETED column at 700
+// - its detail, bodyStyle(22): "ONE MAGMA SLIME, FIRE IMP, SALAMANDER" 37 x
+//   14 = 518, x 84..602, 98px short of the COMPLETED column at 700
 // - COMPLETED, retroStyle(5): "* DELIVERY: 4 SPIDER SILK" 25 x 20 = 500,
 //   x 700..1200, 20px inside the panel's 1220 edge
-// Heights (Press Start 2P lines measure exactly 1em): 8 two-line rows 56px
-// apart end at PANEL_TOP+576 (the last detail line), 26px clear of the close
-// hint's top (PANEL_TOP+602); 13 one-line rows 34px apart (36 until the
+// Heights (Press Start 2P lines measure exactly 1em; a detail's caps sit
+// -7..+8 of its y, descenders to +11): 8 two-line rows 56px apart end at
+// PANEL_TOP+579 (the last detail line), 23px clear of the close hint's top
+// (PANEL_TOP+602); 13 one-line rows 34px apart (36 until the
 // SILK job made it 13) end at PANEL_TOP+568. The 640px panel leaves 40px
 // above and below.
 const PANEL_W = 1160;
@@ -162,7 +164,7 @@ function objectives(): Objective[] {
   });
   // the townsfolk (favors.ts): each favor taken on, a finished chain, and
   // one row for whoever still has one to offer ("ASK BY DAY: FARMER, FISHER,
-  // TRAVELER" is 36 glyphs, 576px)
+  // TRAVELER" is 36 glyphs, 504px)
   for (const key of FAVOR_GIVERS) {
     const status = favorStatus(key);
     const step = favorStep(key);
@@ -233,7 +235,7 @@ export class QuestLog {
       this.activeRows.push({
         title: text(ACTIVE_X, y, 5, "#ffffff"),
         progress: text(PROGRESS_R, y, 5, PROGRESS_COLOR).setOrigin(1, 0.5),
-        detail: text(ACTIVE_X, y + DETAIL_DY, 4, HINT_COLOR),
+        detail: scene.add.text(ACTIVE_X, y + DETAIL_DY, "", bodyStyle(22, HINT_COLOR)).setOrigin(0, 0.5),
       });
     }
     for (let i = 0; i < DONE_ROWS; i++) {

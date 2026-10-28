@@ -81,8 +81,8 @@ export const BOSS_TELL_COOLDOWN = 2;
 export const BOSS_STRIKE_MAX_HP_SHARE = 0.7;
 
 export interface BossTell {
-  warn: string; // the wind-up's line, <= 36 glyphs
-  strike: string; // the strike's name: "<strike>! 999 damage! (GUARD)" <= 36
+  warn: string; // the wind-up's line, <= 54 glyphs (one battle message row)
+  strike: string; // the strike's name: "<strike>! 999 damage! (GUARD)" <= 54
   mult: number;
   color: number; // the boss's tint while it winds up
   freezes?: boolean; // the strike also freezes (EMBER RING blocks it)

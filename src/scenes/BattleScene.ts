@@ -58,7 +58,7 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
@@ -494,8 +494,14 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyStatus();
     this.updateStatus();
 
+    // the message box (y 604..716) reads like the dialogue box, in its
+    // bodyStyle(33) with its 5px leading: 54 glyphs a row, and a second row's
+    // descenders end at y=697
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92).setStrokeStyle(1, 0xffffff);
-    this.msgText = this.add.text(64, GAME_HEIGHT - 104, "", retroStyle(8, "#f5f5f5")).setWordWrapWidth(GAME_WIDTH - 128);
+    this.msgText = this.add
+      .text(64, GAME_HEIGHT - 104, "", bodyStyle(33, "#f5f5f5"))
+      .setLineSpacing(5)
+      .setWordWrapWidth(GAME_WIDTH - 128);
 
     const menuY = GAME_HEIGHT - 184;
     this.menuButtons = [
@@ -1442,7 +1448,7 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  // Messages stay within one 36-glyph line at worst: "SPIDER: WEB SNARE!
+  // Messages stay within one 54-glyph line at worst: "SPIDER: WEB SNARE!
   // 999, foe stuck" (33), "FROST MOTH: CHILL! 999 dmg ATK DN" (33).
   private async companionSkill(name: string, skill: CompanionSkill, atk: number): Promise<void> {
     const head = `${name}: ${skill.name}!`;

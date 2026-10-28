@@ -1667,8 +1667,8 @@ export class TownScene extends Phaser.Scene {
 
   // The keeper explains the gauntlet and asks under the last page (the
   // dialogue's choices: FIGHT, or LEAVE — which ESC also picks). Lines fit
-  // the dialogue's 28-glyph touch rows unbroken; the question gets a page of
-  // its own, as the five lines before it fill one.
+  // the dialogue's 42-glyph touch rows unbroken; the question gets a page of
+  // its own on touch, where it keeps to one row over the choices.
   private startArenaDialogue(): void {
     if (!arenaOpen()) {
       this.dialogue.start(["The ARENA is shut.", "Beat the KING SLIME,", "then come back!"], "ARENA");
@@ -1717,7 +1717,7 @@ export class TownScene extends Phaser.Scene {
   // progress with a hint while it's open, paid when it's met — handing over
   // pieces from the bag asks first. Otherwise, or once the chain is done or
   // waits on a region, just a hint. villagers.talk() also stops the walker
-  // and turns it to the hero. Lines stay within the touch box's 28 glyphs.
+  // and turns it to the hero. Lines stay within the touch box's 42 glyphs.
   private talkToVillager(index: number, key: VillagerKey, name: string): void {
     const hint = this.villagers.talk(index, this.player.x);
     const step = favorStep(key);
@@ -2178,10 +2178,10 @@ export class TownScene extends Phaser.Scene {
   // partial credit, same as every other day-based gate. Then the delivery
   // (delivery.ts): materials are the BLACKSMITH's too, so they're only taken
   // on a YES under the last page (NO, or ESC, keeps them). Every line is at
-  // most 28 glyphs (the touch box's row) and the delivery starts on a row of
+  // most 42 glyphs (the touch box's row) and the delivery starts on a row of
   // its own; the longest talk — a bounty still open plus a delivery ready —
-  // fills one page ("BOUNTY: FROST MOTH 5/6 REWARD: 342 GOLD." 2 rows,
-  // "DELIVER 4 SPIDER SILK FOR 1560 GOLD + A BOMB. YOU HAVE 5." 3) and the
+  // fills three rows ("BOUNTY: FROST MOTH 5/6 REWARD: 342 GOLD." 1 row,
+  // "DELIVER 4 SPIDER SILK FOR 1560 GOLD + A BOMB. YOU HAVE 5." 2) and the
   // question gets a page of its own over the choices.
   private startBountyDialogue(): void {
     GameState.rollBountyIfStale();

@@ -1,32 +1,40 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
-import { retroStyle } from "../pixelart";
+import { BODY_GLYPH_W, bodyStyle, retroStyle } from "../pixelart";
 import { hideTouchButtons, isTouchDevice } from "./TouchControls";
 
-const FONT_SIZE = 32;
-const CHARS_PER_ROW = Math.floor((GAME_WIDTH - 128) / FONT_SIZE);
-// On touch the text stops at x=944, short of the ESC (x>=960) and Z (x>=1076)
+// The talk is in bodyStyle(33), 21px a glyph and a 39px line, 5px apart: four
+// rows from y=496, the last one's descenders ending at 665, inside the box's
+// 488..680. (Press Start 2P's five 32px rows had no gap between them and ran
+// a page into one block.) The speaker's tab and the choices stay in
+// retroStyle(8).
+const GLYPH_W = BODY_GLYPH_W[33];
+const LINE_SPACING = 5;
+const ROW_PITCH = 39 + LINE_SPACING;
+const CHARS_PER_ROW = Math.floor((GAME_WIDTH - 128) / GLYPH_W);
+// On touch the text stops at x=930, short of the ESC (x>=960) and Z (x>=1076)
 // buttons over the box's right end; the d-pad over its left end is hidden
 // while the box is up (bar < and > under a question's choices, see below).
-// Keyboard play keeps the full 36-glyph row.
-const TOUCH_CHARS_PER_ROW = 28;
-const ROWS_PER_PAGE = 5;
-// ask(): the choices sit on the page's fifth row (y 624..656, inside the box's
-// 488..680), so a question's last page packs at most four rows of text above
-// them. Each choice is "> " plus its label at retroStyle(8), CHOICE_PITCH
-// apart from x=48: three five-glyph labels end at 48 + 2 x 256 + 7 x 32 =
-// 784, short of the keyboard box's right edge.
-const CHOICE_Y = GAME_HEIGHT - 224 + (ROWS_PER_PAGE - 1) * FONT_SIZE;
+// Keyboard play keeps the full 54-glyph row.
+const TOUCH_CHARS_PER_ROW = 42;
+const ROWS_PER_PAGE = 4;
+// ask(): the choices sit on the page's fourth row, 8px down it where the
+// body's caps start (y 636..668, inside the box's 488..680; 14px under the
+// third row's descenders), so a question's last page packs at most three rows
+// of text above them. Each choice is "> " plus its label at retroStyle(8),
+// CHOICE_PITCH apart from x=48: three five-glyph labels end at 48 + 2 x 256 +
+// 7 x 32 = 784, short of the keyboard box's right edge.
+const CHOICE_Y = GAME_HEIGHT - 224 + (ROWS_PER_PAGE - 1) * ROW_PITCH + 8;
 const CHOICE_PITCH = 256;
 // On touch the choices bring back the d-pad's < and > (hiding only its ^ and
 // v, TouchControls' "updown") so they can step between them. Those two sit at
 // x 42..258, y 572..660, over the box's left end, so a question's last page
-// keeps to two rows of text (y 496..560, 12px above them) and the choices
-// start at x=288, 30px right of them. Two end at 288 + 256 + 7 x 32 = 768; a
-// third would end at 1024, into the ESC button (x>=960), so touch questions
-// keep to two.
-const TOUCH_QUESTION_ROWS = 2;
+// keeps to one row of text (its descenders end at y 533; a second row's caps
+// would sit at 548..572, on the arrows) and the choices start at x=288, 30px
+// right of them. Two end at 288 + 256 + 7 x 32 = 768; a third would end at
+// 1024, into the ESC button (x>=960), so touch questions keep to two.
+const TOUCH_QUESTION_ROWS = 1;
 const TOUCH_CHOICE_X = 288;
 // A confirm (Z/ENTER/SPACE, or a tap on a choice) within this long of the
 // choices showing is dropped, and restarts the wait. The Z meant to skip the
@@ -94,10 +102,11 @@ export class DialogueBox {
       .setScrollFactor(0)
       .setDepth(201);
     this.text = scene.add
-      .text(48, GAME_HEIGHT - 224, "", retroStyle(8, "#f5f5f5"))
+      .text(48, GAME_HEIGHT - 224, "", bodyStyle(33, "#f5f5f5"))
+      .setLineSpacing(LINE_SPACING)
       .setScrollFactor(0)
       .setDepth(202)
-      .setWordWrapWidth(this.charsPerRow * FONT_SIZE);
+      .setWordWrapWidth(this.charsPerRow * GLYPH_W);
     // On a plate of the box's colour, a tab on the box's top edge: bare, it
     // sat on the map and ran into the name tags behind it (ELDER over
     // BLACKSMITH). The padding (8 a side, 4 on top) keeps the glyphs at
@@ -214,20 +223,19 @@ export class DialogueBox {
 
   private typeLine(): void {
     // Pack lines until the box is full: callers pass sentence-sized strings,
-    // and paging them one-per-keypress left most of the box empty.
+    // and paging them one-per-keypress left most of the box empty. Counted as
+    // wrapped: a row now holds two of those strings, so one a row (the old
+    // estimate) filled half the box, and a "\n" takes a row of its own.
     const page: string[] = [];
-    let rows = 0;
     while (this.index + page.length < this.lines.length) {
-      const line = this.lines[this.index + page.length];
-      const needed = Math.max(1, Math.ceil(line.length / this.charsPerRow));
-      if (page.length > 0 && rows + needed > ROWS_PER_PAGE) break;
-      page.push(line);
-      rows += needed;
+      page.push(this.lines[this.index + page.length]);
+      if (page.length > 1 && this.text.getWrappedText(page.join(" ")).length > ROWS_PER_PAGE) {
+        page.pop();
+        break;
+      }
     }
-    // a question's last page keeps the fifth row for its choices (on touch,
+    // a question's last page keeps the fourth row for its choices (on touch,
     // the d-pad's rows too): what doesn't fit moves on to a page of its own.
-    // Counted as wrapped, not estimated: joined lines can wrap into more rows
-    // than the estimate above, and a "\n" takes a row of its own.
     const questionRows = this.touch ? TOUCH_QUESTION_ROWS : ROWS_PER_PAGE - 1;
     while (
       this.choices.length > 0 &&

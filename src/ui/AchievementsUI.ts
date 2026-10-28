@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, earnedCount, nextLookNeeds } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
@@ -14,32 +14,32 @@ const COLS = 2;
 const ROWS = 7;
 const PER_PAGE = COLS * ROWS;
 const PAGES = Math.max(1, Math.ceil(ACHIEVEMENTS.length / PER_PAGE));
-// a name's caps cover y-12..y+8 (its "*" too) and a desc line's glyphs
-// y+D-8..y+D+7, so D=24 leaves 4-7px under the name and 12px before the next
-// row's name — close enough that each desc reads as its own name's
+// a name's caps cover y-12..y+8 (its "*" too) and a desc line's (bodyStyle(22))
+// y+D-7..y+D+8, its descenders to y+D+11, so D=24 leaves 9px under the name
+// and 12px (9 from a descender) before the next row's name
 const ROW_GAP = 56;
 const DESC_DY = 24;
-// widest line a column has to hold, measured from the data at 4px x font size
-// a glyph: a size-4 desc, a size-6 "* NAME", or a locked count-up's size-6
-// NAME, a 16px gap and its size-4 "need/need" right-aligned at the column's
-// end ("TREASURE HUNTER" + "13/13" is the widest, 456px). A longer entry
-// widens the panel instead of running into the next column; past a 36-glyph
-// desc the panel would outgrow the screen, so shorten the text rather than
-// the margin. Today's longest (34 glyphs, 544px) puts the right edge at
-// x=1218, 2px short of the touch menu column that starts at x=1220.
+// widest line a column has to hold, measured from the data: a desc at 14px a
+// glyph (bodyStyle(22)), or at 4px x font size a glyph a size-6 "* NAME", or a
+// locked count-up's size-6 NAME, a 16px gap and its size-4 "need/need"
+// right-aligned at the column's end ("TREASURE HUNTER" + "13/13" is the
+// widest, 456px). A longer entry widens the panel instead of running into
+// the next column; past a 39-glyph desc the panel would reach the touch menu
+// column that starts at x=1220, so shorten the text rather than the margin.
+// Today's longest (34 glyphs, 476px) puts the right edge at x=1150.
 const progressLabel = (have: number, need: number): string => `${Math.min(have, need)}/${need}`;
 const TEXT_W = Math.max(
   ...ACHIEVEMENTS.map((a) => {
     const p = a.progress?.();
     const counted = p && p.need > 1 ? a.name.length * 6 * 4 + 16 + progressLabel(p.need, p.need).length * 4 * 4 : 0;
-    return Math.max(a.desc.length * 4 * 4, (a.name.length + 2) * 6 * 4, counted);
+    return Math.max(a.desc.length * BODY_GLYPH_W[22], (a.name.length + 2) * 6 * 4, counted);
   }),
 );
 const COL_W = TEXT_W + 20;
 const PANEL_W = COL_W + TEXT_W + 48;
 const COL_X = GAME_WIDTH / 2 - PANEL_W / 2 + 24;
 // Pinned over the HUD (statusHud.ts) instead of centered: the rows then end
-// at y=459, above the touch d-pad (y>=508) and Z button (y>=532) that would
+// at y=463, above the touch d-pad (y>=508) and Z button (y>=532) that would
 // otherwise sit on the bottom rows; only the centered pager/counter go
 // lower, between them.
 const PANEL_TOP = PANEL_TOP_OVER_HUD;
@@ -134,7 +134,7 @@ export class AchievementsUI {
       );
       this.descs.push(
         scene.add
-          .text(x, y + DESC_DY, "", retroStyle(4, DIM_TEXT))
+          .text(x, y + DESC_DY, "", bodyStyle(22, DIM_TEXT))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)

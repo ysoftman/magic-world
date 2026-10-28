@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
 import { type EquipmentKey, GameState, refinedName } from "../gameState";
 import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -177,9 +177,9 @@ const PANEL_H = 202 + INVENTORY_ROWS * INVENTORY_ROW_GAP;
 // Centered on a keyboard (y 83..637, just under the HUD's second row). On
 // touch it's pinned over the HUD instead (statusHud.ts), so the last row (8
 // rows: y 434..458) ends well above the Z button (y>=532). The msg then sits
-// at y 500..524, bounded by the d-pad's up arrow (x<=194) and Z (x>=1076):
-// 36 glyphs at most; the longest, "Take it to the BLACKSMITH!" and "HP and
-// MP are already full!", are 27.
+// at y 499..525, bounded by the d-pad's up arrow (x<=194) and Z (x>=1076):
+// at bodyStyle(22) 59 glyphs at most (826px, x 227..1053); the longest,
+// "Take it to the BLACKSMITH!" and "HP and MP are already full!", are 27.
 const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : GAME_HEIGHT / 2 - PANEL_H / 2;
 const COL_W = 560;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 60;
@@ -210,10 +210,10 @@ const STATUS_Y = 38;
 // x 120..288, well clear of the title (x>=560).
 const ATK_DEF_W = 168;
 // The cursor item's "NAME: INFO" line, on its own row between the last item
-// row and the msg (11px gap to each at 20px tall), so a use/equip message
-// never covers it. At retroStyle(5) the longest, 40 glyphs, is 800px
-// (x 240..1040): inside the panel on a keyboard, and on touch (y 469..489)
-// above the d-pad (y>=508) and Z (y>=532).
+// row and the msg (8 and 7px apart at bodyStyle(22)'s 26px), so a use/equip
+// message never covers it. The longest, 40 glyphs, is 560px (x 360..920):
+// inside the panel on a keyboard, and on touch (y 466..492) above the d-pad
+// (y>=508) and Z (y>=532).
 const INFO_Y = PANEL_TOP + PANEL_H - 83;
 // The key line under the msg, like every other panel's: without one nothing
 // said Z wears a piece. At retroStyle(4) the touch one, 39 glyphs, is 624px
@@ -376,7 +376,7 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", retroStyle(6, "#f5f5f5"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -388,7 +388,7 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.info = scene.add
-      .text(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0"))
+      .text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

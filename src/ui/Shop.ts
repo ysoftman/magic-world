@@ -5,7 +5,7 @@ import { isRefinable } from "../drops";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
 import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
 import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -57,9 +57,10 @@ const PANEL_H = 202 + SHOP_ROWS * SHOP_ROW_GAP;
 // start at y=61, through the HUD's second row, so it starts under the first
 // instead (y 40..638). On touch it's pinned over the HUD instead, so the last
 // equipment row (y 478..502) ends above the Z button (y>=532) instead of
-// under it. The msg then sits at y 544..568, and centered it's bounded by the
-// nearer obstacle, the d-pad (x<=258): 30 glyphs (720px, x 280..1000) at
-// most — the longest message, "Antidote Charm: blocks poison!", is 30.
+// under it. The msg then sits at y 543..569, and centered it's bounded by the
+// nearer obstacle, the d-pad (x<=258): at bodyStyle(22) 51 glyphs (714px,
+// x 283..997) at most — the longest message, "Antidote Charm: blocks
+// poison!", is 30 (420px).
 const PANEL_TOP = isTouchDevice() ? PANEL_TOP_OVER_HUD : PANEL_TOP_UNDER_HUD_ROW1;
 const COL_W = 520;
 const NAME_X = GAME_WIDTH / 2 - PANEL_W / 2 + 60;
@@ -76,10 +77,10 @@ const sellNameW = (col: number): number => PRICE_DX[col] - ICON_DX - 8;
 // an icon for what can't be had here and now (LOCKED, SOLD, none to sell)
 const ICON_NONE_ALPHA = 0.35;
 // The cursor item's "NAME: INFO" line, on its own row halfway between the
-// last item row and the msg (12px gap to each at 20px tall), so a buy/sell
-// message never covers it. At retroStyle(5) the longest, 40 glyphs, is 800px
-// (x 240..1040): inside the panel on a keyboard, and on touch (y 513..533)
-// clear of the d-pad's up arrow (x<=194) and above Z (y>=532 at x=1128).
+// last item row and the msg (9 and 7px apart at bodyStyle(22)'s 26px), so a
+// buy/sell message never covers it. The longest, 40 glyphs, is 560px
+// (x 360..920): inside the panel on a keyboard, and on touch (y 510..536)
+// clear of the d-pad's up arrow (x<=194) and of Z (x>=1076).
 const INFO_Y = PANEL_TOP + PANEL_H - 83;
 
 export class ShopUI {
@@ -199,13 +200,13 @@ export class ShopUI {
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", retroStyle(6, "#f5f5f5"))
+      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.info = scene.add
-      .text(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0"))
+      .text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -400,8 +401,8 @@ export class ShopUI {
     }
     // The last copy of a refined piece takes its REFINE level with it (bought
     // back, it starts at +0), so that sale asks for a second Z first: "Its +5
-    // will be lost! Z: sell" is 28 glyphs, 672px (x 304..976), inside the
-    // touch msg line's 720. A second copy keeps the level, so it sells at once.
+    // will be lost! Z: sell" is 28 glyphs, 392px (x 444..836), inside the
+    // touch msg line's 714. A second copy keeps the level, so it sells at once.
     const lost = item.key && count === 1 ? GameState.refineOf(item.key) : 0;
     if (lost > 0 && this.pendingSell !== this.index) {
       this.pendingSell = this.index;

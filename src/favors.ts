@@ -18,8 +18,8 @@ import { ALL_FISH, type FavorState, GameState, type QuestState, type VillagerKey
 // the BOUNTY BOARD's delivery (delivery.ts) — these are favors.
 //
 // Widths: a title (QuestLog, retroStyle(5)) is at most 23 glyphs, 460px, so
-// it ends 20px short of READY; a hint at most 37 glyphs (retroStyle(4),
-// 592px); the talk lines at most 28, the touch box's row.
+// it ends 20px short of READY; a hint at most 37 glyphs (the quest log's
+// bodyStyle(22), 518px); the talk lines at most 42, the touch box's row.
 export interface FavorStep {
   title: string;
   talk: string[];

@@ -14,7 +14,7 @@ import {
 } from "../drops";
 import { EQUIP_BONUS, EQUIP_SLOT, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
-import { ART_PX, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import { ART_PX, bodyStyle, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -105,7 +105,8 @@ export function bakeCraftedGear(scene: Phaser.Scene): void {
   if (!scene.textures.exists("equip-glacier-mail")) makeTexture(scene, "equip-glacier-mail", GLACIER_MAIL_32, GLACIER_MAIL_PALETTE, ART_PX);
 }
 
-// Laid out top to bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph:
+// Laid out top to bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph
+// (the effect line and the message in bodyStyle(22), 14px a glyph):
 // the title (y+40) between the two tabs at the left (FORGE 100px from x=190,
 // REFINE 120px from x=310, clear of the title's x 480..800) and the gold
 // readout at the right; the rows from y+100 at a 40px pitch, each the
@@ -114,14 +115,14 @@ export function bakeCraftedGear(scene: Phaser.Scene): void {
 // 288px from x=270, status "NEED MATS" 216px from x=600), REFINE's worn
 // weapon and armor (16, "MYTHRIL SHIELD+5" = 384px to x=654, status from
 // x=680); then the picked row — its effect line centered at y+262 (the
-// longest, "TALISMAN: ACCESSORY, BLOCKS ALL AILMENTS", 40 x 20 = 800px, x
-// 240..1040; REFINE's, "MYTHRIL SHIELD+4 > +5: DEF 10 > 11", 680px), up to
+// longest, "TALISMAN: ACCESSORY, BLOCKS ALL AILMENTS", 40 x 14 = 560px, x
+// 360..920; REFINE's, "MYTHRIL SHIELD+4 > +5: DEF 10 > 11", 476px), up to
 // three material lines from y+296 at a 28px pitch, each the material's icon
 // and its line from x=270 ("SPIDER SILK  999/4", 360px, to 630) beside the
 // fee from x=640 (the icons' art keeps to their middle 28px, so the pitch
 // holds) — the message at y+392 (the longest, "FORGE GLACIER MAIL FOR 400G?
-// Z/ESC", 34 x 24 = 816px, x 232..1048; REFINE's "MYTHRIL SHIELD+5 FOR
-// 5000G? Z/ESC" is 792px) and the key hint at y+422 ("HL: TAB   JK: MOVE
+// Z/ESC", 34 x 14 = 476px, x 402..878; REFINE's "MYTHRIL SHIELD+5 FOR
+// 5000G? Z/ESC" is 462px) and the key hint at y+422 ("HL: TAB   JK: MOVE
 // Z: REFINE   ESC: CLOSE", 42 x 16 = 672px), in a 960 x 440 panel. Centered
 // on a keyboard; on touch it's pinned over the HUD (statusHud.ts), so it all
 // ends by y=448, above the d-pad (y>=508) and Z (y>=532).
@@ -266,13 +267,13 @@ export class BlacksmithUI {
       this.statuses.push(fixed(scene.add.text(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
     });
     this.cursor = fixed(scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
-    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0")).setOrigin(0.5));
+    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
     for (let i = 0; i < MAX_NEEDS; i++) {
       this.needIcons.push(fixed(scene.add.image(NAME_X + 16, NEED_Y + i * NEED_GAP, "icon-slimeGel").setScale(0.5)));
       this.needs.push(fixed(scene.add.text(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
     }
     this.fee = fixed(scene.add.text(FEE_X, NEED_Y, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
-    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 392, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
+    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 392, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
     // the line itself is the mode's (refresh); touch names the d-pad rather
     // than HL/JK (the arrows it sends move here too)
     this.hint = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 422, "", retroStyle(4, DIM_TEXT)).setOrigin(0.5));
