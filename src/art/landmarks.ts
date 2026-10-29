@@ -1,8 +1,9 @@
 import type Phaser from "phaser";
-import { keepBlocky, makeTexture } from "../pixelart";
+import { ART_PX, keepBlocky, makeTexture } from "../pixelart";
 
-// The town map's landmarks: the cave mouth, the farm's field, the signs, the
-// keepers' workplaces with their winter look, and HOME at every level.
+// The town map's landmarks: the cave mouth and the ABYSS's gate beside it, the
+// farm's field, the signs, the keepers' workplaces with their winter look, and
+// HOME at every level.
 
 // The cave mouth (TownScene's CAVE, and the way out inside the cave): a
 // boulder outcrop lit from the top left with an arched opening, dark only
@@ -41,6 +42,95 @@ const CAVE_TILE = [
   ".bhlllmmmbnnnnnnnnnnnnbllmmmddb.",
   "..bllmmmdbnnnnnnnnnnnnblmmmddb..",
   "...bbbbbbbnnnnnnnnnnnnbbbbbbb...",
+];
+// The ABYSS's gate by the cave (TownScene): a ring of the cave mouth's stone
+// on a plinth, lit from the top left, round a violet vortex -- the cave
+// stair's glow (0x8b5cf6) at its rim -- with runes on the keystone and the
+// flanks. One tile, drawn on a 32-cell grid at ART_PX.
+const ABYSS_GATE_PALETTE = {
+  b: 0x1a1714,
+  n: 0x231d1a,
+  d: 0x3b3631,
+  m: 0x5c554d,
+  l: 0x80776b,
+  h: 0xa89d8c,
+  k: 0x060508,
+  K: 0x1e0b3d,
+  p: 0x4c1d95,
+  P: 0x7c3aed,
+  V: 0x8b5cf6,
+  r: 0x6d28d9,
+};
+const ABYSS_GATE = [
+  "................................",
+  "...........bbbbbbbbbb...........",
+  "..........bhhhhhnhhhhb..........",
+  "........bbhmmmmrrmmmmlbb........",
+  ".......bhhmmmmnnnnmmmmllb.......",
+  ".......bnmmmnnVVVVnnmmmnb.......",
+  "......bhnnmnVVppppVVdmnnlb......",
+  ".....bhmmnnVpppKKppPVdnmdlb.....",
+  ".....bhmmmnVpKKKKKKpVdmdddb.....",
+  ".....bhmmnVpKPppKKKKPVldddb.....",
+  "....bhmmmnVpPppppKKKPVlddddb....",
+  "....bhmmnVpPpppppkKKPPVldddb....",
+  "....bhmmnVPPpkkkkpkKKPVldddb....",
+  "....bhmmnVPPKkkkkkkKPPVldddb....",
+  "....brnnnVPPKkkkkkkKPPVnddrb....",
+  "....bhmmnVPPKkkkkkkKPPVldddb....",
+  "....bhmmnVPKKkpkkkkpPPVldddb....",
+  "....bhmmnVPPKKkpppppPpVldddb....",
+  ".....bhmnnVPKKKppppPpVndddb.....",
+  ".....bnnnnVPKKKKppPKpVldddb.....",
+  ".....bnmmmdVpKKKKKKpVlddddb.....",
+  "......blmmdVPppKKpppVldddb......",
+  ".......blmmdVVppppVVldddb.......",
+  ".......bllddllVVVVllddddb.......",
+  "........bbldddllllddddbb........",
+  "..........bddddddddddb..........",
+  "......bbbbllllllllllllbbbb......",
+  "....bbddddddddddddddddddddbb....",
+  "....bmmmmmmmmmmmmmmmmmmmmmmb....",
+  "....bbbbbbbbbbbbbbbbbbbbbbbb....",
+  "................................",
+  "................................",
+];
+// laid over the gate and breathed in and out (TownScene): its rim, the
+// vortex's arms and the runes a step brighter
+const ABYSS_GATE_GLOW_PALETTE = { g: 0x9d7bf9, G: 0xb197fc, r: 0xc084fc };
+const ABYSS_GATE_GLOW = [
+  "................................",
+  "................................",
+  "................................",
+  "...............rr...............",
+  "................................",
+  "..............gggg..............",
+  "............gg....gg............",
+  "...........g.......Gg...........",
+  "...........g........g...........",
+  "..........g..Ggg....Gg..........",
+  "..........g.Ggggg...Gg..........",
+  ".........g.Gggggg...GGg.........",
+  ".........gGGg....g...Gg.........",
+  ".........gGG........GGg.........",
+  ".....r...gGG........GGg...r.....",
+  ".........gGG........GGg.........",
+  ".........gG...g....gGGg.........",
+  ".........gGG...gggggG.g.........",
+  "..........gG...ggggG.g..........",
+  "..........gG....ggG..g..........",
+  "...........g........g...........",
+  "...........gG.......g...........",
+  "............gg....gg............",
+  "..............gggg..............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
 ];
 // The farm's tilled field laid over its 3x2 soil tiles: ridge and furrow
 // rows inside a low rail fence, open to the south where the road comes in.
@@ -576,6 +666,8 @@ function makeHouseLevels(scene: Phaser.Scene): void {
 // to pair each grid with its palette.
 export function bakeLandmarks(this: Phaser.Scene): void {
   makeTexture(this, "cave", CAVE_TILE, CAVE_PALETTE);
+  makeTexture(this, "abyss-gate", ABYSS_GATE, ABYSS_GATE_PALETTE, ART_PX);
+  makeTexture(this, "abyss-gate-glow", ABYSS_GATE_GLOW, ABYSS_GATE_GLOW_PALETTE, ART_PX);
   makeTexture(this, "farm-field", FARM_FIELD_TILE, FARM_FIELD_PALETTE);
 
   makeHouse(this);
