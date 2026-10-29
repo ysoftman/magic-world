@@ -21,6 +21,7 @@ import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import {
   addBorderDressing,
+  addRoamer,
   addTownExitLabel,
   boundCameraToMap,
   buildTileLayers,
@@ -32,9 +33,11 @@ import {
   fadeInAfterAreaTitle,
   HeroWalk,
   isWalkableCell,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
@@ -172,17 +175,7 @@ function freshFloor(r: AbyssRun): void {
   r.fight = null;
 }
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: string;
+interface AbyssRoamer extends Roamer {
   id: string | null; // null for the guardian
 }
 
@@ -196,7 +189,7 @@ export class AbyssScene extends Phaser.Scene {
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
+  private roamers: AbyssRoamer[] = [];
   private downLabel!: Phaser.GameObjects.Text;
   private upStair!: Phaser.GameObjects.Zone;
   // the stair up has asked since the hero last stepped onto it: a STAY holds
@@ -477,7 +470,7 @@ export class AbyssScene extends Phaser.Scene {
     // roamers are kept to their boxes, as under a panel: left on their last
     // velocity they walked off across the map until the title came
     if (this.quitting) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -490,7 +483,7 @@ export class AbyssScene extends Phaser.Scene {
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -500,7 +493,7 @@ export class AbyssScene extends Phaser.Scene {
     if (this.panels.takeOpenKey()) return;
 
     const moving = this.walk.step(this.leaving);
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
@@ -639,36 +632,7 @@ export class AbyssScene extends Phaser.Scene {
     const r = run;
     if (!r) return;
     const spawn = (zone: MonsterZone, kind: string, id: string | null): void => {
-      const boss = id === null;
-      const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-      const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-      const def = ENEMIES[kind];
-      const sprite = this.roamerGroup.create(x, y, def.texture) as Phaser.Physics.Arcade.Sprite;
-      sprite.setDepth(10);
-      sprite.body?.setSize(40, 24).setOffset(12, 32);
-      if (boss) sprite.setScale(1.5);
-      this.roamers.push({
-        sprite,
-        minX: zone.cx - zone.w / 2 + 8,
-        maxX: zone.cx + zone.w / 2 - 8,
-        minY: zone.cy - zone.h / 2 + 8,
-        maxY: zone.cy + zone.h / 2 - 8,
-        targetX: x,
-        targetY: y,
-        wait: 300 + Math.random() * 800,
-        speed: (boss ? 40 : 56) + Math.random() * 40,
-        kind,
-        id,
-      });
-      this.tweens.add({
-        targets: sprite,
-        scaleX: boss ? 1.68 : 1.12,
-        scaleY: boss ? 1.32 : 0.88,
-        duration: 280,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
+      this.roamers.push({ ...addRoamer(this, this.roamerGroup, zone, kind, ENEMIES[kind].texture, id === null), id });
     };
     this.floor.zones.forEach((zone, z) => {
       zone.kinds.forEach((kind, i) => {
@@ -730,34 +694,7 @@ export class AbyssScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
-  }
-
-  private startBattle(kind: string, roamer: Roamer | null): void {
+  private startBattle(kind: string, roamer: AbyssRoamer | null): void {
     if (this.encounterCooldown > 0 || this.leaving || !run) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;

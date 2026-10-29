@@ -20,6 +20,7 @@ import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
+  addRoamer,
   addTownExitSign,
   boundCameraToMap,
   buildTileLayers,
@@ -31,10 +32,12 @@ import {
   HeroWalk,
   isWalkableCell,
   noteFightSpot,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
@@ -65,19 +68,6 @@ const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 // lava churns slower than water ripples (WATER_ANIM_DELAY is 400)
 const LAVA_ANIM_DELAY = 700;
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: VolcanoKind;
-}
-
 // The last region, past the GLACIER GOLEM: same skeleton as SnowScene (roamer
 // zones, chests, an exit back to town, a boss that roams its own corner) on
 // the volcano's own ash/lava/basalt tiles rather than tinted grass.
@@ -88,7 +78,7 @@ export class VolcanoScene extends Phaser.Scene {
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
+  private roamers: Roamer<VolcanoKind>[] = [];
   private encounterCooldown = 0;
   private exitingVolcano = false;
 
@@ -275,7 +265,7 @@ export class VolcanoScene extends Phaser.Scene {
     // roamers are kept to their boxes, as under a panel: left on their last
     // velocity they walked off across the map until the title came
     if (this.quitting) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -288,7 +278,7 @@ export class VolcanoScene extends Phaser.Scene {
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -298,7 +288,7 @@ export class VolcanoScene extends Phaser.Scene {
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
     const moving = this.walk.step(this.exitingVolcano);
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
@@ -362,34 +352,8 @@ export class VolcanoScene extends Phaser.Scene {
     for (const zone of VOLCANO_ZONES) {
       const isBoss = zone.count === 1;
       for (let i = 0; i < zone.count; i++) {
-        const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-        const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
         const kind: VolcanoKind = isBoss ? "flameDrake" : (zone.kind ?? "magmaSlime");
-        const sprite = this.roamerGroup.create(x, y, ENEMIES[kind].texture) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDepth(10);
-        sprite.body?.setSize(40, 24).setOffset(12, 32);
-        if (isBoss) sprite.setScale(1.5);
-        this.roamers.push({
-          sprite,
-          minX: zone.cx - zone.w / 2 + 8,
-          maxX: zone.cx + zone.w / 2 - 8,
-          minY: zone.cy - zone.h / 2 + 8,
-          maxY: zone.cy + zone.h / 2 - 8,
-          targetX: x,
-          targetY: y,
-          wait: 300 + Math.random() * 800,
-          speed: (isBoss ? 40 : 56) + Math.random() * 40,
-          kind,
-        });
-        this.tweens.add({
-          targets: sprite,
-          scaleX: isBoss ? 1.68 : 1.12,
-          scaleY: isBoss ? 1.32 : 0.88,
-          duration: 280,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        });
+        this.roamers.push(addRoamer(this, this.roamerGroup, zone, kind, ENEMIES[kind].texture, isBoss));
       }
     }
   }
@@ -441,33 +405,6 @@ export class VolcanoScene extends Phaser.Scene {
       onComplete: () => note.destroy(),
     });
     GameState.save();
-  }
-
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
   private startBattle(enemy?: VolcanoKind): void {

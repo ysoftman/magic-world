@@ -4,7 +4,20 @@ import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { PIXEL } from "./config";
 import { GameState, onSaved } from "./gameState";
-import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
+import {
+  type MonsterZone,
+  OBJECT_TILES,
+  SOLID,
+  T_GRASS,
+  T_LAVA_A,
+  T_LAVA_B,
+  T_PATH,
+  T_SCORCH,
+  T_TALL,
+  T_WATER_A,
+  T_WATER_B,
+  TILE,
+} from "./levels";
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { CompanionSprite } from "./ui/CompanionSprite";
@@ -737,6 +750,99 @@ export function takeFightSpot(scene: Phaser.Scene, data?: { fromBattle?: boolean
   fightSpots.delete(scene);
   scene.sys.settings.data = {};
   return spot;
+}
+
+/**
+ * A monster wandering its zone on a map, which starts the scene's fight with
+ * its `kind` when the hero meets it. It walks to a spot in its box (the zone,
+ * 8px in from each side), waits a moment and picks another (wanderRoamers).
+ */
+export interface Roamer<K extends string = string> {
+  sprite: Phaser.Physics.Arcade.Sprite;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  targetX: number;
+  targetY: number;
+  wait: number;
+  speed: number;
+  kind: K;
+}
+
+/**
+ * A roamer of `kind`, drawn as `texture`, somewhere in the middle 60% of
+ * `zone`, in `group` (the hero's overlap with it is the scene's) and
+ * squashing as it goes; a `boss` is half as big again and slower. The scene
+ * keeps it in its roamers, for wanderRoamers and for the fight it starts.
+ */
+export function addRoamer<K extends string>(
+  scene: Phaser.Scene,
+  group: Phaser.Physics.Arcade.Group,
+  zone: MonsterZone,
+  kind: K,
+  texture: string,
+  boss = false,
+): Roamer<K> {
+  const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
+  const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
+  const sprite = group.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
+  sprite.setDepth(10);
+  sprite.body?.setSize(40, 24).setOffset(12, 32);
+  if (boss) sprite.setScale(1.5);
+  const roamer: Roamer<K> = {
+    sprite,
+    minX: zone.cx - zone.w / 2 + 8,
+    maxX: zone.cx + zone.w / 2 - 8,
+    minY: zone.cy - zone.h / 2 + 8,
+    maxY: zone.cy + zone.h / 2 - 8,
+    targetX: x,
+    targetY: y,
+    wait: 300 + Math.random() * 800,
+    speed: (boss ? 40 : 56) + Math.random() * 40,
+    kind,
+  };
+  scene.tweens.add({
+    targets: sprite,
+    scaleX: boss ? 1.68 : 1.12,
+    scaleY: boss ? 1.32 : 0.88,
+    duration: 280,
+    yoyo: true,
+    repeat: -1,
+    ease: "Sine.easeInOut",
+  });
+  return roamer;
+}
+
+/**
+ * A frame of every roamer's wander: a pause, then a walk at its speed to a
+ * new spot in its box, kept inside the box whatever pushed it. The scenes
+ * run it under a panel and on the way out as well: a roamer left on its
+ * last velocity walked off across the map until the title came.
+ */
+export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
+  for (const r of roamers) {
+    const s = r.sprite;
+    if (r.wait > 0) {
+      r.wait -= delta;
+      if (r.wait <= 0) {
+        r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
+        r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
+      }
+      continue;
+    }
+    const dx = r.targetX - s.x;
+    const dy = r.targetY - s.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 4) {
+      s.setVelocity(0, 0);
+      r.wait = 500 + Math.random() * 900;
+    } else {
+      s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
+    }
+    s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
+    s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
+  }
 }
 
 /** The keys every map scene reads alike, besides walking (FieldKeys). */

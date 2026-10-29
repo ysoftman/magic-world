@@ -47,6 +47,7 @@ import { objectiveLine } from "../objective";
 import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
 import {
   addExitArrow,
+  addRoamer,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -57,10 +58,12 @@ import {
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
   type TileLayers,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { type Season, seasonLook, seasonNews, seasonToday } from "../season";
@@ -192,18 +195,7 @@ const rectOf = (obj: { getBounds(): Phaser.Geom.Rectangle }): Rect => {
   return { x: b.x, y: b.y, w: b.width, h: b.height };
 };
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: "slime" | "troll" | "wolf" | "goldSlime" | "wisp";
-}
+type TownKind = "slime" | "troll" | "wolf" | "goldSlime" | "wisp";
 
 export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -248,8 +240,8 @@ export class TownScene extends Phaser.Scene {
   private questLog!: QuestLog;
   private lookPicker!: LookPicker;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
-  private wispRoamer?: Roamer;
+  private roamers: Roamer<TownKind>[] = [];
+  private wispRoamer?: Roamer<TownKind>;
   private wasNight = false;
   // a town-event toast is scheduled but not yet shown (see announceEvent)
   private eventToastPending = false;
@@ -1269,7 +1261,7 @@ export class TownScene extends Phaser.Scene {
     // boxes, as under a panel: left on their last velocity they walked off
     // across the map until the title came
     if (this.quitting || this.turningSeason) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -1285,7 +1277,7 @@ export class TownScene extends Phaser.Scene {
       this.zQueued = false;
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       // the town keeps living behind a panel; whoever is talking stands still
       this.villagers.update(delta, this.player, this.dialogue.isActive());
       return;
@@ -1327,7 +1319,7 @@ export class TownScene extends Phaser.Scene {
     }
 
     const moving = this.walk.step();
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     this.villagers.update(delta, this.player, this.dialogue.isActive());
     this.checkEncounter(delta, moving);
   }
@@ -2051,34 +2043,9 @@ export class TownScene extends Phaser.Scene {
     for (const zone of MONSTER_ZONES) {
       const kind: "slime" | "wolf" = zone.kind === "wolf" ? "wolf" : "slime";
       for (let i = 0; i < zone.count; i++) {
-        const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-        const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
         const golden = kind === "slime" && Math.random() < GOLDEN_SLIME_CHANCE;
-        const roamerKind: Roamer["kind"] = golden ? "goldSlime" : kind;
-        const sprite = this.roamerGroup.create(x, y, roamerKind) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDepth(10);
-        sprite.body?.setSize(40, 24).setOffset(12, 32);
-        this.roamers.push({
-          sprite,
-          minX: zone.cx - zone.w / 2 + 8,
-          maxX: zone.cx + zone.w / 2 - 8,
-          minY: zone.cy - zone.h / 2 + 8,
-          maxY: zone.cy + zone.h / 2 - 8,
-          targetX: x,
-          targetY: y,
-          wait: 300 + Math.random() * 800,
-          speed: 56 + Math.random() * 40,
-          kind: roamerKind,
-        });
-        this.tweens.add({
-          targets: sprite,
-          scaleX: 1.12,
-          scaleY: 0.88,
-          duration: 280,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        });
+        const roamerKind: TownKind = golden ? "goldSlime" : kind;
+        this.roamers.push(addRoamer(this, this.roamerGroup, zone, roamerKind, roamerKind));
       }
     }
 
@@ -2125,34 +2092,9 @@ export class TownScene extends Phaser.Scene {
   private spawnNightWisp(toast = false): void {
     if (this.wispRoamer) return;
     const zone = MONSTER_ZONES[Math.floor(Math.random() * MONSTER_ZONES.length)];
-    const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-    const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-    const sprite = this.roamerGroup.create(x, y, "wisp") as Phaser.Physics.Arcade.Sprite;
-    sprite.setDepth(10);
-    sprite.body?.setSize(40, 24).setOffset(12, 32);
-    const roamer: Roamer = {
-      sprite,
-      minX: zone.cx - zone.w / 2 + 8,
-      maxX: zone.cx + zone.w / 2 - 8,
-      minY: zone.cy - zone.h / 2 + 8,
-      maxY: zone.cy + zone.h / 2 - 8,
-      targetX: x,
-      targetY: y,
-      wait: 300 + Math.random() * 800,
-      speed: 56 + Math.random() * 40,
-      kind: "wisp",
-    };
+    const roamer = addRoamer<TownKind>(this, this.roamerGroup, zone, "wisp", "wisp");
     this.roamers.push(roamer);
     this.wispRoamer = roamer;
-    this.tweens.add({
-      targets: sprite,
-      scaleX: 1.12,
-      scaleY: 0.88,
-      duration: 280,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-    });
     if (toast) showToast(this, "A NIGHT WISP EMERGES!", STATUS_HUD_TOAST_Y);
   }
 
@@ -2164,33 +2106,6 @@ export class TownScene extends Phaser.Scene {
     if (i >= 0) this.roamers.splice(i, 1);
     this.tweens.killTweensOf(wisp.sprite);
     wisp.sprite.destroy();
-  }
-
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
   }
 
   private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime" | "wisp"): void {

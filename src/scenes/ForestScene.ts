@@ -8,6 +8,7 @@ import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
+  addRoamer,
   addTownExitSign,
   boundCameraToMap,
   buildTileLayers,
@@ -19,10 +20,12 @@ import {
   HeroWalk,
   isWalkableCell,
   noteFightSpot,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { type Season, seasonLook, seasonToday } from "../season";
@@ -56,18 +59,7 @@ const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 // the fade out to the forest built again for a new season, a fight's length
 const SEASON_FADE = 300;
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: "wasp" | "silverWasp" | "spider" | "orc" | "mossGolem";
-}
+type ForestKind = "wasp" | "silverWasp" | "spider" | "orc" | "mossGolem";
 
 export class ForestScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -76,7 +68,7 @@ export class ForestScene extends Phaser.Scene {
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
+  private roamers: Roamer<ForestKind>[] = [];
   private encounterCooldown = 0;
   private exitingForest = false;
 
@@ -282,7 +274,7 @@ export class ForestScene extends Phaser.Scene {
     // boxes, as under a panel: left on their last velocity they walked off
     // across the map until the title came
     if (this.quitting || this.turningSeason) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -298,7 +290,7 @@ export class ForestScene extends Phaser.Scene {
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -322,7 +314,7 @@ export class ForestScene extends Phaser.Scene {
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
     const moving = this.walk.step(this.exitingForest);
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
@@ -413,37 +405,9 @@ export class ForestScene extends Phaser.Scene {
     for (const zone of FOREST_ZONES) {
       const isBoss = zone.count === 1;
       for (let i = 0; i < zone.count; i++) {
-        const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-        const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const base: Roamer["kind"] = isBoss ? "mossGolem" : (zone.kind ?? "wasp");
-        const kind: Roamer["kind"] = base === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : base;
-        const sprite = this.roamerGroup.create(x, y, ENEMIES[kind].texture) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDepth(10);
-        sprite.body?.setSize(40, 24).setOffset(12, 32);
-        if (kind === "mossGolem") {
-          sprite.setScale(1.5);
-        }
-        this.roamers.push({
-          sprite,
-          minX: zone.cx - zone.w / 2 + 8,
-          maxX: zone.cx + zone.w / 2 - 8,
-          minY: zone.cy - zone.h / 2 + 8,
-          maxY: zone.cy + zone.h / 2 - 8,
-          targetX: x,
-          targetY: y,
-          wait: 300 + Math.random() * 800,
-          speed: (isBoss ? 40 : 56) + Math.random() * 40,
-          kind,
-        });
-        this.tweens.add({
-          targets: sprite,
-          scaleX: kind === "mossGolem" ? 1.68 : 1.12,
-          scaleY: kind === "mossGolem" ? 1.32 : 0.88,
-          duration: 280,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        });
+        const base: ForestKind = isBoss ? "mossGolem" : (zone.kind ?? "wasp");
+        const kind: ForestKind = base === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : base;
+        this.roamers.push(addRoamer(this, this.roamerGroup, zone, kind, ENEMIES[kind].texture, isBoss));
       }
     }
   }
@@ -491,34 +455,7 @@ export class ForestScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
-  }
-
-  private startBattle(enemy?: Roamer["kind"]): void {
+  private startBattle(enemy?: ForestKind): void {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.

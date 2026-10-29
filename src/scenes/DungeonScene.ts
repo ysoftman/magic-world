@@ -24,6 +24,7 @@ import { objectiveLine } from "../objective";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
+  addRoamer,
   addTownExitLabel,
   boundCameraToMap,
   buildTileLayers,
@@ -35,10 +36,12 @@ import {
   HeroWalk,
   isWalkableCell,
   noteFightSpot,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
@@ -77,18 +80,7 @@ const TOUCH_CAMERA_FOOT = TILE;
 // goblin rolls only — a dungeon-exclusive jackpot, tint-only reskin
 const CURSED_GOBLIN_CHANCE = 0.08;
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: "slime" | "goblin" | "king" | "bat" | "cursedGoblin";
-}
+type CaveKind = "slime" | "goblin" | "king" | "bat" | "cursedGoblin";
 
 export class DungeonScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -97,7 +89,7 @@ export class DungeonScene extends Phaser.Scene {
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
+  private roamers: Roamer<CaveKind>[] = [];
   private encounterCooldown = 0;
   private exitingDungeon = false;
 
@@ -339,7 +331,7 @@ export class DungeonScene extends Phaser.Scene {
     // roamers are kept to their boxes, as under a panel: left on their last
     // velocity they walked off across the map until the title came
     if (this.quitting) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -355,7 +347,7 @@ export class DungeonScene extends Phaser.Scene {
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -365,7 +357,7 @@ export class DungeonScene extends Phaser.Scene {
     // could land on the exit or the ABYSS stair, which took the hero there
     // (the stair at B1, unasked) the moment the battle returned
     const moving = this.walk.step(this.exitingDungeon);
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
@@ -488,9 +480,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const zone of DUNGEON_ZONES) {
       const isBoss = zone.count === 1;
       for (let i = 0; i < zone.count; i++) {
-        const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-        const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const kind: Exclude<Roamer["kind"], "cursedGoblin"> = isBoss
+        const kind: Exclude<CaveKind, "cursedGoblin"> = isBoss
           ? "king"
           : zone.kind === "bat"
             ? "bat"
@@ -500,34 +490,8 @@ export class DungeonScene extends Phaser.Scene {
         // rare palette reskin, same pattern as TownScene's GOLDEN SLIME: its
         // own texture plus the bookkeeping "kind" used for battle dispatch
         const cursed = kind === "goblin" && Math.random() < CURSED_GOBLIN_CHANCE;
-        const roamerKind: Roamer["kind"] = cursed ? "cursedGoblin" : kind;
-        const sprite = this.roamerGroup.create(x, y, ENEMIES[roamerKind].texture) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDepth(10);
-        sprite.body?.setSize(40, 24).setOffset(12, 32);
-        if (kind === "king") {
-          sprite.setScale(1.5);
-        }
-        this.roamers.push({
-          sprite,
-          minX: zone.cx - zone.w / 2 + 8,
-          maxX: zone.cx + zone.w / 2 - 8,
-          minY: zone.cy - zone.h / 2 + 8,
-          maxY: zone.cy + zone.h / 2 - 8,
-          targetX: x,
-          targetY: y,
-          wait: 300 + Math.random() * 800,
-          speed: (isBoss ? 40 : 56) + Math.random() * 40,
-          kind: roamerKind,
-        });
-        this.tweens.add({
-          targets: sprite,
-          scaleX: kind === "king" ? 1.68 : 1.12,
-          scaleY: kind === "king" ? 1.32 : 0.88,
-          duration: 280,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        });
+        const roamerKind: CaveKind = cursed ? "cursedGoblin" : kind;
+        this.roamers.push(addRoamer(this, this.roamerGroup, zone, roamerKind, ENEMIES[roamerKind].texture, isBoss));
       }
     }
   }
@@ -581,34 +545,7 @@ export class DungeonScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
-  }
-
-  private startBattle(enemy?: Roamer["kind"]): void {
+  private startBattle(enemy?: CaveKind): void {
     // A fade out either way is a scene change: a battle rolled while the exit
     // or the ABYSS stair fades (no safe radius round the stair), or that stair
     // reached while a battle fades, started both scenes at once.

@@ -8,6 +8,7 @@ import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
+  addRoamer,
   addTownExitSign,
   boundCameraToMap,
   buildTileLayers,
@@ -19,10 +20,12 @@ import {
   HeroWalk,
   isWalkableCell,
   noteFightSpot,
+  type Roamer,
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
@@ -58,18 +61,7 @@ const MAX_COOLDOWN_STEP = 50;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 
-interface Roamer {
-  sprite: Phaser.Physics.Arcade.Sprite;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  targetX: number;
-  targetY: number;
-  wait: number;
-  speed: number;
-  kind: "frostMoth" | "auroraMoth" | "yeti" | "iceGolem";
-}
+type SnowKind = "frostMoth" | "auroraMoth" | "yeti" | "iceGolem";
 
 export class SnowScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -80,7 +72,7 @@ export class SnowScene extends Phaser.Scene {
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
-  private roamers: Roamer[] = [];
+  private roamers: Roamer<SnowKind>[] = [];
   private encounterCooldown = 0;
   private exitingSnow = false;
 
@@ -305,7 +297,7 @@ export class SnowScene extends Phaser.Scene {
     // roamers are kept to their boxes, as under a panel: left on their last
     // velocity they walked off across the map until the title came
     if (this.quitting) {
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -322,7 +314,7 @@ export class SnowScene extends Phaser.Scene {
       this.zQueued = false;
       this.walk.halt();
       this.panels.update();
-      this.updateRoamers(delta);
+      wanderRoamers(this.roamers, delta);
       return;
     }
 
@@ -349,7 +341,7 @@ export class SnowScene extends Phaser.Scene {
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
     const moving = this.walk.step(this.exitingSnow);
-    this.updateRoamers(delta);
+    wanderRoamers(this.roamers, delta);
     const nightFade = this.night.update();
     this.fireflies.emitting = nightFade > 0.05;
     this.fireflies.setAlpha(nightFade);
@@ -419,37 +411,9 @@ export class SnowScene extends Phaser.Scene {
     for (const zone of SNOW_ZONES) {
       const isBoss = zone.count === 1;
       for (let i = 0; i < zone.count; i++) {
-        const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
-        const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
-        const base: Roamer["kind"] = isBoss ? "iceGolem" : (zone.kind ?? "frostMoth");
-        const kind: Roamer["kind"] = base === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : base;
-        const sprite = this.roamerGroup.create(x, y, ENEMIES[kind].texture) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDepth(10);
-        sprite.body?.setSize(40, 24).setOffset(12, 32);
-        if (kind === "iceGolem") {
-          sprite.setScale(1.5);
-        }
-        this.roamers.push({
-          sprite,
-          minX: zone.cx - zone.w / 2 + 8,
-          maxX: zone.cx + zone.w / 2 - 8,
-          minY: zone.cy - zone.h / 2 + 8,
-          maxY: zone.cy + zone.h / 2 - 8,
-          targetX: x,
-          targetY: y,
-          wait: 300 + Math.random() * 800,
-          speed: (isBoss ? 40 : 56) + Math.random() * 40,
-          kind,
-        });
-        this.tweens.add({
-          targets: sprite,
-          scaleX: kind === "iceGolem" ? 1.68 : 1.12,
-          scaleY: kind === "iceGolem" ? 1.32 : 0.88,
-          duration: 280,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        });
+        const base: SnowKind = isBoss ? "iceGolem" : (zone.kind ?? "frostMoth");
+        const kind: SnowKind = base === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : base;
+        this.roamers.push(addRoamer(this, this.roamerGroup, zone, kind, ENEMIES[kind].texture, isBoss));
       }
     }
   }
@@ -498,34 +462,7 @@ export class SnowScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private updateRoamers(delta: number): void {
-    for (const r of this.roamers) {
-      const s = r.sprite;
-      if (r.wait > 0) {
-        r.wait -= delta;
-        if (r.wait <= 0) this.pickRoamerTarget(r);
-        continue;
-      }
-      const dx = r.targetX - s.x;
-      const dy = r.targetY - s.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 4) {
-        s.setVelocity(0, 0);
-        r.wait = 500 + Math.random() * 900;
-      } else {
-        s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
-      }
-      s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
-      s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
-    }
-  }
-
-  private pickRoamerTarget(r: Roamer): void {
-    r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
-    r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
-  }
-
-  private startBattle(enemy?: Roamer["kind"]): void {
+  private startBattle(enemy?: SnowKind): void {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
