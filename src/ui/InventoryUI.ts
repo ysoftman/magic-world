@@ -5,6 +5,7 @@ import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
 import { type EquipmentKey, GameState, refinedName } from "../gameState";
 import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
@@ -240,22 +241,22 @@ export class InventoryUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private items: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private items: PixelText[] = [];
   private icons: Phaser.GameObjects.Image[] = [];
-  private counts: Phaser.GameObjects.Text[] = [];
-  private headers: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private statusLabels: Phaser.GameObjects.Text;
-  private statusValues: Phaser.GameObjects.Text;
-  private atkDefLabels: Phaser.GameObjects.Text;
-  private atkDefValues: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
-  private info: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
-  private pager: Phaser.GameObjects.Text;
+  private counts: PixelText[] = [];
+  private headers: PixelText[] = [];
+  private cursor: PixelText;
+  private statusLabels: PixelText;
+  private statusValues: PixelText;
+  private atkDefLabels: PixelText;
+  private atkDefValues: PixelText;
+  private msg: PixelText;
+  private info: PixelText;
+  private hint: PixelText;
+  private pager: PixelText;
   private mapView: Phaser.GameObjects.Graphics;
-  private mapTitle: Phaser.GameObjects.Text;
+  private mapTitle: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private keyUp: Phaser.Input.Keyboard.Key;
@@ -292,7 +293,7 @@ export class InventoryUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 40, "ITEMS", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "ITEMS", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -301,7 +302,7 @@ export class InventoryUI {
     COLUMNS.forEach(({ header }, col) => {
       this.headers.push(
         scene.add
-          .text(NAME_X + (col % 2) * COL_W, PANEL_TOP + 84, header, retroStyle(5, "#8ecbff"))
+          .pixelText(NAME_X + (col % 2) * COL_W, PANEL_TOP + 84, header, retroStyle(5, "#8ecbff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -324,7 +325,7 @@ export class InventoryUI {
       );
       this.items.push(
         scene.add
-          .text(x + ICON_DX, y, item.label, retroStyle(6, "#ffffff"))
+          .pixelText(x + ICON_DX, y, item.label, retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -332,14 +333,19 @@ export class InventoryUI {
       );
       this.counts.push(
         scene.add
-          .text(x + (item.kind === "map" ? MAP_TAG_DX : COUNT_DX), y, "x0", retroStyle(6, "#ffffff"))
+          .pixelText(x + (item.kind === "map" ? MAP_TAG_DX : COUNT_DX), y, "x0", retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
           .setVisible(false),
       );
     });
-    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
+    this.cursor = scene.add
+      .pixelText(0, 0, ">", retroStyle(6, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
 
     // HP/MP is justified: the labels share a left edge, the values a right
     // one. A single right-aligned "HP n/n\nMP n/n" text left the shorter MP
@@ -347,14 +353,14 @@ export class InventoryUI {
     // two lines sat 3px apart): 56px, y 10..66 under the panel's top, 10px
     // inside its edge and 8px over the pager on the header row (from 74)
     this.statusLabels = scene.add
-      .text(STATUS_RIGHT_X - STATUS_VALUE_W, PANEL_TOP + STATUS_Y, "HP\nMP", retroStyle(6, "#8ecbff"))
+      .pixelText(STATUS_RIGHT_X - STATUS_VALUE_W, PANEL_TOP + STATUS_Y, "HP\nMP", retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0.5)
       .setLineSpacing(8)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.statusValues = scene.add
-      .text(STATUS_RIGHT_X, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
+      .pixelText(STATUS_RIGHT_X, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
       .setOrigin(1, 0.5)
       .setAlign("right")
       .setLineSpacing(8)
@@ -362,14 +368,14 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.atkDefLabels = scene.add
-      .text(NAME_X, PANEL_TOP + STATUS_Y, "ATK\nDEF", retroStyle(6, "#8ecbff"))
+      .pixelText(NAME_X, PANEL_TOP + STATUS_Y, "ATK\nDEF", retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0.5)
       .setLineSpacing(8)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.atkDefValues = scene.add
-      .text(NAME_X + ATK_DEF_W, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
+      .pixelText(NAME_X + ATK_DEF_W, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
       .setOrigin(1, 0.5)
       .setAlign("right")
       .setLineSpacing(8)
@@ -377,24 +383,24 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), HINT)
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), HINT)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.info = scene.add
-      .text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.pager = scene.add
-      .text(STATUS_RIGHT_X, PANEL_TOP + 84, "", retroStyle(5, "#9f9fd0"))
+      .pixelText(STATUS_RIGHT_X, PANEL_TOP + 84, "", retroStyle(5, "#9f9fd0"))
       .setOrigin(1, 0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -403,7 +409,7 @@ export class InventoryUI {
     // the map's region over its chart, on the header row: "TOWN FIELDS" is
     // 220px from x=680, 40px clear of the pager
     this.mapTitle = scene.add
-      .text(NAME_X + COL_W, PANEL_TOP + 84, "", retroStyle(5, "#fdba74"))
+      .pixelText(NAME_X + COL_W, PANEL_TOP + 84, "", retroStyle(5, "#fdba74"))
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(152)
