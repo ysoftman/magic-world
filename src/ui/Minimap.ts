@@ -1,6 +1,5 @@
 import type Phaser from "phaser";
 import { GAME_HEIGHT } from "../config";
-import { GameState } from "../gameState";
 import {
   T_ASH,
   T_GRASS,
@@ -17,7 +16,7 @@ import {
   T_WATER_B,
   TILE,
 } from "../levels";
-import { currentObjective, objectivePoints } from "../objective";
+import { guidePoints } from "../objective";
 import { type Season, seasonToday } from "../season";
 import type { Region } from "../weather";
 import { isTouchDevice } from "./TouchControls";
@@ -123,7 +122,7 @@ const GOAL_COLOR = 0xff4fd8;
 const GOAL_RADIUS = 6;
 const GOAL_PULSE_MS = 900;
 
-// which region's map each roaming scene is, for objectivePoints()
+// which region's map each roaming scene is, for guidePoints()
 const SCENE_REGION: Record<string, Region> = { Town: "town", Forest: "forest", Snow: "snow", Dungeon: "dungeon", Volcano: "volcano" };
 
 // Small fixed-screen minimap overlay: the scene's tilemap 2D array is drawn
@@ -214,9 +213,10 @@ export class Minimap {
   }
 
   // Rings the quest's current goal: the spot itself on this map, or this map's
-  // way towards it when it lies in another region (objective.ts).
+  // way towards it when it lies in another region (objective.ts), which in the
+  // cave before the first dive is the ABYSS stair rather than the way out.
   private drawGoal(): void {
-    const points = this.region ? objectivePoints(currentObjective(GameState.quest).spot, this.region) : [];
+    const points = this.region ? guidePoints(this.region) : [];
     const key = points.map((p) => `${p.x},${p.y}`).join("|");
     if (key === this.goalKey) return;
     this.goalKey = key;

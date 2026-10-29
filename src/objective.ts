@@ -1,5 +1,7 @@
+import { abyssOpen } from "./abyss";
 import { FIRE_BEASTS, fireBeastsCaughtIn, GameState, type QuestState } from "./gameState";
 import {
+  ABYSS_STAIRS_POS,
   CAVE_POS,
   DUNGEON_ENTRY,
   DUNGEON_ZONES,
@@ -271,4 +273,26 @@ export function objectivePoints(spot: ObjectiveSpot | null, region: Region): Arr
   // the slime meadows: the town's zones without a named kind
   if (spot.kind === "slimes") return MONSTER_ZONES.filter((z) => !z.kind).map((z) => ({ x: z.cx, y: z.cy }));
   return [ENTRANCE[spot.region]];
+}
+
+/**
+ * What the guide arrow and the minimap's ring point at on `region`'s map:
+ * objectivePoints for the quest's current step, except in the cave while the
+ * ABYSS is open (abyss.ts) and the hero has never been down (abyssBest 0).
+ * There the stair takes the place of the cave's exit: a goal outside the
+ * cave only pointed the way back out, which told someone looking for the
+ * stair it wasn't here (a player took it for gone), and with no goal at all
+ * (CATCH, QUEST DONE) nothing pointed anywhere. A goal inside the cave is
+ * kept: the KING's lair in a NEW GAME+ cycle, and the BATS job, whose whole
+ * map is the goal and points nowhere. From the first dive on the guide is
+ * the quest's alone; the minimap's violet dot and the cave's help line still
+ * say where the stair is.
+ */
+export function guidePoints(region: Region): Array<{ x: number; y: number }> {
+  const spot = currentObjective(GameState.quest).spot;
+  const inCave = (spot?.kind === "boss" || spot?.kind === "region") && spot.region === "dungeon";
+  if (region === "dungeon" && !inCave && GameState.abyssBest === 0 && abyssOpen(GameState.quest, GameState.ngPlus)) {
+    return [ABYSS_STAIRS_POS];
+  }
+  return objectivePoints(spot, region);
 }

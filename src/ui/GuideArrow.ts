@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { GameState } from "../gameState";
-import { currentObjective, objectivePoints } from "../objective";
+import { guidePoints } from "../objective";
 import { makeTexture } from "../pixelart";
 import type { Region } from "../weather";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
@@ -73,7 +73,8 @@ function bake(scene: Phaser.Scene): void {
 
 /**
  * A small arrow orbiting the hero towards the quest's current goal (the
- * nearest of objectivePoints, the spots the minimap rings), so the way is
+ * nearest of guidePoints, the spots the minimap rings; in the cave before the
+ * first dive, the ABYSS stair in place of the way out), so the way is
  * there without opening the map. It shows only while the goal is out of
  * sight, and fades out once it comes into view; `hidden` is the scene's own
  * "a panel, dialogue or prompt is up" check, and the GUIDE ARROW setting
@@ -91,7 +92,7 @@ export function addGuideArrow(scene: Phaser.Scene, hero: Phaser.GameObjects.Spri
     let goal: { x: number; y: number } | null = null;
     if (GameState.guideArrow && !hidden()) {
       let best = Number.POSITIVE_INFINITY;
-      for (const p of objectivePoints(currentObjective(GameState.quest).spot, region)) {
+      for (const p of guidePoints(region)) {
         const d = Phaser.Math.Distance.Squared(hero.x, hero.y, p.x, p.y);
         if (d < best) {
           best = d;
