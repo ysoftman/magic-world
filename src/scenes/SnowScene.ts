@@ -16,6 +16,7 @@ import {
   FieldPanels,
   FieldToasts,
   fadeAreaTitle,
+  HeroWalk,
   isWalkableCell,
   noteFightSpot,
   saveAndQuit,
@@ -33,7 +34,6 @@ import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
-import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
@@ -48,8 +48,6 @@ import { SNOW_SKIN } from "./BootScene";
 // Floating text over the snow gets the same dark rim as the TOWN marker: the
 // field is light enough that the light blue and green labels lost their edges.
 const TEXT_STROKE = "#1a1028";
-
-type LastMove = "down" | "up" | "right" | "left";
 
 const ENCOUNTER_COOLDOWN = 600;
 // the share of frost moths that are the snow field's jackpot, AURORA MOTH
@@ -73,20 +71,10 @@ interface Roamer {
   kind: "frostMoth" | "auroraMoth" | "yeti" | "iceGolem";
 }
 
-const IDLE_TEXTURE: Record<LastMove, string> = {
-  down: "hero-idle-down",
-  up: "hero-idle-up",
-  right: "hero-idle-right",
-  left: "hero-idle-left",
-};
-
 export class SnowScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
-  private playerShadow!: Phaser.GameObjects.Ellipse;
   private companionFollower!: CompanionSprite;
   private treasure!: TreasureDigger;
-  private weaponOverlay!: Phaser.GameObjects.Sprite;
-  private shieldOverlay!: Phaser.GameObjects.Sprite;
   private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -95,16 +83,8 @@ export class SnowScene extends Phaser.Scene {
   private roamers: Roamer[] = [];
   private encounterCooldown = 0;
   private exitingSnow = false;
-  private lastMove: LastMove = "down";
 
-  private keyLeft!: Phaser.Input.Keyboard.Key;
-  private keyRight!: Phaser.Input.Keyboard.Key;
-  private keyUp!: Phaser.Input.Keyboard.Key;
-  private keyDown!: Phaser.Input.Keyboard.Key;
-  private keyH!: Phaser.Input.Keyboard.Key;
-  private keyJ!: Phaser.Input.Keyboard.Key;
-  private keyK!: Phaser.Input.Keyboard.Key;
-  private keyL!: Phaser.Input.Keyboard.Key;
+  private walk!: HeroWalk;
   private fieldKeys!: FieldKeys;
   private keyZ!: Phaser.Input.Keyboard.Key;
   private zQueued = false;
@@ -137,7 +117,6 @@ export class SnowScene extends Phaser.Scene {
     // locked encounters when walking into the cave or forest, and their entry
     // tiles sit near a monster zone, so at night a fight fired immediately.
     this.encounterCooldown = ENTRY_GRACE;
-    this.lastMove = "down";
     this.exitingSnow = false;
     this.quitting = false;
 
@@ -180,12 +159,12 @@ export class SnowScene extends Phaser.Scene {
     // Step clear of every monster zone on entry, the same as the cave.
     this.escapeMonsterZone();
 
-    this.playerShadow = addGroundShadow(this, this.player);
+    const shadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
     this.treasure = new TreasureDigger(this, "snow", this.player, { toastY: FIELD_TOAST_Y, dug: () => this.holdFights() });
 
-    this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
-    this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
+    const weapon = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
+    const shield = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
     createWalkAnimations(this);
 
@@ -243,14 +222,7 @@ export class SnowScene extends Phaser.Scene {
     boundCameraToMap(this, SNOW_W * TILE, SNOW_H * TILE);
 
     const kb = this.input.keyboard!;
-    this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
-    this.keyRight = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
-    this.keyUp = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.keyDown = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.keyH = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-    this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
-    this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
     this.keyZ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
     this.keyZ.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.zQueued = true;
@@ -348,8 +320,7 @@ export class SnowScene extends Phaser.Scene {
     // battle.
     if (this.uiBlocking()) {
       this.zQueued = false;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
+      this.walk.halt();
       this.panels.update();
       this.updateRoamers(delta);
       return;
@@ -374,48 +345,16 @@ export class SnowScene extends Phaser.Scene {
       }
     }
 
-    let vx = 0;
-    let vy = 0;
     // stood still through a scene change's fade: walked on, the fight's spot
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
-    if (!this.exitingSnow) {
-      if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-      else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-      if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-      else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
-    }
-
-    this.player.setVelocity(vx, vy);
-
-    const moving = vx !== 0 || vy !== 0;
-    if (moving) {
-      if (Math.abs(vx) > Math.abs(vy)) {
-        this.lastMove = vx < 0 ? "left" : "right";
-        this.player.anims.play(this.lastMove === "left" ? "walk-left" : "walk-right", true);
-      } else {
-        this.lastMove = vy < 0 ? "up" : "down";
-        this.player.anims.play(this.lastMove === "up" ? "walk-up" : "walk-down", true);
-      }
-    } else {
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
-    }
-
-    this.playerShadow.setPosition(this.player.x, this.player.y + 28);
-    this.companionFollower.update(this.player.x, this.player.y);
-    this.updateEquipOverlays();
+    const moving = this.walk.step(this.exitingSnow);
     this.updateRoamers(delta);
     const nightFade = this.night.update();
     this.fireflies.emitting = nightFade > 0.05;
     this.fireflies.setAlpha(nightFade);
     this.minimap.update();
     this.checkEncounter(delta, moving);
-  }
-
-  private updateEquipOverlays(): void {
-    placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
   }
 
   private uiBlocking(): boolean {

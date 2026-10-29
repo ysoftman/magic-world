@@ -16,6 +16,7 @@ import {
   FieldPanels,
   FieldToasts,
   fadeAreaTitle,
+  HeroWalk,
   isWalkableCell,
   noteFightSpot,
   saveAndQuit,
@@ -33,7 +34,6 @@ import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
-import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
 import { FOREST_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
@@ -44,8 +44,6 @@ import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { type Weather, weatherOn, weatherToday } from "../weather";
 import { seasonSkin } from "./BootScene";
-
-type LastMove = "down" | "up" | "right" | "left";
 
 const ENCOUNTER_COOLDOWN = 600;
 // the share of wasps that are the forest's jackpot, SILVER WASP (monsters.ts),
@@ -71,19 +69,9 @@ interface Roamer {
   kind: "wasp" | "silverWasp" | "spider" | "orc" | "mossGolem";
 }
 
-const IDLE_TEXTURE: Record<LastMove, string> = {
-  down: "hero-idle-down",
-  up: "hero-idle-up",
-  right: "hero-idle-right",
-  left: "hero-idle-left",
-};
-
 export class ForestScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
-  private playerShadow!: Phaser.GameObjects.Ellipse;
   private companionFollower!: CompanionSprite;
-  private weaponOverlay!: Phaser.GameObjects.Sprite;
-  private shieldOverlay!: Phaser.GameObjects.Sprite;
   private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -91,16 +79,8 @@ export class ForestScene extends Phaser.Scene {
   private roamers: Roamer[] = [];
   private encounterCooldown = 0;
   private exitingForest = false;
-  private lastMove: LastMove = "down";
 
-  private keyLeft!: Phaser.Input.Keyboard.Key;
-  private keyRight!: Phaser.Input.Keyboard.Key;
-  private keyUp!: Phaser.Input.Keyboard.Key;
-  private keyDown!: Phaser.Input.Keyboard.Key;
-  private keyH!: Phaser.Input.Keyboard.Key;
-  private keyJ!: Phaser.Input.Keyboard.Key;
-  private keyK!: Phaser.Input.Keyboard.Key;
-  private keyL!: Phaser.Input.Keyboard.Key;
+  private walk!: HeroWalk;
   private fieldKeys!: FieldKeys;
   private quitting = false;
   // the season the forest was built in (or last turned to in place), and
@@ -134,7 +114,6 @@ export class ForestScene extends Phaser.Scene {
     // locked encounters when walking into the cave or forest, and their entry
     // tiles sit near a monster zone, so at night a fight fired immediately.
     this.encounterCooldown = ENTRY_GRACE;
-    this.lastMove = "down";
     this.exitingForest = false;
     this.quitting = false;
     this.turningSeason = false;
@@ -178,7 +157,7 @@ export class ForestScene extends Phaser.Scene {
     // Step clear of every monster zone on entry, the same as the cave
     if (!turn) this.escapeMonsterZone();
 
-    this.playerShadow = addGroundShadow(this, this.player);
+    const shadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
     // treasure maps to this region: the glint over each X, and Z to dig
     new TreasureDigger(this, "forest", this.player, {
@@ -188,8 +167,8 @@ export class ForestScene extends Phaser.Scene {
       dug: () => this.holdFights(),
     });
 
-    this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
-    this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
+    const weapon = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
+    const shield = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
     createWalkAnimations(this);
 
@@ -226,15 +205,7 @@ export class ForestScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     boundCameraToMap(this, FOREST_W * TILE, FOREST_H * TILE);
 
-    const kb = this.input.keyboard!;
-    this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
-    this.keyRight = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
-    this.keyUp = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.keyDown = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.keyH = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-    this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
-    this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
     this.fieldKeys = new FieldKeys(this);
     const help = addHelpPopup(
       this,
@@ -325,8 +296,7 @@ export class ForestScene extends Phaser.Scene {
     // run through the cave or forest had no way to drink a potion outside of a
     // battle.
     if (this.uiBlocking()) {
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
+      this.walk.halt();
       this.panels.update();
       this.updateRoamers(delta);
       return;
@@ -348,46 +318,14 @@ export class ForestScene extends Phaser.Scene {
 
     if (this.panels.takeOpenKey()) return;
 
-    let vx = 0;
-    let vy = 0;
     // stood still through a scene change's fade: walked on, the fight's spot
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
-    if (!this.exitingForest) {
-      if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-      else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-      if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-      else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
-    }
-
-    this.player.setVelocity(vx, vy);
-
-    const moving = vx !== 0 || vy !== 0;
-    if (moving) {
-      if (Math.abs(vx) > Math.abs(vy)) {
-        this.lastMove = vx < 0 ? "left" : "right";
-        this.player.anims.play(this.lastMove === "left" ? "walk-left" : "walk-right", true);
-      } else {
-        this.lastMove = vy < 0 ? "up" : "down";
-        this.player.anims.play(this.lastMove === "up" ? "walk-up" : "walk-down", true);
-      }
-    } else {
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
-    }
-
-    this.playerShadow.setPosition(this.player.x, this.player.y + 28);
-    this.companionFollower.update(this.player.x, this.player.y);
-    this.updateEquipOverlays();
+    const moving = this.walk.step(this.exitingForest);
     this.updateRoamers(delta);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
-  }
-
-  private updateEquipOverlays(): void {
-    placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
   }
 
   private uiBlocking(): boolean {
@@ -412,9 +350,7 @@ export class ForestScene extends Phaser.Scene {
     this.turningSeason = true;
     // the roamers still wander (update) and would start a fight on contact
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.player.setVelocity(0, 0);
-    this.player.anims.stop();
-    this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
+    this.walk.idle();
     this.cameras.main.fadeOut(SEASON_FADE, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.restart({

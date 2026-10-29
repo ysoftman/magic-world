@@ -53,6 +53,7 @@ import {
   FieldKeys,
   FieldPanels,
   FieldToasts,
+  HeroWalk,
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
@@ -74,7 +75,6 @@ import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
-import { placeHeroGear } from "../ui/HeroGear";
 import { HomeUI } from "../ui/HomeUI";
 import { InventoryUI } from "../ui/InventoryUI";
 import { KitchenUI } from "../ui/Kitchen";
@@ -169,8 +169,6 @@ const WORKPLACES: Record<
 // half a retroStyle(5) tag's height (5 x 4 x 1.3 = 26px) plus a 2px gap
 const TAG_CLEAR = 15;
 
-type LastMove = "down" | "up" | "right" | "left";
-
 // One step from an exit back into the map, in tiles: away from the edge it
 // sits on. The CAVE, on no edge, steps out south of its mouth.
 const inwardOf = (pos: { x: number; y: number }): { dx: number; dy: number } => {
@@ -207,20 +205,10 @@ interface Roamer {
   kind: "slime" | "troll" | "wolf" | "goldSlime" | "wisp";
 }
 
-const IDLE_TEXTURE: Record<LastMove, string> = {
-  down: "hero-idle-down",
-  up: "hero-idle-up",
-  right: "hero-idle-right",
-  left: "hero-idle-left",
-};
-
 export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
-  private playerShadow!: Phaser.GameObjects.Ellipse;
   private companionFollower!: CompanionSprite;
   private treasure!: TreasureDigger;
-  private weaponOverlay!: Phaser.GameObjects.Sprite;
-  private shieldOverlay!: Phaser.GameObjects.Sprite;
   private layers!: TileLayers;
   private panels!: FieldPanels;
   private dialogue!: DialogueBox;
@@ -266,7 +254,6 @@ export class TownScene extends Phaser.Scene {
   // a town-event toast is scheduled but not yet shown (see announceEvent)
   private eventToastPending = false;
   private encounterCooldown = 0;
-  private lastMove: LastMove = "down";
   private night!: NightOverlay;
   private touch?: TouchControls;
   private homeLabel!: Phaser.GameObjects.Text;
@@ -295,14 +282,7 @@ export class TownScene extends Phaser.Scene {
   private turningSeason = false;
   private toasts!: FieldToasts;
 
-  private keyLeft!: Phaser.Input.Keyboard.Key;
-  private keyRight!: Phaser.Input.Keyboard.Key;
-  private keyUp!: Phaser.Input.Keyboard.Key;
-  private keyDown!: Phaser.Input.Keyboard.Key;
-  private keyH!: Phaser.Input.Keyboard.Key;
-  private keyJ!: Phaser.Input.Keyboard.Key;
-  private keyK!: Phaser.Input.Keyboard.Key;
-  private keyL!: Phaser.Input.Keyboard.Key;
+  private walk!: HeroWalk;
   private keyZ!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyG!: Phaser.Input.Keyboard.Key;
@@ -338,7 +318,6 @@ export class TownScene extends Phaser.Scene {
     // locked encounters when walking into the cave or forest, and their entry
     // tiles sit near a monster zone, so at night a fight fired immediately.
     this.encounterCooldown = ENTRY_GRACE;
-    this.lastMove = "down";
     this.resting = false;
     this.enteringDungeon = false;
     this.enteringForest = false;
@@ -565,12 +544,12 @@ export class TownScene extends Phaser.Scene {
     // lock expiring here doesn't trigger another fight immediately.
     if (data?.fromBattle) this.escapeMonsterZone();
 
-    this.playerShadow = addGroundShadow(this, this.player);
+    const shadow = addGroundShadow(this, this.player);
     this.companionFollower = new CompanionSprite(this, this.player.x, this.player.y);
     this.treasure = new TreasureDigger(this, "town", this.player, { toastY: STATUS_HUD_TOAST_Y, dug: () => this.holdFights() });
 
-    this.weaponOverlay = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
-    this.shieldOverlay = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
+    const weapon = this.add.sprite(this.player.x, this.player.y, "equip-sword").setDepth(11).setVisible(false);
+    const shield = this.add.sprite(this.player.x, this.player.y, "equip-shield").setDepth(11).setVisible(false);
 
     createWalkAnimations(this);
 
@@ -686,14 +665,7 @@ export class TownScene extends Phaser.Scene {
     boundCameraToMap(this, MAP_W * TILE, MAP_H * TILE);
 
     const kb = this.input.keyboard!;
-    this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
-    this.keyRight = kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
-    this.keyUp = kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.keyDown = kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.keyH = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-    this.keyJ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.keyK = kb.addKey(Phaser.Input.Keyboard.KeyCodes.K);
-    this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
     // ignore e.repeat on keys the title screen also uses (Z/SPACE/C): holding
     // one through the scene switch delivers repeat keydowns to the fresh Keys
     // here, instantly triggering talk/rest or the bestiary on entry
@@ -1311,8 +1283,7 @@ export class TownScene extends Phaser.Scene {
 
     if (this.uiBlocking()) {
       this.zQueued = false;
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
+      this.walk.halt();
       this.panels.update();
       this.updateRoamers(delta);
       // the town keeps living behind a panel; whoever is talking stands still
@@ -1355,33 +1326,7 @@ export class TownScene extends Phaser.Scene {
       if (!this.fieldKeys.leaving() && this.tryTalk()) return;
     }
 
-    let vx = 0;
-    let vy = 0;
-    if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-    else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-    if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-    else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
-
-    this.player.setVelocity(vx, vy);
-
-    const moving = vx !== 0 || vy !== 0;
-    if (moving) {
-      if (Math.abs(vx) > Math.abs(vy)) {
-        this.lastMove = vx < 0 ? "left" : "right";
-        this.player.anims.play(this.lastMove === "left" ? "walk-left" : "walk-right", true);
-      } else {
-        this.lastMove = vy < 0 ? "up" : "down";
-        this.player.anims.play(this.lastMove === "up" ? "walk-up" : "walk-down", true);
-      }
-    } else {
-      this.player.setVelocity(0, 0);
-      this.player.anims.stop();
-      this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
-    }
-
-    this.playerShadow.setPosition(this.player.x, this.player.y + 28);
-    this.companionFollower.update(this.player.x, this.player.y);
-    this.updateEquipOverlays();
+    const moving = this.walk.step();
     this.updateRoamers(delta);
     this.villagers.update(delta, this.player, this.dialogue.isActive());
     this.checkEncounter(delta, moving);
@@ -1399,10 +1344,6 @@ export class TownScene extends Phaser.Scene {
       duration: 900,
       onComplete: () => n.destroy(),
     });
-  }
-
-  private updateEquipOverlays(): void {
-    placeHeroGear(this.weaponOverlay, this.shieldOverlay, this.player, this.lastMove);
   }
 
   // YES to the quit question, or the settings' QUIT chip on touch
@@ -1716,9 +1657,7 @@ export class TownScene extends Phaser.Scene {
     this.turningSeason = true;
     // the roamers still wander (update) and would start a fight on contact
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
-    this.player.setVelocity(0, 0);
-    this.player.anims.stop();
-    this.player.setTexture(IDLE_TEXTURE[this.lastMove]);
+    this.walk.idle();
     this.cameras.main.fadeOut(SEASON_FADE, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       // never without data: a restart with none replays the last, and a town

@@ -7,8 +7,10 @@ import { GameState, onSaved } from "./gameState";
 import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
+import type { CompanionSprite } from "./ui/CompanionSprite";
 import type { DialogueBox } from "./ui/DialogueBox";
 import { helpOpen } from "./ui/HelpPopup";
+import { placeHeroGear } from "./ui/HeroGear";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
 import { showUnlockTip, type TipPlace } from "./unlockTips";
@@ -443,6 +445,83 @@ export function createWalkAnimations(scene: Phaser.Scene): void {
       key: `hero-${dir}-${i}`,
     }));
     scene.anims.create({ key, frames, frameRate: WALK_FRAME_RATE, repeat: -1 });
+  }
+}
+
+// px a second on each axis, so a diagonal is that on both
+const WALK_SPEED = 240;
+
+/** What goes about a map with the hero: its shadow, the companion, the gear drawn over it. */
+export interface HeroFollowers {
+  shadow: Phaser.GameObjects.Ellipse;
+  companion: CompanionSprite;
+  weapon: Phaser.GameObjects.Sprite;
+  shield: Phaser.GameObjects.Sprite;
+}
+
+/**
+ * The hero's walk on a map: the arrows or HJKL, the walk cycle of the way
+ * it goes (up or down wins a diagonal) and, stood still, the idle frame of
+ * the way it last went, which the gear is placed for too (placeHeroGear).
+ * Built in create(), where the scene's other keys are, on a hero that
+ * starts facing down; its keys go at the scene's shutdown.
+ */
+export class HeroWalk {
+  private facing: LastMove = "down";
+  private readonly hero: Phaser.Physics.Arcade.Sprite;
+  private readonly followers: HeroFollowers;
+  private readonly keys: Record<LastMove, Phaser.Input.Keyboard.Key[]>;
+
+  constructor(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite, followers: HeroFollowers) {
+    this.hero = hero;
+    this.followers = followers;
+    const kb = scene.input.keyboard!;
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    const [left, right, up, down, h, j, k, l] = [K.LEFT, K.RIGHT, K.UP, K.DOWN, K.H, K.J, K.K, K.L].map((code) => kb.addKey(code));
+    this.keys = { left: [left, h], right: [right, l], up: [up, k], down: [down, j] };
+  }
+
+  /**
+   * A frame's walk, and the shadow, the companion and the gear after it;
+   * whether the hero walked. `still` (the scene has begun to leave) stands
+   * the hero whatever is held.
+   */
+  step(still = false): boolean {
+    const held = (way: LastMove): boolean => this.keys[way].some((key) => key.isDown);
+    let vx = 0;
+    let vy = 0;
+    if (!still) {
+      if (held("left")) vx = -WALK_SPEED;
+      else if (held("right")) vx = WALK_SPEED;
+      if (held("up")) vy = -WALK_SPEED;
+      else if (held("down")) vy = WALK_SPEED;
+    }
+    this.hero.setVelocity(vx, vy);
+    const moving = vx !== 0 || vy !== 0;
+    if (moving) {
+      if (Math.abs(vx) > Math.abs(vy)) this.facing = vx < 0 ? "left" : "right";
+      else this.facing = vy < 0 ? "up" : "down";
+      this.hero.anims.play(`walk-${this.facing}`, true);
+    } else {
+      this.idle();
+    }
+    const { shadow, companion, weapon, shield } = this.followers;
+    shadow.setPosition(this.hero.x, this.hero.y + 28);
+    companion.update(this.hero.x, this.hero.y);
+    placeHeroGear(weapon, shield, this.hero, this.facing);
+    return moving;
+  }
+
+  /** Stopped where it stands, its walk cycle frozen: under a panel, a talk or the help. */
+  halt(): void {
+    this.hero.setVelocity(0, 0);
+    this.hero.anims.stop();
+  }
+
+  /** Stopped and turned to the idle frame of the way it last went. */
+  idle(): void {
+    this.halt();
+    this.hero.setTexture(`hero-idle-${this.facing}`);
   }
 }
 
