@@ -218,9 +218,10 @@ export class AbyssScene extends Phaser.Scene {
   }
 
   // `fromBattle` / `fromStairs` carry on the dive in memory; anything else
-  // (the cave's stair) starts a new one, at B1 or at `start` when that is
-  // where the stair offered to pick up (abyssResume: the checkpoint, or the
-  // portal, which taking uses up — saved before anything else, quietly)
+  // (the cave's stair or the town's gate) starts a new one, at B1 or at
+  // `start` when that is where it offered to pick up (abyssResume: the
+  // checkpoint, or the portal, which taking uses up — saved before anything
+  // else, quietly)
   create(data?: { fromBattle?: boolean; fromStairs?: boolean; start?: number }): void {
     Sfx.playBgm(DUNGEON_THEME);
     const fromBattle = !!data?.fromBattle;

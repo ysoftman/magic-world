@@ -43,7 +43,7 @@ export const UNLOCK_TIPS: UnlockTip[] = [
     },
     when: () => GameState.quest.volcanoBoss,
   },
-  { id: "abyss", place: "town", text: "THE ABYSS OPENS DEEP IN THE CAVE!", when: () => abyssOpen(GameState.quest, GameState.ngPlus) },
+  { id: "abyss", place: "town", text: "THE ABYSS OPENS: A GATE BY THE CAVE!", when: () => abyssOpen(GameState.quest, GameState.ngPlus) },
   {
     id: "material",
     place: "town",
