@@ -276,12 +276,30 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   줄(`takeQuitKey`, `quitting` 가드)을 넣는다.
 - 필드 공통 키(S·CTRL+S·M·T·I·B·A·U·O·Q)는 `sceneCommon` 의 `FieldKeys` 가 등록하고 큐에 담는다. 새 필드
   씬은 create() 에서 TouchControls 보다 먼저 `new FieldKeys(this)` 를 만들고(마을은 `{ toastY:
-  STATUS_HUD_TOAST_Y, repeatI: true }`), update() 에서 `takeSystemKeys(hud)` → `takeMapKey` → quitting
+  STATUS_HUD_TOAST_Y }`), update() 에서 `takeSystemKeys(hud)` → `takeMapKey` → quitting
   가드 → `takeQuitKey` 순으로 부른다(마을은 T 를 가드 뒤, Q 다음에 읽는다). 이 키들의 `*Queued`
   플래그를 씬에 새로 만들지 않는다. 씬 전용 키(설원 Z, 마을 Z·SPACE·C·G·F2)만 씬이 직접 등록한다.
   실제 사례: 여섯 씬이 같은 키 등록·플래그·처리를 각자 들고 있어, 최근 커밋 150개 중 21개가 이 씬
   3개 이상을 함께 고쳤다. 공통 키를 더하려면 `FieldKey` 타입과 생성자를 고치고 TouchControls 의
   `MENU`·Gamepad 의 `FIELD` 표도 같이 본다.
+- 맵 위에 뜨는 패널은 `sceneCommon` 의 `FieldPanels` 에 모은다. 새 필드 씬은 FieldKeys 다음에
+  `this.panels = new FieldPanels(this, this.fieldKeys)` 를 만들고, 패널을 만드는 그 자리에서 `add` 한다.
+  I·B·A·U·O 패널은 키와 함께(`this.panels.add(new InventoryUI(this), "I")`), 대화창·얼음 낚시·마을 상점처럼
+  씬이 직접 여는 패널은 키 없이(`this.dialogue = this.panels.add(new DialogueBox(this, []))`) 넣는다.
+  `uiBlocking()` 은 `this.panels.blocking()`(패널과 도움말), update() 의 막힌 분기는 영웅을 세운 뒤
+  `this.panels.update()`(그 패널의 키로 닫기와 모든 패널의 update), 열기는 `if (this.panels.takeOpenKey())
+  return;`, SHUTDOWN 은 `this.panels.destroy()` 다. add 순서가 만드는 순서이자 update 순서다. 패널은
+  만들 때 키 리스너를 등록하므로 같은 키(ESC·Z·방향키)를 누가 먼저 듣는지가 이 순서로 정해지고, 마을은
+  대화창이 먼저라 대화의 답으로 연 상점이 같은 프레임에 돈다. `add` 하지 않은 패널은 uiBlocking 에서
+  빠진다. 실제 사례: 여섯 씬이 다섯 패널의 필드·생성·uiBlocking·닫기·update·열기·destroy 를 씬마다
+  60줄 남짓 각자 들고 있었고, 마을 오버랩 콜백이 따로 들고 있던 그 목록의 사본은 BestiaryUI 를 빠뜨린
+  적이 있다.
+- 씬 전환이 시작되면(카메라 fadeOut: 전투·출구·계단·계절, 마을 휴식) `FieldKeys.leaving()` 이 참이 되어
+  Q 와 패널 키는 큐에서 꺼내 버린다. 씬이 직접 받는 입력(도움말의 `blocked`, 보물 지도 Z, 설원 Z)도
+  `this.fieldKeys.leaving()` 을 같이 본다. 새 전환도 카메라를 fadeOut 하고 그 끝에서 씬을 바꾼다. 실제
+  사례: 조우 페이드 300ms 안에 누른 I 는 가방을 연 채 전투로 넘어갔고, Q 는 출구 페이드 위에 질문을
+  띄웠고, 설원 Z 는 페이드 중에 얼음 낚시를 열거나 보물을 파고 저장했다. 종료 대기 700ms 는 페이드가
+  없어 각 씬의 `quitting` 이 막는다.
 - 필드의 패널 키나 전투 키를 새로 만들면 터치와 게임패드도 같이 본다. 터치 오른쪽 세로 줄은
   `TouchControls` 의 `MENU`(씬이 등록한 키만 버튼이 됨), 패드는 `src/ui/Gamepad.ts` 의
   `FIELD`/`BATTLE` 표다. 둘 다 `sendKey` 로 키보드 이벤트를 합성해 보내서 씬은 키보드만
