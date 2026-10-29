@@ -550,7 +550,7 @@ const AREA_TITLE_FADE_MS = 600;
  * in on, where a tag there and the title would print over each other;
  * fading in as the title faded out, both showed half through.
  */
-export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObjects.Text | PixelText): void {
+export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: PixelText): void {
   target.setAlpha(0);
   scene.tweens.add({ targets: target, alpha: 1, delay: AREA_TITLE_HOLD_MS + AREA_TITLE_FADE_MS, duration: AREA_TITLE_FADE_MS });
 }
@@ -592,9 +592,8 @@ export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titl
  * Toasts: an unlock tip or achievement printed over a panel's title hid
  * both; news now comes out once the panel closes (pixelart's toastHolds).
  */
-type MapTag = Phaser.GameObjects.Text | PixelText | Phaser.GameObjects.Container;
-const isText = (o: Phaser.GameObjects.GameObject): o is Phaser.GameObjects.Text | PixelText =>
-  o instanceof Phaser.GameObjects.Text || o instanceof PixelText;
+type MapTag = PixelText | Phaser.GameObjects.Container;
+const isText = (o: Phaser.GameObjects.GameObject): o is PixelText => o instanceof PixelText;
 const isMapTag = (o: Phaser.GameObjects.GameObject): o is MapTag =>
   (isText(o) && o.scrollFactorX === 1) || (o instanceof Phaser.GameObjects.Container && o.scrollFactorX === 1 && o.list.some(isText));
 
@@ -733,7 +732,7 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): voi
  * caption: it lies straight on the map's top rows, and the bare green of THE
  * FOREST sank into the forest's canopy at night.
  */
-export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text | PixelText): void {
+export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText): void {
   title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
 }

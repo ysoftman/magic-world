@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import type { PixelText } from "../pixelText";
 import { isTouchDevice, sendKey } from "./TouchControls";
 
 // A gamepad as a second keyboard. The browser's Gamepad API is state, not
@@ -183,10 +184,8 @@ export function keyHint(keys: string, touch = keys, { table = "field", pad = key
 
 // The texts showing a key line: what to write and what was written last. A
 // text later given other words (the battle's hint between its uses) shows
-// something else by then and is dropped instead of overwritten. A Text or a
-// BitmapText (PixelText): only its `text` is read and set.
-type HintText = Phaser.GameObjects.Text | Phaser.GameObjects.BitmapText;
-const bound = new Map<HintText, { line: () => string; shown: string }>();
+// something else by then and is dropped instead of overwritten.
+const bound = new Map<PixelText, { line: () => string; shown: string }>();
 
 function rewriteHints(): void {
   for (const [text, hint] of bound) {
@@ -201,12 +200,11 @@ function rewriteHints(): void {
 
 // Writes `line()` into `text`, and again whenever the input in use changes,
 // so a panel shows the right buttons when it opens and while it is up.
-export function bindKeyHint<T extends HintText>(text: T, line: () => string): T {
+export function bindKeyHint(text: PixelText, line: () => string): PixelText {
   if (!bound.has(text)) text.once("destroy", () => bound.delete(text));
   const shown = line();
   bound.set(text, { line, shown });
-  text.setText(shown);
-  return text;
+  return text.setText(shown);
 }
 
 // the key each pressed button sent, so its release sends that same key even
