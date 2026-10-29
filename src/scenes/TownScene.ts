@@ -1064,9 +1064,10 @@ export class TownScene extends Phaser.Scene {
     const h = text.height + pad * 2;
     const border = this.add.rectangle(0, 0, w + 8, h + 8, 0xffffff).setOrigin(0.5);
     const box = this.add.rectangle(0, 0, w, h, 0x0b0b2b).setOrigin(0.5);
-    // a tap on the bubble is touch's C (it only shows by the door)
+    // a tap on the bubble is touch's C (it only shows by the door), and
+    // like C is dropped once the town is leaving (FieldKeys.leaving)
     box.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
-      if (this.bubbleVisible && !this.uiBlocking()) this.openLookPicker();
+      if (this.bubbleVisible && !this.uiBlocking() && !this.fieldKeys.leaving()) this.openLookPicker();
     });
     const tail = this.add
       .triangle(0, h / 2 + 4, -24, 0, 24, 0, 0, 28, 0x0b0b2b)
@@ -1385,9 +1386,12 @@ export class TownScene extends Phaser.Scene {
 
     if (this.panels.takeOpenKey()) return;
 
+    // C and Z are dropped once the town is leaving, as Q is
+    // (FieldKeys.leaving): in a fight's fade they opened the look picker or a
+    // talk under the battle
     if (this.cQueued) {
       this.cQueued = false;
-      if (this.nearHouse()) {
+      if (this.nearHouse() && !this.fieldKeys.leaving()) {
         this.openLookPicker();
         return;
       }
@@ -1395,7 +1399,7 @@ export class TownScene extends Phaser.Scene {
 
     if (this.zQueued) {
       this.zQueued = false;
-      if (this.tryTalk()) return;
+      if (!this.fieldKeys.leaving() && this.tryTalk()) return;
     }
 
     let vx = 0;

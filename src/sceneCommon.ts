@@ -720,11 +720,11 @@ export class FieldKeys {
    * exit or a stair, a new season) fades its camera out and changes scene
    * as the fade ends, and the town's rest fades out the same way before it
    * fades back in. Q (takeQuitKey), the panel keys (FieldPanels) and the
-   * scenes' own (the help, a treasure map's or the ice hole's Z) are dropped
-   * meanwhile, as under a panel: a bag or a question opened in a fight's
-   * 300ms fade was still up as the battle took over, and a dig in it saved.
-   * The quit's wait for the title has no fade; the scenes hold it with their
-   * `quitting`.
+   * scenes' own (the help, a treasure map's or the ice hole's Z, the town's
+   * talk and look picker) are dropped meanwhile, as under a panel: a bag or
+   * a question opened in a fight's 300ms fade was still up as the battle
+   * took over, and a dig in it saved. The quit's wait for the title has no
+   * fade; the scenes hold it with their `quitting`.
    */
   leaving(): boolean {
     const fade = this.scene.cameras.main.fadeEffect;
