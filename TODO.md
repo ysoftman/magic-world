@@ -8,7 +8,6 @@
 
 - 깊은 씬(숲·설원·겨울 마을·동굴·화산)의 해질녘·새벽 30분이 예전보다 덜 파랗고 회보라로 바뀜(NightOverlay `nightBlue`, 피부 hue 8~31° 를 위해 결정) — 숲의 "푸른 시간" 이 회보라로 읽히는지 실기기에서 눈으로 확인. 헤드리스 swiftshader 측정이라 실 GPU 블렌딩 반올림이 다르면 hue 가 ±3~4° 흔들릴 수 있음(여유 피부 9.0°, 그림자 8.2°)
 - 밤 라이트맵(NightOverlay): 실기기(모바일) 프레임 비용 확인 — 헤드리스 데스크톱 Chrome 에서는 사각형과 차이 없음(스텝 약 1.0ms), 램프 있는 씬(마을·화산)만 +3.7MB. 화산은 용암 둘레 바위의 주황 안개가 줄어 분위기가 바뀌었으니 실기기에서 눈으로도 확인
-- 텍스트를 RetroFont BitmapText 로 옮기기(장기): DPR 과 무관하게 선명하고 글자 텍스처 메모리(해상도 3 에서 약 37MB)와 갱신 비용이 거의 사라짐. setStroke 외곽선 미지원이라 외곽선 변형을 따로 구워야 하고 retroStyle(5)(2.5배)는 고르지 않은 픽셀이 됨 — Phaser 스킬 검토(qa) 후보 8
 - 전체화면 실기기 확인: 안드로이드 Chrome(행 탭·D-pad →), iPad/macOS Safari, Firefox — 헤드리스 Chrome 에서만 확인함(설정의 FULLSCREEN 줄, `SettingsUI.setFullscreen`)
 - 게임패드(src/ui/Gamepad.ts): 실기기 패드로 확인 필요 — playwright 의 가짜 navigator.getGamepads(standard mapping)로만 검증함(타이틀 A 새 게임·이어하기, D-pad·왼쪽 스틱 이동과 데드존, Select 도움말, L3 미니맵, 전투 A 메시지 넘김·X FIGHT·L3 WARD·R3 NOVA·Select STEAL, 필드 LT HUD·RT 음소거·R3 나가기 질문, 타이틀 X/LB/RB/LT 질문과 Y 확인·RT 음소거). standard 가 아닌 배치의 패드는 같은 번호로 짐작해 읽음. 패드 입력은 브라우저 user activation 이 아니라 AudioContext 는 키보드·클릭 뒤에만 깨어남. 패드 매핑 없음: 필드의 CTRL+S(sendKey 에 modifier 가 없음, R3 Q 로 나가면 저장됨), 타이틀의 X(손상 사본 삭제)와 C(A 가 대신함), 마을 HOME 의 C(외형 변경 — 말풍선 클릭·탭으로만 열리고, 패드 표기에서는 HOME 줄에 키를 적지 않음). Nintendo 배치 이름(id 판별·자리 매핑, 키 안내의 B·A·Y·X/L·R·ZL·ZR/-·+)은 가짜 id 로만 확인
 - 가을 숲 전투 배경: 진홍 벽을 자두빛 황혼·먼지 낀 황갈색 벽으로 다시 칠해 전투 띠 chroma 0.20→0.14(봄 숲 0.16, 겨울 숲 0.14, 캐릭터 평균 0.35)로 낮춤 — 헤드리스 chromium 측정뿐이라 실기기에서 눈으로 확인 필요
