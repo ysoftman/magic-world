@@ -458,10 +458,15 @@ export class SnowScene extends Phaser.Scene {
 
     let vx = 0;
     let vy = 0;
-    if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-    else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-    if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-    else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    // stood still through a scene change's fade: walked on, the fight's spot
+    // could land on the exit, which took the hero back to town the moment the
+    // battle returned
+    if (!this.exitingSnow) {
+      if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
+      else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
+      if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
+      else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    }
 
     this.player.setVelocity(vx, vy);
 
@@ -673,9 +678,13 @@ export class SnowScene extends Phaser.Scene {
   }
 
   private startBattle(enemy?: Roamer["kind"]): void {
-    if (this.encounterCooldown > 0) return; // already fading into a battle
+    // A fade out either way is a scene change: the exit reached while a
+    // battle fades, or a roamer met while the exit fades, started both scenes
+    // at once and left the town running under the battle.
+    if (this.encounterCooldown > 0 || this.exitingSnow) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.exitingSnow = true;
     encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const rolled = roll < 0.5 ? "frostMoth" : "yeti";

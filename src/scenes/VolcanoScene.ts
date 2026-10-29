@@ -407,10 +407,15 @@ export class VolcanoScene extends Phaser.Scene {
 
     let vx = 0;
     let vy = 0;
-    if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-    else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-    if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-    else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    // stood still through a scene change's fade: walked on, the fight's spot
+    // could land on the exit, which took the hero back to town the moment the
+    // battle returned
+    if (!this.exitingVolcano) {
+      if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
+      else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
+      if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
+      else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    }
 
     this.player.setVelocity(vx, vy);
 
@@ -617,9 +622,13 @@ export class VolcanoScene extends Phaser.Scene {
   }
 
   private startBattle(enemy?: VolcanoKind): void {
-    if (this.encounterCooldown > 0) return; // already fading into a battle
+    // A fade out either way is a scene change: the exit reached while a
+    // battle fades, or a roamer met while the exit fades, started both scenes
+    // at once and left the town running under the battle.
+    if (this.encounterCooldown > 0 || this.exitingVolcano) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.exitingVolcano = true;
     encounterOut(this.cameras.main, 300, () => {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
