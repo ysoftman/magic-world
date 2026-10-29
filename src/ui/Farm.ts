@@ -5,6 +5,7 @@ import { addIngredient, INGREDIENTS } from "../cooking";
 import { HARVEST_MULT, isEventToday } from "../events";
 import { CROPS, type CropDef, type CropKey, cropClock, cropLeft, cropReadyAt, FARM_PLOTS, type FarmPlot, GameState } from "../gameState";
 import { DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { isWet, weatherToday } from "../weather";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
@@ -111,15 +112,15 @@ export class FarmUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private goldText: Phaser.GameObjects.Text;
-  private seedLabel: Phaser.GameObjects.Text;
-  private seedChips: Phaser.GameObjects.Text[] = [];
-  private seedText: Phaser.GameObjects.Text;
-  private rows: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private title: PixelText;
+  private goldText: PixelText;
+  private seedLabel: PixelText;
+  private seedChips: PixelText[] = [];
+  private seedText: PixelText;
+  private rows: PixelText[] = [];
+  private cursor: PixelText;
+  private msg: PixelText;
+  private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private upQueued = false;
@@ -147,13 +148,13 @@ export class FarmUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 40, "FARM", retroStyle(8, "#a3e635"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "FARM", retroStyle(8, "#a3e635"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.goldText = scene.add
-      .text(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff"))
       .setOrigin(1, 0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -165,7 +166,7 @@ export class FarmUI {
     const pickerW = (SEED_LABEL.length + chips.reduce((n, c) => n + c.length + 1, 0)) * 20;
     let x = GAME_WIDTH / 2 - pickerW / 2;
     this.seedLabel = scene.add
-      .text(x, PANEL_TOP + 92, SEED_LABEL, retroStyle(5, "#9f9fd0"))
+      .pixelText(x, PANEL_TOP + 92, SEED_LABEL, retroStyle(5, "#9f9fd0"))
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -174,7 +175,7 @@ export class FarmUI {
     for (const chip of chips) {
       this.seedChips.push(
         scene.add
-          .text(x, PANEL_TOP + 92, chip, retroStyle(5, DIM_TEXT))
+          .pixelText(x, PANEL_TOP + 92, chip, retroStyle(5, DIM_TEXT))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -183,7 +184,7 @@ export class FarmUI {
       x += (chip.length + 1) * 20;
     }
     this.seedText = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 126, "", retroStyle(5, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 126, "", retroStyle(5, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -192,17 +193,22 @@ export class FarmUI {
     for (let i = 0; i < FARM_PLOTS; i++) {
       this.rows.push(
         scene.add
-          .text(ROW_X, PANEL_TOP + 176 + i * ROW_GAP, "", retroStyle(5, "#ffffff"))
+          .pixelText(ROW_X, PANEL_TOP + 176 + i * ROW_GAP, "", retroStyle(5, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
           .setVisible(false),
       );
     }
-    this.cursor = scene.add.text(0, 0, ">", retroStyle(5, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
+    this.cursor = scene.add
+      .pixelText(0, 0, ">", retroStyle(5, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
 
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 70, "", retroStyle(6, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 70, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -215,7 +221,7 @@ export class FarmUI {
     // touch names the d-pad by its own button labels (no J/K/H/L/TAB there);
     // 51 x 16 = 816px (x 232..1048) keeps it between the d-pad (x<=194 on
     // this line) and Z (x>=1084); the keyboard's 55 (880px) keeps 40px inside
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 22, "", retroStyle(4, DIM_TEXT)), () =>
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 22, "", retroStyle(4, DIM_TEXT)), () =>
       keyHint("JK: PLOT   HL/TAB: SEED   Z: PLANT/HARVEST   ESC: CLOSE", "^v: PLOT   <>: SEED   Z: PLANT/HARVEST   ESC: CLOSE"),
     )
       .setOrigin(0.5)

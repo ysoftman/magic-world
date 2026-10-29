@@ -6,6 +6,7 @@ import { addIngredient, isRareFish } from "../cooking";
 import { DERBY_MULT, isEventToday } from "../events";
 import { ARCTIC_FISH, type FishDef, GameState, isNight, POND_FISH } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { isWet, WEATHER_LABEL, weatherToday } from "../weather";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
@@ -79,16 +80,17 @@ export class FishingUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
+  private title: PixelText;
   private water: Phaser.GameObjects.Ellipse;
   private bobber: Phaser.GameObjects.Container;
-  private biteMark: Phaser.GameObjects.Text;
-  private status: Phaser.GameObjects.Text;
-  private badge: Phaser.GameObjects.Text;
-  private count: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
-  private pageChip?: Phaser.GameObjects.Text;
-  private logRows: Phaser.GameObjects.Text[] = [];
+  private biteMark: PixelText;
+  private status: PixelText;
+  private badge: PixelText;
+  private count: PixelText;
+  private hint: PixelText;
+  private pageChip?: PixelText;
+  private pageBack?: Phaser.GameObjects.Rectangle;
+  private logRows: PixelText[] = [];
   private bobTween?: Phaser.Tweens.Tween;
 
   private zQueued = false;
@@ -114,7 +116,7 @@ export class FishingUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 34, "", retroStyle(8, "#38bdf8"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 34, "", retroStyle(8, "#38bdf8"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -131,7 +133,7 @@ export class FishingUI {
     ]);
     this.bobber.setScrollFactor(0).setDepth(153).setVisible(false);
     this.biteMark = scene.add
-      .text(GAME_WIDTH / 2 + 24, WATER_Y - 30, "!", retroStyle(10, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2 + 24, WATER_Y - 30, "!", retroStyle(10, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(153)
@@ -139,7 +141,7 @@ export class FishingUI {
     // top-anchored under the water so the two-line catch result (fish, then
     // reward) grows downward instead of back up into the bobber
     this.status = scene.add
-      .text(GAME_WIDTH / 2, WATER_Y + 34, "", retroStyle(6, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, WATER_Y + 34, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(152)
@@ -154,7 +156,7 @@ export class FishingUI {
     // top-anchored (y+252..272, where it was centered at y+262) so a rare
     // catch's second line grows down, to y+298, 6px above the hint (y+304)
     this.badge = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 252, "", retroStyle(5, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 252, "", retroStyle(5, "#ffd166"))
       .setOrigin(0.5, 0)
       .setAlign("center")
       .setLineSpacing(6)
@@ -162,13 +164,13 @@ export class FishingUI {
       .setDepth(152)
       .setVisible(false);
     this.count = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 72, "", retroStyle(5, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 72, "", retroStyle(5, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 26, "", retroStyle(5, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 26, "", retroStyle(5, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -176,24 +178,30 @@ export class FishingUI {
     // Touch has no TAB key, so the log was out of reach there. This chip sits
     // right-aligned on the count row (x 870..970 at its widest, "BACK"),
     // clear of the count's 340px and of the title above, and a tap queues
-    // the same page flip TAB does.
+    // the same page flip TAB does. Its slate fill (10px a side, 8px above and
+    // below the word) is a Rectangle behind it, and the tap target.
     if (isTouchDevice()) {
+      const right = GAME_WIDTH / 2 + PANEL_W / 2 - 20;
       this.pageChip = scene.add
-        .text(GAME_WIDTH / 2 + PANEL_W / 2 - 20, PANEL_TOP + 72, "", retroStyle(5, "#ffd166"))
+        .pixelText(right - 10, PANEL_TOP + 72, "LOG", retroStyle(5, "#ffd166"))
         .setOrigin(1, 0.5)
-        .setPadding(10, 8, 10, 8)
-        .setBackgroundColor("#334155")
         .setScrollFactor(0)
         .setDepth(152)
         .setVisible(false);
-      this.pageChip.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+      this.pageBack = scene.add
+        .rectangle(right, PANEL_TOP + 72, this.pageChip.width + 20, this.pageChip.height + 16, 0x334155)
+        .setOrigin(1, 0.5)
+        .setScrollFactor(0)
+        .setDepth(this.pageChip.depth - 0.01)
+        .setVisible(false);
+      this.pageBack.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
         this.tabQueued = true;
       });
     }
     this.table.forEach((_f, i) => {
       this.logRows.push(
         scene.add
-          .text(GAME_WIDTH / 2 - LOG_W / 2, LOG_TOP + i * LOG_GAP, "", retroStyle(5, "#f5f5f5"))
+          .pixelText(GAME_WIDTH / 2 - LOG_W / 2, LOG_TOP + i * LOG_GAP, "", retroStyle(5, "#f5f5f5"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -313,7 +321,10 @@ export class FishingUI {
     this.title.setVisible(shown);
     this.count.setVisible(shown);
     this.hint.setVisible(shown);
-    this.pageChip?.setText(page === "log" ? "BACK" : "LOG").setVisible(shown);
+    if (this.pageChip && this.pageBack) {
+      this.pageChip.setText(page === "log" ? "BACK" : "LOG").setVisible(shown);
+      this.pageBack.setSize(this.pageChip.width + 20, this.pageChip.height + 16).setVisible(shown);
+    }
     this.water.setVisible(page === "fish");
     this.bobber.setVisible(page === "fish");
     this.status.setVisible(page === "fish");
@@ -475,6 +486,7 @@ export class FishingUI {
     this.count.destroy();
     this.hint.destroy();
     this.pageChip?.destroy();
+    this.pageBack?.destroy();
     for (const row of this.logRows) row.destroy();
   }
 }
