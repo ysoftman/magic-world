@@ -83,7 +83,7 @@
 
 ## 조작
 
-필드에서 `?` 를 누르면 필드 키 목록(도움말)이 뜬다. 맨 아래 줄은 마을에서는 지금 목표(`GOAL: SLIMES 0/5 - IN THE TALL GRASS` 처럼 HUD 의 목표와 그 장소), 동굴에서는 KING SLIME 을 쓰러뜨리기 전엔 `FIND THE KING!`, 심연 계단이 열린 뒤엔 `THE ABYSS STAIR IS OPEN!`, 그 사이엔 마을과 같은 목표 줄이고, 다른 필드는 그 지역 안내다. 도움말을 열 때마다 다시 읽는다.
+필드에서 `?` 를 누르면 필드 키 목록(도움말)이 뜬다. 맨 아래 줄은 마을에서는 지금 목표(`GOAL: SLIMES 0/5 - IN THE TALL GRASS` 처럼 HUD 의 목표와 그 장소), 동굴에서는 KING SLIME 을 쓰러뜨리기 전엔 `FIND THE KING!`, 심연 계단이 열린 뒤엔 계단 위치(`ABYSS STAIR: FAR SOUTH-EAST CORNER`), 그 사이엔 마을과 같은 목표 줄이고, 다른 필드는 그 지역 안내다. 도움말을 열 때마다 다시 읽는다.
 
 | 키 | 필드 | 전투 |
 | --- | --- | --- |

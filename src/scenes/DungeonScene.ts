@@ -296,13 +296,15 @@ export class DungeonScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       // the king, until he falls; then the stair down, once the FLAME DRAKE
-      // has opened it (abyss.ts); in between, the chain's current step
-      // (SEE ELDER, the HUNTER's bats here). Read when the popup opens
+      // has opened it (abyss.ts), and where: it lies off the entrance's
+      // screen; in between, the chain's current step (SEE ELDER, the
+      // HUNTER's bats here). Read when the popup opens. 35 glyphs, 700px at
+      // the popup's retroStyle(5), inside its 860px
       () =>
         !GameState.quest.bossDefeated
           ? "FIND THE KING!"
           : abyssOpen(GameState.quest, GameState.ngPlus)
-            ? "THE ABYSS STAIR IS OPEN!"
+            ? "ABYSS STAIR: FAR SOUTH-EAST CORNER"
             : objectiveLine(GameState.quest),
       () => this.uiBlocking() || this.quitting,
     );
