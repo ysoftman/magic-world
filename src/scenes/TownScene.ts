@@ -2073,8 +2073,8 @@ export class TownScene extends Phaser.Scene {
       lines.push(`BOUNTY: ${b.target} ${b.have}/${b.need}`, `REWARD: ${b.reward} GOLD.`);
     } else if (GameState.gold + b.reward > MAX_GOLD) {
       // refused whole, as the delivery is (delivery.ts deliver()): gainGold()
-      // would credit only what fits. Unclaimed, it can be taken later today
-      // with room (the day's turn pays what fits, GameState.rollBountyIfStale);
+      // would credit only what fits. Unclaimed, it stays up, past the day's
+      // turn too, until there's room (GameState.rollBountyIfStale);
       // "BOUNTY COMPLETE! YOUR PURSE IS TOO FULL." is one row (40 glyphs)
       lines.push("BOUNTY COMPLETE!", "YOUR PURSE IS TOO FULL.");
     } else {
