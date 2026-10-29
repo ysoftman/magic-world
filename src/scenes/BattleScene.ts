@@ -2678,20 +2678,21 @@ export class BattleScene extends Phaser.Scene {
     this.typing = ev;
   }
 
-  // every battle action key also advances messages, so mashing your next
-  // action never stalls on a textbox
-  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "D", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
-
+  // any key advances messages, so mashing your next action never stalls on a
+  // textbox; one pressed with CMD/CTRL/ALT/SHIFT is a browser shortcut (CMD+TAB)
+  // and would skip a line unread
   private awaitAdvance(resolve: () => void): void {
-    // a tap advances too (below), and a touch screen has no Z. "MENU KEYS"
-    // says the A:FIGHT, F:FIRE ... letters work too, so mashing them is fine
-    bindKeyHint(this.hintText, () => keyHint("Z/MENU KEYS:CONTINUE", "TAP:CONTINUE", { table: "battle", pad: "Z:CONTINUE" }));
+    // a tap advances too (below), and a touch screen has no keys
+    bindKeyHint(this.hintText, () => keyHint("ANY KEY:CONTINUE", "TAP:CONTINUE", { table: "battle", pad: "Z:CONTINUE" }));
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) done();
+    };
     const done = () => {
-      for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.removeListener(`keydown-${k}`, done);
+      this.input.keyboard?.off("keydown", onKey);
       this.input.off("pointerdown", done);
       resolve();
     };
-    for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.once(`keydown-${k}`, done);
+    this.input.keyboard?.on("keydown", onKey);
     this.input.once("pointerdown", done);
   }
 
