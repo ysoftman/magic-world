@@ -9,11 +9,11 @@
 //
 // The model, kept simple: day, NG+0, no meal, not rested, no accessory, no
 // bestiary bonus. The hero FIGHTs; at 35% HP or less drinks a POTION (while
-// any are left) or casts HEAL; answers a boss wind-up with WARD once learned;
-// casts the foe's weakness spell whenever MP allows. The companion is a WOLF
-// (DOUBLE BITE) or none; its bond bonus is min(5, floor(level / 4)) unless
-// --bond says otherwise, roughly the rounds a hero of that level has fought
-// beside it.
+// any are left) or casts HEAL; answers a boss wind-up with WARD once learned,
+// with DEFEND before that or without the MP for it; casts the foe's weakness
+// spell whenever MP allows. The companion is a WOLF (DOUBLE BITE) or none;
+// its bond bonus is min(5, floor(level / 4)) unless --bond says otherwise,
+// roughly the rounds a hero of that level has fought beside it.
 //
 // The late-game options (--refine, --forged, --ng, --abyss, --hipotions,
 // --talisman, --meal; see --help) dress that hero for NEW GAME+ and the
@@ -54,6 +54,7 @@ const {
   bossStrikeDamage,
   comboBonus,
   companionAtk,
+  defendedDamage,
   guardedDamage,
   poisonTickDamage,
   regenAmount,
@@ -74,20 +75,23 @@ type Foe = ReturnType<typeof scaleEnemy>;
 // the bosses, their intended level and gear (battleRules.ts BOSS_TELLS note:
 // "KING Lv6 + SHIELD, TROLL Lv8 + IRON SHIELD, MOSS Lv12 + IRON, GLACIER
 // Lv18 + MYTHRIL, DRAKE Lv24 + MYTHRIL"), and the first levels at a 90% win
-// this sim measured with the telegraphed strikes (BOSS_TELLS) on (`todo`,
-// first noted in TODO.md; the summary prints them as "noted"). They sit 2-8
-// levels above the numbers from before the strikes (WOLF 1/2/4/8/11, solo
-// 3/4/8/10/17): a strike that takes up to 70% of max HP is deadly at a low
-// level. The fights at the intended levels still come out as the monsters.ts
-// and battleRules.ts comments say: 4.3-8.3 rounds beside the WOLF, 32-40% of
-// max HP taken (heals not subtracted). A boss falling before its intended
-// level is seen, not tuned: those comments aim at a threat, not a win rate,
-// and NEW GAME+ is the challenge. An unarmed Lv8 hero beats the MOSS GOLEM
-// ~90% of the time with the WOLF, ~28% alone (a point or two either way a
-// run). The lost progression sim (a WOLF player who takes each boss on as
-// soon as it reaches 90%: 95-100% against the KING at Lv5, MOSS Lv8,
-// GLACIER Lv13, DRAKE Lv16.5) predates the strikes and wasn't redone; this
-// sim gives GLACIER Lv13 ~60%, DRAKE Lv16 ~70%.
+// this sim measured with the telegraphed strikes (BOSS_TELLS) on and the hero
+// DEFENDing them (`todo`, first noted in TODO.md; the summary prints them as
+// "noted"). DEFEND took them 0-2 lower (from WOLF 4/4/8/16/18, solo
+// 5/6/11/19/21, at 20000 fights a cell); KING alone at Lv4 and TROLL at Lv3
+// and MOSS at Lv7 beside the WOLF sit at 90-92%, so a run may print a level
+// either way. They still sit above the numbers from before the strikes (WOLF
+// 1/2/4/8/11, solo 3/4/8/10/17): a strike that takes up to 70% of max HP is
+// deadly at a low level. The fights at the intended levels still come out as
+// the monsters.ts and battleRules.ts comments say: 4.8-8.3 rounds beside the
+// WOLF, 32-37% of max HP taken (heals not subtracted). A boss falling before
+// its intended level is seen, not tuned: those comments aim at a threat, not
+// a win rate, and NEW GAME+ is the challenge. An unarmed Lv8 hero beats the
+// MOSS GOLEM ~91% of the time with the WOLF, ~30% alone (a point or two
+// either way a run). The lost progression sim (a WOLF player who takes each
+// boss on as soon as it reaches 90%: 95-100% against the KING at Lv5, MOSS
+// Lv8, GLACIER Lv13, DRAKE Lv16.5) predates the strikes and wasn't redone;
+// this sim gives GLACIER Lv13 ~87%, DRAKE Lv16 ~91%.
 interface BossCase {
   tag: string;
   key: keyof typeof ENEMIES;
@@ -96,11 +100,11 @@ interface BossCase {
   todo: { wolf: number; solo: number };
 }
 const BOSSES: BossCase[] = [
-  { tag: "KING", key: "king", level: 6, gear: { weapon: "sword", armor: "shield" }, todo: { wolf: 4, solo: 5 } },
-  { tag: "TROLL", key: "troll", level: 8, gear: { weapon: "sword", armor: "ironShield" }, todo: { wolf: 4, solo: 6 } },
-  { tag: "MOSS", key: "mossGolem", level: 12, gear: { weapon: "ironSword", armor: "ironShield" }, todo: { wolf: 8, solo: 11 } },
-  { tag: "GLACIER", key: "iceGolem", level: 18, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 16, solo: 19 } },
-  { tag: "DRAKE", key: "flameDrake", level: 24, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 18, solo: 21 } },
+  { tag: "KING", key: "king", level: 6, gear: { weapon: "sword", armor: "shield" }, todo: { wolf: 4, solo: 4 } },
+  { tag: "TROLL", key: "troll", level: 8, gear: { weapon: "sword", armor: "ironShield" }, todo: { wolf: 3, solo: 6 } },
+  { tag: "MOSS", key: "mossGolem", level: 12, gear: { weapon: "ironSword", armor: "ironShield" }, todo: { wolf: 7, solo: 10 } },
+  { tag: "GLACIER", key: "iceGolem", level: 18, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 14, solo: 18 } },
+  { tag: "DRAKE", key: "flameDrake", level: 24, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 16, solo: 20 } },
 ];
 const WOLF = ENEMIES.wolf;
 const HP_LOW_SHARE = 0.35;
@@ -211,7 +215,7 @@ interface Outcome {
   taken: number; // damage the hero took, poison ticks included
 }
 
-type Action = { kind: "fight" } | { kind: "potion" } | { kind: "hiPotion" } | { kind: "magic"; spell: Spell };
+type Action = { kind: "fight" } | { kind: "potion" } | { kind: "hiPotion" } | { kind: "defend" } | { kind: "magic"; spell: Spell };
 
 function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome {
   const foe: Foe = scaleEnemy(ENEMIES[boss.key], {
@@ -234,6 +238,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let charging = false;
   let tellCooldown = 0;
   let wardTurns = 0;
+  let defending = false;
   let enemyDot: number | null = null; // turns left (burn: FIRE's effect)
   let stuck = false;
   let chilled = false;
@@ -244,8 +249,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     hp = Math.max(0, hp - dmg);
     taken += dmg;
   };
-  // BattleScene guardHit(): WARD halves a hit (no ORC here, so no BULWARK)
-  const guard = (raw: number): number => guardedDamage(raw, wardTurns > 0);
+  // BattleScene guardHit(): WARD halves a hit (no ORC here, so no BULWARK),
+  // else DEFEND takes its share
+  const guard = (raw: number): number => (wardTurns > 0 ? guardedDamage(raw, true) : defending ? defendedDamage(raw) : raw);
 
   const choose = (): Action => {
     if (hp <= hero.maxHp * HP_LOW_SHARE) {
@@ -256,6 +262,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     }
     const ward = hero.spells.find((s) => s.kind === "ward");
     if (charging && ward && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
+    if (charging && wardTurns === 0) return { kind: "defend" };
     const weak = hero.spells.find((s) => s.kind === "attack" && s.element !== undefined && s.element === foe.weakness);
     if (weak && mp >= weak.cost) return { kind: "magic", spell: weak };
     return { kind: "fight" };
@@ -387,7 +394,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       const action = choose();
       if (action.kind === "fight") playerAttack();
       else if (action.kind === "magic") cast(action.spell);
-      else if (action.kind === "hiPotion") {
+      else if (action.kind === "defend") {
+        combo = 0;
+        defending = true;
+      } else if (action.kind === "hiPotion") {
         combo = 0;
         hiPotions -= 1;
         hp += Math.min(hero.maxHp - hp, HI_POTION_HP);
@@ -405,6 +415,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (foe.curHp <= 0) return { won: true, rounds, taken };
     }
     enemyTurn();
+    defending = false;
     if (wardTurns > 0) wardTurns -= 1;
   }
 }

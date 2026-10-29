@@ -91,7 +91,7 @@ export const BOSS_STRIKE_MAX_HP_SHARE = 0.7;
 
 export interface BossTell {
   warn: string; // the wind-up's line, <= 54 glyphs (one battle message row)
-  strike: string; // the strike's name: "<strike>! 999 damage! (GUARD)" <= 54
+  strike: string; // the strike's name: "<strike>! 999 damage! (DEFEND)" <= 54
   mult: number;
   color: number; // the boss's tint while it winds up
   freezes?: boolean; // the strike also freezes (EMBER RING blocks it)
@@ -123,6 +123,17 @@ export const COMPANION_ATK_MULT = 0.8;
 export const WARD_TURNS = 3;
 export const WARD_MULT = 0.5;
 export const WARD_COLOR = 0x93c5fd;
+
+// DEFEND (D) spends the hero's turn bracing: the enemy turn after it lands
+// at this share, never below 1, crits and telegraphed strikes included. WARD
+// or BULWARK, when up, halve the hit instead; the three never stack. It is
+// the answer to a wind-up a hero has before WARD (Lv18) or the MP for it,
+// paid for with the turn's damage and the combo. In sim:battle, its hero
+// DEFENDing each wind-up it can't WARD, x0.5 took the first level at a 90%
+// win 2-5 lower and left the strikes before Lv18 near harmless; x0.7 takes
+// it 0-2 lower, with 32-37% of max HP still lost at each boss's intended
+// level.
+export const DEFEND_MULT = 0.7;
 
 // What a won ordinary fight leaves (one roll, at most one item; victory()).
 // It used to be POTION 30% and HI-POTION 8%, and the stock piled up: the
@@ -188,8 +199,8 @@ export const CHILL_PROOF = [ENEMIES.frostMoth, ENEMIES.yeti, ENEMIES.iceGolem].m
 // Spells are learned automatically at their level gate, so nothing about
 // them needs saving: an old save just knows fewer spells until it levels up.
 // Each spell's first letter is its hotkey, so a new name must not start with
-// another spell's letter or a menu key (A FIGHT, E ITEM, S STEAL) — nor M,
-// which mutes, or the item list's H/J/K/L/Z.
+// another spell's letter or a menu key (A FIGHT, E ITEM, D DEFEND, S STEAL)
+// — nor M, which mutes, or the item list's H/J/K/L/Z.
 export interface Spell {
   name: string;
   cost: number;
@@ -302,6 +313,9 @@ export function bossStrikeDamage(atk: number, mult: number, def: number, maxHp: 
 
 // a hit through WARD or BULWARK: halved, never below 1
 export const guardedDamage = (raw: number, halved: boolean): number => (halved ? Math.max(1, Math.ceil(raw * WARD_MULT)) : raw);
+
+// a hit on a DEFENDing hero, never below 1
+export const defendedDamage = (raw: number): number => Math.max(1, Math.ceil(raw * DEFEND_MULT));
 
 // a round's poison tick on the hero, which never takes the last HP
 export const poisonTickDamage = (maxHp: number, hp: number): number => Math.min(Math.max(1, Math.floor(maxHp * POISON_PCT)), hp - 1);

@@ -16,6 +16,7 @@ import {
   comboBonus,
   companionAtk,
   DEATH_GOLD_LOSS,
+  defendedDamage,
   ENRAGE_ATK_MULT,
   ENRAGE_HP_SHARE,
   FIELD_LOOT,
@@ -160,7 +161,19 @@ const MENU_ROW_GAP = 40;
 const MENU_Y = GAME_HEIGHT - 184;
 const MENU_ROWS_Y = [GAME_HEIGHT - 208, GAME_HEIGHT - 172];
 
-type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
+type MenuAction =
+  | "fight"
+  | "magic"
+  | "defend"
+  | "run"
+  | "steal"
+  | "potion"
+  | "mPotion"
+  | "candy"
+  | "hiPotion"
+  | "ether"
+  | "elixir"
+  | "bomb";
 // one flat action row, spells included at the same level as everything else;
 // a spell button carries its Spell and resolves as a "magic" action
 interface MenuButton {
@@ -354,6 +367,8 @@ export class BattleScene extends Phaser.Scene {
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
+  // DEFEND, for the enemy turn after it (battleRules DEFEND_MULT)
+  private defending = false;
   // the killing blow was a weakness spell's (WEAK FINISH, drops.ts)
   private weakFinish = false;
   private dotText!: PixelText;
@@ -411,6 +426,7 @@ export class BattleScene extends Phaser.Scene {
     this.chilled = false;
     this.pilfered = false;
     this.guarded = false;
+    this.defending = false;
     this.weakFinish = false;
     const def = ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime;
     // Night is the risk/reward shift: tougher enemies, richer payout. Applied
@@ -651,6 +667,7 @@ export class BattleScene extends Phaser.Scene {
       // greyed out with nothing in the bag, as a spent STEAL is: an empty list
       // has nothing to pick
       { label: "E:ITEM", action: "item", enabled: () => this.hasItems() },
+      { label: "D:DEFEND", action: "defend" },
       { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
       { label: "ESC:RUN", action: "run", enabled: () => !this.arena },
     ];
@@ -828,6 +845,10 @@ export class BattleScene extends Phaser.Scene {
       this.resolveAction("fight");
       return;
     }
+    if (e.code === "KeyD") {
+      this.resolveAction("defend");
+      return;
+    }
     if (e.code === "KeyE") {
       if (!this.hasItems()) {
         Sfx.error();
@@ -935,17 +956,18 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff);
   }
 
-  // Up to BOLT the 8 buttons (50 glyphs, 1000px + 32) fit one row, spread
-  // evenly with ~22px gaps — the layout from Lv1 to Lv17. WARD makes it 56
-  // glyphs (3px gaps) and NOVA 62 (1240px, wider than the room), so from Lv18
-  // the attacks (FIGHT and the spells) take a row of their own above ITEM /
-  // STEAL / RUN, each centered with MENU_ROW_GAP between buttons; Lv24's
-  // attack row is the widest, 42 glyphs = 840 + 7 x 4 + 6 x 40 = 1108px. The
-  // rows (y 500..524 / 536..560) clear the companion sprite (to y 488) above
-  // and the hint line (566..586) and message box (604) below. With a pad the
-  // buttons carry its names (X:FIGHT ... SELECT:STEAL, B:RUN): BOLT's row is
-  // 57 glyphs, two rows from Lv14, and Lv24's attacks are 48 = 960 + 7 x 4,
-  // their gaps closing to 32px to fit the 1184.
+  // Up to HEAL the 7 buttons (47 glyphs, 940px + 28) fit one row, spread
+  // evenly with 36px gaps — the layout from Lv1 to Lv8. ICE makes it 52
+  // glyphs (16px gaps, under MENU_MIN_GAP), so from Lv9 the attacks (FIGHT
+  // and the spells) take a row of their own above ITEM / DEFEND / STEAL / RUN
+  // (28 glyphs, 696px), each centered with MENU_ROW_GAP between buttons;
+  // Lv24's attack row is the widest, 42 glyphs = 840 + 7 x 4 + 6 x 40 =
+  // 1108px. (Before DEFEND the one row lasted to Lv17.) The rows (y 500..524
+  // / 536..560) clear the companion sprite (to y 488) above and the hint line
+  // (566..586) and message box (604) below. With a pad the buttons carry its
+  // names (X:FIGHT ... START:DEFEND, SELECT:STEAL, B:RUN): HEAL's row is 56
+  // glyphs, two rows from Lv5, the lower one 35 glyphs = 836px, and Lv24's
+  // attacks are 48 = 960 + 7 x 4, their gaps closing to 32px to fit the 1184.
   private layoutMenu(): void {
     this.menuButtons.forEach((b, i) => {
       this.menuTexts[i].setText(keyHint(b.label, b.label, { table: "battle" }));
@@ -1098,6 +1120,9 @@ export class BattleScene extends Phaser.Scene {
         case "steal":
           await this.attemptSteal();
           break;
+        case "defend":
+          await this.defend();
+          break;
       }
 
       if (!this.running) return;
@@ -1108,6 +1133,7 @@ export class BattleScene extends Phaser.Scene {
       if (this.enemy.curHp <= 0) return this.victory();
 
       await this.enemyTurn();
+      this.defending = false;
       await this.tickWard();
     }
   }
@@ -1477,6 +1503,17 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  // the turn spent bracing for the enemy's next hit (guardHit), which
+  // answers a wind-up's CHG before WARD; it breaks the combo as any
+  // non-attack does
+  private async defend(): Promise<void> {
+    this.resetCombo();
+    this.defending = true;
+    Sfx.ward();
+    this.flashStatus("DEFEND", "#e2e8f0");
+    await this.say("You brace for the blow!");
+  }
+
   // one chance per battle to lift bonus gold instead of fighting; costs the
   // turn the same as any other non-fight action (companion still attacks,
   // enemy still counters) whether it succeeds or not
@@ -1811,13 +1848,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // WARD (while it lasts) or BULWARK (the next blow) halves a hit, never
-  // below 1; BULWARK is used up by the blow either way
+  // below 1, else DEFEND takes its share; the three never stack, and BULWARK
+  // is used up by the blow either way. Worst case "CRITICAL! CURSED GOBLIN
+  // strikes for 999! (DEFEND)", 49 glyphs
   private guardHit(raw: number): { dmg: number; note: string } {
     const warded = this.wardTurns > 0;
     const guarded = !warded && this.guarded;
     this.guarded = false;
-    const dmg = guardedDamage(raw, warded || guarded);
-    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : "" };
+    const defended = !warded && !guarded && this.defending;
+    const dmg = defended ? defendedDamage(raw) : guardedDamage(raw, warded || guarded);
+    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : defended ? " (DEFEND)" : "" };
   }
 
   private async freezeHero(): Promise<void> {
@@ -2640,7 +2680,7 @@ export class BattleScene extends Phaser.Scene {
 
   // every battle action key also advances messages, so mashing your next
   // action never stalls on a textbox
-  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
+  private static readonly ADVANCE_KEYS = ["Z", "A", "E", "D", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
 
   private awaitAdvance(resolve: () => void): void {
     // a tap advances too (below), and a touch screen has no Z

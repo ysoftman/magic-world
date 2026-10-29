@@ -64,9 +64,10 @@ const FIELD: Record<number, string> = {
 // letter of its own, so the spare buttons stand in for the common ones — X
 // FIGHT (KeyA, as in the field), Y the items, LB HEAL, RB FIRE, LT ICE, RT
 // BOLT — and the stick clicks for the two late spells, L3 WARD and R3 NOVA.
-// Select, the help in the field (a battle has none), is STEAL. Start (O)
-// does nothing here. A still advances the text and picks an item, B still
-// runs / closes the list, the d-pad still moves the item cursor.
+// Select, the help in the field (a battle has none), is STEAL, and Start,
+// the settings there, DEFEND (KeyD). A still advances the text and picks an
+// item, B still runs / closes the list, the d-pad still moves the item
+// cursor.
 const BATTLE: Record<number, string> = {
   ...FIELD,
   [BTN.y]: "KeyE",
@@ -77,6 +78,7 @@ const BATTLE: Record<number, string> = {
   [BTN.l3]: "KeyW",
   [BTN.r3]: "KeyN",
   [BTN.select]: "KeyS",
+  [BTN.start]: "KeyD",
 };
 // The title (TitleScene's keydown): A still continues or starts, the d-pad
 // picks the slot, RB is U (RESTORE), RT M and Start O as in the field. X is
