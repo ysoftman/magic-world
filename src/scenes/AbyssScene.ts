@@ -37,6 +37,7 @@ import {
   saveAndQuit,
   saveOnShutdown,
   startWaterAnimation,
+  walkOut,
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
@@ -559,10 +560,7 @@ export class AbyssScene extends Phaser.Scene {
   private leave(next: () => void): void {
     if (this.leaving) return;
     this.leaving = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, next);
+    walkOut(this, this.player, next);
   }
 
   private tryDescend(): void {

@@ -684,6 +684,22 @@ export function addExitArrow(
   return arrow;
 }
 
+const WALK_OUT_FADE = 200;
+
+/**
+ * A walk off the map, by an exit, a stair or one of the town's ways out:
+ * the hero stops, the door sounds, the camera fades out (FieldKeys.leaving
+ * from here on) and `next`, the scene change, runs as the fade ends. The
+ * scene's own flag, set before, is what keeps a second way out or a fight
+ * from starting over it.
+ */
+export function walkOut(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite, next: () => void): void {
+  Sfx.night();
+  hero.setVelocity(0, 0);
+  scene.cameras.main.fadeOut(WALK_OUT_FADE, 0, 0, 0);
+  scene.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, next);
+}
+
 /**
  * Bounds the main camera to a w x h map plus, while the status HUD is up, a
  * STATUS_HUD_HEIGHT strip above it. The HUD covers the top 88px of the screen,

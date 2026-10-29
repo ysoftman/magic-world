@@ -41,6 +41,7 @@ import {
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  walkOut,
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
@@ -380,12 +381,7 @@ export class DungeonScene extends Phaser.Scene {
   private exitDungeon(): void {
     if (this.exitingDungeon) return;
     this.exitingDungeon = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Town", { fromDungeon: true });
-    });
+    walkOut(this, this.player, () => this.scene.start("Town", { fromDungeon: true }));
   }
 
   // The ABYSS's stair (abyss.ts) under an "ABYSS" tag in the TOWN marker's
@@ -430,13 +426,8 @@ export class DungeonScene extends Phaser.Scene {
 
   private enterAbyss(start: number): void {
     this.exitingDungeon = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      // a new dive, never a stale { fromBattle } replayed by Phaser
-      this.scene.start("Abyss", { start });
-    });
+    // a new dive, never a stale { fromBattle } replayed by Phaser
+    walkOut(this, this.player, () => this.scene.start("Abyss", { start }));
   }
 
   // A find (a chest, a treasure map's dig) gets the grace a fight's return

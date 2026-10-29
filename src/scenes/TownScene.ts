@@ -63,6 +63,7 @@ import {
   saveOnShutdown,
   startWaterAnimation,
   type TileLayers,
+  walkOut,
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
@@ -1090,48 +1091,28 @@ export class TownScene extends Phaser.Scene {
   private enterDungeon(): void {
     if (this.enteringDungeon) return;
     this.enteringDungeon = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Dungeon");
-    });
+    walkOut(this, this.player, () => this.scene.start("Dungeon"));
   }
 
   private enterForest(): void {
     if (this.enteringForest) return;
     this.enteringForest = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      // {} rather than nothing: Phaser keeps the last start's data when the
-      // next passes none, and a forest last built for a season's turn would
-      // set the hero back where they stood then, untitled
-      this.scene.start("Forest", {});
-    });
+    // {} rather than nothing: Phaser keeps the last start's data when the
+    // next passes none, and a forest last built for a season's turn would
+    // set the hero back where they stood then, untitled
+    walkOut(this, this.player, () => this.scene.start("Forest", {}));
   }
 
   private enterSnow(): void {
     if (this.enteringSnow) return;
     this.enteringSnow = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Snow");
-    });
+    walkOut(this, this.player, () => this.scene.start("Snow"));
   }
 
   private enterVolcano(): void {
     if (this.enteringVolcano) return;
     this.enteringVolcano = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Volcano");
-    });
+    walkOut(this, this.player, () => this.scene.start("Volcano"));
   }
 
   // resets forestOverlapActive once the player is a full tile clear of the

@@ -37,6 +37,7 @@ import {
   saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
+  walkOut,
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
@@ -307,12 +308,7 @@ export class VolcanoScene extends Phaser.Scene {
   private exitVolcano(): void {
     if (this.exitingVolcano) return;
     this.exitingVolcano = true;
-    Sfx.night();
-    this.player.setVelocity(0, 0);
-    this.cameras.main.fadeOut(200, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("Town", { fromVolcano: true });
-    });
+    walkOut(this, this.player, () => this.scene.start("Town", { fromVolcano: true }));
   }
 
   // A find (a chest, a treasure map's dig) gets the grace a fight's return
