@@ -19,8 +19,8 @@ const JOURNEY = ["TOWN", "CAVE", "FOREST", "SNOW FIELD", "VOLCANO"];
 const LABEL_W = 13;
 // When each screen's PRESS ENTER starts to blink, and the screen takes a
 // press: one before then is dropped. Z mashed through the battle's last line
-// ("Battle won!", then a 1.5s fade) landed here and threw the ending away as
-// it came up.
+// ("Battle won!" then, the boss's "... is no more!" now, and a 1.5s fade)
+// landed here and threw the ending away as it came up.
 const ENDING_PROMPT_MS = 4200;
 const EPILOGUE_PROMPT_MS = 5000;
 // a pad's A sends Z, which leaves as ENTER does
