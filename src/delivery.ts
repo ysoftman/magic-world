@@ -1,3 +1,4 @@
+import { MAX_GOLD } from "./config";
 import { MATERIALS, type MaterialKey } from "./drops";
 import { type DeliveryState, econDay, GameState, type QuestState } from "./gameState";
 
@@ -106,16 +107,17 @@ export function canDeliver(d: DeliveryState): boolean {
 }
 
 /**
- * Hands today's pieces in. Paid first and only then taken, so a purse at the
- * gold cap (gainGold() credits nothing) keeps its materials and the request
- * stays open, the same edge the bounty claim guards. Null when nothing
- * happened.
+ * Hands today's pieces in. Refused whole when the pay won't all fit under
+ * MAX_GOLD, as the shop refuses such a sale: gainGold() credits only what
+ * fits, so at 9800G four FROST SCALE (1560G) paid 199G and took all four.
+ * Refused, the materials stay and the request stays open, the same edge the
+ * bounty claim guards. Null when nothing happened.
  */
 export function deliver(d: DeliveryState): { gold: number; bomb: boolean } | null {
   if (!canDeliver(d)) return null;
   const reward = deliveryReward(d.material, d.need);
+  if (GameState.gold + reward.gold > MAX_GOLD) return null;
   const gold = GameState.gainGold(reward.gold);
-  if (gold <= 0) return null;
   GameState.inventory[d.material] -= d.need;
   if (reward.bomb) GameState.inventory.bomb += 1;
   d.done = true;

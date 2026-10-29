@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { canDeliver, deliver, deliveryReward, materialName, rollDeliveryIfStale } from "../delivery";
 import { eventToday } from "../events";
 import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, materialNameOf } from "../favors";
@@ -1693,7 +1693,7 @@ export class TownScene extends Phaser.Scene {
       const paid = completeFavor(key);
       if (!paid) return;
       if (paid === "full") {
-        this.dialogue.start(["Your purse is full.", "Come back with room."], name);
+        this.dialogue.start(["Your purse is too full.", "Come back with room."], name);
         return;
       }
       Sfx.buy();
@@ -2143,11 +2143,15 @@ export class TownScene extends Phaser.Scene {
       lines.push("BOUNTY CLAIMED TODAY.");
     } else if (b.have < b.need) {
       lines.push(`BOUNTY: ${b.target} ${b.have}/${b.need}`, `REWARD: ${b.reward} GOLD.`);
+    } else if (GameState.gold + b.reward > MAX_GOLD) {
+      // refused whole, as the delivery is (delivery.ts deliver()): gainGold()
+      // would credit only what fits. Unclaimed, it can be taken later today
+      // with room (the day's turn pays what fits, GameState.rollBountyIfStale);
+      // "BOUNTY COMPLETE! YOUR PURSE IS TOO FULL." is one row (40 glyphs)
+      lines.push("BOUNTY COMPLETE!", "YOUR PURSE IS TOO FULL.");
     } else {
       const gained = GameState.gainGold(b.reward);
-      // only latch claimed once gold actually landed — at the cap gainGold()
-      // returns 0, same MAX_GOLD edge BattleScene's steal already guards
-      if (gained > 0) b.claimed = true;
+      b.claimed = true;
       Sfx.buy();
       GameState.save();
       lines.push("BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`);
@@ -2177,7 +2181,7 @@ export class TownScene extends Phaser.Scene {
     const name = materialName(d.material);
     const paid = deliver(d);
     if (!paid) {
-      this.dialogue.start(["YOUR PURSE IS FULL.", "COME BACK WITH ROOM."], "BOUNTY BOARD");
+      this.dialogue.start(["YOUR PURSE IS TOO FULL.", "COME BACK WITH ROOM."], "BOUNTY BOARD");
       return;
     }
     Sfx.buy();

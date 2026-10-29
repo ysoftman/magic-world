@@ -1,3 +1,4 @@
+import { MAX_GOLD } from "./config";
 import { MATERIALS, type MaterialKey } from "./drops";
 import { ALL_FISH, type FavorState, GameState, type QuestState, type VillagerKey } from "./gameState";
 
@@ -155,18 +156,18 @@ export function acceptFavor(key: VillagerKey): void {
 }
 
 /**
- * Pays a ready step and moves the chain on: the gold lands first
- * (gainGold()'s credited amount is what's reported), then the pieces it asked
- * for leave the bag and the last step adds an ELIXIR. "full" when the purse
- * is at the gold cap — nothing credited, so nothing is taken and the step
- * stays ready, the same edge the bounty claim and the delivery guard. Null
- * when the step isn't ready.
+ * Pays a ready step and moves the chain on: the gold lands first, then the
+ * pieces it asked for leave the bag and the last step adds an ELIXIR. "full"
+ * when the gold won't all fit under MAX_GOLD (gainGold() would credit only
+ * what fits and the pieces would still go) — nothing is paid or taken and
+ * the step stays ready, the same edge the bounty claim and the delivery
+ * guard. Null when the step isn't ready.
  */
 export function completeFavor(key: VillagerKey): { gold: number; elixir: boolean } | "full" | null {
   const step = favorStep(key);
   if (!step || favorStatus(key) !== "ready") return null;
+  if (GameState.gold + step.gold > MAX_GOLD) return "full";
   const gold = GameState.gainGold(step.gold);
-  if (gold <= 0) return "full";
   if (step.takes) GameState.inventory[step.takes] -= step.need;
   const next = stateOf(key).step + 1;
   const elixir = next >= FAVORS[key].length;

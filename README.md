@@ -55,7 +55,7 @@
 | ARENA | KING SLIME 처치 후. 처치한 보스(쓰러뜨리거나 잡은 TROLL KING 포함) 최대 5연전, 사이마다 HP/MP 20% 회복, 도망 불가. 상금은 보스 골드의 25%로 이긴 판마다 바로 지급·저장(완주 시 합계의 +50% 추가) |
 | FARM | 4칸. CORN, BEAN, PUMPKIN, MOONFLOWER(밤에만 자람). 5% 확률로 황금 수확 x3. 수확하면 골드와 함께 그 작물이 요리 재료로 1개 |
 | FISHING | 마을 연못과 설원 얼음 구멍. 입질("!") 때 Z. 밤에만 나오는 어종, 황금 어종은 포션 동봉. TAB 으로 어류 기록. 낚을 때마다 골드와 함께 요리 재료 FISH 1개(어종 구분 없음). 희귀 어종(포션이 딸린 GOLDEN FISH·AURORA KOI, 밤에만 나오는 MOON EEL·GHOST ICEFISH)은 RARE FISH 를 하나 더 준다 — 낮 약 8%, 밤에는 밤 어종이 더해져 약 16% |
-| BOUNTY BOARD | 매일 바뀌는 처치 의뢰(3~6마리) |
+| BOUNTY BOARD | 매일 바뀌는 처치 의뢰(3~6마리)와 소재 납품. 받을 골드가 상한 9999G 를 넘기면 바운티 보상과 납품을 거부한다(소재는 그대로, 주민 부탁도 같음) |
 | GAMBLER | LUCKY WHEEL: 10/50/200/1000G 베팅. 최고 당첨(JACKPOT x5)이 나왔을 때 9999G 를 넘길 베팅은 받지 않는다(그 줄은 흐리게 표시) |
 | RANK BOARD | 영웅 레벨 순위 |
 | ELDER / HUNTER | 메인 퀘스트 / 사이드 의뢰. HUNTER 는 BAT 4마리 → CANDY 로 몬스터 3마리 포획 → (KING SLIME 처치 뒤) SPIDER SILK 3개 가져오기(넘길 때 YES/NO, 110G + HI-POTION 2) → YETI 처치 → 화산 몬스터 포획 순 |
