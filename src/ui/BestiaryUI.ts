@@ -5,6 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { CATCHABLE, ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 
@@ -113,19 +114,19 @@ export class BestiaryUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
+  private title: PixelText;
+  private hint: PixelText;
+  private msg: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
-  private pager: Phaser.GameObjects.Text;
-  private counter: Phaser.GameObjects.Text;
+  private pager: PixelText;
+  private counter: PixelText;
   // one icon/name/note set per slot on a page, refilled on every page turn
   private icons: Phaser.GameObjects.Sprite[] = [];
-  private rows: Phaser.GameObjects.Text[] = [];
-  private weakNotes: Phaser.GameObjects.Text[] = [];
-  private canNotes: Phaser.GameObjects.Text[] = [];
-  private partnerTags: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
+  private rows: PixelText[] = [];
+  private weakNotes: PixelText[] = [];
+  private canNotes: PixelText[] = [];
+  private partnerTags: PixelText[] = [];
+  private cursor: PixelText;
 
   private keyEsc: Phaser.Input.Keyboard.Key;
   private keyB: Phaser.Input.Keyboard.Key;
@@ -160,13 +161,13 @@ export class BestiaryUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, TITLE_Y, "BESTIARY", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, TITLE_Y, "BESTIARY", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.hint = bindKeyHint(
-      scene.add.text(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)),
+      scene.add.pixelText(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)),
       // the key line, in the other panels' form (B/ESC closed it unsaid);
       // 50 glyphs at most, 800px (x 240..1040)
       () => keyHint("HJKL: MOVE   Z/CLICK: SET COMPANION   B/ESC: CLOSE", "D-PAD: MOVE   Z/TAP: SET COMPANION   B/ESC: CLOSE"),
@@ -176,14 +177,14 @@ export class BestiaryUI {
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, HINT_Y, "", retroStyle(5, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, HINT_Y, "", retroStyle(5, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     // the arrows are tappable too: the left half turns back, the right on
     this.pager = scene.add
-      .text(GAME_WIDTH / 2, PAGER_Y, "", retroStyle(5, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, PAGER_Y, "", retroStyle(5, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -194,7 +195,7 @@ export class BestiaryUI {
     // top-anchored at its reserved slot, so a three-line counter (no
     // companion) just ends higher instead of creeping up toward the pager
     this.counter = scene.add
-      .text(GAME_WIDTH / 2, COUNTER_TOP, "", retroStyle(6, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, COUNTER_TOP, "", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5, 0)
       .setLineSpacing(COUNTER_LINE_SPACING)
       .setAlign("center")
@@ -215,7 +216,7 @@ export class BestiaryUI {
         .setVisible(false);
       this.icons.push(icon);
       const row = scene.add
-        .text(x + NAME_DX, y, "", retroStyle(6, DIM_TEXT))
+        .pixelText(x + NAME_DX, y, "", retroStyle(6, DIM_TEXT))
         .setOrigin(0, 0.5)
         .setScrollFactor(0)
         .setDepth(152)
@@ -223,7 +224,7 @@ export class BestiaryUI {
       this.rows.push(row);
       const note = (color: string) =>
         scene.add
-          .text(x + NAME_DX, y + NOTE_DY, "", retroStyle(4, color))
+          .pixelText(x + NAME_DX, y + NOTE_DY, "", retroStyle(4, color))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -248,7 +249,12 @@ export class BestiaryUI {
       weak.setInteractive({ useHandCursor: true }).on("pointerdown", select);
       can.setInteractive({ useHandCursor: true }).on("pointerdown", select);
     }
-    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
+    this.cursor = scene.add
+      .pixelText(0, 0, ">", retroStyle(6, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
 
     const kb = scene.input.keyboard!;
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);

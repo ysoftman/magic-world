@@ -4,6 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { isEventToday } from "../events";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized by the key hint (retroStyle(4), 16px a glyph): "D-PAD: MOVE   Z:
@@ -80,12 +81,12 @@ export class LuckyWheel {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private goldText: Phaser.GameObjects.Text;
-  private rows: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private status: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private title: PixelText;
+  private goldText: PixelText;
+  private rows: PixelText[] = [];
+  private cursor: PixelText;
+  private status: PixelText;
+  private hint: PixelText;
 
   private keyUp: Phaser.Input.Keyboard.Key;
   private keyDown: Phaser.Input.Keyboard.Key;
@@ -114,7 +115,7 @@ export class LuckyWheel {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 36, "LUCKY WHEEL", retroStyle(8, "#f472b6"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 36, "LUCKY WHEEL", retroStyle(8, "#f472b6"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -122,7 +123,7 @@ export class LuckyWheel {
     // own line below the title, not beside it — "LUCKY WHEEL" at retroStyle(8)
     // runs wide enough to collide with a same-row gold readout
     this.goldText = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 74, "G 0", retroStyle(6, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 74, "G 0", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -133,16 +134,21 @@ export class LuckyWheel {
     WAGER_TIERS.forEach((_tier, i) => {
       this.rows.push(
         scene.add
-          .text(rowX, startY + i * ROW_GAP, "", retroStyle(6, "#ffffff"))
+          .pixelText(rowX, startY + i * ROW_GAP, "", retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
           .setVisible(false),
       );
     });
-    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
+    this.cursor = scene.add
+      .pixelText(0, 0, ">", retroStyle(6, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
     this.status = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 330, "", retroStyle(6, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 330, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -157,7 +163,7 @@ export class LuckyWheel {
       .setLineSpacing(8);
     // only UP/DOWN/J/K are bound below — this is a single column, not a
     // grid, so no H/L to advertise; touch moves with the d-pad's arrows
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, DIM_TEXT)), () =>
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, DIM_TEXT)), () =>
       keyHint("JK: MOVE   Z: SPIN   ESC: CLOSE", "D-PAD: MOVE   Z: SPIN   ESC: CLOSE"),
     )
       .setOrigin(0.5)
