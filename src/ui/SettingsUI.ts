@@ -18,14 +18,19 @@ import { isTouchDevice } from "./TouchControls";
 // d-pad), the tenth (GUIDE ARROW) came out of the pitch (40 to 36) and the
 // eleventh (FULLSCREEN) did again: 33 keeps 12px above the hint and 8 under
 // the CLOSE chip, and leaves 9 between rows. Widest row
-// "> BGM VOLUME: ##########  100%" is 30 x 24 = 720px, x=280..1000 inside the
-// panel's 160..1120, clear of the d-pad (x<=258) and the touch menu (x>=1222).
+// "> BGM VOLUME: ##########  100%" is 30 x 24 = 720px, x=280..1000, and on
+// touch "< BGM VOLUME: ##########  100% >" is 32 x 24 = 768px, x=256..1024:
+// inside the panel's 160..1120, clear of the touch menu (x>=1222), and far
+// above the d-pad (x<=258 from y=508).
 const PANEL_W = 960;
 const PANEL_H = 496;
 const PANEL_TOP = 588 - PANEL_H;
 const TITLE_Y = PANEL_TOP + 56;
 const ROW_Y = PANEL_TOP + 98;
 const ROW_GAP = 33;
+// the rows' tap zone: as wide as the widest touch row, a full pitch per row
+const ROWS_TOP = ROW_Y - ROW_GAP / 2;
+const ROWS_HIT_W = 768;
 
 const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
 const TIME_SPEED_LABELS: Record<number, string> = { 1: "NORMAL", 5: "FAST", 20: "VERY FAST" };
@@ -82,6 +87,7 @@ export class SettingsUI {
   private panel: Phaser.GameObjects.Rectangle;
   private title: Phaser.GameObjects.Text;
   private rows: Phaser.GameObjects.Text[] = [];
+  private rowsHit: Phaser.GameObjects.Zone;
   private hint: Phaser.GameObjects.Text;
   private closeChip: Phaser.GameObjects.Container;
   private quitChip?: Phaser.GameObjects.Container;
@@ -118,13 +124,13 @@ export class SettingsUI {
     });
     // The keyboard line (55 x 16 = 880px, x 200..1080, 40px inside the
     // panel's sides) runs under the touch d-pad's up arrow; the touch line is
-    // 50 x 16 = 800px (x 240..1040), clear of it and of Z, and names the
-    // d-pad rather than HJKL
+    // 39 x 16 = 624px (x 328..952), clear of it and of Z. It names taps, not
+    // the d-pad: the title opens SETTINGS too and has no TouchControls
     this.hint = scene.add
       .text(
         GAME_WIDTH / 2,
         PANEL_TOP + PANEL_H - 36,
-        isTouchDevice() ? "D-PAD: SELECT/ADJUST   Z: APPLY/CLOSE   ESC: CLOSE" : "JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE",
+        isTouchDevice() ? "TAP: TOGGLE/APPLY   TAP LEFT/RIGHT: -/+" : "JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE",
         retroStyle(4, "#8ecbff"),
       )
       .setOrigin(0.5)
@@ -173,20 +179,25 @@ export class SettingsUI {
       });
     }
 
-    // The FULLSCREEN row also takes a tap or click, on pointerup. Asking for
-    // fullscreen needs the browser's user activation: a touch only grants it
-    // at touchend, and the d-pad sends its key from pointerdown, so a tap on
-    // the row itself is the one touch input sure to work. The padding (4px,
-    // most of the 9px gap on each side) widens the target without moving the
-    // text: the box is 438..470, the rows beside it end at 433 and start at 475.
-    this.rows[FULLSCREEN_ROW]
-      .setPadding(40, 4)
+    // Every row takes a tap or click, the title's touch player's only way to
+    // change one (no d-pad there). One zone over all the rows, a full pitch
+    // each so the 9px gaps count too (y 173..537, under the chips' 170 and
+    // above the hint's 544; x 256..1024, clear of the d-pad's up arrow at
+    // x<=194 and of Z at x>=1076). It reads a tap by row, and a stepped row
+    // by half like the pagers (BestiaryUI): see tapRow. On pointerup: asking
+    // for fullscreen needs the browser's user activation, a touch only grants
+    // it at touchend, and the d-pad sends its key from pointerdown, so a tap
+    // on the FULLSCREEN row itself is the one touch input sure to work there.
+    this.rowsHit = scene.add
+      .zone(GAME_WIDTH / 2, ROWS_TOP + (LABELS.length * ROW_GAP) / 2, ROWS_HIT_W, LABELS.length * ROW_GAP)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false)
       .setInteractive({ useHandCursor: true })
-      .on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+      .on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, (p: Phaser.Input.Pointer) => {
         if (!this.active) return;
-        this.row = FULLSCREEN_ROW;
-        this.refresh();
-        this.setFullscreen(!scene.scale.isFullscreen);
+        const i = Math.min(LABELS.length - 1, Math.floor((p.y - ROWS_TOP) / ROW_GAP));
+        this.tapRow(i, p.x < GAME_WIDTH / 2 ? -1 : 1);
       });
     // the ScaleManager is the game's, so it outlives this scene's rows
     const onFullscreenChange = () => {
@@ -250,6 +261,7 @@ export class SettingsUI {
     this.quitChip?.setVisible(true);
     this.quitText?.setText("QUIT");
     for (const t of this.rows) t.setVisible(true);
+    this.rowsHit.setVisible(true);
     this.refresh();
   }
 
@@ -262,6 +274,8 @@ export class SettingsUI {
     this.closeChip.setVisible(false);
     this.quitChip?.setVisible(false);
     for (const t of this.rows) t.setVisible(false);
+    // hidden, it is no hit target: the title reads a tap that hits nothing as ENTER
+    this.rowsHit.setVisible(false);
   }
 
   isActive(): boolean {
@@ -283,6 +297,20 @@ export class SettingsUI {
     this.closeChip.destroy();
     this.quitChip?.destroy();
     for (const t of this.rows) t.destroy();
+    this.rowsHit.destroy();
+  }
+
+  // A tap selects the row and works it in one go (a tap that only selected
+  // would be a wasted one): a stepped row goes the way of the half it hit,
+  // an ON/OFF row flips — a tap on its value always changes it — and a save
+  // row runs.
+  private tapRow(i: number, half: number): void {
+    this.row = i;
+    this.refresh();
+    if (i >= LABELS.length - 2) this.activate();
+    else if (i === FULLSCREEN_ROW) this.adjust(this.scene.scale.isFullscreen ? -1 : 1);
+    else if (TOGGLES[i]) this.adjust(GameState[TOGGLES[i]] ? -1 : 1);
+    else this.adjust(half);
   }
 
   private moveRow(dir: number): void {
@@ -414,6 +442,7 @@ export class SettingsUI {
       return "#".repeat(n) + "-".repeat(10 - n);
     };
     const fullscreenOk = fullscreenSupported(this.scene.scale);
+    const touch = isTouchDevice();
     const values = [
       `${bar(GameState.bgmVolume)}  ${Math.round(GameState.bgmVolume * 100)}%`,
       `${bar(GameState.sfxVolume)}  ${Math.round(GameState.sfxVolume * 100)}%`,
@@ -433,7 +462,11 @@ export class SettingsUI {
       // the save actions name the slot they act on: "> IMPORT SAVE (SLOT 3)"
       // is 22 x 24 = 528px, inside the widest row's 720
       const slot = i >= LABELS.length - 2 ? ` (SLOT ${GameState.saveSlot})` : "";
-      this.rows[i].setText(`${selected ? "> " : ""}${label}${slot}${value}`);
+      const text = `${label}${slot}${value}`;
+      // on touch a stepped row (volumes, speeds) under the cursor wears the
+      // pagers' "< >" in place of "> ": the halves a tap steps it by
+      const stepped = i < 2 || i in SPEEDS;
+      this.rows[i].setText(!selected ? text : touch && stepped ? `< ${text} >` : `> ${text}`);
       // N/A stays greyed even under the cursor; the "> " still marks it
       const dimmed = i === FULLSCREEN_ROW && !fullscreenOk;
       this.rows[i].setColor(dimmed ? DIM_TEXT : selected ? "#ffd166" : "#f5f5f5");
