@@ -352,8 +352,8 @@ export class BattleScene extends Phaser.Scene {
   private frozen = false;
   private freezeGrace = 0;
   private enraged = false;
-  // a boss mid wind-up (its strike lands on its next turn), and the turns
-  // left before it may wind up again (see BOSS_TELLS)
+  // a boss, giant or big foe mid wind-up (its strike lands on its next
+  // turn), and the turns left before it may wind up again (see BOSS_TELLS)
   private charging = false;
   private tellCooldown = 0;
   private chargeText!: PixelText;
@@ -1790,7 +1790,7 @@ export class BattleScene extends Phaser.Scene {
     const tell = BOSS_TELLS[this.enemy.name];
     if (tell && this.charging) return this.bossStrike(tell);
     if (tell && this.tellCooldown > 0) this.tellCooldown -= 1;
-    else if (tell && !this.frozen && Math.random() < BOSS_TELL_CHANCE) return this.bossTell(tell);
+    else if (tell && !this.frozen && Math.random() < (tell.chance ?? BOSS_TELL_CHANCE)) return this.bossTell(tell);
     const special = this.rollSpecial();
     if (this.freezeGrace > 0) this.freezeGrace -= 1;
     if (special === "regen") return this.regenerate();

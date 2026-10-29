@@ -55,10 +55,10 @@ export const ENRAGE_ATK_MULT = 1.3;
 
 export const REGEN_PCT = 0.12;
 
-// Telegraphed boss attacks: a boss (or the TROLL KING) may spend a turn
+// Telegraphed boss attacks: a boss, giant or big foe may spend a turn
 // winding up — a warning line and a CHG tag instead of an attack — and the
-// next enemy turn lands the strike, so WARD, HEAL or an item has a turn to
-// answer it. Tuning knobs for the balance audit:
+// next enemy turn lands the strike, so DEFEND, WARD, HEAL or an item has a
+// turn to answer it. Tuning knobs for the balance audit:
 // - BOSS_TELL_CHANCE: odds an enemy turn turns into a wind-up, once ready.
 //   0.5 from the balance audit: at 0.3 only 52-57% of boss fights ever saw
 //   a wind-up land as a strike before the boss fell, so the mechanic was
@@ -79,9 +79,18 @@ export const REGEN_PCT = 0.12;
 //   to at most 35%.
 // - BOSS_STRIKE_MAX_HP_SHARE: the strike never takes more than this share of
 //   max HP before WARD, so from full HP it can't kill, whatever stacks
+// - BossTell.chance: a big ordinary foe's own odds (ORC, YETI, SALAMANDER),
+//   so the regions between the bosses ask for DEFEND too. Their fights last
+//   1.5-2.5 rounds, so a wind-up mostly asks whether to finish the foe
+//   first. Their mults put an unanswered strike at 18-19% of max HP at the
+//   level and gear a hero walks into the region with (ORC Lv8 + SWORD + IRON
+//   SHIELD, YETI Lv14 + IRON, SALAMANDER Lv18 + MYTHRIL; 28% by night, whose
+//   x1.25 ATK they do take) and ~10% by the region's boss level, against 3-6%
+//   for a plain hit.
 // Statuses: a boss never starts a wind-up while the hero is frozen; it can't
 // be snared or shocked (WEB SNARE and BOLT skip bosses and giants), so no
-// strike is ever cancelled; poison/burn still tick on a wind-up turn; CHILL
+// strike is ever cancelled; a big foe can, and its strike waits out the lost
+// turn, CHG still up; poison/burn still tick on a wind-up turn; CHILL
 // (companion or ICE) lowers the ATK the strike multiplies; enraging at the
 // start of the strike turn powers the strike up. The ARENA plays it all the
 // same.
@@ -95,6 +104,7 @@ export interface BossTell {
   mult: number;
   color: number; // the boss's tint while it winds up
   freezes?: boolean; // the strike also freezes (EMBER RING blocks it)
+  chance?: number; // odds of a wind-up, BOSS_TELL_CHANCE if not given
 }
 
 export const BOSS_TELLS: Record<string, BossTell> = {
@@ -103,6 +113,9 @@ export const BOSS_TELLS: Record<string, BossTell> = {
   [ENEMIES.mossGolem.name]: { warn: "MOSS GOLEM's roots creep closer!", strike: "ROOT CRUSH", mult: 2.6, color: 0x86efac },
   [ENEMIES.iceGolem.name]: { warn: "GLACIER GOLEM draws in frost...", strike: "FROST BREATH", mult: 2.6, color: 0x67e8f9, freezes: true },
   [ENEMIES.flameDrake.name]: { warn: "FLAME DRAKE takes a deep breath...", strike: "INFERNO", mult: 2.8, color: 0xf97316 },
+  [ENEMIES.orc.name]: { warn: "ORC raises its club high!", strike: "CLUB SMASH", mult: 2, color: 0xfca5a5, chance: 0.25 },
+  [ENEMIES.yeti.name]: { warn: "YETI rears up, roaring!", strike: "MAUL", mult: 2.2, color: 0xe0f2fe, chance: 0.25 },
+  [ENEMIES.salamander.name]: { warn: "SALAMANDER's throat glows red...", strike: "FLAME SPIT", mult: 2.2, color: 0xfb923c, chance: 0.25 },
 };
 
 // Companion attack power is (species ATK + level/2 + bond) x this. It was
