@@ -15,6 +15,7 @@ import {
 import { EQUIP_BONUS, EQUIP_SLOT, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
 import { ART_PX, bodyStyle, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
@@ -211,19 +212,19 @@ export class BlacksmithUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private tabs: Phaser.GameObjects.Text[] = [];
-  private goldText: Phaser.GameObjects.Text;
-  private names: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private tabs: PixelText[] = [];
+  private goldText: PixelText;
+  private names: PixelText[] = [];
   private icons: Phaser.GameObjects.Image[] = [];
-  private statuses: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private info: Phaser.GameObjects.Text;
-  private needs: Phaser.GameObjects.Text[] = [];
+  private statuses: PixelText[] = [];
+  private cursor: PixelText;
+  private info: PixelText;
+  private needs: PixelText[] = [];
   private needIcons: Phaser.GameObjects.Image[] = [];
-  private fee: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private fee: PixelText;
+  private msg: PixelText;
+  private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private upQueued = false;
@@ -249,9 +250,11 @@ export class BlacksmithUI {
       scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
       151,
     );
-    this.title = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "BLACKSMITH", retroStyle(8, "#fb923c")).setOrigin(0.5));
+    this.title = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "BLACKSMITH", retroStyle(8, "#fb923c")).setOrigin(0.5));
     MODES.forEach((mode, i) => {
-      const tab = fixed(scene.add.text(TAB_X + i * TAB_GAP, PANEL_TOP + 40, TAB_LABEL[mode], retroStyle(5, DIM_TEXT)).setOrigin(0, 0.5));
+      const tab = fixed(
+        scene.add.pixelText(TAB_X + i * TAB_GAP, PANEL_TOP + 40, TAB_LABEL[mode], retroStyle(5, DIM_TEXT)).setOrigin(0, 0.5),
+      );
       // a tap picks the tab, as HL / the d-pad's < and > do
       tab.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
         if (this.active) this.tapQueued = mode;
@@ -259,25 +262,25 @@ export class BlacksmithUI {
       this.tabs.push(tab);
     });
     this.goldText = fixed(
-      scene.add.text(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff")).setOrigin(1, 0.5),
+      scene.add.pixelText(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff")).setOrigin(1, 0.5),
     );
     RECIPES.forEach((r, i) => {
       const y = ROW_Y + i * ROW_GAP;
       this.icons.push(fixed(scene.add.image(NAME_X + 16, y, `icon-${r.key}`).setScale(0.5)));
-      this.names.push(fixed(scene.add.text(NAME_X + ICON_DX, y, r.name, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
-      this.statuses.push(fixed(scene.add.text(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
+      this.names.push(fixed(scene.add.pixelText(NAME_X + ICON_DX, y, r.name, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
+      this.statuses.push(fixed(scene.add.pixelText(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
     });
-    this.cursor = fixed(scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
-    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
+    this.cursor = fixed(scene.add.pixelText(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
+    this.info = fixed(scene.add.pixelText(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
     for (let i = 0; i < MAX_NEEDS; i++) {
       this.needIcons.push(fixed(scene.add.image(NAME_X + 16, NEED_Y + i * NEED_GAP, "icon-slimeGel").setScale(0.5)));
-      this.needs.push(fixed(scene.add.text(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
+      this.needs.push(fixed(scene.add.pixelText(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
     }
-    this.fee = fixed(scene.add.text(FEE_X, NEED_Y, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
-    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 392, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
+    this.fee = fixed(scene.add.pixelText(FEE_X, NEED_Y, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5));
+    this.msg = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 392, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
     // the line itself is the mode's (refresh); touch names the d-pad rather
     // than HL/JK (the arrows it sends move here too)
-    this.hint = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 422, "", retroStyle(4, DIM_TEXT)).setOrigin(0.5));
+    this.hint = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 422, "", retroStyle(4, DIM_TEXT)).setOrigin(0.5));
 
     const kb = scene.input.keyboard!;
     const DOWN = Phaser.Input.Keyboard.Events.DOWN;
