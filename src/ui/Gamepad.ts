@@ -183,8 +183,10 @@ export function keyHint(keys: string, touch = keys, { table = "field", pad = key
 
 // The texts showing a key line: what to write and what was written last. A
 // text later given other words (the battle's hint between its uses) shows
-// something else by then and is dropped instead of overwritten.
-const bound = new Map<Phaser.GameObjects.Text, { line: () => string; shown: string }>();
+// something else by then and is dropped instead of overwritten. A Text or a
+// BitmapText (PixelText): only its `text` is read and set.
+type HintText = Phaser.GameObjects.Text | Phaser.GameObjects.BitmapText;
+const bound = new Map<HintText, { line: () => string; shown: string }>();
 
 function rewriteHints(): void {
   for (const [text, hint] of bound) {
@@ -199,11 +201,12 @@ function rewriteHints(): void {
 
 // Writes `line()` into `text`, and again whenever the input in use changes,
 // so a panel shows the right buttons when it opens and while it is up.
-export function bindKeyHint(text: Phaser.GameObjects.Text, line: () => string): Phaser.GameObjects.Text {
+export function bindKeyHint<T extends HintText>(text: T, line: () => string): T {
   if (!bound.has(text)) text.once("destroy", () => bound.delete(text));
   const shown = line();
   bound.set(text, { line, shown });
-  return text.setText(shown);
+  text.setText(shown);
+  return text;
 }
 
 // the key each pressed button sent, so its release sends that same key even

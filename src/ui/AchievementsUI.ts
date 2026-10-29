@@ -120,14 +120,11 @@ export class AchievementsUI {
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = scene.add
-      .pixelText(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT))
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)), HINT)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    // bindKeyHint is typed for a Text; it only reads and sets `text`
-    bindKeyHint(this.hint as unknown as Phaser.GameObjects.Text, HINT);
 
     for (let i = 0; i < PER_PAGE; i++) {
       const x = COL_X + Math.floor(i / ROWS) * COL_W;
