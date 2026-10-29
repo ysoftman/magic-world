@@ -19,6 +19,7 @@ import { GameState } from "../gameState";
 import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import {
   addBorderDressing,
   addRoamer,
@@ -191,7 +192,7 @@ export class AbyssScene extends Phaser.Scene {
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: AbyssRoamer[] = [];
-  private downLabel!: Phaser.GameObjects.Text;
+  private downLabel!: PixelText;
   private upStair!: Phaser.GameObjects.Zone;
   // the stair up has asked since the hero last stepped onto it: a STAY holds
   // the question back until the hero steps off and on again
@@ -289,7 +290,7 @@ export class AbyssScene extends Phaser.Scene {
     // title is: the hero never left the floor
     if (!back) {
       const title = this.add
-        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, `ABYSS B${r.floor}`, retroStyle(8, DOWN_COLOR))
+        .pixelText(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, `ABYSS B${r.floor}`, retroStyle(8, DOWN_COLOR))
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
@@ -352,7 +353,7 @@ export class AbyssScene extends Phaser.Scene {
     // name, or SEALED while a guardian holds it ("SEALED" 6 x 20 = 120px; the
     // generator check keeps both stair labels on the map and apart)
     this.downLabel = this.add
-      .text(down.x, down.y - TILE + 8, "", retroStyle(5, DOWN_COLOR))
+      .pixelText(down.x, down.y - TILE + 8, "", retroStyle(5, DOWN_COLOR))
       .setOrigin(0.5, 1)
       .setStroke("#1a1028", 4)
       .setDepth(9);
@@ -676,7 +677,7 @@ export class AbyssScene extends Phaser.Scene {
     // "+80 GOLD HI-POTION!" (x2 loot at most) is 19 x 24 = 456px; kept on the
     // map like the volcano's notes, whatever wall the chest sits against
     const note = this.add
-      .text(chest.x, chest.y - 52, `+${gold} GOLD${found}`, retroStyle(6, "#4ade80"))
+      .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${found}`, retroStyle(6, "#4ade80"))
       .setOrigin(0.5)
       .setDepth(120);
     note.setX(Phaser.Math.Clamp(note.x, note.width / 2 + 8, ABYSS_W * TILE - note.width / 2 - 8));

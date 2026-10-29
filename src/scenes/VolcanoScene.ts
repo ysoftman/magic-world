@@ -127,7 +127,7 @@ export class VolcanoScene extends Phaser.Scene {
 
     if (!back) {
       const title = this.add
-        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "VOLCANO", retroStyle(8, "#fb923c"))
+        .pixelText(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "VOLCANO", retroStyle(8, "#fb923c"))
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
@@ -386,7 +386,7 @@ export class VolcanoScene extends Phaser.Scene {
     }
     if (loot) Sfx.pickup();
     const note = this.add
-      .text(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
+      .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
       .setOrigin(0.5)
       .setDepth(120);
     // two of the chests sit two tiles from a side wall, closer than half of

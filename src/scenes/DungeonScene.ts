@@ -147,7 +147,7 @@ export class DungeonScene extends Phaser.Scene {
 
     if (!back) {
       const title = this.add
-        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
+        .pixelText(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE CAVE", retroStyle(8, "#ffd166"))
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
@@ -397,7 +397,7 @@ export class DungeonScene extends Phaser.Scene {
     // marker's 9: from the top of the stair's row the arrow, pointing the way
     // out, sat on the tag's SS
     const label = this.add
-      .text(x, y - TILE + 8, "ABYSS", retroStyle(5, "#c084fc"))
+      .pixelText(x, y - TILE + 8, "ABYSS", retroStyle(5, "#c084fc"))
       .setOrigin(0.5, 1)
       .setStroke("#1a1028", 4)
       .setDepth(11);
@@ -517,7 +517,7 @@ export class DungeonScene extends Phaser.Scene {
     }
     if (loot) Sfx.pickup();
     const note = this.add
-      .text(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#ffd166"))
+      .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#ffd166"))
       .setOrigin(0.5)
       // on the map, and over the ABYSS tag from the stair's chest: outlined
       .setStroke("#1a1028", 4)

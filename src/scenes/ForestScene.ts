@@ -130,7 +130,7 @@ export class ForestScene extends Phaser.Scene {
 
     if (!turn && !back) {
       const title = this.add
-        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE FOREST", retroStyle(8, "#4ade80"))
+        .pixelText(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "THE FOREST", retroStyle(8, "#4ade80"))
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
@@ -438,7 +438,7 @@ export class ForestScene extends Phaser.Scene {
     }
     if (loot) Sfx.pickup();
     const note = this.add
-      .text(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
+      .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
       .setOrigin(0.5)
       .setDepth(120);
     this.tweens.add({

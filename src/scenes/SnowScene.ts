@@ -131,9 +131,8 @@ export class SnowScene extends Phaser.Scene {
 
     if (!back) {
       const title = this.add
-        .text(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "SNOW FIELD", retroStyle(8, "#a5f3fc"))
+        .pixelText(GAME_WIDTH / 2, STATUS_HUD_HEIGHT + 24, "SNOW FIELD", retroStyle(8, "#a5f3fc"))
         .setOrigin(0.5)
-        .setStroke(TEXT_STROKE, 6)
         .setScrollFactor(0)
         .setDepth(95);
       fadeAreaTitle(this, title);
@@ -187,7 +186,7 @@ export class SnowScene extends Phaser.Scene {
 
     this.add.image(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE, "sign").setDepth(9);
     this.add
-      .text(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE - 48, "ICE FISHING", retroStyle(5, "#38bdf8"))
+      .pixelText(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE - 48, "ICE FISHING", retroStyle(5, "#38bdf8"))
       .setOrigin(0.5)
       .setStroke(TEXT_STROKE, 4)
       .setDepth(11);
@@ -444,7 +443,7 @@ export class SnowScene extends Phaser.Scene {
     }
     if (loot) Sfx.pickup();
     const note = this.add
-      .text(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
+      .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#4ade80"))
       .setOrigin(0.5)
       .setStroke(TEXT_STROKE, 4)
       .setDepth(120);
