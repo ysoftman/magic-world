@@ -4,6 +4,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 
@@ -66,16 +67,16 @@ export class AchievementsUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private pager: Phaser.GameObjects.Text;
-  private counter: Phaser.GameObjects.Text;
-  private next: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private title: PixelText;
+  private pager: PixelText;
+  private counter: PixelText;
+  private next: PixelText;
+  private hint: PixelText;
   // one name/desc pair per slot on a page, refilled on every page turn
-  private names: Phaser.GameObjects.Text[] = [];
-  private descs: Phaser.GameObjects.Text[] = [];
+  private names: PixelText[] = [];
+  private descs: PixelText[] = [];
   // a locked count-up's "7/10", right-aligned on its name's line
-  private counts: Phaser.GameObjects.Text[] = [];
+  private counts: PixelText[] = [];
 
   private keyEsc: Phaser.Input.Keyboard.Key;
   private keyA: Phaser.Input.Keyboard.Key;
@@ -96,44 +97,47 @@ export class AchievementsUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 36, "ACHIEVEMENTS", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 36, "ACHIEVEMENTS", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.pager = scene.add
-      .text(GAME_WIDTH / 2, PAGER_Y, "", retroStyle(5, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, PAGER_Y, "", retroStyle(5, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.counter = scene.add
-      .text(GAME_WIDTH / 2, COUNTER_Y, "", retroStyle(6, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, COUNTER_Y, "", retroStyle(6, "#8ecbff"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.next = scene.add
-      .text(GAME_WIDTH / 2, NEXT_Y, "", retroStyle(4, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, NEXT_Y, "", retroStyle(4, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)), HINT)
+    this.hint = scene.add
+      .pixelText(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
+    // bindKeyHint is typed for a Text; it only reads and sets `text`
+    bindKeyHint(this.hint as unknown as Phaser.GameObjects.Text, HINT);
 
     for (let i = 0; i < PER_PAGE; i++) {
       const x = COL_X + Math.floor(i / ROWS) * COL_W;
       const y = ROW_Y + (i % ROWS) * ROW_GAP;
       this.names.push(
-        scene.add.text(x, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add.pixelText(x, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.descs.push(
         scene.add
-          .text(x, y + DESC_DY, "", bodyStyle(22, DIM_TEXT))
+          .pixelText(x, y + DESC_DY, "", bodyStyle(22, DIM_TEXT))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -141,7 +145,7 @@ export class AchievementsUI {
       );
       this.counts.push(
         scene.add
-          .text(x + TEXT_W, y, "", retroStyle(4, "#9f9fd0"))
+          .pixelText(x + TEXT_W, y, "", retroStyle(4, "#9f9fd0"))
           .setOrigin(1, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
