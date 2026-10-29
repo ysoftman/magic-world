@@ -12,7 +12,6 @@ import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 import { GameState } from "./gameState";
 import { installKeyboardQueueFix } from "./keyboardQueueFix";
 import { loadMapOverride } from "./levels";
-import { watchTextResolution } from "./pixelart";
 import { installRenderTextureLeakFix } from "./renderTextureLeakFix";
 import { AbyssScene } from "./scenes/AbyssScene";
 import { BattleScene } from "./scenes/BattleScene";
@@ -66,11 +65,12 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, TitleScene, TownScene, DungeonScene, ForestScene, SnowScene, VolcanoScene, AbyssScene, BattleScene, EndingScene],
 };
 
-// Canvas text bakes in whatever font is available at draw time; unlike DOM
-// text it won't repaint when the webfont finishes loading later. The
-// @font-faces above only fetch their files when asked, so ask, and wait for
-// both (bounded, so a slow first load can't stall the game forever) before
-// booting Phaser, so the title screen never flashes the fallback font.
+// The glyph atlases (pixelText.ts) are read off the webfonts as Boot runs,
+// in whatever font the canvas has by then. The @font-faces above only fetch
+// their files when asked, so ask, and wait for both (bounded, so a slow
+// first load can't stall the game forever) before booting Phaser, so the
+// title screen never shows the fallback font; one that comes in later has
+// the atlases drawn again.
 const fontReady = Promise.all([document.fonts.load('16px "Press Start 2P"'), document.fonts.load('22px "Departure Mono"')]).catch(
   () => undefined,
 );
@@ -81,6 +81,5 @@ Promise.race([fontReady, timeout]).finally(() => {
   installKeyboardQueueFix();
   installRenderTextureLeakFix();
   const game = new Phaser.Game(config);
-  watchTextResolution(game);
   startGamepad(game);
 });

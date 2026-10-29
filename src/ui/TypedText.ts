@@ -14,9 +14,9 @@ export interface TypedTextOptions {
  * at, so the typed glyphs are the start of the wrapped page: each row typed
  * is the start of a row that fitted, and wrapping it again changes nothing,
  * so a word never jumps a row as it types. A setText moves quads. A Text drew
- * its canvas again and sent it to the GPU every glyph (at TEXT_RESOLUTION 3 a
- * four-row page was ~570MB over its typing), which this used to dodge with a
- * Text a row, baked once and cropped to the typed glyphs.
+ * its canvas again and sent it to the GPU every glyph (baked at 3x for a
+ * sharp screen, a four-row page was ~570MB over its typing), which this used
+ * to dodge with a Text a row, baked once and cropped to the typed glyphs.
  */
 export class TypedText {
   private text: PixelText;

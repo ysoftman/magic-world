@@ -12,57 +12,14 @@ export interface PixelMap {
 // and #444444 (1.97:1) it replaces were the UI's least legible lines.
 export const DIM_TEXT = "#808096";
 
-// Text is baked bigger than it's drawn (TEXT_RESOLUTION, 1 to 3), then drawn
-// down into the 1280x720 canvas with the game's nearest filtering. The canvas
-// stays 1280x720 on any screen, so a bigger bake never maps onto device
-// pixels; what it buys is cleaner samples for the nearest filter, fewer of a
-// glyph's anti-aliased grey edge pixels. Those show once the screen blows a
-// game pixel up to 2 device pixels or more: on a MacBook (DPR 2, the display
-// snapped to exactly 2x) a 20px line keeps 8.5% in-between pixels baked at 3,
-// 17.8% at 2, 30.2% at 1. So from 2x up it's the cap, and below that the
-// scale rounded up. The price is texture memory, the square of it: the
-// town's 431 texts took 3.9MB at 1, 15MB at 2, ~35MB at 3, hence the cap.
-// Every Text goes through retroStyle or bodyStyle; one styled by hand must
-// use this too.
-const TEXT_RESOLUTION_MAX = 3;
-export let TEXT_RESOLUTION = 1;
-
-// Every Text in `list`, and in the containers in it, baked again at `n`. By
-// type name: this file keeps clear of Phaser's runtime, as check:art loads it.
-function rebakeTexts(list: readonly Phaser.GameObjects.GameObject[], n: number): void {
-  for (const o of list) {
-    if (o.type === "Text") (o as Phaser.GameObjects.Text).setResolution(n);
-    else if (o.type === "Container") rebakeTexts((o as Phaser.GameObjects.Container).list, n);
-  }
-}
-
-/**
- * Keeps TEXT_RESOLUTION at what the screen shows the game at: a resized
- * window, the browser's zoom or a move to a screen of another pixel density
- * re-bakes the Text up in every scene, and new Text takes the new value.
- * Before this it was read once at load, from the window rather than the
- * snapped display, and kept for good. Checked every frame, two numbers: a
- * density change alone resizes nothing, and its media query's change event
- * never came in headless Chrome, so nothing here could be shown to catch it.
- */
-export function watchTextResolution(game: Phaser.Game): void {
-  // Phaser.Core.Events.POST_STEP: after the scale manager's resize, before the render
-  game.events.on("poststep", () => {
-    const shown = (window.devicePixelRatio || 1) * (game.scale.displaySize.width / GAME_WIDTH);
-    const n = shown >= 2 - 1e-6 ? TEXT_RESOLUTION_MAX : Math.max(1, Math.ceil(shown - 1e-6));
-    if (n === TEXT_RESOLUTION) return;
-    TEXT_RESOLUTION = n;
-    for (const scene of game.scene.getScenes(false)) rebakeTexts(scene.children.list, n);
-  });
-}
-
+// Text is made with scene.add.pixelText(x, y, text, retroStyle(n) |
+// bodyStyle(n)) (pixelText.ts), drawn from the fonts' pixel atlases.
 export function retroStyle(size = 8, color = "#ffffff"): Phaser.Types.GameObjects.Text.TextStyle {
   return {
     fontFamily: RETRO_FONT,
     fontSize: `${size * PIXEL}px`,
     color,
     align: "left",
-    resolution: TEXT_RESOLUTION,
   };
 }
 
@@ -73,10 +30,11 @@ export function retroStyle(size = 8, color = "#ffffff"): Phaser.Types.GameObject
 // of talk into one block, and in mixed case its words lost their shape.
 // Departure Mono is monospace too, a glyph 7/11 em (BODY_GLYPH_W), so a
 // width is still glyphs x width. It's drawn on an 11px grid, so only 22 (2px
-// a dot) and 33 (3px) are sharp at TEXT_RESOLUTION 1. Each is narrower a
+// a dot) and 33 (3px) scale it whole; another size would mix dot sizes
+// (as retroStyle(5)'s 2.5 does, 2 and 3px). Each is narrower a
 // glyph than the retroStyle it replaces (14px for retroStyle(4)/(5)'s 16/20,
-// 21px for (6)/(8)'s 24/32) but taller a line: 26 and 39 (Phaser's metrics;
-// the caps sit 6 / 8px under the top, room for an accent).
+// 21px for (6)/(8)'s 24/32) but taller a line: 26 and 39 (13/11 em; the
+// caps sit 6 / 9px under the top, room for an accent).
 export type BodySize = 22 | 33;
 export const BODY_GLYPH_W: Record<BodySize, number> = { 22: 14, 33: 21 };
 export function bodyStyle(size: BodySize = 33, color = "#ffffff"): Phaser.Types.GameObjects.Text.TextStyle {
@@ -85,7 +43,6 @@ export function bodyStyle(size: BodySize = 33, color = "#ffffff"): Phaser.Types.
     fontSize: `${size}px`,
     color,
     align: "left",
-    resolution: TEXT_RESOLUTION,
   };
 }
 

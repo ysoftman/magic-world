@@ -1,21 +1,22 @@
 import Phaser from "phaser";
 import { BODY_FONT } from "./config";
 
-// Text drawn from glyph atlases rather than baked per object: scene.add
-// .pixelText(x, y, text, retroStyle(n) | bodyStyle(n)) takes the same
-// arguments as scene.add.text and the Text methods the game uses, so a call
-// site changes its factory name and its type and nothing else.
+// The game's text, drawn from glyph atlases rather than baked per object:
+// scene.add.pixelText(x, y, text, retroStyle(n) | bodyStyle(n)) takes the
+// arguments scene.add.text took and has the Text methods the game used, so
+// every Text became one by its factory name and its type.
 //
-// Why: a Text is its own canvas texture, drawn again and sent to the GPU on
-// every setText, and it is sharp only as far as TEXT_RESOLUTION's bigger bake
-// gives the nearest filter clean samples (a 20px line kept 8.5% in-between
-// grey pixels baked at 3, 30% at 1); at 3 the town's 502 Texts held 36.8MB of
-// canvas, the same again on the GPU. Both fonts are pixel fonts on a grid
+// Why: a Text was its own canvas texture, drawn again and sent to the GPU on
+// every setText, and only as sharp as a bake at up to 3x the screen's scale
+// let the nearest filter pick clean samples (a 20px line kept 8.5% in-between
+// grey pixels baked at 3x, 30% at 1x); at 3x the town's 502 Texts held 36.8MB
+// of canvas, the same again on the GPU, all baked again whenever the window
+// or the screen's density changed. Both fonts are pixel fonts on a grid
 // (Press Start 2P 8px, Departure Mono 11px), so a glyph is read off once at
 // its grid size, kept as on/off pixels, and drawn whole-pixel scaled: every
 // glyph pixel is a block of game pixels on any screen at any DPR, and a
-// setText only moves quads. The two grid-size atlases are 62 and 85KB; a size
-// or outline baked at its size (see bake) 0.3 to 1MB, once for the game.
+// setText only moves quads. The two grid-size atlases are 31 and 43KB; a size
+// or an outline baked at its size (see bake) 46 to 763KB, once for the game.
 
 interface Family {
   css: string;
