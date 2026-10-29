@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { sendKey } from "./TouchControls";
+import { isTouchDevice, sendKey } from "./TouchControls";
 
 // A gamepad as a second keyboard. The browser's Gamepad API is state, not
 // events, so a loop outside Phaser (requestAnimationFrame, one read of
@@ -91,6 +91,120 @@ const TITLE: Record<number, string> = {
   [BTN.lb]: "KeyD",
   [BTN.lt]: "KeyP",
 };
+export type PadTable = "field" | "battle" | "title";
+const TABLES: Record<PadTable, Record<number, string>> = { field: FIELD, battle: BATTLE, title: TITLE };
+
+// The buttons' names in the key lines, by standard index (the d-pad is
+// D-PAD). A Nintendo pad reports the same places under its own labels: its
+// bottom button, index 0, is B, and the top one the title's Y/N asks for is X.
+const NAMES = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "SELECT", "START", "L3", "R3"];
+const NINTENDO_NAMES = ["B", "A", "Y", "X", "L", "R", "ZL", "ZR", "-", "+", "L3", "R3"];
+// Chrome's "Pro Controller (STANDARD GAMEPAD Vendor: 057e ...)", Firefox's
+// "057e-2009-Pro Controller"; 057e is Nintendo's USB vendor id
+const NINTENDO_ID = /nintendo|pro controller|joy-con|057e/i;
+
+// The key lines follow the input last used: a pad press (the stick past the
+// deadzone too) turns them to the pad's buttons, a key typed on a keyboard or
+// a finger on a touch screen turns them back. sendKey's events are untrusted,
+// so the keys the pad and the touch buttons send don't count as a keyboard.
+let padInUse = false;
+let names = NAMES;
+const listeners = new Set<() => void>();
+
+function setInput(pad: boolean, padNames = names): void {
+  if (pad === padInUse && padNames === names) return;
+  padInUse = pad;
+  names = padNames;
+  rewriteHints();
+  for (const fn of listeners) fn();
+}
+
+export function usingPad(): boolean {
+  return padInUse;
+}
+
+// for what bindKeyHint can't rewrite on its own (a layout that follows its
+// labels' widths); the returned function unsubscribes
+export function onInputChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+// One key of a line as the pad's button, or null when no button sends it
+// (TAB, ENTER, CLICK, CTRL+S ...). The vim keys are the d-pad, which a line
+// giving each axis its own job (FARM's JK: PLOT, HL: SEED) splits into the
+// touch pad's glyphs, ^v and <>.
+function buttonName(key: string, table: Record<number, string>, split: boolean): string | null {
+  if (key === "HJKL") return "D-PAD";
+  if (key === "JK" || key === "HL") return !split ? "D-PAD" : key === "JK" ? "^v" : "<>";
+  const code = key === "ESC" ? "Escape" : key === "?" ? "Slash" : /^[A-Z]$/.test(key) ? `Key${key}` : null;
+  const button = Object.keys(table)
+    .map(Number)
+    .find((b) => table[b] === code);
+  return button === undefined ? null : (names[button] ?? null);
+}
+
+// "Z/ESC" as the pad's "A/B" in `table`'s scene; "" when no button sends any
+export function padButtons(keys: string, table: PadTable = "field", split = false): string {
+  const out: string[] = [];
+  for (const key of keys.split("/")) {
+    const name = buttonName(key, TABLES[table], split);
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out.join("/");
+}
+
+// keys named inside a sentence ("FORGE IT? Z/ESC"), as the pad's buttons
+// once it is in use
+export function keyNames(keys: string, table: PadTable = "field"): string {
+  return (padInUse && padButtons(keys, table)) || keys;
+}
+
+// A key line ("JK: MOVE   Z: COOK   ESC: CLOSE", or the battle's tighter
+// "HJKL:MOVE  Z:OK") for the input in use: the pad's buttons after a pad
+// press, `touch` on a touch screen, else as written. Each "KEYS: ACTION"
+// takes the buttons that send its keys and drops out when none does; words
+// without a colon ("TOP 10 BY LEVEL") stay. `pad` is the line to translate
+// when the pad's keys differ from the keyboard's (the shop's B/U for TAB).
+export function keyHint(keys: string, touch = keys, { table = "field", pad = keys }: { table?: PadTable; pad?: string } = {}): string {
+  if (!padInUse) return isTouchDevice() ? touch : keys;
+  const split = /\bJK\b/.test(pad) && /\bHL\b/.test(pad);
+  const sep = pad.includes("   ") ? "   " : "  ";
+  return pad
+    .split(sep)
+    .flatMap((group) => {
+      const m = /^(\S+):( ?)(.*)$/.exec(group);
+      if (!m) return [group];
+      const buttons = padButtons(m[1], table, split);
+      return buttons ? [`${buttons}:${m[2]}${m[3]}`] : [];
+    })
+    .join(sep);
+}
+
+// The texts showing a key line: what to write and what was written last. A
+// text later given other words (the battle's hint between its uses) shows
+// something else by then and is dropped instead of overwritten.
+const bound = new Map<Phaser.GameObjects.Text, { line: () => string; shown: string }>();
+
+function rewriteHints(): void {
+  for (const [text, hint] of bound) {
+    if (text.text !== hint.shown) {
+      bound.delete(text);
+      continue;
+    }
+    hint.shown = hint.line();
+    text.setText(hint.shown);
+  }
+}
+
+// Writes `line()` into `text`, and again whenever the input in use changes,
+// so a panel shows the right buttons when it opens and while it is up.
+export function bindKeyHint(text: Phaser.GameObjects.Text, line: () => string): Phaser.GameObjects.Text {
+  if (!bound.has(text)) text.once("destroy", () => bound.delete(text));
+  const shown = line();
+  bound.set(text, { line, shown });
+  return text.setText(shown);
+}
 
 // the key each pressed button sent, so its release sends that same key even
 // when the scene (and with it the mapping) changed while it was held
@@ -134,6 +248,7 @@ function poll(game: Phaser.Game): void {
     return;
   }
   const mapping = game.scene.isActive("Battle") ? BATTLE : game.scene.isActive("Title") ? TITLE : FIELD;
+  const padNames = NINTENDO_ID.test(pad.id) ? NINTENDO_NAMES : NAMES;
   // at least the d-pad indices, which a stick-only pad may not list
   for (let button = 0; button < Math.max(pad.buttons.length, 16); button++) {
     const down = pad.buttons[button]?.pressed === true || stick(pad, button);
@@ -144,6 +259,8 @@ function poll(game: Phaser.Game): void {
     }
     const code = mapping[button];
     if (!code) continue;
+    // before the key goes out, so a panel it opens names the pad's buttons
+    setInput(true, padNames);
     held.set(button, code);
     sendKey("keydown", code);
   }
@@ -155,6 +272,19 @@ export function startGamepad(game: Phaser.Game): void {
     console.info(`GAMEPAD: ${e.gamepad?.id ?? "?"} (${e.gamepad?.mapping || "no standard mapping"})`),
   );
   window.addEventListener("gamepaddisconnected", releaseAll);
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.isTrusted) setInput(false);
+    },
+    true,
+  );
+  // A finger only once the tap has landed: the canvas handles its touches
+  // before they bubble here, so a tap aimed at a battle button still meets
+  // the layout it was aimed at, not the one its own names would make.
+  window.addEventListener("touchend", (e) => {
+    if (e.isTrusted) setInput(false);
+  });
   // a key held when the tab goes away would otherwise never come up, and
   // the hero would walk on until the tab comes back
   document.addEventListener("visibilitychange", () => {
