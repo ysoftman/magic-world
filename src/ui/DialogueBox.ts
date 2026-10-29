@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { BODY_GLYPH_W, bodyStyle, retroStyle } from "../pixelart";
 import { hideTouchButtons, isTouchDevice } from "./TouchControls";
+import { TypedText } from "./TypedText";
 
 // The talk is in bodyStyle(33), 21px a glyph and a 39px line, 5px apart: four
 // rows from y=496, the last one's descenders ending at 665, inside the box's
@@ -63,7 +64,7 @@ export class DialogueBox {
 
   private border: Phaser.GameObjects.Rectangle;
   private box: Phaser.GameObjects.Rectangle;
-  private text: Phaser.GameObjects.Text;
+  private text: TypedText;
   private nameText: Phaser.GameObjects.Text;
   private timer?: Phaser.Time.TimerEvent;
 
@@ -101,12 +102,14 @@ export class DialogueBox {
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 136, GAME_WIDTH - 64, 192, 0x0b0b2b)
       .setScrollFactor(0)
       .setDepth(201);
-    this.text = scene.add
-      .text(48, GAME_HEIGHT - 224, "", bodyStyle(33, "#f5f5f5"))
-      .setLineSpacing(LINE_SPACING)
+    this.text = new TypedText(scene, 48, GAME_HEIGHT - 224, bodyStyle(33, "#f5f5f5"), {
+      glyphW: GLYPH_W,
+      wrapWidth: this.charsPerRow * GLYPH_W,
+      lineSpacing: LINE_SPACING,
+      rows: ROWS_PER_PAGE,
+    })
       .setScrollFactor(0)
-      .setDepth(202)
-      .setWordWrapWidth(this.charsPerRow * GLYPH_W);
+      .setDepth(202);
     // On a plate of the box's colour, a tab on the box's top edge: bare, it
     // sat on the map and ran into the name tags behind it (ELDER over
     // BLACKSMITH). The padding (8 a side, 4 on top) keeps the glyphs at
@@ -253,7 +256,7 @@ export class DialogueBox {
     // Space-join so setWordWrapWidth wraps only at the real box width; "\n"
     // forced every fragment onto its own row even at half-filled width.
     this.pageText = page.join(" ");
-    this.text.setText("");
+    this.text.setText(this.pageText);
     this.typing = true;
     this.charIndex = 0;
     this.timer = this.scene.time.addEvent({
@@ -261,7 +264,7 @@ export class DialogueBox {
       repeat: this.pageText.length,
       callback: () => {
         this.charIndex++;
-        this.text.setText(this.pageText.slice(0, this.charIndex));
+        this.text.reveal(this.charIndex);
         if (this.charIndex >= this.pageText.length) {
           this.typing = false;
           this.timer?.remove();
@@ -311,7 +314,7 @@ export class DialogueBox {
     if (this.typing) {
       this.typing = false;
       this.timer?.remove();
-      this.text.setText(this.pageText);
+      this.text.reveal(this.pageText.length);
       this.showChoicesIfLast();
       return;
     }
