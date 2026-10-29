@@ -430,10 +430,15 @@ export class SettingsUI {
       return;
     }
     Sfx.buy();
-    showToast(this.scene, `SLOT ${GameState.saveSlot} IMPORTED - RELOADING`);
-    // Reload instead of scene.start: every scene's SHUTDOWN handler saves the
-    // in-memory state and would overwrite the code just imported
-    this.scene.time.delayedCall(900, () => location.reload());
+    // Reload instead of scene.start, and at once, with the scene paused until
+    // the page goes: the memory still holds the old save, and every scene's
+    // SHUTDOWN handler, CTRL+S and a season's turn write it to the slot. A
+    // 900ms wait for an IMPORTED toast left room for that, and a scene change
+    // in it dropped the timer, so the code was lost though the toast said
+    // IMPORTED. The paused scene has no update or keys while the old page
+    // waits for the new one; the reload itself is the confirmation.
+    this.scene.scene.pause();
+    location.reload();
   }
 
   private refresh(): void {
