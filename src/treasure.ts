@@ -44,14 +44,20 @@ import {
 // What it pays, against hunting. A map drops in 1 win of 25 and only while
 // fewer than MAX_MAPS are held: at 125-145 wins an hour (the balance sim,
 // /tmp/pwcheck/sim report.ts: a fight every ~26s with the encounter waits,
-// battle time timed in the live game), ~5 maps an hour. A dig pays ~190G on
-// average over the regions a mid-game hero has open (the table below, x the
-// NEW GAME+ loot scale like a battle's gold) and ~0.8 materials. Each map is
-// a detour to its region and its cell, ~1 minute not hunting: ~145G at the
-// volcano's 8.5-9.0k G an hour by day without the win streak, ~260G at its
-// 15.4-16.2k with it. Net: about +3% over hunting alone without the streak,
-// about -2.5% with it — even on gold; the materials are the real draw, a
-// quicker way to a BLACKSMITH recipe than the 15-25 fights drops.ts plans on.
+// battle time timed in the live game), ~5 maps an hour, each to an even pick
+// of the open regions. A dig pays the middle of its region's range (the
+// table below, x the NEW GAME+ loot scale like a battle's gold): ~160G on
+// average once all five are open, ~135G with four. Then ~0.8 materials (60%
+// of digs find some, 30% of those two pieces), a CANDY 10% and a shop piece
+// 4%, a HI-POTION once all four are owned (/tmp/pwcheck/econ-sim
+// treasure-sim.ts, 100k digs a region). Each map is a detour from the
+// volcano to its cell and back, ~30s on the grids' walk (15s for a volcano
+// X, 46s for a snow field one) to ~1 minute: 75-145G not hunted at the
+// volcano's 8.5-9.0k G an hour by day without the win streak, 140-260G at
+// its 15.4-16.2k with it. Net: +1% to +5% over hunting alone without the
+// streak, -3.5% to +1% with it — even on gold; the materials are the real
+// draw, a quicker way to a BLACKSMITH recipe than the 15-25 fights drops.ts
+// plans on.
 // All gold goes through gainGold(), so the gold cap holds.
 
 export type TreasureRegion = "town" | "dungeon" | "forest" | "snow" | "volcano";
@@ -284,7 +290,8 @@ export interface DigState {
 
 /**
  * Digs up `map`'s chest into `state` and says what came out, as one line for
- * a toast: at most "DUG UP 400G, 2 FROST SCALE & AN IRON SHIELD!" (45 glyphs).
+ * a toast: at most "DUG UP 420G, 2 FROST SCALE & AN IRON SHIELD!" (44 glyphs,
+ * NEW GAME+3's x1.75 on the snow field's 240G).
  */
 export function digUp(map: TreasureMap, state: DigState, rand: () => number = Math.random): string {
   const def = REGIONS[map.region];
