@@ -126,7 +126,7 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 - 같은 `whilePanelUp` 이 그동안 토스트도 붙잡는다. `!` 가 들어간 소식(업적·해금 팁·
   `MARKET DAY! ...`)은 패널이 닫힌 뒤 순서대로 나오고, 패널이 열릴 때 떠 있던 토스트는 내린다
   (소식은 다시 줄 맨 앞에, `SAVED` 같은 상태 줄은 버림). 패널 안에서 누른 키의 답(`SOUND: OFF`,
-  `SLOT 1 CODE COPIED`, `INVALID CODE`)과 `SAVE FAILED: STORAGE FULL` 은 `!` 없는 상태 줄이라
+  `SLOT 1 CODE COPIED`, `INVALID CODE`)과 `SAVE FAILED: STORAGE FULL`·`STORAGE BLOCKED` 는 `!` 없는 상태 줄이라
   패널 위에 바로 보인다(수확·요리·구매 저장이 패널 안에서 일어난다). 실제 사례: 해금 팁
   `THE FOREST GATE IS OPEN!` 이 ITEMS 제목 위에 겹쳐 둘 다 못 읽었다. 그래서 소식 토스트에는
   `!` 를 넣고, 상태 줄에는 넣지 않는다.
