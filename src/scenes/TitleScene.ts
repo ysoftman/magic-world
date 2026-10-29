@@ -13,6 +13,7 @@ import {
   SAVE_SLOTS,
 } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint, keyNames, onInputChange, usingPad } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { LookPicker } from "../ui/LookPicker";
@@ -110,7 +111,7 @@ export class TitleScene extends Phaser.Scene {
   private settingsUI?: SettingsUI;
   private lookPicker?: LookPicker;
   private nameEntry?: NameEntry;
-  private buttons: Phaser.GameObjects.Text[] = [];
+  private buttons: PixelText[] = [];
 
   constructor() {
     super("Title");
@@ -125,11 +126,11 @@ export class TitleScene extends Phaser.Scene {
 
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "title-bg");
 
-    const title = this.add.text(GAME_WIDTH / 2, 216, "MAGIC WORLD", retroStyle(24, "#ffd166")).setOrigin(0.5);
+    const title = this.add.pixelText(GAME_WIDTH / 2, 216, "MAGIC WORLD", retroStyle(24, "#ffd166")).setOrigin(0.5);
     title.setShadow(8, 8, "#7c2d12", 1, true, true);
 
-    this.add.text(GAME_WIDTH / 2, 368, "A TALE OF MAGIC", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
-    this.add.text(GAME_WIDTH / 2, 416, "AND ADVENTURE", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
+    this.add.pixelText(GAME_WIDTH / 2, 368, "A TALE OF MAGIC", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
+    this.add.pixelText(GAME_WIDTH / 2, 416, "AND ADVENTURE", retroStyle(8, "#c4b5fd")).setOrigin(0.5);
 
     // Top right, not bottom right: with the commit hash, "v0.1.0-3a09b68" is
     // 14 x 16 = 224px (x 1040..1264, y 12..28), and down at y 692..708 it ran
@@ -138,7 +139,7 @@ export class TitleScene extends Phaser.Scene {
     // toast, at most 604px wide centred (x 338..942), and the backdrop keeps its
     // stars out from behind it (backdrops.ts). DIM_TEXT, not #666688: 3.4:1 on
     // this sky was too faint to read the hash off.
-    this.add.text(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
+    this.add.pixelText(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
 
     // one card per slot; tapping a card picks that slot, tapping the picked
     // one again is ENTER (continue it, or start a new game in it)
@@ -146,9 +147,9 @@ export class TitleScene extends Phaser.Scene {
       const slot = i + 1;
       const bg = this.add.rectangle(0, 0, CARD_W, CARD_H, 0x0b0b2b, 0.85);
       const lines = [
-        this.add.text(0, -(20 + CARD_LINE_GAP), "", retroStyle(5, "#9f9fd0")).setOrigin(0.5),
-        this.add.text(0, 0, "", retroStyle(5, "#ffffff")).setOrigin(0.5),
-        this.add.text(0, 20 + CARD_LINE_GAP, "", retroStyle(5, "#fb923c")).setOrigin(0.5),
+        this.add.pixelText(0, -(20 + CARD_LINE_GAP), "", retroStyle(5, "#9f9fd0")).setOrigin(0.5),
+        this.add.pixelText(0, 0, "", retroStyle(5, "#ffffff")).setOrigin(0.5),
+        this.add.pixelText(0, 20 + CARD_LINE_GAP, "", retroStyle(5, "#fb923c")).setOrigin(0.5),
       ];
       // the hero at half its 64px texture: each 2px cell of the 32-cell art
       // lands on one screen pixel, so nothing is resampled unevenly
@@ -168,7 +169,7 @@ export class TitleScene extends Phaser.Scene {
       return { bg, lines, hero };
     });
 
-    const prompt = this.add.text(GAME_WIDTH / 2, 592, "", retroStyle(8, "#ffffff")).setOrigin(0.5);
+    const prompt = this.add.pixelText(GAME_WIDTH / 2, 592, "", retroStyle(8, "#ffffff")).setOrigin(0.5);
     // The line blinks only as the menu's own (PRESS ENTER, TAP TO START); a
     // question, a refusal or the DAMAGED warning put in it holds still.
     // Blinking, it was gone half the time, and "RESTORE QA2 LV25? Y/N" is the
@@ -262,7 +263,7 @@ export class TitleScene extends Phaser.Scene {
         list.map(([label, run]) => {
           // the dark stroke keeps "C: CONTINUE" legible over the pale crystal
           // in the background art's bottom-left corner
-          const b = this.add.text(0, 0, buttonLabel(label), retroStyle(6, "#8ecbff")).setOrigin(0.5).setStroke("#0b0b2b", MENU_STROKE);
+          const b = this.add.pixelText(0, 0, buttonLabel(label), retroStyle(6, "#8ecbff")).setOrigin(0.5).setStroke("#0b0b2b", MENU_STROKE);
           b.setInteractive({
             hitArea: new Phaser.Geom.Rectangle(-BUTTON_PAD, -BUTTON_PAD, b.width + BUTTON_PAD * 2, b.height + BUTTON_PAD * 2),
             hitAreaCallback: Phaser.Geom.Rectangle.Contains,
@@ -277,7 +278,7 @@ export class TitleScene extends Phaser.Scene {
           return b;
         }),
       );
-      const width = (row: Phaser.GameObjects.Text[]) => row.reduce((w, b) => w + b.width, 0) + MENU_GAP * (row.length - 1);
+      const width = (row: PixelText[]) => row.reduce((w, b) => w + b.width, 0) + MENU_GAP * (row.length - 1);
       const half = Math.ceil(made[0].length / 2);
       const laid = made.length === 1 && width(made[0]) > GAME_WIDTH - MENU_GAP * 2 ? [made[0].slice(0, half), made[0].slice(half)] : made;
       laid.forEach((row, r) => {

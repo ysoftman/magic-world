@@ -104,19 +104,19 @@ export class EndingScene extends Phaser.Scene {
     // where the title has it, top right (x 1040..1264, y 12..28): at the
     // bottom it stood 16px off the epilogue's NEW GAME+ note on the same line
     // and read as its last word; the headlines start at y 66
-    this.add.text(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
+    this.add.pixelText(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
   }
 
   private showEnding(): void {
     // size 11, not 12: 27 glyphs x 48px was 1296, wider than the screen and
     // clipping the first T and the "!"; x 44 = 1188 leaves 46px either side
     const headline = this.add
-      .text(GAME_WIDTH / 2, 130, "THE MOSS GOLEM IS DEFEATED!", retroStyle(11, "#4ade80"))
+      .pixelText(GAME_WIDTH / 2, 130, "THE MOSS GOLEM IS DEFEATED!", retroStyle(11, "#4ade80"))
       .setOrigin(0.5)
       .setAlpha(0);
     // the forest, not the world: the snow pass opens on this fight (27 x 32 = 864px)
     const sub = this.add
-      .text(GAME_WIDTH / 2, 190, "PEACE RETURNS TO THE FOREST", retroStyle(8, "#c4b5fd"))
+      .pixelText(GAME_WIDTH / 2, 190, "PEACE RETURNS TO THE FOREST", retroStyle(8, "#c4b5fd"))
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -134,7 +134,7 @@ export class EndingScene extends Phaser.Scene {
       `DAY       ${dayIndex() + 1}`,
     ];
     const summary = this.add
-      .text(GAME_WIDTH / 2, 330, stats.join("\n"), retroStyle(8, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, 330, stats.join("\n"), retroStyle(8, "#f5f5f5"))
       .setOrigin(0.5)
       .setLineSpacing(14)
       .setAlpha(0);
@@ -143,18 +143,18 @@ export class EndingScene extends Phaser.Scene {
     // retroStyle(24) would be 1728. Rows: 488..552 and the shadow to 560, the
     // hint 578..602, the prompt 614..646.
     const toBeContinued = this.add
-      .text(GAME_WIDTH / 2, 520, "TO BE CONTINUED...", retroStyle(16, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, 520, "TO BE CONTINUED...", retroStyle(16, "#ffd166"))
       .setOrigin(0.5)
       .setAlpha(0);
     toBeContinued.setShadow(8, 8, "#7c2d12", 1, true, true);
     // where it goes on: the SNOW PASS, which thaws with this fall (the town's
     // snow gate waits on forestBoss); 36 x 24 = 864px, x 208..1072
     const hint = this.add
-      .text(GAME_WIDTH / 2, 590, "A COLD WIND BLOWS FROM THE SNOW PASS", retroStyle(6, "#a5f3fc"))
+      .pixelText(GAME_WIDTH / 2, 590, "A COLD WIND BLOWS FROM THE SNOW PASS", retroStyle(6, "#a5f3fc"))
       .setOrigin(0.5)
       .setAlpha(0);
 
-    const prompt = bindKeyHint(this.add.text(GAME_WIDTH / 2, 630, "", retroStyle(8, "#ffffff")), pressLine)
+    const prompt = bindKeyHint(this.add.pixelText(GAME_WIDTH / 2, 630, "", retroStyle(8, "#ffffff")), pressLine)
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -201,11 +201,11 @@ export class EndingScene extends Phaser.Scene {
     }
 
     const headline = this.add
-      .text(GAME_WIDTH / 2, 90, "THE FLAME IS QUENCHED", retroStyle(12, "#fb923c"))
+      .pixelText(GAME_WIDTH / 2, 90, "THE FLAME IS QUENCHED", retroStyle(12, "#fb923c"))
       .setOrigin(0.5)
       .setAlpha(0);
     const sub = this.add
-      .text(GAME_WIDTH / 2, 150, "ALL OF MAGIC WORLD IS AT PEACE", retroStyle(8, "#c4b5fd"))
+      .pixelText(GAME_WIDTH / 2, 150, "ALL OF MAGIC WORLD IS AT PEACE", retroStyle(8, "#c4b5fd"))
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -229,23 +229,23 @@ export class EndingScene extends Phaser.Scene {
     ];
     // left-aligned inside a centered block, so the values line up in a column
     const summary = this.add
-      .text(GAME_WIDTH / 2, 330, stats.map(([k, v]) => `${k.padEnd(LABEL_W)}${v}`).join("\n"), retroStyle(6, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, 330, stats.map(([k, v]) => `${k.padEnd(LABEL_W)}${v}`).join("\n"), retroStyle(6, "#f5f5f5"))
       .setOrigin(0.5)
       .setLineSpacing(10)
       .setAlpha(0);
 
     const journey = this.add
-      .text(GAME_WIDTH / 2, 512, JOURNEY.join(" > "), retroStyle(5, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, 512, JOURNEY.join(" > "), retroStyle(5, "#8ecbff"))
       .setOrigin(0.5)
       .setAlpha(0);
 
     const theEnd = this.add
-      .text(GAME_WIDTH / 2, 586, "THE TRUE END", retroStyle(16, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, 586, "THE TRUE END", retroStyle(16, "#ffd166"))
       .setOrigin(0.5)
       .setAlpha(0);
     theEnd.setShadow(8, 8, "#7c2d12", 1, true, true);
 
-    const prompt = bindKeyHint(this.add.text(GAME_WIDTH / 2, 668, "", retroStyle(8, "#ffffff")), pressLine)
+    const prompt = bindKeyHint(this.add.pixelText(GAME_WIDTH / 2, 668, "", retroStyle(8, "#ffffff")), pressLine)
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -254,7 +254,7 @@ export class EndingScene extends Phaser.Scene {
     // it names the title's button, since there is no P key to press, and with
     // a pad the button that sends P there (LT, "...PRESS LT ON THE TITLE
     // SCREEN" 49 x 16 = 784px)
-    const plus = bindKeyHint(this.add.text(GAME_WIDTH / 2, 702, "", retroStyle(4, "#ffd166")), () =>
+    const plus = bindKeyHint(this.add.pixelText(GAME_WIDTH / 2, 702, "", retroStyle(4, "#ffd166")), () =>
       !usingPad() && isTouchDevice()
         ? "NEW GAME+ UNLOCKED - TAP NEW GAME+ ON THE TITLE"
         : `NEW GAME+ UNLOCKED - PRESS ${keyNames("P", "title")} ON THE TITLE SCREEN`,
