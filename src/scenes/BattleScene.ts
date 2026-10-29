@@ -279,6 +279,8 @@ export class BattleScene extends Phaser.Scene {
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private msgText!: TypedText;
+  // the line typing out now (type()), cut off by the next one
+  private typing?: Phaser.Time.TimerEvent;
 
   private menuButtons: MenuButton[] = [];
   private menuTexts: PixelText[] = [];
@@ -475,6 +477,7 @@ export class BattleScene extends Phaser.Scene {
     this.inItems = false;
     this.itemIndex = 0;
     this.waitingAction = null;
+    this.typing = undefined;
 
     const unsubSaved = onSaved(() => showToast(this, "SAVED"));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubSaved);
@@ -1029,8 +1032,11 @@ export class BattleScene extends Phaser.Scene {
 
   private async runBattle(): Promise<void> {
     if (this.enemy.boss || this.enemy.giant) Sfx.boss();
-    await this.say(this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`);
-    if (this.rested) await this.say("Well rested: your WARD is up!");
+    // The opening line types out under the menu instead of waiting for a Z:
+    // nothing has happened yet to read past, and it was one press more in
+    // every fight. It stays in the box until the first action's line.
+    const intro = this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`;
+    this.type(this.rested ? `${intro}\nWell rested: your WARD is up!` : intro);
 
     while (this.running) {
       if (GameState.player.hp <= 0) return this.defeat();
@@ -2377,19 +2383,6 @@ export class BattleScene extends Phaser.Scene {
       );
       GameState.player.hp += mealHeal;
       this.updatePlayerStats();
-      Sfx.victory();
-      this.settleEnemyScale();
-      this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
-      await this.say(`${this.enemy.name} is defeated!`);
-      await this.say(`Gained ${goldGained} gold!`);
-      // "The FISH STEW restores 999 HP!", 30 glyphs
-      if (mealHeal > 0 && this.meal) await this.say(`The ${this.meal.def.name} restores ${mealHeal} HP!`);
-      if (streakBonus > 0) {
-        Sfx.pickup();
-        this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-        this.coinBurst.explode(10);
-        await this.say(`${GameState.streak} WIN STREAK! +${streakBonus} bonus gold!`);
-      }
       // a boss's first kill always leaves a HI-POTION; anything else, a
       // rematch too, rolls FIELD_LOOT
       const roll = Math.random();
@@ -2409,24 +2402,37 @@ export class BattleScene extends Phaser.Scene {
       // the KOI FEAST's doubling (cooking.ts), on top of the depth's
       if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
       if (drop) GameState.inventory[drop.material] += drop.count;
-      // one line for both, at most "Found a HI-POTION & 3 FROST SCALE!" (34)
       const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);
-      if (found.length > 0) {
-        Sfx.pickup();
-        await this.say(`Found ${found.join(" & ")}!`);
-      }
-      // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
-      // pay model has no room for it; its own line, the one above being full,
-      // and where to read it on a second (the bag's last page, which nothing
-      // else points a new player at; touch has an I button too). 29 glyphs,
-      // inside the 36 a row holds
-      if (!this.abyss && rollTreasureMap(GameState.treasureMaps, GameState.quest)) {
-        Sfx.pickup();
-        await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.");
-      }
       const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0)));
       GameState.player.exp += exp;
-      let msg = `EXP +${exp}`;
+      Sfx.victory();
+      this.settleEnemyScale();
+      this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
+      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+      this.coinBurst.explode(10);
+      if (streakBonus > 0) {
+        this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+        this.coinBurst.explode(10);
+      }
+      // the streak's and the find's chime after the fanfare, not over it
+      if (streakBonus > 0 || found.length > 0) this.time.delayedCall(360, () => Sfx.pickup());
+      // The whole payout on one page, where it took five, a Z each (the foe,
+      // the gold, the streak, the find, the EXP, then "Battle won!"). Every
+      // figure has four digits at most: the biggest purse is an NG+3 night
+      // FLAME DRAKE's first kill on an 8+ streak with PUMPKIN PIE, 3639G
+      // (STREAK +1470), EXP +1890. The longest name with them all at four,
+      // "GLACIER GOLEM falls! +2599G (STREAK +1050)  EXP +1260", is 53 of a
+      // row's 54 glyphs ("is defeated!" made it 59). The second row at most,
+      // "Found a HI-POTION & 9 FROST SCALE!  FISH STEW +150 HP", is 53 (an
+      // ABYSS GUARDIAN's x3; the KOI FEAST's 18 takes the meal's place).
+      const streak = streakBonus > 0 ? ` (STREAK +${streakBonus})` : "";
+      const finds = [
+        found.length > 0 && `Found ${found.join(" & ")}!`,
+        mealHeal > 0 && this.meal && `${this.meal.def.name} +${mealHeal} HP`,
+      ];
+      const second = finds.filter(Boolean).join("  ");
+      await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`);
+      let leveled = false;
       let newRank = 0;
       while (GameState.player.level < MAX_LEVEL && GameState.player.exp >= expToNext(GameState.player.level)) {
         GameState.player.exp -= expToNext(GameState.player.level);
@@ -2439,27 +2445,33 @@ export class BattleScene extends Phaser.Scene {
         GameState.player.mp = GameState.player.maxMp;
         const rank = recordRank(GameState.player.name, GameState.player.level);
         if (rank > 0) newRank = rank;
+        leveled = true;
+      }
+      // a level up keeps a line of its own, the burst and the fanfare with it
+      if (leveled) {
         Sfx.levelup();
         this.levelBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.levelBurst.explode(24);
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(12);
         shake(this.cameras.main, 200, 0.01);
-        msg = `LEVEL UP! LV ${GameState.player.level}`;
+        // the stat window takes the new HP/MP with the burst and the line, not
+        // only once the hero is back in the field
+        this.updatePlayerStats();
+        await this.say(`LEVEL UP! LV ${GameState.player.level}${newRank > 0 ? `  RANK #${newRank}!` : ""}`);
       }
-      if (newRank > 0) msg += `  RANK #${newRank}!`;
-      // the stat window takes the new HP/MP with the burst and the line, not
-      // only once the hero is back in the field
-      this.updatePlayerStats();
-      await this.say(msg);
+      // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
+      // pay model has no room for it; its own line, news the payout's page
+      // would bury, and where to read it on a second (the bag's last page,
+      // which nothing else points a new player at; touch has an I button
+      // too). 29 glyphs, inside the 54 a row holds
+      if (!this.abyss && rollTreasureMap(GameState.treasureMaps, GameState.quest)) {
+        Sfx.pickup();
+        await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.");
+      }
       if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`);
     }
     GameState.save();
-    if (!caught) {
-      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-      this.coinBurst.explode(10);
-    }
-    await this.say("Battle won!");
     // the forest boss closes the story's first part: the ending's TO BE
     // CONTINUED, then back to the town (EndingScene)
     if (firstMoss) {
@@ -2583,22 +2595,29 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private say(text: string): Promise<void> {
-    return new Promise((resolve) => {
-      this.msgText.setText(text);
-      let i = 0;
-      const ev = this.time.addEvent({
-        delay: this.anim(14, TYPE_MIN_MS),
-        repeat: text.length,
-        callback: () => {
-          i++;
-          this.msgText.reveal(i);
-          if (i >= text.length) {
-            ev.remove();
-            this.awaitAdvance(resolve);
-          }
-        },
-      });
+    return new Promise((resolve) => this.type(text, () => this.awaitAdvance(resolve)));
+  }
+
+  // types `text` into the message box, then `done`; a line still typing
+  // (only ever the opening one, which nothing waits on) is cut off
+  private type(text: string, done?: () => void): void {
+    this.typing?.remove();
+    this.msgText.setText(text);
+    let i = 0;
+    const ev = this.time.addEvent({
+      delay: this.anim(14, TYPE_MIN_MS),
+      repeat: text.length,
+      callback: () => {
+        i++;
+        this.msgText.reveal(i);
+        if (i >= text.length) {
+          ev.remove();
+          this.typing = undefined;
+          done?.();
+        }
+      },
     });
+    this.typing = ev;
   }
 
   // every battle action key also advances messages, so mashing your next
