@@ -5,6 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
 import { dayIndex, GameState } from "../gameState";
 import { CATCHABLE } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyNames, usingPad } from "../ui/Gamepad";
 import { isTouchDevice } from "../ui/TouchControls";
 
 export interface EndingData {
@@ -22,6 +23,8 @@ const LABEL_W = 13;
 // it came up.
 const ENDING_PROMPT_MS = 4200;
 const EPILOGUE_PROMPT_MS = 5000;
+// a pad's A sends Z, which leaves as ENTER does
+const pressLine = (): string => (usingPad() ? `PRESS ${keyNames("Z")}` : isTouchDevice() ? "TAP TO CONTINUE" : "PRESS ENTER");
 
 // The MOSS GOLEM's fall closes the story's first part: congratulations, a
 // run summary, TO BE CONTINUED and a hint of the snow pass it opens, then
@@ -151,8 +154,7 @@ export class EndingScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    const prompt = this.add
-      .text(GAME_WIDTH / 2, 630, isTouchDevice() ? "TAP TO CONTINUE" : "PRESS ENTER", retroStyle(8, "#ffffff"))
+    const prompt = bindKeyHint(this.add.text(GAME_WIDTH / 2, 630, "", retroStyle(8, "#ffffff")), pressLine)
       .setOrigin(0.5)
       .setAlpha(0);
 
@@ -243,21 +245,20 @@ export class EndingScene extends Phaser.Scene {
       .setAlpha(0);
     theEnd.setShadow(8, 8, "#7c2d12", 1, true, true);
 
-    const prompt = this.add
-      .text(GAME_WIDTH / 2, 668, isTouchDevice() ? "TAP TO CONTINUE" : "PRESS ENTER", retroStyle(8, "#ffffff"))
+    const prompt = bindKeyHint(this.add.text(GAME_WIDTH / 2, 668, "", retroStyle(8, "#ffffff")), pressLine)
       .setOrigin(0.5)
       .setAlpha(0);
 
     // The drake's fall is what opens NEW GAME+ (TitleScene offers it once the
     // save has volcanoBoss), and nothing else in the game says so; on touch
-    // it names the title's button, since there is no P key to press.
-    const plus = this.add
-      .text(
-        GAME_WIDTH / 2,
-        702,
-        isTouchDevice() ? "NEW GAME+ UNLOCKED - TAP NEW GAME+ ON THE TITLE" : "NEW GAME+ UNLOCKED - PRESS P ON THE TITLE SCREEN",
-        retroStyle(4, "#ffd166"),
-      )
+    // it names the title's button, since there is no P key to press, and with
+    // a pad the button that sends P there (LT, "...PRESS LT ON THE TITLE
+    // SCREEN" 49 x 16 = 784px)
+    const plus = bindKeyHint(this.add.text(GAME_WIDTH / 2, 702, "", retroStyle(4, "#ffd166")), () =>
+      !usingPad() && isTouchDevice()
+        ? "NEW GAME+ UNLOCKED - TAP NEW GAME+ ON THE TITLE"
+        : `NEW GAME+ UNLOCKED - PRESS ${keyNames("P", "title")} ON THE TITLE SCREEN`,
+    )
       .setOrigin(0.5)
       .setAlpha(0);
 

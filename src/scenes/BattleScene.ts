@@ -62,9 +62,9 @@ import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pix
 import { recordRank } from "../ranking";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
+import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { skyOverlay } from "../ui/NightOverlay";
-import { isTouchDevice } from "../ui/TouchControls";
 import { TypedText } from "../ui/TypedText";
 import { battleBgKey } from "./BootScene";
 import type { EndingData } from "./EndingScene";
@@ -152,10 +152,11 @@ const ENEMY_STATUS_MIN_X = 1076;
 const DOT_COLOR = { PSN: "#c084fc", BRN: "#fb923c" } as const;
 // the action menu splits into two rows, rather than shrinking its font, once
 // one row at size 5 would leave less than MENU_MIN_GAP between buttons (see
-// create()); two-row buttons sit MENU_ROW_GAP apart on MENU_ROWS_Y
+// layoutMenu()); one row sits on MENU_Y, two MENU_ROW_GAP apart on MENU_ROWS_Y
 const MENU_MARGIN = 48;
 const MENU_MIN_GAP = 20;
 const MENU_ROW_GAP = 40;
+const MENU_Y = GAME_HEIGHT - 184;
 const MENU_ROWS_Y = [GAME_HEIGHT - 208, GAME_HEIGHT - 172];
 
 type MenuAction = "fight" | "magic" | "run" | "steal" | "potion" | "mPotion" | "candy" | "hiPotion" | "ether" | "elixir" | "bomb";
@@ -632,7 +633,6 @@ export class BattleScene extends Phaser.Scene {
       rows: 2,
     });
 
-    const menuY = GAME_HEIGHT - 184;
     this.menuButtons = [
       { label: "A:FIGHT", action: "fight" },
       ...this.knownSpells().map(
@@ -647,45 +647,14 @@ export class BattleScene extends Phaser.Scene {
     // Always size 5 (20px a glyph), within 48px margins (1184px of room), and
     // outlined, as text straight on the backdrop is (AGENTS.md): a greyed-out
     // DIM_TEXT button was 1.7:1 on the town's daytime field bare. The outline
-    // adds 4px to each button. Up to BOLT the 8 buttons (50 glyphs, 1000px +
-    // 32) fit one row, spread evenly with ~22px gaps — the layout from Lv1 to
-    // Lv17. WARD makes it 56 glyphs (3px gaps) and NOVA 62 (1240px, wider
-    // than the room), so from Lv18 the attacks (FIGHT and the spells) take a
-    // row of their own above ITEM / STEAL / RUN, each centered with
-    // MENU_ROW_GAP between buttons; Lv24's attack row is the widest, 42 glyphs
-    // = 840 + 7 x 4 + 6 x 40 = 1108px. The rows (y 500..524 / 536..560)
-    // clear the companion sprite (to y 488) above and the hint line (566..586)
-    // and message box (604) below.
-    this.menuTexts = this.menuButtons.map((b) =>
-      this.add.text(0, menuY, b.label, retroStyle(5, "#ffffff")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5),
+    // adds 4px to each button.
+    this.menuTexts = this.menuButtons.map(() =>
+      this.add.text(0, MENU_Y, "", retroStyle(5, "#ffffff")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5),
     );
-    const room = GAME_WIDTH - MENU_MARGIN * 2;
-    const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
-    const oneRowGap = (room - total) / (this.menuTexts.length - 1);
-    if (oneRowGap >= MENU_MIN_GAP) {
-      let x = MENU_MARGIN;
-      for (const t of this.menuTexts) {
-        t.setX(x);
-        x += t.width + oneRowGap;
-      }
-      this.menuHitPadY = 14;
-    } else {
-      const isAttack = (i: number) => this.menuButtons[i].action === "fight" || this.menuButtons[i].action === "magic";
-      const rows = [this.menuTexts.filter((_, i) => isAttack(i)), this.menuTexts.filter((_, i) => !isAttack(i))];
-      rows.forEach((row, r) => {
-        const width = row.reduce((n, t) => n + t.width, 0);
-        // a spell list longer than today's would close the gaps before overflowing
-        const gap = Math.min(MENU_ROW_GAP, (room - width) / Math.max(1, row.length - 1));
-        let x = GAME_WIDTH / 2 - (width + gap * (row.length - 1)) / 2;
-        for (const t of row) {
-          t.setPosition(x, MENU_ROWS_Y[r]);
-          x += t.width + gap;
-        }
-      });
-      // 36px between the rows' centres: 8px of padding each way keeps the
-      // two rows' tap boxes from overlapping
-      this.menuHitPadY = 8;
-    }
+    this.layoutMenu();
+    // a pad press or a key renames the buttons, and their widths change
+    const offInput = onInputChange(() => this.layoutMenu());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offInput);
     this.hideMenu();
 
     // outlined like the map's name tags: it sits on the backdrop's field,
@@ -929,7 +898,7 @@ export class BattleScene extends Phaser.Scene {
     for (let i = 0; i < this.menuButtons.length; i++) {
       const t = this.menuTexts[i];
       // padded past the glyphs so a button is a fair finger target: 8px of
-      // the >= 20px gap each side, and menuHitPadY up and down (see create())
+      // the >= 20px gap each side, and menuHitPadY up and down (see layoutMenu())
       if (!t.visible || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, this.menuHitPadY).contains(pointer.x, pointer.y)) continue;
       const btn = this.menuButtons[i];
       if (btn.enabled && !btn.enabled()) {
@@ -950,6 +919,50 @@ export class BattleScene extends Phaser.Scene {
 
   private window(x: number, y: number, w: number, h: number): void {
     this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff);
+  }
+
+  // Up to BOLT the 8 buttons (50 glyphs, 1000px + 32) fit one row, spread
+  // evenly with ~22px gaps — the layout from Lv1 to Lv17. WARD makes it 56
+  // glyphs (3px gaps) and NOVA 62 (1240px, wider than the room), so from Lv18
+  // the attacks (FIGHT and the spells) take a row of their own above ITEM /
+  // STEAL / RUN, each centered with MENU_ROW_GAP between buttons; Lv24's
+  // attack row is the widest, 42 glyphs = 840 + 7 x 4 + 6 x 40 = 1108px. The
+  // rows (y 500..524 / 536..560) clear the companion sprite (to y 488) above
+  // and the hint line (566..586) and message box (604) below. With a pad the
+  // buttons carry its names (X:FIGHT ... SELECT:STEAL, B:RUN): BOLT's row is
+  // 57 glyphs, two rows from Lv14, and Lv24's attacks are 48 = 960 + 7 x 4,
+  // their gaps closing to 32px to fit the 1184.
+  private layoutMenu(): void {
+    this.menuButtons.forEach((b, i) => {
+      this.menuTexts[i].setText(keyHint(b.label, b.label, { table: "battle" }));
+    });
+    const room = GAME_WIDTH - MENU_MARGIN * 2;
+    const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
+    const oneRowGap = (room - total) / (this.menuTexts.length - 1);
+    if (oneRowGap >= MENU_MIN_GAP) {
+      let x = MENU_MARGIN;
+      for (const t of this.menuTexts) {
+        t.setPosition(x, MENU_Y);
+        x += t.width + oneRowGap;
+      }
+      this.menuHitPadY = 14;
+    } else {
+      const isAttack = (i: number) => this.menuButtons[i].action === "fight" || this.menuButtons[i].action === "magic";
+      const rows = [this.menuTexts.filter((_, i) => isAttack(i)), this.menuTexts.filter((_, i) => !isAttack(i))];
+      rows.forEach((row, r) => {
+        const width = row.reduce((n, t) => n + t.width, 0);
+        // a spell list longer than today's would close the gaps before overflowing
+        const gap = Math.min(MENU_ROW_GAP, (room - width) / Math.max(1, row.length - 1));
+        let x = GAME_WIDTH / 2 - (width + gap * (row.length - 1)) / 2;
+        for (const t of row) {
+          t.setPosition(x, MENU_ROWS_Y[r]);
+          x += t.width + gap;
+        }
+      });
+      // 36px between the rows' centres: 8px of padding each way keeps the
+      // two rows' tap boxes from overlapping
+      this.menuHitPadY = 8;
+    }
   }
 
   private hideMenu(): void {
@@ -999,7 +1012,7 @@ export class BattleScene extends Phaser.Scene {
     this.itemCursor.setY(target.y);
     const slot = ITEM_SLOTS[this.itemIndex];
     this.itemInfoText.setText(`${slot.label}: ${ITEM_INFO[slot.key]}`).setVisible(true);
-    this.hintText.setText(isTouchDevice() ? TOUCH_ITEM_HINT : "HJKL:MOVE  Z:OK  ESC:BACK");
+    bindKeyHint(this.hintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
   }
 
   private knownSpells(): Spell[] {
@@ -2586,7 +2599,7 @@ export class BattleScene extends Phaser.Scene {
 
   private awaitAdvance(resolve: () => void): void {
     // a tap advances too (below), and a touch screen has no Z
-    this.hintText.setText(isTouchDevice() ? "TAP:CONTINUE" : "Z:CONTINUE");
+    bindKeyHint(this.hintText, () => keyHint("Z:CONTINUE", "TAP:CONTINUE", { table: "battle" }));
     const done = () => {
       for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.removeListener(`keydown-${k}`, done);
       this.input.off("pointerdown", done);

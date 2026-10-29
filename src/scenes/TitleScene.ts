@@ -13,6 +13,7 @@ import {
   SAVE_SLOTS,
 } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { bindKeyHint, keyHint, keyNames, onInputChange, usingPad } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { LookPicker } from "../ui/LookPicker";
 import { NameEntry } from "../ui/NameEntry";
@@ -80,6 +81,10 @@ const MENU_Y = 660;
 // with neither P nor U splits into C + X 564px over N + D + O. An empty
 // slot's N + U + X + O is 1176px on one row; a damaged slot's splits into
 // N + D + U 834px over X + O 564px (x 358..922).
+// With a pad the buttons name its buttons (Gamepad.ts's TITLE): "START:
+// SETTINGS" and the shoulders' two letters make a save's four-button row
+// 1296px, past the screen, so a single row wider than the screen less
+// MENU_GAP each side splits in two like the rest (setButtons).
 const MENU_ROWS_Y = [636, 684];
 const MENU_GAP = 48;
 const MENU_STROKE = 6;
@@ -93,6 +98,12 @@ type Mode = "menu" | "confirmDelete" | "confirmNew" | "confirmPlus" | "confirmRe
 // title is the first scene every session opens — not once per visit here.
 let saveFailHooked = false;
 type Button = [label: string, run: () => void];
+// A button's keys as the pad presses them: A continues (it sends Z), B is the
+// pad's way back out of a question (any button but Y is), and X: DAMAGED,
+// which no button sends, keeps only its word.
+const PAD_KEYS: Record<string, string> = { "C: CONTINUE": "Z: CONTINUE", "N: CANCEL": "ESC: CANCEL" };
+const buttonLabel = (label: string): string =>
+  keyHint(label, label, { table: "title", pad: PAD_KEYS[label] ?? label }) || label.slice(label.indexOf(" ") + 1);
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
@@ -240,16 +251,18 @@ export class TitleScene extends Phaser.Scene {
       showMenu();
     };
 
-    // one row at MENU_Y, or two at MENU_ROWS_Y; each row centred on its own
+    // one row at MENU_Y, or two at MENU_ROWS_Y; each row centred on its own.
+    // The rows are kept to be made again in the other input's names.
+    let shownRows: Button[][] = [];
     const setButtons = (rows: Button[][]) => {
+      shownRows = rows;
       for (const b of this.buttons) b.destroy();
       this.buttons = [];
-      rows.forEach((list, r) => {
-        const y = rows.length === 1 ? MENU_Y : MENU_ROWS_Y[r];
-        const row = list.map(([label, run]) => {
+      const made = rows.map((list) =>
+        list.map(([label, run]) => {
           // the dark stroke keeps "C: CONTINUE" legible over the pale crystal
           // in the background art's bottom-left corner
-          const b = this.add.text(0, y, label, retroStyle(6, "#8ecbff")).setOrigin(0.5).setStroke("#0b0b2b", MENU_STROKE);
+          const b = this.add.text(0, 0, buttonLabel(label), retroStyle(6, "#8ecbff")).setOrigin(0.5).setStroke("#0b0b2b", MENU_STROKE);
           b.setInteractive({
             hitArea: new Phaser.Geom.Rectangle(-BUTTON_PAD, -BUTTON_PAD, b.width + BUTTON_PAD * 2, b.height + BUTTON_PAD * 2),
             hitAreaCallback: Phaser.Geom.Rectangle.Contains,
@@ -262,16 +275,22 @@ export class TitleScene extends Phaser.Scene {
             if (!settings.isActive()) run();
           });
           return b;
-        });
-        const total = row.reduce((w, b) => w + b.width, 0) + MENU_GAP * (row.length - 1);
-        let x = GAME_WIDTH / 2 - total / 2;
+        }),
+      );
+      const width = (row: Phaser.GameObjects.Text[]) => row.reduce((w, b) => w + b.width, 0) + MENU_GAP * (row.length - 1);
+      const half = Math.ceil(made[0].length / 2);
+      const laid = made.length === 1 && width(made[0]) > GAME_WIDTH - MENU_GAP * 2 ? [made[0].slice(0, half), made[0].slice(half)] : made;
+      laid.forEach((row, r) => {
+        let x = GAME_WIDTH / 2 - width(row) / 2;
         for (const b of row) {
-          b.setX(x + b.width / 2);
+          b.setPosition(x + b.width / 2, laid.length === 1 ? MENU_Y : MENU_ROWS_Y[r]);
           x += b.width + MENU_GAP;
         }
         this.buttons.push(...row);
       });
     };
+    const offInput = onInputChange(() => setButtons(shownRows));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offInput);
 
     // NEW GAME+ opens once the save has felled the FLAME DRAKE (the true end)
     const canPlus = () => readSaveSummary()?.quest.volcanoBoss === true;
@@ -282,19 +301,12 @@ export class TitleScene extends Phaser.Scene {
       const hasSave = GameState.hasSave();
       const damaged = isSaveDamaged();
       blink(!damaged);
-      prompt
-        .setText(
-          damaged
-            ? `SLOT ${GameState.saveSlot} IS DAMAGED`
-            : hasSave
-              ? touch
-                ? "TAP TO CONTINUE"
-                : "PRESS ENTER TO CONTINUE"
-              : touch
-                ? "TAP TO START"
-                : "PRESS ENTER",
-        )
-        .setColor(damaged ? "#ff5555" : "#ffffff");
+      // a pad's A sends Z, which starts as ENTER does
+      bindKeyHint(prompt, () => {
+        const press = usingPad() ? `PRESS ${keyNames("Z", "title")}` : touch ? "" : "PRESS ENTER";
+        if (damaged) return `SLOT ${GameState.saveSlot} IS DAMAGED`;
+        return hasSave ? (press ? `${press} TO CONTINUE` : "TAP TO CONTINUE") : press || "TAP TO START";
+      }).setColor(damaged ? "#ff5555" : "#ffffff");
       const settingsButton: Button = ["O: SETTINGS", () => settings.open()];
       const restore: Button[] = GameState.hasBackup() ? [["U: RESTORE", askRestore]] : [];
       const plus: Button[] = canPlus() ? [["P: NEW GAME+", askPlus]] : [];
@@ -337,7 +349,8 @@ export class TitleScene extends Phaser.Scene {
     const confirm = (next: Mode, question: string, yesLabel: string) => {
       mode = next;
       Sfx.error();
-      prompt.setText(question).setColor("#ff5555");
+      // Y/N, or the pad's Y and B (any button but Y backs out)
+      bindKeyHint(prompt, () => `${question}? ${usingPad() ? keyNames("Y/ESC", "title") : "Y/N"}`).setColor("#ff5555");
       blink(false);
       setButtons([
         [
@@ -349,29 +362,29 @@ export class TitleScene extends Phaser.Scene {
 
     // the questions name the slot they act on; the longest, "SLOT 3: NEW
     // GAME+? Y/N", is 22 x 32 = 704px (x 288..992)
-    const askDelete = () => confirm("confirmDelete", `DELETE SLOT ${GameState.saveSlot}? Y/N`, "Y: DELETE");
+    const askDelete = () => confirm("confirmDelete", `DELETE SLOT ${GameState.saveSlot}`, "Y: DELETE");
     // the replay rewrites the save (quests, chests, half the gold), so it gets
     // the same Y/N as the other two
-    const askPlus = () => confirm("confirmPlus", `SLOT ${GameState.saveSlot}: NEW GAME+? Y/N`, "Y: NEW GAME+");
+    const askPlus = () => confirm("confirmPlus", `SLOT ${GameState.saveSlot}: NEW GAME+`, "Y: NEW GAME+");
     // names what comes back: "RESTORE TWELVECHARSX LV30? Y/N" is 30 x 32 =
     // 960px (x 160..1120). It swaps, so the save it replaces becomes the
     // backup and U again puts it back.
     const askRestore = () => {
       const prev = readBackupSummary();
-      confirm("confirmRestore", `RESTORE ${prev ? `${prev.name} LV${prev.level}` : "BACKUP"}? Y/N`, "Y: RESTORE");
+      confirm("confirmRestore", `RESTORE ${prev ? `${prev.name} LV${prev.level}` : "BACKUP"}`, "Y: RESTORE");
     };
     // "OLD" so it isn't read as the save in the slot now; "DELETE 12 OLD
     // DAMAGED COPIES? Y/N" is 33 x 32 = 1056px (x 112..1168)
     const askPurge = () => {
       const n = damagedCopyKeys().length;
-      confirm("confirmPurge", n > 1 ? `DELETE ${n} OLD DAMAGED COPIES? Y/N` : "DELETE THE OLD DAMAGED COPY? Y/N", "Y: DELETE");
+      confirm("confirmPurge", n > 1 ? `DELETE ${n} OLD DAMAGED COPIES` : "DELETE THE OLD DAMAGED COPY", "Y: DELETE");
     };
 
     // starting over empties the slot on the spot (start() retires the save to
     // the slot's backup), so it gets the same Y/N as DELETE; with no save
     // there is nothing to lose and it starts straight away
     const newGame = () => {
-      if (GameState.hasSave()) confirm("confirmNew", `OVERWRITE SLOT ${GameState.saveSlot}? Y/N`, "Y: NEW GAME");
+      if (GameState.hasSave()) confirm("confirmNew", `OVERWRITE SLOT ${GameState.saveSlot}`, "Y: NEW GAME");
       else start(false);
     };
 
