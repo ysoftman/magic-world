@@ -1206,6 +1206,10 @@ export const GameState = {
     if (!raw) return false;
     try {
       const data = JSON.parse(raw);
+      // from a new game's state, not the one in memory: CONTINUE comes here
+      // straight from the title, and a field an old save lacks would keep
+      // whatever the last game played this session had in it
+      this.reset();
       Object.assign(this.player, data.player);
       this.player.name = typeof this.player.name === "string" ? this.player.name.slice(0, NAME_MAX) : "HERO";
       this.player.level = Math.min(MAX_LEVEL, this.player.level);
@@ -1271,6 +1275,11 @@ export const GameState = {
         armor: data.shield ? "shield" : null,
         accessory: null,
       };
+      // a save code can carry any HP/MP; the max counts the accessory just
+      // loaded (a LIFE CHARM's +20). 0 HP would start the hero dead.
+      const p = this.player;
+      p.hp = Number.isFinite(p.hp) ? Math.min(this.effMaxHp(), Math.max(1, p.hp)) : this.effMaxHp();
+      p.mp = Number.isFinite(p.mp) ? Math.min(p.maxMp, Math.max(0, p.mp)) : p.maxMp;
       this.refine = loadRefine(data.refine);
       this.caught = data.caught ?? [];
       this.seenMonsters = data.seenMonsters ?? [];
@@ -1310,8 +1319,10 @@ export const GameState = {
           this.favors[key] = { step: f.step, accepted: f.accepted === true, snap: f.snap };
         }
       }
-      // straight into the field: a load is no time passing (see the setter)
-      this._minutes = data.minutes ?? 360;
+      // straight into the field: a load is no time passing (see the setter).
+      // A clock that isn't a number (a hand-edited save code) made the day
+      // NaN, and the weather threw on every frame of the field.
+      this._minutes = Number.isFinite(data.minutes) ? data.minutes : 360;
       // The farm's clocks. A save from before them grew its crops on the
       // clock itself, so they start level with it and its plots carry on
       // where they were: a day crop's plantedAt was a clock reading already,
