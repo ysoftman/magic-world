@@ -19,6 +19,7 @@ import {
   isWalkableCell,
   noteFightSpot,
   saveAndQuit,
+  saveOnShutdown,
   startWaterAnimation,
   takeFightSpot,
   whilePanelUp,
@@ -315,15 +316,7 @@ export class SnowScene extends Phaser.Scene {
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      GameState.save();
-      this.minimap.destroy();
-      this.panels.destroy();
-      this.night.destroy();
-      this.companionFollower.destroy();
-      help.destroy();
-      this.touch?.destroy();
-    });
+    saveOnShutdown(this, [this.minimap, this.panels, this.night, this.companionFollower, help, this.touch]);
   }
 
   update(_time: number, delta: number): void {

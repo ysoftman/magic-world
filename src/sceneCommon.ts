@@ -968,3 +968,19 @@ export function saveAndQuit(scene: Phaser.Scene): void {
   GameState.save();
   scene.time.delayedCall(QUIT_SAVE_DELAY, () => scene.scene.start("Title"));
 }
+
+/**
+ * A map scene's SHUTDOWN, whichever way it left (a fight, an exit or a
+ * stair, a new season, the title): save, then destroy `parts` in order —
+ * its panels, the minimap, the night, the companion, the help, the touch
+ * buttons and whatever else of it holds listeners or game objects. Added
+ * once they are all built, at the end of create(), so after FieldToasts'
+ * unsubscribe: the save shows no SAVED on a scene tearing down. The town
+ * notes the hero's spot for it in a SHUTDOWN listener added just before.
+ */
+export function saveOnShutdown(scene: Phaser.Scene, parts: ReadonlyArray<{ destroy(): void } | undefined>): void {
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    GameState.save();
+    for (const part of parts) part?.destroy();
+  });
+}

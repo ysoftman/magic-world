@@ -32,6 +32,7 @@ import {
   fadeInAfterAreaTitle,
   isWalkableCell,
   saveAndQuit,
+  saveOnShutdown,
   startWaterAnimation,
   whilePanelUp,
 } from "../sceneCommon";
@@ -469,15 +470,7 @@ export class AbyssScene extends Phaser.Scene {
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      GameState.save();
-      this.minimap.destroy();
-      this.panels.destroy();
-      this.night.destroy();
-      this.companionFollower.destroy();
-      help.destroy();
-      this.touch?.destroy();
-    });
+    saveOnShutdown(this, [this.minimap, this.panels, this.night, this.companionFollower, help, this.touch]);
 
     // News, queued under the floor's title. "NEW RECORD: B999!" is 17 glyphs
     // and "A GUARDIAN SEALS THE STAIRS!" 28 (560px) at retroStyle(5).

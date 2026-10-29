@@ -57,6 +57,7 @@ import {
   OBJECT_LAYER_DEPTH,
   paintTile,
   saveAndQuit,
+  saveOnShutdown,
   startWaterAnimation,
   type TileLayers,
   whilePanelUp,
@@ -855,17 +856,11 @@ export class TownScene extends Phaser.Scene {
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
 
+    // where the hero stands, for the save the shutdown makes next
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.pos = { x: this.player.x, y: this.player.y };
-      GameState.save();
-      this.panels.destroy();
-      this.villagers.destroy();
-      this.minimap.destroy();
-      this.night.destroy();
-      this.companionFollower.destroy();
-      help.destroy();
-      this.touch?.destroy();
     });
+    saveOnShutdown(this, [this.panels, this.villagers, this.minimap, this.night, this.companionFollower, help, this.touch]);
   }
 
   // One place decides how an exit to another map is drawn, so the three
