@@ -17,6 +17,7 @@ import {
   TILE,
 } from "../levels";
 import { retroStyle, showToast } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { paintTile, type TileLayers } from "../sceneCommon";
 import { closeHelp } from "./HelpPopup";
 import { STATUS_HUD_TOAST_Y } from "./StatusHud";
@@ -84,8 +85,8 @@ export class MapEditor {
   // (and show "MAP EDITED") that later map-file changes never reach
   private dirty = false;
   private panel: Phaser.GameObjects.Rectangle;
-  private info: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private info: PixelText;
+  private hint: PixelText;
 
   constructor(scene: Phaser.Scene, layers: TileLayers, level: number[][], onMoveLandmark: (name: string, x: number, y: number) => void) {
     this.scene = scene;
@@ -117,12 +118,12 @@ export class MapEditor {
       .setDepth(198)
       .setVisible(false);
     this.info = scene.add
-      .text(16, GAME_HEIGHT - 76, "", retroStyle(6, "#ffd166"))
+      .pixelText(16, GAME_HEIGHT - 76, "", retroStyle(6, "#ffd166"))
       .setScrollFactor(0)
       .setDepth(199)
       .setVisible(false);
     this.hint = scene.add
-      .text(
+      .pixelText(
         16,
         GAME_HEIGHT - 44,
         "HJKL/MOUSE: CURSOR (EDGE SCROLLS MAP)   Z/CLICK: PAINT, PICK UP, DROP\n1-7: BRUSH   TAB: TILE/LANDMARK   X: APPLY TO MAP FILE   R: RESET   F2: LEAVE",
