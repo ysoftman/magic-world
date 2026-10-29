@@ -249,10 +249,8 @@ export class AbyssScene extends Phaser.Scene {
     // stair up: no question until a step off it
     this.stairAsked = fromBattle;
 
-    // SAVED and the achievements; the first SHUTDOWN listener (FieldToasts).
-    // SAVED shows under a panel or the stair's question too, as it always
-    // has down here (no reason kept), where the fields hold it back
-    this.toasts = new FieldToasts(this, { blocked: () => this.uiBlocking(), savedHeld: () => false });
+    // SAVED and the achievements; the first SHUTDOWN listener (FieldToasts)
+    this.toasts = new FieldToasts(this, { blocked: () => this.uiBlocking() });
 
     // the same seed rebuilds the floor a battle was fought on, exactly
     const floor = generateFloor(r.floor, floorSeed(r.seed, r.floor, GameState.ngPlus));
