@@ -307,8 +307,8 @@ export const regenAmount = (hp: number, curHp: number): number => Math.min(hp - 
  * ATK; then NEW GAME+'s scale, in the ABYSS times its floor's depth
  * (abyss.ts), HP capped at ENEMY_HP_MAX; a GUARDIAN pays its gold share.
  * `night` is isNight() && not the ABYSS, as BattleScene works it out. A
- * field boss's `rematch` pays the gold its ARENA bout does: the ARENA's
- * share, with no night x1.5 (its EXP keeps the night's).
+ * field boss's (or the TROLL KING's) `rematch` pays the gold its ARENA bout
+ * does: the ARENA's share, with no night x1.5 (its EXP keeps the night's).
  */
 export function scaleEnemy(
   def: EnemyDef,

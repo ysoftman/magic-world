@@ -321,7 +321,8 @@ export class BattleScene extends Phaser.Scene {
   // set for a fight down in the ABYSS (see abyss.ts): its floor, and whether
   // the foe is that floor's GUARDIAN
   private abyss: AbyssBout | null = null;
-  // a field boss fought again after its first kill (see init)
+  // a field boss or the TROLL KING fought again after its first kill (see
+  // init)
   private rematch = false;
   private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
@@ -434,10 +435,16 @@ export class BattleScene extends Phaser.Scene {
     // ~14s clicked through as fast as the text allows). It pays what its
     // ARENA bout does instead, no night bonus, win-streak bonus or PUMPKIN
     // PIE, and no sure HI-POTION; its EXP and materials stay. That is 175 G,
-    // ~21k G an hour, near the ARENA's 18-20k (arena.ts). The arithmetic is
-    // battleRules.scaleEnemy's.
+    // ~21k G an hour, near the ARENA's 18-20k (arena.ts). The TROLL KING, a
+    // giant and in that lineup too, is the same farm by chance: every Town
+    // build (each fight there ends in one) rolls it into a meadow 35% of the
+    // time, so a ~5s slime fight rerolls it, and that hero fells it in two
+    // or three rounds (~7.5s) for 360 G by day on the streak, 540 by night.
+    // A kill every ~20s knowing its meadow, ~35s going by what the screen
+    // shows: 38-64k G an hour by day. Its rematch pays 50 G. The arithmetic
+    // is battleRules.scaleEnemy's.
     this.night = isNight() && !this.abyss;
-    this.rematch = !this.arena && !this.abyss && !!def.boss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
+    this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
     this.enemy = scaleEnemy(def, {
       night: this.night,
       arena: !!this.arena,
@@ -2326,8 +2333,8 @@ export class BattleScene extends Phaser.Scene {
     if (!caught) {
       GameState.streak += 1;
       // streak bonus rewards pushing on without fleeing; capped so a long run
-      // can't outpace the boss/chest economy; a boss rematch pays neither
-      // bonus, as its ARENA bout doesn't (see init)
+      // can't outpace the boss/chest economy; a rematch pays neither bonus,
+      // as its ARENA bout doesn't (see init)
       const streakPct = GameState.streak >= STREAK_MIN && !this.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
       const streakBonus = Math.floor(this.enemy.gold * streakPct);
       // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
