@@ -19,6 +19,7 @@ import {
   TILE,
 } from "./levels";
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
+import { PixelText } from "./pixelText";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { CompanionSprite } from "./ui/CompanionSprite";
 import type { DialogueBox } from "./ui/DialogueBox";
@@ -549,7 +550,7 @@ const AREA_TITLE_FADE_MS = 600;
  * in on, where a tag there and the title would print over each other;
  * fading in as the title faded out, both showed half through.
  */
-export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObjects.Text): void {
+export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObjects.Text | PixelText): void {
   target.setAlpha(0);
   scene.tweens.add({ targets: target, alpha: 1, delay: AREA_TITLE_HOLD_MS + AREA_TITLE_FADE_MS, duration: AREA_TITLE_FADE_MS });
 }
@@ -566,7 +567,7 @@ export function fadeInAfterAreaTitle(scene: Phaser.Scene, target: Phaser.GameObj
  */
 export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titled = true): void {
   const label = scene.add
-    .text(x, y - TILE + 8, "TOWN", retroStyle(5, "#ffd166"))
+    .pixelText(x, y - TILE + 8, "TOWN", retroStyle(5, "#ffd166"))
     .setOrigin(0.5, 1)
     .setStroke("#1a1028", 4)
     .setDepth(9);
@@ -591,10 +592,11 @@ export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titl
  * Toasts: an unlock tip or achievement printed over a panel's title hid
  * both; news now comes out once the panel closes (pixelart's toastHolds).
  */
-type MapTag = Phaser.GameObjects.Text | Phaser.GameObjects.Container;
+type MapTag = Phaser.GameObjects.Text | PixelText | Phaser.GameObjects.Container;
+const isText = (o: Phaser.GameObjects.GameObject): o is Phaser.GameObjects.Text | PixelText =>
+  o instanceof Phaser.GameObjects.Text || o instanceof PixelText;
 const isMapTag = (o: Phaser.GameObjects.GameObject): o is MapTag =>
-  (o instanceof Phaser.GameObjects.Text && o.scrollFactorX === 1) ||
-  (o instanceof Phaser.GameObjects.Container && o.scrollFactorX === 1 && o.list.some((c) => c instanceof Phaser.GameObjects.Text));
+  (isText(o) && o.scrollFactorX === 1) || (o instanceof Phaser.GameObjects.Container && o.scrollFactorX === 1 && o.list.some(isText));
 
 export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () => void): void {
   holdToastsWhile(scene, up);
@@ -627,7 +629,7 @@ export function addTownExitSign(scene: Phaser.Scene, hero: { x: number; y: numbe
   const signX = x - 2 * TILE;
   scene.add.image(signX, y, "sign").setDepth(9);
   const tag = scene.add
-    .text(signX, y - 48, "TOWN", retroStyle(5, "#ffd166"))
+    .pixelText(signX, y - 48, "TOWN", retroStyle(5, "#ffd166"))
     .setOrigin(0.5)
     .setStroke("#1a1028", 4)
     .setDepth(11);
@@ -731,7 +733,7 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): voi
  * caption: it lies straight on the map's top rows, and the bare green of THE
  * FOREST sank into the forest's canopy at night.
  */
-export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text): void {
+export function fadeAreaTitle(scene: Phaser.Scene, title: Phaser.GameObjects.Text | PixelText): void {
   title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
 }

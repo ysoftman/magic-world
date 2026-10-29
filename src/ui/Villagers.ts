@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import { GameState, nightFactor, type QuestState } from "../gameState";
 import { type MonsterZone, SOLID, T_SOIL, T_TALL, TILE } from "../levels";
 import { addGroundShadow, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 
 // A slow stroll: the hero walks at 240px/s, a villager at a fifth of that.
 const SPEED = 48;
@@ -205,7 +206,7 @@ interface Walker {
   def: VillagerDef;
   sprite: Phaser.GameObjects.Sprite;
   shadow: Phaser.GameObjects.Ellipse;
-  label: Phaser.GameObjects.Text;
+  label: PixelText;
   // out: strolling; homeward: walking off at dusk; home: gone for the night
   state: "out" | "homeward" | "home";
   path: Array<[number, number]>;
@@ -249,7 +250,7 @@ export class Villagers {
       const sprite = scene.add.sprite(x, y, `villager-${def.key}-idle`).setDepth(10);
       const shadow = addGroundShadow(scene, sprite);
       const label = scene.add
-        .text(x, villagerLabelY(y), def.name, retroStyle(LABEL_SIZE, def.color))
+        .pixelText(x, villagerLabelY(y), def.name, retroStyle(LABEL_SIZE, def.color))
         .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11)

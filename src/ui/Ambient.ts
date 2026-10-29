@@ -721,7 +721,7 @@ export function addOvercast(scene: Phaser.Scene, color: number, depth = OVERCAST
 // few seconds; "none" (the cave) shows nothing.
 function addCaption(scene: Phaser.Scene): (weather: Weather) => void {
   const text = scene.add
-    .text(GAME_WIDTH / 2, CAPTION_Y, "", retroStyle(5, "#dbe7f3"))
+    .pixelText(GAME_WIDTH / 2, CAPTION_Y, "", retroStyle(5, "#dbe7f3"))
     .setOrigin(0.5)
     .setStroke("#1a1028", 4)
     .setScrollFactor(0)

@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { BODY_FONT, GAME_WIDTH, PIXEL, RETRO_FONT } from "./config";
+import type { PixelText } from "./pixelText";
 
 export interface PixelMap {
   [ch: string]: number;
@@ -119,7 +120,7 @@ interface ToastState {
 }
 
 // per toast Text, so a scene restart (which destroys the Text) starts clean
-const toastStates = new WeakMap<Phaser.GameObjects.Text, ToastState>();
+const toastStates = new WeakMap<PixelText, ToastState>();
 
 // News waits while a scene's panel, help or talk is up (holdToastsWhile).
 // An unlock tip or an achievement printed over a panel's title covered it
@@ -139,7 +140,7 @@ export function holdToastsWhile(scene: Phaser.Scene, held: () => boolean): void 
 }
 
 export function pumpToasts(scene: Phaser.Scene): void {
-  const t = scene.children.getByName(TOAST_NAME) as Phaser.GameObjects.Text | null;
+  const t = scene.children.getByName(TOAST_NAME) as PixelText | null;
   const state = t && toastStates.get(t);
   if (!t || !state) return;
   if (toastsHeld(scene)) {
@@ -162,7 +163,7 @@ export function pumpToasts(scene: Phaser.Scene): void {
 // whether a toast is up now (fading in, held or fading out), for what would
 // share its line: the town's HOME bubble steps aside for it
 export function toastShowing(scene: Phaser.Scene): boolean {
-  const t = scene.children.getByName(TOAST_NAME) as Phaser.GameObjects.Text | null;
+  const t = scene.children.getByName(TOAST_NAME) as PixelText | null;
   return !!t && toastStates.get(t)?.showing === true;
 }
 
@@ -197,10 +198,10 @@ export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
   // Reuse one toast per scene instead of stacking a new Text on every call —
   // otherwise mashing the key that triggers it (e.g. mute) overlaps garbled
   // text from multiple in-flight instances.
-  let t = scene.children.getByName(TOAST_NAME) as Phaser.GameObjects.Text | null;
+  let t = scene.children.getByName(TOAST_NAME) as PixelText | null;
   if (!t) {
     t = scene.add
-      .text(GAME_WIDTH / 2, y ?? 8, "", retroStyle(5, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2, y ?? 8, "", retroStyle(5, "#8ecbff"))
       .setName(TOAST_NAME)
       .setOrigin(0.5, 0)
       // the same dark outline as the other floating text (the TOWN marker,
@@ -236,7 +237,7 @@ export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
   if (state.waiting.length > TOAST_MAX_WAITING) state.waiting.shift();
 }
 
-function playToast(scene: Phaser.Scene, t: Phaser.GameObjects.Text, state: ToastState, entry: ToastEntry): void {
+function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: ToastEntry): void {
   // a killed tween never completes, so a replaced toast doesn't also pull
   // the next one off the queue
   scene.tweens.killTweensOf(t);

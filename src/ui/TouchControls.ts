@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 
 // Virtual gamepad for coarse-pointer (touch) devices. Buttons replay real key
 // events into the window so every scene keeps its existing keyboard handling:
@@ -72,7 +73,7 @@ export function hideTouchButtons(scene: Phaser.Scene, groups: TouchGroup[]): voi
 
 interface TouchButton {
   ring: Phaser.GameObjects.Arc;
-  text: Phaser.GameObjects.Text;
+  text: PixelText;
   groups: TouchGroup[];
   release: () => void;
 }
@@ -173,7 +174,7 @@ export class TouchControls {
     groups: TouchGroup[] = [],
   ): TouchButton {
     const ring = scene.add.circle(x, y, r, 0x000000, DISC_ALPHA).setStrokeStyle(2, 0xffffff, 0.45).setScrollFactor(0).setDepth(250);
-    const text = scene.add.text(x, y, label, retroStyle(size, "#ffffff")).setOrigin(0.5).setScrollFactor(0).setDepth(251);
+    const text = scene.add.pixelText(x, y, label, retroStyle(size, "#ffffff")).setOrigin(0.5).setScrollFactor(0).setDepth(251);
     ring.setInteractive(new Phaser.Geom.Circle(r, r, r), Phaser.Geom.Circle.Contains);
     let held = false;
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {

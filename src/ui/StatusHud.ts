@@ -4,6 +4,7 @@ import { MEALS } from "../cooking";
 import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
 import { currentObjective } from "../objective";
 import { makeTexture, type PixelMap, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { type Region, type Weather, weatherToday } from "../weather";
 
 export const STATUS_HUD_HEIGHT = 88;
@@ -217,7 +218,7 @@ export class StatusHud {
   private dayNightIcon!: Phaser.GameObjects.Image;
   private region: Region | null;
   private lastIcon = "";
-  private segments: Phaser.GameObjects.Text[] = [];
+  private segments: PixelText[] = [];
   private lastTexts: string[] = [];
   private lastColors: string[] = [];
 
@@ -282,7 +283,7 @@ export class StatusHud {
   }
 
   private addSegment(x: number, y: number, size: number, color: string, originX = 0): void {
-    const t = this.scene.add.text(x, y, "", retroStyle(size, color)).setOrigin(originX, 0).setScrollFactor(0).setDepth(111);
+    const t = this.scene.add.pixelText(x, y, "", retroStyle(size, color)).setOrigin(originX, 0).setScrollFactor(0).setDepth(111);
     this.segments.push(t);
     this.lastTexts.push("");
     this.lastColors.push("");
