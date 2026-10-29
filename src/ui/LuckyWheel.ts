@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { isEventToday } from "../events";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
-import { isTouchDevice } from "./TouchControls";
+import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized by the key hint (retroStyle(4), 16px a glyph): "D-PAD: MOVE   Z:
 // SPIN   ESC: CLOSE" is 34 x 16 = 544px and the keyboard's "JK: ..." 496,
@@ -157,13 +157,9 @@ export class LuckyWheel {
       .setLineSpacing(8);
     // only UP/DOWN/J/K are bound below — this is a single column, not a
     // grid, so no H/L to advertise; touch moves with the d-pad's arrows
-    this.hint = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        PANEL_TOP + PANEL_H - 30,
-        isTouchDevice() ? "D-PAD: MOVE   Z: SPIN   ESC: CLOSE" : "JK: MOVE   Z: SPIN   ESC: CLOSE",
-        retroStyle(4, DIM_TEXT),
-      )
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, DIM_TEXT)), () =>
+      keyHint("JK: MOVE   Z: SPIN   ESC: CLOSE", "D-PAD: MOVE   Z: SPIN   ESC: CLOSE"),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

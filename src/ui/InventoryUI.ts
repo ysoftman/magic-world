@@ -6,6 +6,7 @@ import { type EquipmentKey, GameState, refinedName } from "../gameState";
 import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 import { drawTreasureMap } from "./TreasureDig";
@@ -219,7 +220,7 @@ const INFO_Y = PANEL_TOP + PANEL_H - 83;
 // said Z wears a piece. At retroStyle(4) the touch one, 39 glyphs, is 624px
 // (x 328..952; on touch y 534..550, clear of the d-pad's up arrow, x<=194,
 // and of Z, x>=1089 that high), the keyboard's 38.
-const HINT = isTouchDevice() ? "D-PAD: MOVE   Z: USE/EQUIP   ESC: CLOSE" : "HJKL: MOVE   Z: USE/EQUIP   ESC: CLOSE";
+const HINT = (): string => keyHint("HJKL: MOVE   Z: USE/EQUIP   ESC: CLOSE", "D-PAD: MOVE   Z: USE/EQUIP   ESC: CLOSE");
 // The chart of the cursor's map (ui/TreasureDig.ts), in the right half of
 // the maps page: x 680..1180 under the column header (to y 94) and 16px over
 // the info line, less its 6px frame. At 16px a cell the town's 28 x 20 is
@@ -381,8 +382,7 @@ export class InventoryUI {
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, HINT, retroStyle(4, DIM_TEXT))
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), HINT)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

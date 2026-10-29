@@ -6,6 +6,7 @@ import { MATERIALS, type MaterialKey } from "../drops";
 import { econDay, GameState, isNight } from "../gameState";
 import { BEDS_LEVEL, GARDEN_LEVEL, GARDEN_YIELD, gardenPick, HOUSE_STAGES, type HouseStage } from "../home";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
@@ -106,14 +107,9 @@ export class HomeUI {
     }
     this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 392, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
     this.hint = fixed(
-      scene.add
-        .text(
-          GAME_WIDTH / 2,
-          PANEL_TOP + 430,
-          isTouchDevice() ? "D-PAD: MOVE   Z: OK   ESC: CLOSE" : "JK: MOVE   Z: OK   ESC: CLOSE",
-          retroStyle(4, DIM_TEXT),
-        )
-        .setOrigin(0.5),
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 430, "", retroStyle(4, DIM_TEXT)), () =>
+        keyHint("JK: MOVE   Z: OK   ESC: CLOSE", "D-PAD: MOVE   Z: OK   ESC: CLOSE"),
+      ).setOrigin(0.5),
     );
 
     const kb = scene.input.keyboard;
@@ -226,7 +222,7 @@ export class HomeUI {
     }
     this.confirming = true;
     Sfx.move();
-    this.showMsg(`BUILD ${next.name} FOR ${next.cost}G? Z/ESC`, 0);
+    this.showMsg(`BUILD ${next.name} FOR ${next.cost}G? ${keyNames("Z/ESC")}`, 0);
   }
 
   private build(): void {

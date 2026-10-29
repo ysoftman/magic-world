@@ -4,8 +4,8 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
-import { isTouchDevice } from "./TouchControls";
 
 // Fixed pages of two columns x seven rows. Shrinking the row gap to fit one
 // page stopped working at 23 entries (a name's glyphs touched its own desc),
@@ -53,7 +53,7 @@ const COUNTER_Y = PAGER_Y + 36;
 // between the d-pad (x<=258) and Z (x>=1076) at that height.
 const NEXT_Y = COUNTER_Y + 34;
 const HINT_Y = NEXT_Y + 34;
-const HINT = isTouchDevice() ? "D-PAD: PAGE   A/ESC: CLOSE" : "HL: PAGE   A/ESC: CLOSE";
+const HINT = (): string => keyHint("HL: PAGE   A/ESC: CLOSE", "D-PAD: PAGE   A/ESC: CLOSE");
 const PANEL_H = HINT_Y + 28 - PANEL_TOP;
 
 // Trophy board shown with A, listing every achievement as name + description,
@@ -119,8 +119,7 @@ export class AchievementsUI {
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = scene.add
-      .text(GAME_WIDTH / 2, HINT_Y, HINT, retroStyle(4, DIM_TEXT))
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)), HINT)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

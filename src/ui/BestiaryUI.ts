@@ -5,8 +5,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { CATCHABLE, ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
-import { isTouchDevice } from "./TouchControls";
 
 const SPECIES = Object.values(ENEMIES);
 
@@ -165,15 +165,12 @@ export class BestiaryUI {
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
-    this.hint = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        HINT_Y,
-        // the key line, in the other panels' form (B/ESC closed it unsaid);
-        // 50 glyphs at most, 800px (x 240..1040)
-        isTouchDevice() ? "D-PAD: MOVE   Z/TAP: SET COMPANION   B/ESC: CLOSE" : "HJKL: MOVE   Z/CLICK: SET COMPANION   B/ESC: CLOSE",
-        retroStyle(4, DIM_TEXT),
-      )
+    this.hint = bindKeyHint(
+      scene.add.text(GAME_WIDTH / 2, HINT_Y, "", retroStyle(4, DIM_TEXT)),
+      // the key line, in the other panels' form (B/ESC closed it unsaid);
+      // 50 glyphs at most, 800px (x 240..1040)
+      () => keyHint("HJKL: MOVE   Z/CLICK: SET COMPANION   B/ESC: CLOSE", "D-PAD: MOVE   Z/TAP: SET COMPANION   B/ESC: CLOSE"),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

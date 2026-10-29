@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { bodyStyle, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint, padButtons, usingPad } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
 const PANEL_W = 900;
@@ -24,7 +25,9 @@ const COL_W = 18;
 // (bodyStyle(33), 21px a glyph; the panel's sides less 20px leave 860px): the
 // Town's keyboard list, 16 keys in 8 rows, is 18 + "F2     MAP EDIT" = 33
 // glyphs (693px); its touch list, 11 in 6 rows, 18 + "O      SETUP/QUIT" =
-// 35 (735px).
+// 35 (735px). With a pad the keys are its buttons (Gamepad.ts), and those no
+// button sends (C, F2, CTRL+S) drop out: the Town's 13 in 7 rows, at most
+// 18 + "START  SETTINGS" = 33.
 const TOUCH_KEYS: Record<string, [string, string] | null> = {
   HJKL: ["D-PAD", "MOVE"],
   C: ["HOME", "TAP: LOOK"],
@@ -59,30 +62,39 @@ export function addHelpPopup(
   goal: string | (() => string) = "",
   blocked: () => boolean = () => false,
 ): Phaser.GameObjects.Container {
-  const shown = isTouchDevice()
-    ? keys.flatMap(([k, d]): [string, string][] => {
-        const t: [string, string] | null = k in TOUCH_KEYS ? TOUCH_KEYS[k] : [k, d];
-        return t ? [t] : [];
-      })
-    : keys;
-  const half = Math.ceil(shown.length / 2);
-  const cell = ([k, d]: [string, string]) => k.padEnd(KEY_W) + d;
-  const body = shown
-    .slice(0, half)
-    .map((e, i) => cell(e).padEnd(COL_W) + (shown[half + i] ? cell(shown[half + i]) : ""))
-    .join("\n");
+  // rebuilt when the input in use changes (bindKeyHint)
+  const body = (): string => {
+    const shown = usingPad()
+      ? keys.flatMap(([k, d]): [string, string][] => {
+          const button = padButtons(k);
+          return button ? [[button, d]] : [];
+        })
+      : isTouchDevice()
+        ? keys.flatMap(([k, d]): [string, string][] => {
+            const t: [string, string] | null = k in TOUCH_KEYS ? TOUCH_KEYS[k] : [k, d];
+            return t ? [t] : [];
+          })
+        : keys;
+    const half = Math.ceil(shown.length / 2);
+    const cell = ([k, d]: [string, string]) => k.padEnd(KEY_W) + d;
+    return shown
+      .slice(0, half)
+      .map((e, i) => cell(e).padEnd(COL_W) + (shown[half + i] ? cell(shown[half + i]) : ""))
+      .join("\n");
+  };
 
   const goalText = scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 70, "", retroStyle(5, "#7fbf7f")).setOrigin(0.5);
   const popup = scene.add
     .container(0, 0, [
       scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95).setStrokeStyle(2, 0xffffff),
       scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 44, "HELP", retroStyle(8, "#ffd166")).setOrigin(0.5),
-      scene.add
-        .text(GAME_WIDTH / 2, PANEL_TOP + 84, body, bodyStyle(33, "#f5f5f5"))
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 84, "", bodyStyle(33, "#f5f5f5")), body)
         .setOrigin(0.5, 0)
         .setLineSpacing(-3),
       goalText,
-      scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "?/ESC: CLOSE", retroStyle(4, "#8ecbff")).setOrigin(0.5),
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, "#8ecbff")), () =>
+        keyHint("?/ESC: CLOSE"),
+      ).setOrigin(0.5),
     ])
     .setScrollFactor(0)
     .setDepth(140)

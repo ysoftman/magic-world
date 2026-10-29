@@ -7,6 +7,7 @@ import { DERBY_MULT, isEventToday } from "../events";
 import { ARCTIC_FISH, type FishDef, GameState, isNight, POND_FISH } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { isWet, WEATHER_LABEL, weatherToday } from "../weather";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
 // Sized off the widest lines, all Press Start 2P at retroStyle(n) = n*4 px a
@@ -51,8 +52,8 @@ const LOG_GAP = 36;
 
 // touch has no TAB: the page switch is the LOG/BACK chip there (see the
 // constructor), so its hints leave TAB out
-const FISH_HINT = isTouchDevice() ? "Z: REEL   ESC: QUIT" : "Z: REEL   HL/TAB: LOG   ESC: QUIT";
-const LOG_HINT = isTouchDevice() ? "ESC: QUIT" : "HL/TAB: BACK   ESC: QUIT";
+const FISH_HINT = (): string => keyHint("Z: REEL   HL/TAB: LOG   ESC: QUIT", "Z: REEL   ESC: QUIT");
+const LOG_HINT = (): string => keyHint("HL/TAB: BACK   ESC: QUIT", "ESC: QUIT");
 
 // one entry per bonusItem value, so a new one is a compile error here
 // instead of a silently mislabeled toast — same shape as gameState.ts's
@@ -324,7 +325,7 @@ export class FishingUI {
   private showFishing(): void {
     this.setPage("fish");
     this.count.setText(`FISH CAUGHT: ${GameState.fishCaught}`);
-    this.hint.setText(FISH_HINT);
+    bindKeyHint(this.hint, FISH_HINT);
     this.startCast();
   }
 
@@ -335,7 +336,7 @@ export class FishingUI {
     this.setPage("log");
     this.title.setText("FISH LOG");
     this.count.setText(`LOGGED ${GameState.fishLogged()}/${TOTAL_FISH}`);
-    this.hint.setText(LOG_HINT);
+    bindKeyHint(this.hint, LOG_HINT);
     this.table.forEach((f, i) => {
       const best = GameState.fishLog[f.name];
       const caught = best !== undefined;

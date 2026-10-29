@@ -6,6 +6,7 @@ import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
 
 // Rows are pooled, sized to the most each column can ever hold at once.
@@ -254,7 +255,9 @@ export class QuestLog {
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
         ...this.doneRows,
-        scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "U/ESC: CLOSE", retroStyle(4, HINT_COLOR)).setOrigin(0.5),
+        bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, HINT_COLOR)), () =>
+          keyHint("U/ESC: CLOSE"),
+        ).setOrigin(0.5),
       ])
       .setScrollFactor(0)
       .setDepth(150)

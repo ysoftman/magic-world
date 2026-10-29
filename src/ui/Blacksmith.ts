@@ -16,6 +16,7 @@ import { EQUIP_BONUS, EQUIP_SLOT, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
 import { ART_PX, bodyStyle, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
+import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
@@ -384,7 +385,7 @@ export class BlacksmithUI {
     }
     this.confirming = true;
     Sfx.move();
-    this.showMsg(`FORGE ${r.name} FOR ${r.fee}G? Z/ESC`, 0);
+    this.showMsg(`FORGE ${r.name} FOR ${r.fee}G? ${keyNames("Z/ESC")}`, 0);
   }
 
   private forge(): void {
@@ -428,7 +429,7 @@ export class BlacksmithUI {
     }
     this.confirming = true;
     Sfx.move();
-    this.showMsg(`${GEAR_NAME[key]}+${level + 1} FOR ${fee}G? Z/ESC`, 0);
+    this.showMsg(`${GEAR_NAME[key]}+${level + 1} FOR ${fee}G? ${keyNames("Z/ESC")}`, 0);
   }
 
   // the level goes on the piece (GameState.refine), so it stays with it
@@ -475,7 +476,7 @@ export class BlacksmithUI {
       t.setColor(MODES[i] === this.mode ? "#ffd166" : DIM_TEXT);
     });
     const action = this.mode === "forge" ? "FORGE" : "REFINE";
-    this.hint.setText(isTouchDevice() ? `D-PAD: MOVE/TAB   Z: ${action}   ESC: CLOSE` : `HL: TAB   JK: MOVE   Z: ${action}   ESC: CLOSE`);
+    bindKeyHint(this.hint, () => keyHint(`HL: TAB   JK: MOVE   Z: ${action}   ESC: CLOSE`, `D-PAD: MOVE/TAB   Z: ${action}   ESC: CLOSE`));
     this.cursor.setPosition(NAME_X - 26, ROW_Y + this.index * ROW_GAP);
     const lines = this.mode === "forge" ? this.refreshForge() : this.refreshRefine();
     // the rows past the mode's own, and the icon of an empty REFINE slot, off

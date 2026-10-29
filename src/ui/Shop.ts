@@ -7,6 +7,7 @@ import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, 
 import { itemInfo } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import { SHOP_ITEMS } from "../shopItems";
+import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
@@ -216,14 +217,15 @@ export class ShopUI {
       .setDepth(152)
       .setVisible(false);
     // the keyboard line (896px) would run under the d-pad and ESC on touch,
-    // which switches modes with the chip below instead of TAB
-    this.hint = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        PANEL_TOP + PANEL_H - 20,
-        isTouchDevice() ? "D-PAD: MOVE   Z: BUY/SELL   ESC: CLOSE" : "HJKL: MOVE   Z: BUY/SELL   TAB: SWITCH MODE   ESC: CLOSE",
-        retroStyle(4, DIM_TEXT),
-      )
+    // which switches modes with the chip below instead of TAB. A pad switches
+    // with LB/RB (B/U, below) and its line is as long, 57 glyphs (912px), so
+    // on a touch screen it gives up D-PAD: MOVE: 43 glyphs, x 296..984, clear
+    // of the d-pad (x<=258) and Z (x>=1076) on its y 578..594.
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), () =>
+      keyHint("HJKL: MOVE   Z: BUY/SELL   TAB: SWITCH MODE   ESC: CLOSE", "D-PAD: MOVE   Z: BUY/SELL   ESC: CLOSE", {
+        pad: `${isTouchDevice() ? "" : "HJKL: MOVE   "}Z: BUY/SELL   B/U: SWITCH MODE   ESC: CLOSE`,
+      }),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -420,7 +422,7 @@ export class ShopUI {
     if (lost > 0 && this.pendingSell !== this.index) {
       this.pendingSell = this.index;
       Sfx.error();
-      this.showMsg(`Its +${lost} will be lost! Z: sell`, CONFIRM_HOLD_MS);
+      this.showMsg(`Its +${lost} will be lost! ${keyNames("Z")}: sell`, CONFIRM_HOLD_MS);
       return;
     }
     this.pendingSell = -1;

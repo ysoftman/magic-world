@@ -4,7 +4,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { HERO_LOOKS } from "../scenes/BootScene";
-import { isTouchDevice } from "./TouchControls";
+import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized off Press Start 2P (chars x size x 4px). Eight looks in two rows of
 // four: 144px frames 170px apart span x 313..967 inside the 760px panel (x
@@ -29,7 +29,7 @@ const DETAIL_Y = PANEL_TOP + 438;
 const PICKED = "#ffd166";
 // a look still to earn: its hero as a flat shape, the count it opens at on it
 const SILHOUETTE = 0x2c2c4a;
-const HINT = isTouchDevice() ? "TAP A HERO  -  TAP OUTSIDE: BACK" : "HJKL: MOVE   Z: OK   ESC: BACK";
+const HINT = (): string => keyHint("HJKL: MOVE   Z: OK   ESC: BACK", "TAP A HERO  -  TAP OUTSIDE: BACK");
 
 const lookX = (i: number): number => GAME_WIDTH / 2 + ((i % COLS) - (COLS - 1) / 2) * SPACING;
 const lookY = (i: number): number => FRAME_Y + Math.floor(i / COLS) * ROW_GAP;
@@ -77,7 +77,7 @@ export class LookPicker {
       panel,
       scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "CHOOSE YOUR LOOK", retroStyle(8, PICKED)).setOrigin(0.5),
       this.detail,
-      scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, HINT, retroStyle(4, "#8ecbff")).setOrigin(0.5),
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
     ];
     HERO_LOOKS.forEach((look, i) => {
       const frame = scene.add.rectangle(lookX(i), lookY(i), FRAME_W, FRAME_H, 0x000000, 0).setInteractive({ useHandCursor: true });

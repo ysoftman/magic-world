@@ -2,7 +2,7 @@ import type Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { DIM_TEXT, retroStyle } from "../pixelart";
-import { isTouchDevice } from "./TouchControls";
+import { bindKeyHint, keyHint } from "./Gamepad";
 
 // The hero's name at NEW GAME, in the game's own panel: window.prompt put a
 // browser (on touch an OS) dialog over the pixel screen, and a gamepad had
@@ -75,7 +75,11 @@ const cellY = (cell: Cell): number => GRID_Y + cell.row * CELL_H;
 // gamepad goes through too): untrusted, so their Z picks rather than types
 // and their other letters (X is A, Y is I ...) do nothing here. On touch a
 // tap on a cell picks it and a tap outside the panel backs out.
-const HINT = isTouchDevice() ? "TAP: TYPE   OK: DONE   TAP OUTSIDE: BACK" : "A-Z: TYPE   BKSP: DEL   ENTER: OK   ESC: BACK";
+// A pad moves over the grid instead and picks with A (Z).
+const HINT = (): string =>
+  keyHint("A-Z: TYPE   BKSP: DEL   ENTER: OK   ESC: BACK", "TAP: TYPE   OK: DONE   TAP OUTSIDE: BACK", {
+    pad: "HJKL: MOVE   Z: TYPE   ESC: BACK",
+  });
 
 export class NameEntry {
   private root: Phaser.GameObjects.Container;
@@ -119,7 +123,7 @@ export class NameEntry {
       this.slots,
       this.nameText,
       this.caret,
-      scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, HINT, retroStyle(4, "#8ecbff")).setOrigin(0.5),
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
     ];
     for (const cell of CELLS) {
       const box = scene.add

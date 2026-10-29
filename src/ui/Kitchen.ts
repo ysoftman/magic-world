@@ -5,6 +5,7 @@ import { canCook, cook, INGREDIENTS, type IngredientKey, MEAL_KEYS, MEALS, type 
 import { GameState } from "../gameState";
 import { mealBattles } from "../home";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
@@ -129,14 +130,9 @@ export class KitchenUI {
     this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 412, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
     // touch names the d-pad rather than JK (the arrows it sends move here too)
     this.hint = fixed(
-      scene.add
-        .text(
-          GAME_WIDTH / 2,
-          PANEL_TOP + 450,
-          isTouchDevice() ? "D-PAD: MOVE   Z: COOK   ESC: CLOSE" : "JK: MOVE   Z: COOK   ESC: CLOSE",
-          retroStyle(4, DIM_TEXT),
-        )
-        .setOrigin(0.5),
+      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 450, "", retroStyle(4, DIM_TEXT)), () =>
+        keyHint("JK: MOVE   Z: COOK   ESC: CLOSE", "D-PAD: MOVE   Z: COOK   ESC: CLOSE"),
+      ).setOrigin(0.5),
     );
 
     const kb = scene.input.keyboard!;
@@ -212,7 +208,8 @@ export class KitchenUI {
     Sfx.move();
     // cooking replaces whatever is on the table, so say so
     const now = GameState.meal;
-    this.showMsg(now ? `SWAP ${MEALS[now.key].tag} FOR ${MEALS[key].name}? Z/ESC` : `COOK ${MEALS[key].name}? Z/ESC`, 0);
+    const ask = keyNames("Z/ESC");
+    this.showMsg(now ? `SWAP ${MEALS[now.key].tag} FOR ${MEALS[key].name}? ${ask}` : `COOK ${MEALS[key].name}? ${ask}`, 0);
   }
 
   private serve(): void {

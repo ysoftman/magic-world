@@ -6,7 +6,7 @@ import { HARVEST_MULT, isEventToday } from "../events";
 import { CROPS, type CropDef, type CropKey, cropClock, cropLeft, cropReadyAt, FARM_PLOTS, type FarmPlot, GameState } from "../gameState";
 import { DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
 import { isWet, weatherToday } from "../weather";
-import { isTouchDevice } from "./TouchControls";
+import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized off the widest lines, Press Start 2P at retroStyle(n) = n*4 px a
 // glyph: a night crop's plot row (43 x 20 = 860, "PLOT 1  MOONFLOWER  READY
@@ -215,13 +215,9 @@ export class FarmUI {
     // touch names the d-pad by its own button labels (no J/K/H/L/TAB there);
     // 51 x 16 = 816px (x 232..1048) keeps it between the d-pad (x<=194 on
     // this line) and Z (x>=1084); the keyboard's 55 (880px) keeps 40px inside
-    this.hint = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        PANEL_TOP + PANEL_H - 22,
-        isTouchDevice() ? "^v: PLOT   <>: SEED   Z: PLANT/HARVEST   ESC: CLOSE" : "JK: PLOT   HL/TAB: SEED   Z: PLANT/HARVEST   ESC: CLOSE",
-        retroStyle(4, DIM_TEXT),
-      )
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 22, "", retroStyle(4, DIM_TEXT)), () =>
+      keyHint("JK: PLOT   HL/TAB: SEED   Z: PLANT/HARVEST   ESC: CLOSE", "^v: PLOT   <>: SEED   Z: PLANT/HARVEST   ESC: CLOSE"),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

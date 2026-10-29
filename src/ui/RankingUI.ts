@@ -3,7 +3,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { getRanks, MAX_RANKS } from "../ranking";
-import { hideTouchButtons, isTouchDevice } from "./TouchControls";
+import { bindKeyHint, keyHint } from "./Gamepad";
+import { hideTouchButtons } from "./TouchControls";
 
 // Cells are retroStyle(6) (24px a glyph), headers retroStyle(5) (20px). The
 // ARENA and NG+ columns widened the panel (960 -> 1040), and the ABYSS one
@@ -93,13 +94,9 @@ export class RankingUI {
       );
     }
     // touch hides Z while the board is up (see open()), leaving ESC to close
-    this.footer = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        PANEL_TOP + PANEL_H - 36,
-        isTouchDevice() ? "TOP 10 BY LEVEL   ESC: CLOSE" : "TOP 10 BY LEVEL   ESC/Z: CLOSE",
-        retroStyle(5, "#9f9fd0"),
-      )
+    this.footer = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(5, "#9f9fd0")), () =>
+      keyHint("TOP 10 BY LEVEL   ESC/Z: CLOSE", "TOP 10 BY LEVEL   ESC: CLOSE"),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)

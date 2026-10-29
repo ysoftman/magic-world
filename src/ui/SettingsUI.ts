@@ -3,6 +3,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { BATTLE_SPEEDS, GameState, TEXT_SPEEDS, TIME_SPEEDS } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
 // Eleven retroStyle(6) rows (24px, Press Start 2P measures 1em) from
@@ -125,14 +126,14 @@ export class SettingsUI {
     // The keyboard line (55 x 16 = 880px, x 200..1080, 40px inside the
     // panel's sides) runs under the touch d-pad's up arrow; the touch line is
     // 39 x 16 = 624px (x 328..952), clear of it and of Z. It names taps, not
-    // the d-pad: the title opens SETTINGS too and has no TouchControls
-    this.hint = scene.add
-      .text(
-        GAME_WIDTH / 2,
-        PANEL_TOP + PANEL_H - 36,
-        isTouchDevice() ? "TAP: TOGGLE/APPLY   TAP LEFT/RIGHT: -/+" : "JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE",
-        retroStyle(4, "#8ecbff"),
-      )
+    // the d-pad: the title opens SETTINGS too and has no TouchControls. A
+    // pad's line is 57 (912px, x 184..1096); on a touch screen it leaves out
+    // START (O) for 51 (x 232..1048), between the up arrow and Z.
+    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(4, "#8ecbff")), () =>
+      keyHint("JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE", "TAP: TOGGLE/APPLY   TAP LEFT/RIGHT: -/+", {
+        pad: `JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ${isTouchDevice() ? "ESC" : "ESC/O"}: CLOSE`,
+      }),
+    )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
