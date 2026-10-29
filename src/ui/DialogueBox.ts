@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { BODY_GLYPH_W, bodyStyle, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { hideTouchButtons, isTouchDevice } from "./TouchControls";
 import { TypedText } from "./TypedText";
 
@@ -49,6 +50,10 @@ const TOUCH_CHOICE_X = 288;
 const CHOICE_GUARD_MS = 250;
 const MAX_CHOICES = 3;
 const PICKED_COLOR = "#ffd166";
+// the speaker's plate round its name: 8 a side, 4 on top, none under (see
+// the constructor)
+const NAME_PAD_X = 8;
+const NAME_PAD_TOP = 4;
 
 export class DialogueBox {
   private scene: Phaser.Scene;
@@ -65,7 +70,8 @@ export class DialogueBox {
   private border: Phaser.GameObjects.Rectangle;
   private box: Phaser.GameObjects.Rectangle;
   private text: TypedText;
-  private nameText: Phaser.GameObjects.Text;
+  private namePlate: Phaser.GameObjects.Rectangle;
+  private nameText: PixelText;
   private timer?: Phaser.Time.TimerEvent;
 
   private z: Phaser.Input.Keyboard.Key;
@@ -83,7 +89,7 @@ export class DialogueBox {
   private escPick = 0;
   private choice = 0;
   private choosing = false;
-  private choiceTexts: Phaser.GameObjects.Text[] = [];
+  private choiceTexts: PixelText[] = [];
   private choiceStep = 0;
   private pickQueued: number | null = null;
   private tapQueued: number | null = null;
@@ -103,27 +109,30 @@ export class DialogueBox {
       .setScrollFactor(0)
       .setDepth(201);
     this.text = new TypedText(scene, 48, GAME_HEIGHT - 224, bodyStyle(33, "#f5f5f5"), {
-      glyphW: GLYPH_W,
       wrapWidth: this.charsPerRow * GLYPH_W,
       lineSpacing: LINE_SPACING,
-      rows: ROWS_PER_PAGE,
     })
       .setScrollFactor(0)
       .setDepth(202);
     // On a plate of the box's colour, a tab on the box's top edge: bare, it
     // sat on the map and ran into the name tags behind it (ELDER over
-    // BLACKSMITH). The padding (8 a side, 4 on top) keeps the glyphs at
-    // 48,456 and the plate's foot on the border at y=480.
+    // BLACKSMITH). The plate starts at 40,452 and reaches 8px past the name
+    // either side and 4px over it, so the glyphs sit at 48,456 and the
+    // plate's foot on the border at y=480 (sized to the name in open()).
+    this.namePlate = scene.add
+      .rectangle(40, GAME_HEIGHT - 268, 0, 0, 0x0b0b2b)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(202);
     this.nameText = scene.add
-      .text(40, GAME_HEIGHT - 268, "", retroStyle(6, "#ffd166"))
-      .setBackgroundColor("#0b0b2b")
-      .setPadding(8, 4, 8, 0)
+      .pixelText(40 + NAME_PAD_X, GAME_HEIGHT - 268 + NAME_PAD_TOP, "", retroStyle(6, "#ffd166"))
       .setScrollFactor(0)
       .setDepth(202);
 
     this.border.setVisible(false);
     this.box.setVisible(false);
     this.text.setVisible(false);
+    this.namePlate.setVisible(false);
     this.nameText.setVisible(false);
 
     const kb = scene.input.keyboard!;
@@ -164,7 +173,7 @@ export class DialogueBox {
     const choiceX = this.touch ? TOUCH_CHOICE_X : 48;
     for (let i = 0; i < MAX_CHOICES; i++) {
       const t = scene.add
-        .text(choiceX + i * CHOICE_PITCH, CHOICE_Y, "", retroStyle(8, "#f5f5f5"))
+        .pixelText(choiceX + i * CHOICE_PITCH, CHOICE_Y, "", retroStyle(8, "#f5f5f5"))
         .setScrollFactor(0)
         .setDepth(202)
         .setVisible(false);
@@ -219,6 +228,7 @@ export class DialogueBox {
     this.text.setVisible(true);
     this.nameText.setVisible(name ? true : false);
     this.nameText.setText(name ?? "");
+    this.namePlate.setSize(this.nameText.width + 2 * NAME_PAD_X, this.nameText.height + NAME_PAD_TOP).setVisible(this.nameText.visible);
     hideTouchButtons(this.scene, ["dpad"]);
 
     this.typeLine();
@@ -368,6 +378,7 @@ export class DialogueBox {
     this.border.setVisible(false);
     this.box.setVisible(false);
     this.text.setVisible(false);
+    this.namePlate.setVisible(false);
     this.nameText.setVisible(false);
     hideTouchButtons(this.scene, []);
   }
@@ -381,6 +392,7 @@ export class DialogueBox {
     this.border.destroy();
     this.box.destroy();
     this.text.destroy();
+    this.namePlate.destroy();
     this.nameText.destroy();
     for (const t of this.choiceTexts) t.destroy();
     // keys are shared instances from kb.addKey (same keycode → same object);

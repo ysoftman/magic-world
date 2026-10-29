@@ -58,7 +58,8 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
@@ -280,16 +281,16 @@ export class BattleScene extends Phaser.Scene {
   private msgText!: TypedText;
 
   private menuButtons: MenuButton[] = [];
-  private menuTexts: Phaser.GameObjects.Text[] = [];
+  private menuTexts: PixelText[] = [];
   // vertical tap padding around each menu button: 14px for the single row
   // (short of the hint line at y=568), 8px once there are two rows
   private menuHitPadY = 14;
 
   private inItems = false;
   private itemIndex = 0;
-  private itemTexts: Phaser.GameObjects.Text[] = [];
-  private itemCursor!: Phaser.GameObjects.Text;
-  private itemInfoText!: Phaser.GameObjects.Text;
+  private itemTexts: PixelText[] = [];
+  private itemCursor!: PixelText;
+  private itemInfoText!: PixelText;
 
   private pendingSpell!: Spell;
   private companionSprite?: Phaser.GameObjects.Sprite;
@@ -306,13 +307,13 @@ export class BattleScene extends Phaser.Scene {
   private heroStance!: Stance;
   private enemyStance!: Stance;
   private companionStance?: Stance;
-  private hintText!: Phaser.GameObjects.Text;
+  private hintText!: PixelText;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
-  private playerHpText!: Phaser.GameObjects.Text;
-  private playerMpText!: Phaser.GameObjects.Text;
-  private enemyHpText!: Phaser.GameObjects.Text;
+  private playerHpText!: PixelText;
+  private playerMpText!: PixelText;
+  private enemyHpText!: PixelText;
 
   private running = false;
   private night = false;
@@ -327,7 +328,7 @@ export class BattleScene extends Phaser.Scene {
   // init)
   private rematch = false;
   private combo = 0;
-  private comboText!: Phaser.GameObjects.Text;
+  private comboText!: PixelText;
   // one successful steal per battle; failed attempts don't count against it
   private stolen = false;
   // whether the bestiary had this species before the fight (see init)
@@ -340,7 +341,7 @@ export class BattleScene extends Phaser.Scene {
   // left before it may wind up again (see BOSS_TELLS)
   private charging = false;
   private tellCooldown = 0;
-  private chargeText!: Phaser.GameObjects.Text;
+  private chargeText!: PixelText;
   private wardTurns = 0;
   // companion skill state on the enemy (see companionSkills.ts), which the
   // elemental spells' side effects share: a poison or burn ticking down, a
@@ -351,16 +352,16 @@ export class BattleScene extends Phaser.Scene {
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
-  private dotText!: Phaser.GameObjects.Text;
-  private chillText!: Phaser.GameObjects.Text;
-  private poisonText!: Phaser.GameObjects.Text;
-  private frozenText!: Phaser.GameObjects.Text;
-  private wardText!: Phaser.GameObjects.Text;
+  private dotText!: PixelText;
+  private chillText!: PixelText;
+  private poisonText!: PixelText;
+  private frozenText!: PixelText;
+  private wardText!: PixelText;
   // the meal from HOME this battle is fought on (cooking.ts)
   private meal: { def: MealDef; left: number } | null = null;
   // WELL RESTED from the HOME's FEATHER BEDS (home.ts): WARD up at the start
   private rested = false;
-  private rageText!: Phaser.GameObjects.Text;
+  private rageText!: PixelText;
   // a pale bubble around the hero for as long as WARD holds
   private wardRing!: Phaser.GameObjects.Arc;
 
@@ -500,11 +501,11 @@ export class BattleScene extends Phaser.Scene {
     // MP/HP rows) — at (16,24)/(GAME_WIDTH-16,24) they sat on top of the
     // window borders and the player/enemy names
     if (GameState.streak >= STREAK_MIN) {
-      this.add.text(64, 168, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
+      this.add.pixelText(64, 168, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
     }
 
     // live combo counter, filled in by updateCombo() on every fight/heal turn
-    this.comboText = this.add.text(GAME_WIDTH - 464, 168, "", retroStyle(6, "#fbbf24")).setDepth(120);
+    this.comboText = this.add.pixelText(GAME_WIDTH - 464, 168, "", retroStyle(6, "#fbbf24")).setDepth(120);
 
     // Stacked in the gap between the two stat windows (x 496..784): as one
     // 840px line across the top it ran over both windows and the foe's name.
@@ -513,7 +514,12 @@ export class BattleScene extends Phaser.Scene {
     // payout for a boss, nothing in the ARENA, whose label takes the gap.
     if (this.night && !this.arena) {
       this.add
-        .text(GAME_WIDTH / 2, 40, this.enemy.boss ? "NIGHT\nRICHER LOOT" : "NIGHT\nTOUGHER FOES\nRICHER LOOT", retroStyle(5, "#a5b4fc"))
+        .pixelText(
+          GAME_WIDTH / 2,
+          40,
+          this.enemy.boss ? "NIGHT\nRICHER LOOT" : "NIGHT\nTOUGHER FOES\nRICHER LOOT",
+          retroStyle(5, "#a5b4fc"),
+        )
         .setOrigin(0.5, 0)
         .setAlign("center")
         .setLineSpacing(8)
@@ -524,7 +530,7 @@ export class BattleScene extends Phaser.Scene {
     // note goes outside the ARENA: "ARENA 5/5" is 9 x 24 = 216px, x 532..748
     if (this.arena) {
       this.add
-        .text(GAME_WIDTH / 2, 64, `ARENA ${this.arena.round + 1}/${this.arena.lineup.length}`, retroStyle(6, "#fbbf24"))
+        .pixelText(GAME_WIDTH / 2, 64, `ARENA ${this.arena.round + 1}/${this.arena.lineup.length}`, retroStyle(6, "#fbbf24"))
         .setOrigin(0.5, 0)
         .setDepth(120);
     }
@@ -532,7 +538,7 @@ export class BattleScene extends Phaser.Scene {
     // "ABYSS B999" is 10 x 24 = 240px, x 520..760
     if (this.abyss) {
       this.add
-        .text(GAME_WIDTH / 2, 64, `ABYSS B${this.abyss.floor}`, retroStyle(6, "#c084fc"))
+        .pixelText(GAME_WIDTH / 2, 64, `ABYSS B${this.abyss.floor}`, retroStyle(6, "#c084fc"))
         .setOrigin(0.5, 0)
         .setDepth(120);
     }
@@ -568,19 +574,19 @@ export class BattleScene extends Phaser.Scene {
     this.window(32, 24, 464, 176);
     this.window(GAME_WIDTH - 496, 24, 464, 176);
 
-    this.add.text(64, 40, GameState.player.name, retroStyle(7, "#ffd166")).setOrigin(0, 0);
+    this.add.pixelText(64, 40, GameState.player.name, retroStyle(7, "#ffd166")).setOrigin(0, 0);
     this.playerHpText = this.add
-      .text(64, 88, "HP " + GameState.player.hp + "/" + GameState.effMaxHp(), retroStyle(6, "#ffffff"))
+      .pixelText(64, 88, "HP " + GameState.player.hp + "/" + GameState.effMaxHp(), retroStyle(6, "#ffffff"))
       .setOrigin(0, 0);
     this.playerMpText = this.add
-      .text(64, 136, "MP " + GameState.player.mp + "/" + GameState.player.maxMp, retroStyle(6, "#8ecbff"))
+      .pixelText(64, 136, "MP " + GameState.player.mp + "/" + GameState.player.maxMp, retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0);
 
     this.playerHpBar = this.add.rectangle(64, 124, 176, 16, 0x22c55e).setOrigin(0, 0.5);
 
-    this.add.text(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555")).setOrigin(0, 0);
+    this.add.pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555")).setOrigin(0, 0);
     this.enemyHpText = this.add
-      .text(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
+      .pixelText(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
       .setOrigin(0, 0);
     this.enemyHpBar = this.add.rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444).setOrigin(0, 0.5);
     // The foe's weakness worded and coloured as the bestiary has it
@@ -591,7 +597,7 @@ export class BattleScene extends Phaser.Scene {
     // clear of the status tags' third row (from x=1076).
     const weak = this.enemy.weakness;
     this.add
-      .text(
+      .pixelText(
         GAME_WIDTH - 464,
         140,
         !this.weakKnown ? "WEAK:?" : weak ? `WEAK:${weak.toUpperCase()}` : "WEAK:-",
@@ -601,23 +607,23 @@ export class BattleScene extends Phaser.Scene {
 
     // one size smaller than the HP rows so "HP 999/999" (ends x=304) keeps a
     // gap to "PSN FRZ" (x=336..476) when both statuses are up
-    this.poisonText = this.add.text(0, 90, "PSN", retroStyle(5, "#c084fc")).setOrigin(1, 0);
-    this.frozenText = this.add.text(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0);
-    this.wardText = this.add.text(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0);
+    this.poisonText = this.add.pixelText(0, 90, "PSN", retroStyle(5, "#c084fc")).setOrigin(1, 0);
+    this.frozenText = this.add.pixelText(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0);
+    this.wardText = this.add.pixelText(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0);
     // the meal's tag and battles left, this one counted, on the MP row
     // right-aligned in the window: "MP 999/999" ends at x=304, the longest
     // tag "GRILL 5" (140px) starts at 336
-    if (this.meal) this.add.text(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0);
+    if (this.meal) this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0);
     this.wardRing = this.add
       .circle(this.playerSprite.x, this.playerSprite.y, 64, WARD_COLOR, 0.12)
       .setStrokeStyle(3, WARD_COLOR, 0.8)
       .setVisible(false);
     this.tweens.add({ targets: this.wardRing, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
-    this.rageText = this.add.text(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555")).setOrigin(1, 0).setVisible(false);
-    this.dotText = this.add.text(ENEMY_STATUS_RIGHT, 90, "PSN", retroStyle(5, DOT_COLOR.PSN)).setOrigin(1, 0).setVisible(false);
-    this.chillText = this.add.text(ENEMY_STATUS_RIGHT, 90, "CHL", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setVisible(false);
+    this.rageText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555")).setOrigin(1, 0).setVisible(false);
+    this.dotText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "PSN", retroStyle(5, DOT_COLOR.PSN)).setOrigin(1, 0).setVisible(false);
+    this.chillText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "CHL", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setVisible(false);
     // pulses while a boss winds up, so the warning outlives its message
-    this.chargeText = this.add.text(ENEMY_STATUS_RIGHT, 90, "CHG", retroStyle(5, "#f97316")).setOrigin(1, 0).setVisible(false);
+    this.chargeText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "CHG", retroStyle(5, "#f97316")).setOrigin(1, 0).setVisible(false);
     this.tweens.add({ targets: this.chargeText, alpha: 0.35, duration: 320, yoyo: true, repeat: -1 });
     this.updateEnemyStatus();
     this.updateStatus();
@@ -627,10 +633,8 @@ export class BattleScene extends Phaser.Scene {
     // descenders end at y=697
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92).setStrokeStyle(1, 0xffffff);
     this.msgText = new TypedText(this, 64, GAME_HEIGHT - 104, bodyStyle(33, "#f5f5f5"), {
-      glyphW: BODY_GLYPH_W[33],
       wrapWidth: GAME_WIDTH - 128,
       lineSpacing: 5,
-      rows: 2,
     });
 
     this.menuButtons = [
@@ -649,7 +653,7 @@ export class BattleScene extends Phaser.Scene {
     // DIM_TEXT button was 1.7:1 on the town's daytime field bare. The outline
     // adds 4px to each button.
     this.menuTexts = this.menuButtons.map(() =>
-      this.add.text(0, MENU_Y, "", retroStyle(5, "#ffffff")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5),
+      this.add.pixelText(0, MENU_Y, "", retroStyle(5, "#ffffff")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5),
     );
     this.layoutMenu();
     // a pad press or a key renames the buttons, and their widths change
@@ -660,7 +664,7 @@ export class BattleScene extends Phaser.Scene {
     // outlined like the map's name tags: it sits on the backdrop's field,
     // not a panel (#9f9fd0 on that green is 1.4:1 bare)
     this.hintText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 144, "", retroStyle(4, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, GAME_HEIGHT - 144, "", retroStyle(4, "#9f9fd0"))
       .setStroke("#0b0b2b", 4)
       .setOrigin(0.5)
       .setDepth(30);
@@ -670,7 +674,7 @@ export class BattleScene extends Phaser.Scene {
     for (let i = 0; i < ITEM_SLOTS.length; i++) {
       const slot = ITEM_SLOTS[i];
       const t = this.add
-        .text(
+        .pixelText(
           ITEM_COL_X[i % ITEMS_PER_ROW] + ITEM_TEXT_OFFSET,
           itemY + Math.floor(i / ITEMS_PER_ROW) * 40,
           `${slot.label} x${GameState.inventory[slot.key]}`,
@@ -681,14 +685,18 @@ export class BattleScene extends Phaser.Scene {
         .setVisible(false);
       this.itemTexts.push(t);
     }
-    this.itemCursor = this.add.text(0, itemY, ">", retroStyle(6, "#ffd166")).setStroke("#0b0b2b", 4).setOrigin(0, 0.5).setVisible(false);
+    this.itemCursor = this.add
+      .pixelText(0, itemY, ">", retroStyle(6, "#ffd166"))
+      .setStroke("#0b0b2b", 4)
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     // what the cursor's item does, as the shop and the bag word it
     // (itemInfo.ts). Size 4 is all that fits between the second item row
     // (size 6 at y=528, to 544) and the hint (from 566): y 544..564. The
     // longest, "CANDY: THROW TO CATCH A WEAKENED MONSTER", is 40 glyphs =
     // 640px, x 320..960. Outlined like the hint: it sits on the backdrop.
     this.itemInfoText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 166, "", retroStyle(4, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, GAME_HEIGHT - 166, "", retroStyle(4, "#ffd166"))
       .setStroke("#0b0b2b", 4)
       .setOrigin(0.5)
       .setDepth(30)
@@ -1961,7 +1969,7 @@ export class BattleScene extends Phaser.Scene {
   // (a spell's side effect on the foe passes its own spot); like the damage
   // numbers it stops under the stat windows (POPUP_TOP, see popNumber)
   private flashStatus(label: string, color: string, x = this.playerSprite.x, y = this.playerSprite.y - 80): void {
-    const t = this.add.text(x, y, label, retroStyle(10, color)).setOrigin(0.5).setStroke("#000000", 2);
+    const t = this.add.pixelText(x, y, label, retroStyle(10, color)).setOrigin(0.5).setStroke("#000000", 2);
     const endY = Math.max(t.y - 60, POPUP_TOP + t.height / 2);
     this.tweens.add({ targets: t, y: endY, alpha: 0, duration: this.anim(900, STATUS_POP_MIN_MS), onComplete: () => t.destroy() });
   }
@@ -1997,7 +2005,7 @@ export class BattleScene extends Phaser.Scene {
     );
   }
 
-  private layoutTags(tags: Array<[Phaser.GameObjects.Text, boolean]>, rightEdge: number, minX: number): void {
+  private layoutTags(tags: Array<[PixelText, boolean]>, rightEdge: number, minX: number): void {
     let right = rightEdge;
     let row = 0;
     for (const [t, on] of tags) {
@@ -2256,7 +2264,7 @@ export class BattleScene extends Phaser.Scene {
   // art is (AGENTS.md), since it can cross the fighter.
   private popNumber(x: number, y: number, text: string, size: number, color: string, rise: number): void {
     const t = this.add
-      .text(x + 40, 0, text, retroStyle(size, color))
+      .pixelText(x + 40, 0, text, retroStyle(size, color))
       .setOrigin(0.5)
       .setStroke("#1a1028", 4)
       // over an effect sheet, even one started after it
