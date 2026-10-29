@@ -4,6 +4,7 @@ import { arenaOpen } from "./arena";
 import { MATERIAL_KEYS } from "./drops";
 import { GameState } from "./gameState";
 import { showToast } from "./pixelart";
+import { keyNames } from "./ui/Gamepad";
 import { isWet, weatherToday } from "./weather";
 
 // One-time tips: the first time something opens up (or a kind of day first
@@ -16,7 +17,9 @@ import { isWet, weatherToday } from "./weather";
 // becomes true. Materials drop in battle, so that tip waits for the walk back.
 // Each line ends in "!" so the toast queue treats it as news (pixelart.ts
 // supersedes()) and never lets a tip replace another. At retroStyle(5),
-// 20px a glyph, the longest (44 glyphs, 880px) sits at x 200..1080.
+// 20px a glyph, the longest (44 glyphs, 880px) sits at x 200..1080. A tip
+// naming a key reads it when it shows (a getter), so with a pad in use it
+// names the button: "PRESS LT ON THE TITLE!" (41 glyphs), "AT HOME (A)!".
 // Town events need no row: TownScene already announces each event day.
 export type TipPlace = "town" | "snow";
 
@@ -32,7 +35,14 @@ export const UNLOCK_TIPS: UnlockTip[] = [
   { id: "forest", place: "town", text: "THE FOREST GATE IS OPEN!", when: () => GameState.quest.bossDefeated },
   { id: "snow", place: "town", text: "THE SNOW PASS IS OPEN!", when: () => GameState.quest.forestBoss },
   { id: "volcano", place: "town", text: "THE VOLCANO IS OPEN!", when: () => GameState.quest.snowBoss },
-  { id: "ngplus", place: "town", text: "NEW GAME+ IS OPEN: PRESS P ON THE TITLE!", when: () => GameState.quest.volcanoBoss },
+  {
+    id: "ngplus",
+    place: "town",
+    get text() {
+      return `NEW GAME+ IS OPEN: PRESS ${keyNames("P", "title")} ON THE TITLE!`;
+    },
+    when: () => GameState.quest.volcanoBoss,
+  },
   { id: "abyss", place: "town", text: "THE ABYSS OPENS DEEP IN THE CAVE!", when: () => abyssOpen(GameState.quest, GameState.ngPlus) },
   {
     id: "material",
@@ -55,7 +65,9 @@ export const UNLOCK_TIPS: UnlockTip[] = [
   {
     id: "pantry",
     place: "town",
-    text: "YOU HAVE FOOD: COOK IT AT HOME (Z)!",
+    get text() {
+      return `YOU HAVE FOOD: COOK IT AT HOME (${keyNames("Z")})!`;
+    },
     when: () => !GameState.meal && Object.values(GameState.pantry).some((n) => n > 0),
   },
   { id: "rain", place: "town", text: "RAINY DAY: FISH BITE FASTER, CROPS PAY MORE!", when: () => isWet(weatherToday("town")) },
