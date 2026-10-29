@@ -862,6 +862,14 @@ export const GameState = {
     // voiding a reward the player already earned just because they didn't
     // walk back to the board before the day rolled over
     if (this.bounty && !this.bounty.claimed && this.bounty.have >= this.bounty.need) {
+      // unless it won't all fit under MAX_GOLD: gainGold() credits only what
+      // fits, so a purse the board refused (TownScene) lost the rest here. It
+      // stays up as today's instead, for the board to pay whole once there's
+      // room; BOUNTY HUNTER counts it then
+      if (this.gold + this.bounty.reward > MAX_GOLD) {
+        this.bounty.day = econDay();
+        return;
+      }
       this.gainGold(this.bounty.reward);
     }
     // ...and a finished bounty, claimed at the board or paid out here, goes
