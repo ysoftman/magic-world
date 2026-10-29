@@ -45,6 +45,7 @@ import {
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { objectiveLine } from "../objective";
 import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import {
   addExitArrow,
   addRoamer,
@@ -234,7 +235,7 @@ export class TownScene extends Phaser.Scene {
   // the workplaces' lamps, lit once the night overlay exists
   private workplaceLights: Array<{ landmark: string; light: NightLight }> = [];
   // the name tags that fade with the hero's distance (NPC_TAG_NEAR)
-  private npcTags: Array<{ tag: Phaser.GameObjects.Text; sprite: Phaser.GameObjects.Sprite }> = [];
+  private npcTags: Array<{ tag: PixelText; sprite: Phaser.GameObjects.Sprite }> = [];
   private villagers!: Villagers;
   private level: number[][] = [];
   private editorQueued = false;
@@ -250,9 +251,9 @@ export class TownScene extends Phaser.Scene {
   private encounterCooldown = 0;
   private night!: NightOverlay;
   private touch?: TouchControls;
-  private homeLabel!: Phaser.GameObjects.Text;
+  private homeLabel!: PixelText;
   private homeBubble!: Phaser.GameObjects.Container;
-  private homeBubbleText!: Phaser.GameObjects.Text;
+  private homeBubbleText!: PixelText;
   // the bubble box's height (buildHomeBubble), for homeBubbleY
   private homeBubbleH = 0;
   private bubbleVisible = false;
@@ -379,7 +380,7 @@ export class TownScene extends Phaser.Scene {
     this.homeLabel = this.track(
       "HOUSE_POS",
       this.add
-        .text(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - 80, "HOME", retroStyle(5, "#9f9fd0"))
+        .pixelText(HOUSE_POS.x + TILE, HOUSE_POS.y + TILE - 80, "HOME", retroStyle(5, "#9f9fd0"))
         .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11),
@@ -403,7 +404,7 @@ export class TownScene extends Phaser.Scene {
     const caveTag = this.track(
       "CAVE_POS",
       this.add
-        .text(CAVE_POS.x, this.labelY(CAVE_POS.y, TILE * 1.25 + EXIT_LABEL_GAP), "CAVE", retroStyle(6, EXIT_LABEL_COLOR))
+        .pixelText(CAVE_POS.x, this.labelY(CAVE_POS.y, TILE * 1.25 + EXIT_LABEL_GAP), "CAVE", retroStyle(6, EXIT_LABEL_COLOR))
         .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11),
@@ -807,7 +808,7 @@ export class TownScene extends Phaser.Scene {
         // long one ran into it ("MARKET DAY! SHOP PRICES ..." over "MAP
         // EDITED"). Clear of the touch menu strip (x >= 1222), outlined like
         // the other text over the map.
-        .text(GAME_WIDTH - 70, STATUS_HUD_TOAST_Y + 60, "MAP EDITED - F2 THEN R TO RESTORE", retroStyle(4, "#ffd166"))
+        .pixelText(GAME_WIDTH - 70, STATUS_HUD_TOAST_Y + 60, "MAP EDITED - F2 THEN R TO RESTORE", retroStyle(4, "#ffd166"))
         .setStroke("#1a1028", 4)
         .setOrigin(1, 0)
         .setScrollFactor(0)
@@ -892,7 +893,7 @@ export class TownScene extends Phaser.Scene {
     const tag = this.track(
       landmark,
       this.add
-        .text(at.x, at.y, label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
+        .pixelText(at.x, at.y, label, retroStyle(5, labelColor ?? `#${tint.toString(16).padStart(6, "0")}`))
         .setStroke("#1a1028", 4)
         .setOrigin(0.5)
         .setDepth(11),
@@ -968,7 +969,7 @@ export class TownScene extends Phaser.Scene {
     // pale as the field's, and the bare colours sank into it (contrast ~1.3)
     const tag = this.track(
       landmark,
-      this.add.text(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, color)).setStroke("#1a1028", 4).setOrigin(0.5).setDepth(11),
+      this.add.pixelText(pos.x, this.labelY(pos.y, 48), label, retroStyle(5, color)).setStroke("#1a1028", 4).setOrigin(0.5).setDepth(11),
     );
     this.fixedLabels.push(rectOf(tag));
   }
@@ -1000,7 +1001,11 @@ export class TownScene extends Phaser.Scene {
   }
 
   private buildHomeBubble(): Phaser.GameObjects.Container {
-    const text = this.add.text(0, 0, this.homeBubbleLines(), retroStyle(5, "#f5f5f5")).setOrigin(0.5).setAlign("center").setLineSpacing(4);
+    const text = this.add
+      .pixelText(0, 0, this.homeBubbleLines(), retroStyle(5, "#f5f5f5"))
+      .setOrigin(0.5)
+      .setAlign("center")
+      .setLineSpacing(4);
     this.homeBubbleText = text;
     const pad = 20;
     const w = text.width + pad * 2;
@@ -1311,7 +1316,7 @@ export class TownScene extends Phaser.Scene {
 
   private flashNote(text: string): void {
     const n = this.add
-      .text(this.player.x, this.player.y - 52, text, retroStyle(6, "#ffd166"))
+      .pixelText(this.player.x, this.player.y - 52, text, retroStyle(6, "#ffd166"))
       .setOrigin(0.5)
       .setDepth(120);
     this.tweens.add({
@@ -1610,7 +1615,7 @@ export class TownScene extends Phaser.Scene {
 
   private restedNote(): void {
     const note = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "RESTED! HP/MP FULL", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, GAME_HEIGHT / 2, "RESTED! HP/MP FULL", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(120);
