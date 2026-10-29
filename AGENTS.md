@@ -330,6 +330,13 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   "c'd" 가 "CC''D" 로 들어갔다. `src/keyboardQueueFix.ts` 를 main.ts 에서 게임 생성 전에 불러
   플러그인마다 이벤트를 한 번만 처리하게 보정한다. Phaser 를 올리면 이 보정이 아직 필요한지 다시
   확인한다(window 에 keydown 3개를 한 번에 보내 씬의 `keydown` 리스너가 각 1회만 받는지).
+- Phaser 4.2.1 RenderTexture GL 텍스처 누수: `TextureSource.init` 이 렌더 텍스처 소스에 제 크기의
+  GL 텍스처를 만들고, `DynamicTexture` 생성자가 그 자리에 DrawingContext 의 텍스처를 넣으면서 첫
+  텍스처를 지우지 않아 RenderTexture 하나마다 텍스처 하나가 영영 남았다. 실제 사례: 마을·화산
+  create() 마다 NightOverlay 라이트맵(1280x720)이 3.7MB 씩 쌓였다(마을 진입 6번에 15→20개, JS heap
+  에는 안 보임). `src/renderTextureLeakFix.ts` 를 main.ts 에서 게임 생성 전에 불러 init 이 만든
+  텍스처를 바로 지운다. Phaser 를 올리면 이 보정 없이 마을을 몇 번 restart 해 `renderer.glTextureWrappers`
+  의 1280x720 개수가 그대로인지 본다.
 - playwright 에서 드롭·포획을 강제하려고 `Math.random` 을 상수 함수(`() => 0.01`)로 덮으면,
   Phaser 가 텍스처 키 UUID 를 `Math.random` 으로 만들어서 모두
   `00000000-0000-4000-8000-000000000000` 이 된다. 그 결과 "Texture key already in use" 콘솔

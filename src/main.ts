@@ -13,6 +13,7 @@ import { GameState } from "./gameState";
 import { installKeyboardQueueFix } from "./keyboardQueueFix";
 import { loadMapOverride } from "./levels";
 import { watchTextResolution } from "./pixelart";
+import { installRenderTextureLeakFix } from "./renderTextureLeakFix";
 import { AbyssScene } from "./scenes/AbyssScene";
 import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
@@ -78,6 +79,7 @@ Promise.race([fontReady, timeout]).finally(() => {
   GameState.loadSettings();
   loadMapOverride();
   installKeyboardQueueFix();
+  installRenderTextureLeakFix();
   const game = new Phaser.Game(config);
   watchTextResolution(game);
   startGamepad(game);
