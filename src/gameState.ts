@@ -924,8 +924,12 @@ export const GameState = {
     this.setEquipped(slot, key);
     // preserve the HP the amulet's +maxHp bonus grants, without letting
     // repeated equip/unequip toggles net-heal (the bonus isn't tracked
-    // separately from maxHp, so clamping alone would keep adding it back)
-    this.player.hp = Math.min(this.effMaxHp(), this.player.hp + (this.effMaxHp() - before));
+    // separately from maxHp, so clamping alone would keep adding it back).
+    // At most HP - 1, as much as an unequip can take back: that stops at
+    // 1 HP, so at 3 HP a LIFE CHARM went off to 1 and on to 21, again and again.
+    // A swap to a smaller bonus takes HP as an unequip does, down to 1.
+    const gain = Math.min(this.effMaxHp() - before, this.player.hp - 1);
+    this.player.hp = Math.max(1, Math.min(this.effMaxHp(), this.player.hp + gain));
     return "Equipped!";
   },
   setEquipped(slot: EquipSlot, key: EquipmentKey): void {
