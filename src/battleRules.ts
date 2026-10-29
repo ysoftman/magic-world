@@ -1,4 +1,5 @@
 import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale } from "./abyss";
+import { ARENA_GOLD_SHARE } from "./arena";
 import type { GameState } from "./gameState";
 import { type Element, ENEMIES, type EnemyDef } from "./monsters";
 
@@ -305,11 +306,13 @@ export const regenAmount = (hp: number, curHp: number): number => Math.min(hp - 
  * hardens an ordinary foe and pays x1.5, a boss keeping its daytime HP and
  * ATK; then NEW GAME+'s scale, in the ABYSS times its floor's depth
  * (abyss.ts), HP capped at ENEMY_HP_MAX; a GUARDIAN pays its gold share.
- * `night` is isNight() && not the ABYSS, as BattleScene works it out.
+ * `night` is isNight() && not the ABYSS, as BattleScene works it out. A
+ * field boss's `rematch` pays the gold its ARENA bout does: the ARENA's
+ * share, with no night x1.5 (its EXP keeps the night's).
  */
 export function scaleEnemy(
   def: EnemyDef,
-  opts: { night: boolean; arena: boolean; abyss: AbyssBout | null; ng: { stat: number; loot: number } },
+  opts: { night: boolean; arena: boolean; abyss: AbyssBout | null; ng: { stat: number; loot: number }; rematch?: boolean },
 ): EnemyDef & { curHp: number } {
   const enemy = { ...def, curHp: def.hp };
   if (opts.night && !opts.arena) {
@@ -318,7 +321,7 @@ export function scaleEnemy(
       enemy.curHp = enemy.hp;
       enemy.atk = Math.round(def.atk * NIGHT_STAT_MULT);
     }
-    enemy.gold = Math.round(def.gold * NIGHT_LOOT_MULT);
+    if (!opts.rematch) enemy.gold = Math.round(def.gold * NIGHT_LOOT_MULT);
     enemy.exp = Math.round(def.exp * NIGHT_LOOT_MULT);
   }
   const ng = opts.abyss ? abyssScale(opts.abyss.floor, opts.ng) : opts.ng;
@@ -328,5 +331,6 @@ export function scaleEnemy(
   enemy.exp = Math.round(enemy.exp * ng.loot);
   enemy.gold = Math.round(enemy.gold * ng.loot);
   if (opts.abyss?.guardian) enemy.gold = Math.round(enemy.gold * ABYSS_GUARDIAN_GOLD_SHARE);
+  if (opts.rematch) enemy.gold = Math.round(enemy.gold * ARENA_GOLD_SHARE);
   return enemy;
 }

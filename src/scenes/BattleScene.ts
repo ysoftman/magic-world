@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { type AbyssBout, abyssDropMult } from "../abyss";
-import { ARENA_CLEAR_BONUS, ARENA_GOLD_SHARE, ARENA_RECOVER_PCT, type ArenaRun } from "../arena";
+import { ARENA_BOSSES, ARENA_CLEAR_BONUS, ARENA_GOLD_SHARE, ARENA_RECOVER_PCT, type ArenaRun } from "../arena";
 import { BATTLE_THEME, BOSS_THEME, FOREST_BATTLE_THEME, Sfx, SNOW_BATTLE_THEME, VOLCANO_BATTLE_THEME } from "../audio";
 import {
   BOSS_LOOT,
@@ -321,6 +321,8 @@ export class BattleScene extends Phaser.Scene {
   // set for a fight down in the ABYSS (see abyss.ts): its floor, and whether
   // the foe is that floor's GUARDIAN
   private abyss: AbyssBout | null = null;
+  // a field boss fought again after its first kill (see init)
+  private rematch = false;
   private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
   // one successful steal per battle; failed attempts don't count against it
@@ -422,9 +424,27 @@ export class BattleScene extends Phaser.Scene {
     // the floor's depth on top of that (abyss.ts abyssScale, capped). HP stops
     // at ENEMY_HP_MAX, which only the deep ABYSS ever reaches. A GUARDIAN pays
     // a cut of its gold, as an ARENA bout does: its first kill already paid
-    // in full (abyss.ts). The arithmetic is battleRules.scaleEnemy's.
+    // in full (abyss.ts). So does a field boss met again once its quest flag
+    // is set (the ARENA's own lineup check, read before this fight's victory
+    // sets it, and cleared by NEW GAME+ so a cycle's first kill pays in
+    // full). Its field raises it on every visit and the hero comes back from
+    // the fight beside it, so a full purse a kill was a farm: the FLAME
+    // DRAKE's 1,260 G by day on an 8+ streak, 1,890 by night, one kill every
+    // ~30s (a Lv30 hero in MYTHRIL with the WOLF fells it in five rounds,
+    // ~14s clicked through as fast as the text allows). It pays what its
+    // ARENA bout does instead, no night bonus, win-streak bonus or PUMPKIN
+    // PIE, and no sure HI-POTION; its EXP and materials stay. That is 175 G,
+    // ~21k G an hour, near the ARENA's 18-20k (arena.ts). The arithmetic is
+    // battleRules.scaleEnemy's.
     this.night = isNight() && !this.abyss;
-    this.enemy = scaleEnemy(def, { night: this.night, arena: !!this.arena, abyss: this.abyss, ng: GameState.enemyScale() });
+    this.rematch = !this.arena && !this.abyss && !!def.boss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
+    this.enemy = scaleEnemy(def, {
+      night: this.night,
+      arena: !!this.arena,
+      abyss: this.abyss,
+      ng: GameState.enemyScale(),
+      rematch: this.rematch,
+    });
     const from = data?.from;
     this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" || from === "Volcano" || from === "Abyss" ? from : "Town";
     // read before this fight puts the species in the bestiary, below: the
@@ -2306,11 +2326,13 @@ export class BattleScene extends Phaser.Scene {
     if (!caught) {
       GameState.streak += 1;
       // streak bonus rewards pushing on without fleeing; capped so a long run
-      // can't outpace the boss/chest economy
-      const streakPct = GameState.streak >= STREAK_MIN ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
+      // can't outpace the boss/chest economy; a boss rematch pays neither
+      // bonus, as its ARENA bout doesn't (see init)
+      const streakPct = GameState.streak >= STREAK_MIN && !this.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
       const streakBonus = Math.floor(this.enemy.gold * streakPct);
       // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
-      const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + (this.meal?.def.effect.gold ?? 0))));
+      const mealGold = this.rematch ? 0 : (this.meal?.def.effect.gold ?? 0);
+      const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + mealGold)));
       GameState.battles += 1;
       // nothing fought in the ABYSS counts toward a quest, the bounty or a
       // boss's flag (abyss.ts)
@@ -2337,15 +2359,17 @@ export class BattleScene extends Phaser.Scene {
         this.coinBurst.explode(10);
         await this.say(`${GameState.streak} WIN STREAK! +${streakBonus} bonus gold!`);
       }
-      // a boss always leaves a HI-POTION; anything else rolls FIELD_LOOT
+      // a boss's first kill always leaves a HI-POTION; anything else, a
+      // rematch too, rolls FIELD_LOOT
       const roll = Math.random();
       let edge = 0;
-      const loot = this.enemy.boss
-        ? BOSS_LOOT
-        : FIELD_LOOT.find((l) => {
-            edge += l.chance;
-            return roll < edge;
-          });
+      const loot =
+        this.enemy.boss && !this.rematch
+          ? BOSS_LOOT
+          : FIELD_LOOT.find((l) => {
+              edge += l.chance;
+              return roll < edge;
+            });
       if (loot) GameState.inventory[loot.key] += 1;
       // monster materials for the BLACKSMITH (drops.ts), more of them deep in
       // the ABYSS (abyss.ts, at most x3); the ARENA returned above
