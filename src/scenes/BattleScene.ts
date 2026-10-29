@@ -2683,8 +2683,9 @@ export class BattleScene extends Phaser.Scene {
   private static readonly ADVANCE_KEYS = ["Z", "A", "E", "D", "S", "ESC", "SPACE", ...SPELLS.map((s) => s.name[0])];
 
   private awaitAdvance(resolve: () => void): void {
-    // a tap advances too (below), and a touch screen has no Z
-    bindKeyHint(this.hintText, () => keyHint("Z:CONTINUE", "TAP:CONTINUE", { table: "battle" }));
+    // a tap advances too (below), and a touch screen has no Z. "MENU KEYS"
+    // says the A:FIGHT, F:FIRE ... letters work too, so mashing them is fine
+    bindKeyHint(this.hintText, () => keyHint("Z/MENU KEYS:CONTINUE", "TAP:CONTINUE", { table: "battle", pad: "Z:CONTINUE" }));
     const done = () => {
       for (const k of BattleScene.ADVANCE_KEYS) this.input.keyboard?.removeListener(`keydown-${k}`, done);
       this.input.off("pointerdown", done);
