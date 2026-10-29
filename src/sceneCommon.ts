@@ -673,18 +673,21 @@ export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" 
  * run faded out would otherwise act on this run's first frame. The scene's
  * keys go at its shutdown, these listeners with them.
  *
- * A repeat keydown (a key held through the scene switch reaches the fresh Key
- * as one) is dropped, but on S and M, which never checked, and on the town's I
- * (`repeatI`). Built before the scene's TouchControls, so touch gets a button
- * for each of these its MENU has. `toastY` is the scene's toast line (the
- * town's sits under the HUD, the fields' lower).
+ * A repeat keydown is dropped, but on S and M, which never checked. Phaser
+ * sends a Key's DOWN for the first keydown of a press only, so a repeat here
+ * is a key held through the scene switch, and would act on the new scene's
+ * first frame. The town's I took one too, from before the check (no reason
+ * kept): an I held through a field's exit or a fight's end opened the bag on
+ * arrival in town, and nowhere else. Built before the scene's TouchControls,
+ * so touch gets a button for each of these its MENU has. `toastY` is the
+ * scene's toast line (the town's sits under the HUD, the fields' lower).
  */
 export class FieldKeys {
   private readonly queued = new Set<FieldKey>();
   private readonly scene: Phaser.Scene;
   private readonly toastY: number;
 
-  constructor(scene: Phaser.Scene, { toastY = FIELD_TOAST_Y, repeatI = false }: { toastY?: number; repeatI?: boolean } = {}) {
+  constructor(scene: Phaser.Scene, { toastY = FIELD_TOAST_Y }: { toastY?: number } = {}) {
     this.scene = scene;
     this.toastY = toastY;
     const kb = scene.input.keyboard!;
@@ -695,11 +698,11 @@ export class FieldKeys {
         if (pressed) this.queued.add(pressed);
       });
     };
-    const once = (code: number, key: FieldKey, repeats = false): void => on(code, (e) => (repeats || !e.repeat ? key : null));
+    const once = (code: number, key: FieldKey): void => on(code, (e) => (e.repeat ? null : key));
     on(K.S, (e) => (e.ctrlKey ? "CTRL+S" : "S"));
     on(K.M, () => "M");
     once(K.T, "T");
-    once(K.I, "I", repeatI);
+    once(K.I, "I");
     once(K.B, "B");
     once(K.A, "A");
     once(K.U, "U");

@@ -725,8 +725,7 @@ export class TownScene extends Phaser.Scene {
     this.keySpace.on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
       if (!e.repeat) this.zQueued = true;
     });
-    // the town's I takes a repeat keydown too, as it always did
-    this.fieldKeys = new FieldKeys(this, { toastY: STATUS_HUD_TOAST_Y, repeatI: true });
+    this.fieldKeys = new FieldKeys(this, { toastY: STATUS_HUD_TOAST_Y });
     // CTRL+G, +100 gold: a dev server's test key only. A build leaves it out
     // (scripts/build.ts sets NODE_ENV to production), or anyone could buy
     // their way up the RANK BOARD and into TYCOON.
