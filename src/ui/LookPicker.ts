@@ -3,6 +3,7 @@ import { earnedCount, lookNeeds, lookUnlocked } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { HERO_LOOKS } from "../scenes/BootScene";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
@@ -47,9 +48,9 @@ export class LookPicker {
   private root: Phaser.GameObjects.Container;
   private frames: Phaser.GameObjects.Rectangle[] = [];
   private heroes: Phaser.GameObjects.Image[] = [];
-  private names: Phaser.GameObjects.Text[] = [];
-  private needs: Phaser.GameObjects.Text[] = [];
-  private detail: Phaser.GameObjects.Text;
+  private names: PixelText[] = [];
+  private needs: PixelText[] = [];
+  private detail: PixelText;
   private active = false;
   private index = 0;
   private done: (look: number | null) => void = () => {};
@@ -71,13 +72,13 @@ export class LookPicker {
       .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
       .setStrokeStyle(2, 0xffffff)
       .setInteractive();
-    this.detail = scene.add.text(GAME_WIDTH / 2, DETAIL_Y, "", retroStyle(4, PICKED)).setOrigin(0.5);
-    const children: Array<Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text | Phaser.GameObjects.Image> = [
+    this.detail = scene.add.pixelText(GAME_WIDTH / 2, DETAIL_Y, "", retroStyle(4, PICKED)).setOrigin(0.5);
+    const children: Array<Phaser.GameObjects.Rectangle | PixelText | Phaser.GameObjects.Image> = [
       dim,
       panel,
-      scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "CHOOSE YOUR LOOK", retroStyle(8, PICKED)).setOrigin(0.5),
+      scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "CHOOSE YOUR LOOK", retroStyle(8, PICKED)).setOrigin(0.5),
       this.detail,
-      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
+      bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
     ];
     HERO_LOOKS.forEach((look, i) => {
       const frame = scene.add.rectangle(lookX(i), lookY(i), FRAME_W, FRAME_H, 0x000000, 0).setInteractive({ useHandCursor: true });
@@ -86,9 +87,9 @@ export class LookPicker {
         this.confirmQueued = true;
       });
       const hero = scene.add.image(lookX(i), lookY(i) - 6, `hero-look-${i}`).setScale(2);
-      const name = scene.add.text(lookX(i), lookY(i) + NAME_DY, look.name, retroStyle(5, "#f5f5f5")).setOrigin(0.5);
+      const name = scene.add.pixelText(lookX(i), lookY(i) + NAME_DY, look.name, retroStyle(5, "#f5f5f5")).setOrigin(0.5);
       const need = scene.add
-        .text(lookX(i), lookY(i) - 6, String(lookNeeds(i)), retroStyle(8, PICKED))
+        .pixelText(lookX(i), lookY(i) - 6, String(lookNeeds(i)), retroStyle(8, PICKED))
         .setStroke("#0b0b2b", 4)
         .setOrigin(0.5);
       this.frames.push(frame);

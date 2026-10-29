@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
 // The hero's name at NEW GAME, in the game's own panel: window.prompt put a
@@ -33,7 +34,7 @@ const CELL_H = 48;
 const GRID_X = GAME_WIDTH / 2 - (COLS * CELL_W) / 2;
 const PICKED = "#ffd166";
 // the plate under the untouched default, as a prompt's preselected text sat
-const SELECTED_BG = "#3b4a75";
+const SELECTED_BG = 0x3b4a75;
 
 // What a keyboard may type: printable ASCII, as the prompt took it (upper
 // cased). Anything past it (an IME's hangul, an emoji) is dropped: the
@@ -83,11 +84,13 @@ const HINT = (): string =>
 
 export class NameEntry {
   private root: Phaser.GameObjects.Container;
-  private nameText: Phaser.GameObjects.Text;
-  private slots: Phaser.GameObjects.Text;
-  private caret: Phaser.GameObjects.Text;
+  private nameText: PixelText;
+  // the name's box, shown while the default stands selected
+  private nameBack: Phaser.GameObjects.Rectangle;
+  private slots: PixelText;
+  private caret: PixelText;
   private cellBoxes: Phaser.GameObjects.Rectangle[] = [];
-  private cellTexts: Phaser.GameObjects.Text[] = [];
+  private cellTexts: PixelText[] = [];
   private active = false;
   private name = DEFAULT_NAME;
   // the default stands selected until the first edit replaces it, as a
@@ -112,18 +115,20 @@ export class NameEntry {
       .setInteractive();
     // an underscore only under a slot still empty: under every glyph it read
     // as part of it (a T over one looked like an I, a space like a "_")
-    this.slots = scene.add.text(NAME_X, NAME_Y, "", retroStyle(8, DIM_TEXT)).setOrigin(0, 0.5);
-    this.nameText = scene.add.text(NAME_X, NAME_Y, "", retroStyle(8, "#f5f5f5")).setOrigin(0, 0.5);
-    this.caret = scene.add.text(NAME_X, NAME_Y, "_", retroStyle(8, PICKED)).setOrigin(0, 0.5);
+    this.slots = scene.add.pixelText(NAME_X, NAME_Y, "", retroStyle(8, DIM_TEXT)).setOrigin(0, 0.5);
+    this.nameText = scene.add.pixelText(NAME_X, NAME_Y, "", retroStyle(8, "#f5f5f5")).setOrigin(0, 0.5);
+    this.nameBack = scene.add.rectangle(NAME_X, NAME_Y, 0, 0, SELECTED_BG).setOrigin(0, 0.5);
+    this.caret = scene.add.pixelText(NAME_X, NAME_Y, "_", retroStyle(8, PICKED)).setOrigin(0, 0.5);
     scene.tweens.add({ targets: this.caret, alpha: 0.2, duration: 400, yoyo: true, repeat: -1 });
-    const children: Phaser.GameObjects.GameObject[] = [
+    const children: Array<Phaser.GameObjects.Rectangle | PixelText> = [
       dim,
       panel,
-      scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "YOUR NAME", retroStyle(8, PICKED)).setOrigin(0.5),
+      scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "YOUR NAME", retroStyle(8, PICKED)).setOrigin(0.5),
       this.slots,
+      this.nameBack,
       this.nameText,
       this.caret,
-      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
+      bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 28, "", retroStyle(4, "#8ecbff")), HINT).setOrigin(0.5),
     ];
     for (const cell of CELLS) {
       const box = scene.add
@@ -134,12 +139,12 @@ export class NameEntry {
         this.col = cell.col;
         this.queue.push({ kind: "pick" });
       });
-      const text = scene.add.text(cellX(cell), cellY(cell), cell.label, retroStyle(6, "#f5f5f5")).setOrigin(0.5);
+      const text = scene.add.pixelText(cellX(cell), cellY(cell), cell.label, retroStyle(6, "#f5f5f5")).setOrigin(0.5);
       this.cellBoxes.push(box);
       this.cellTexts.push(text);
       children.push(box, text);
     }
-    for (const c of children) (c as Phaser.GameObjects.Text).setScrollFactor(0);
+    for (const c of children) c.setScrollFactor(0);
     this.root = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(160).setVisible(false);
 
     scene.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
@@ -255,7 +260,8 @@ export class NameEntry {
   }
 
   private render(): void {
-    this.nameText.setText(this.name).setBackgroundColor(this.fresh ? SELECTED_BG : "");
+    this.nameText.setText(this.name);
+    this.nameBack.setSize(this.nameText.width, this.nameText.height).setVisible(this.fresh);
     this.slots.setText(" ".repeat(this.name.length) + "_".repeat(NAME_MAX - this.name.length));
     // on the slot the next glyph goes to; gone while the default is selected
     // (the next glyph replaces it) and once all twelve are full
