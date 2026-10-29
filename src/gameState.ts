@@ -490,12 +490,15 @@ function dropSlot(slot: number): boolean {
 }
 
 const saveListeners: Array<() => void> = [];
-const saveFailListeners: Array<() => void> = [];
+// "full": the quota ran out; "blocked": storage is off for the site (site
+// data blocked), where the browser throws a SecurityError instead
+export type SaveFailure = "full" | "blocked";
+const saveFailListeners: Array<(why: SaveFailure) => void> = [];
 
 // GameState.save() hit a full (or blocked) storage: the game carries on with
-// what's in memory, and whoever listens tells the player. Returns an
+// what's in memory, and whoever listens tells the player which. Returns an
 // unsubscribe function, like onSaved().
-export function onSaveFailed(callback: () => void): () => void {
+export function onSaveFailed(callback: (why: SaveFailure) => void): () => void {
   saveFailListeners.push(callback);
   return () => {
     const i = saveFailListeners.indexOf(callback);
@@ -1196,9 +1199,12 @@ export const GameState = {
           heroLook: this.heroLook,
         }),
       );
-    } catch {
+    } catch (e) {
+      // QuotaExceededError (Firefox once named it NS_ERROR_DOM_QUOTA_REACHED);
+      // anything else, a SecurityError or no localStorage at all, is blocked
+      const full = e instanceof DOMException && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED");
       saveFailListeners.forEach((cb) => {
-        cb();
+        cb(full ? "full" : "blocked");
       });
       return false;
     }

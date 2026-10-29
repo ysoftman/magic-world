@@ -182,10 +182,12 @@ export class TitleScene extends Phaser.Scene {
     if (!saveFailHooked) {
       saveFailHooked = true;
       const game = this.game;
-      onSaveFailed(() => {
+      // a status line, no "!", so it shows over a panel at once; the longer,
+      // "SAVE FAILED: STORAGE BLOCKED", is 28 x 20 = 560px
+      onSaveFailed((why) => {
         const up = game.scene.getScenes(true);
         const top = up[up.length - 1];
-        if (top) showToast(top, "SAVE FAILED: STORAGE FULL");
+        if (top) showToast(top, why === "full" ? "SAVE FAILED: STORAGE FULL" : "SAVE FAILED: STORAGE BLOCKED");
       });
     }
 
