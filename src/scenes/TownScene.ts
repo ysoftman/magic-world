@@ -77,6 +77,7 @@ import { DialogueBox } from "../ui/DialogueBox";
 import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
+import { keyNames, usingPad } from "../ui/Gamepad";
 import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
 import { HomeUI } from "../ui/HomeUI";
@@ -987,10 +988,13 @@ export class TownScene extends Phaser.Scene {
   // retroStyle(5) (20px a glyph) "Z: REST, COOK, BUILD" is the widest line
   // either way (400px; "HOME  TAP: NEW LOOK" 380, "SLEEP UNTIL MORNING" 380,
   // "SLEEP AFTER 20:00" 340), so the box sized once below fits every swap.
+  // With a pad in use the lines name its buttons ("A: REST, COOK, BUILD", as
+  // wide), and the first is HOME alone: no button sends C. updateHomeBubble
+  // rewrites them every frame by the door, so a switch shows at once.
   private homeBubbleLines(): string {
     return [
-      `HOME  ${isTouchDevice() ? "TAP" : "C"}: NEW LOOK`,
-      "Z: REST, COOK, BUILD",
+      usingPad() ? "HOME" : `HOME  ${isTouchDevice() ? "TAP" : "C"}: NEW LOOK`,
+      `${keyNames("Z")}: REST, COOK, BUILD`,
       isNight() ? "SLEEP UNTIL MORNING" : "SLEEP AFTER 20:00",
     ].join("\n");
   }
