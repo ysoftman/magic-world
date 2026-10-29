@@ -67,7 +67,8 @@ AUDIT_JS = """() => {
         const v = vis && o.visible !== false && (o.alpha === undefined || o.alpha > 0.05);
         if (v && o.texture && o.texture.key === "__MISSING") out.missing.push(`${s.scene.key}:${o.type}`);
         if (o.list) walk(o.list, v);
-        if (o.type !== "Text" || !v || !o.text || !o.text.trim()) continue;
+        // Text, or PixelText (a BitmapText; its text is what was set, unwrapped)
+        if ((o.type !== "Text" && o.type !== "BitmapText") || !v || !o.text || !o.text.trim()) continue;
         const b = o.getBounds();
         const fixed = (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
         items.push({ t: o.text.replace(/\\n/g, "|").slice(0, 48), x: fixed ? b.x : b.x - cam.scrollX, y: fixed ? b.y : b.y - cam.scrollY,
@@ -202,7 +203,7 @@ class Game:
         return path
 
     def audit(self) -> dict:
-        """screen-fixed text off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text.
+        """screen-fixed text (Text or PixelText) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text.
         An opaque panel over the HUD band still lists the HUD texts under it as overlaps: check the screenshot."""
         return self.ev(AUDIT_JS)
 
