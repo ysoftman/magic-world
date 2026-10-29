@@ -23,7 +23,15 @@ export const MIN_DAMAGE_SHARE = 0.2;
 export const DEATH_GOLD_LOSS = 0.5;
 export const STREAK_CAP = 8;
 // each consecutive FIGHT adds this much extra damage, so a pure-fight run
-// outpaces pausing to heal; items/magic/flee reset it
+// outpaces pausing to heal; items, STEAL, flee and every spell but a
+// weakness hit reset it. CHAIN: an attack spell on the foe's weakness counts
+// as one more hit instead (BattleScene castSpell), though the spell's own
+// damage takes no bonus. While it reset the combo too, casting the spell the
+// bestiary's WEAK hint points at cost the FIGHTs after it their bonus, and
+// mashing FIGHT beat mixing it in. It moves the bosses little (sim:battle's
+// hero casts the weakness spell while its MP lasts): a lone hero beats the
+// FLAME DRAKE 3-6 points more often at Lv19-21, the rest within a point or
+// two.
 export const COMBO_PCT = 0.1;
 export const COMBO_CAP = 8;
 // flat roll, independent of enemy HP — unlike throwCandy's ratio-based

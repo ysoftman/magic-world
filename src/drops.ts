@@ -62,16 +62,36 @@ const DROP_TABLE: Record<string, { material: MaterialKey; chance: number; count:
 // name is what still ties a fight back to its ENEMIES entry
 const BY_NAME = new Map(Object.entries(ENEMIES).map(([key, def]) => [def.name, DROP_TABLE[key]]));
 
+// WEAK FINISH: a battle won by a spell on the foe's weakness (BattleScene
+// castSpell) rolls its material at these odds times the table's, a sure
+// drop staying one. It pays for reading the bestiary's WEAK hint and saving
+// the MP for the last blow; the KOI FEAST and the ABYSS multiply the count
+// on top (BattleScene victory()). x1.25, so a hunt can never gather more
+// than a quarter faster: in a sim of these rules hunting each region at its
+// intended level and gear, with the WOLF or alone, a hero who casts the
+// weakness spell whenever it surely kills gets 7-16% more material a fight
+// on the MP the hunt earns back (+2 a win, the odd MPOTION), 8-20% on a full
+// bar every fight; x1.5 made it 16-31% and up to 50%. REFINE mostly waits
+// on its gold, so it comes no sooner but in the snow (+5 in ~145 fights for
+// the FROST SCALE, from 159). The cave's foes have no weakness a Lv5 hero
+// can cast.
+export const WEAK_FINISH_DROP_MULT = 1.25;
+
 /**
  * What a won battle against `enemy` leaves, or null. Pure apart from `rand`
  * (Math.random by default), so the odds can be tested. ARENA bouts drop
  * nothing: the gauntlet replays bosses on demand, and their sure drops would
  * turn it into a material farm.
  */
-export function rollDrop(enemy: Pick<EnemyDef, "name">, inArena = false, rand: () => number = Math.random): Drop | null {
+export function rollDrop(
+  enemy: Pick<EnemyDef, "name">,
+  inArena = false,
+  rand: () => number = Math.random,
+  weakFinish = false,
+): Drop | null {
   if (inArena) return null;
   const entry = BY_NAME.get(enemy.name);
-  if (!entry || rand() >= entry.chance) return null;
+  if (!entry || rand() >= entry.chance * (weakFinish ? WEAK_FINISH_DROP_MULT : 1)) return null;
   return { material: entry.material, count: entry.count };
 }
 

@@ -270,18 +270,21 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
 
   // BattleScene castSpell() + spellEffectCanLand() + landSpellEffect()
   const cast = (spell: Spell): void => {
-    combo = 0;
     mp -= spell.cost;
     if (spell.kind === "heal") {
+      combo = 0;
       hp += Math.min(hero.maxHp - hp, spell.power);
       poisonTurns = 0;
       return;
     }
     if (spell.kind === "ward") {
+      combo = 0;
       wardTurns = WARD_TURNS;
       return;
     }
     const { dmg, weak } = spellRoll(spell, foe.weakness);
+    // CHAIN: a weakness hit is one more in the combo, any other cast resets it
+    combo = weak ? combo + 1 : 0;
     const fx = spell.effect;
     const canLand =
       fx &&

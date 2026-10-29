@@ -354,6 +354,8 @@ export class BattleScene extends Phaser.Scene {
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
+  // the killing blow was a weakness spell's (WEAK FINISH, drops.ts)
+  private weakFinish = false;
   private dotText!: PixelText;
   private chillText!: PixelText;
   private poisonText!: PixelText;
@@ -409,6 +411,7 @@ export class BattleScene extends Phaser.Scene {
     this.chilled = false;
     this.pilfered = false;
     this.guarded = false;
+    this.weakFinish = false;
     const def = ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime;
     // Night is the risk/reward shift: tougher enemies, richer payout. Applied
     // to the copy, so ENEMIES stays the daytime baseline. Two exceptions, from
@@ -1129,9 +1132,7 @@ export class BattleScene extends Phaser.Scene {
   private async playerAttack(): Promise<void> {
     Sfx.attack();
     await this.lunge();
-    this.combo += 1;
-    if (this.combo >= COMBO_CAP) GameState.quest.comboCapped = true;
-    this.updateCombo();
+    this.addCombo();
     const comboBonus = this.comboBonus();
     const { dmg, crit } = rollDamage(this.heroAtk(), this.enemy.def);
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
@@ -1171,7 +1172,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async castSpell(spell: Spell): Promise<void> {
-    this.resetCombo();
+    // an attack spell settles the combo when it lands (CHAIN, below)
+    if (spell.kind !== "attack") this.resetCombo();
     if (spell.kind === "ward") Sfx.ward();
     else if (spell.ultimate) Sfx.nova();
     else Sfx.magic();
@@ -1205,13 +1207,21 @@ export class BattleScene extends Phaser.Scene {
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
+    // CHAIN (battleRules COMBO_PCT): a weakness hit is one more in the combo
+    if (weak) this.addCombo();
+    else this.resetCombo();
+    // WEAK FINISH (drops.ts): the weakness hit that fells the foe betters the
+    // odds of its material
+    this.weakFinish = weak && this.enemy.curHp <= 0;
     if (weak) {
       Sfx.critical();
       shake(this.cameras.main, 120, 0.01);
     }
-    // worst case "WEAKNESS! ICE hits for 39! ATK DN!", 34 glyphs
+    // worst case "WEAKNESS! ICE hits for 39! ATK DN! CHAIN x99!", 45 glyphs
     const tail = effect && this.enemy.curHp > 0 ? this.landSpellEffect(effect) : "";
-    await this.say(`${weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`}${tail}`);
+    const chain = weak && this.enemy.curHp > 0 && this.combo >= 2 ? ` CHAIN x${this.combo}!` : "";
+    const finish = this.weakFinish ? " WEAK FINISH!" : "";
+    await this.say(`${weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`}${tail}${chain}${finish}`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
   }
@@ -2312,6 +2322,13 @@ export class BattleScene extends Phaser.Scene {
     this.comboText.setColor(this.combo >= COMBO_CAP ? "#ff5555" : "#fbbf24");
   }
 
+  // one more hit in the combo: a FIGHT, or a weakness spell's CHAIN
+  private addCombo(): void {
+    this.combo += 1;
+    if (this.combo >= COMBO_CAP) GameState.quest.comboCapped = true;
+    this.updateCombo();
+  }
+
   private resetCombo(): void {
     this.combo = 0;
     this.updateCombo();
@@ -2395,9 +2412,10 @@ export class BattleScene extends Phaser.Scene {
               return roll < edge;
             });
       if (loot) GameState.inventory[loot.key] += 1;
-      // monster materials for the BLACKSMITH (drops.ts), more of them deep in
-      // the ABYSS (abyss.ts, at most x3); the ARENA returned above
-      const drop = rollDrop(this.enemy);
+      // monster materials for the BLACKSMITH (drops.ts), likelier after a
+      // WEAK FINISH, more of them deep in the ABYSS (abyss.ts, at most x3);
+      // the ARENA returned above
+      const drop = rollDrop(this.enemy, false, Math.random, this.weakFinish);
       if (drop && this.abyss) drop.count *= abyssDropMult(this.abyss.floor);
       // the KOI FEAST's doubling (cooking.ts), on top of the depth's
       if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
