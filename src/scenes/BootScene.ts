@@ -7,6 +7,7 @@ import { bakeNpcs } from "../art/npcs";
 import { bakeProps } from "../art/props";
 import { bakeTilesets } from "../art/tilesets";
 import { makeBattleBgs, makeTitleBg } from "../backdrops";
+import { bakePixelFonts } from "../pixelText";
 import { bakeCraftedGear } from "../ui/Blacksmith";
 
 // The art is in src/art/, a file an area: tiles.ts (the terrain) and
@@ -51,5 +52,6 @@ export class BootScene extends Phaser.Scene {
     bakeLandmarks.call(this);
     makeBattleBgs(this);
     makeTitleBg(this);
+    bakePixelFonts(this);
   }
 }
