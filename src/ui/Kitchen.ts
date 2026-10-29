@@ -5,6 +5,7 @@ import { canCook, cook, INGREDIENTS, type IngredientKey, MEAL_KEYS, MEALS, type 
 import { GameState } from "../gameState";
 import { mealBattles } from "../home";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -73,18 +74,18 @@ export class KitchenUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private pantryText: Phaser.GameObjects.Text;
-  private names: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private pantryText: PixelText;
+  private names: PixelText[] = [];
   private icons: Phaser.GameObjects.Image[] = [];
-  private statuses: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private info: Phaser.GameObjects.Text;
-  private needs: Phaser.GameObjects.Text[] = [];
+  private statuses: PixelText[] = [];
+  private cursor: PixelText;
+  private info: PixelText;
+  private needs: PixelText[] = [];
   private needIcons: Phaser.GameObjects.Image[] = [];
-  private table: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private table: PixelText;
+  private msg: PixelText;
+  private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private upQueued = false;
@@ -106,10 +107,10 @@ export class KitchenUI {
       scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
       151,
     );
-    this.title = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 38, "KITCHEN", retroStyle(8, "#fdba74")).setOrigin(0.5));
+    this.title = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 38, "KITCHEN", retroStyle(8, "#fdba74")).setOrigin(0.5));
     this.pantryText = fixed(
       scene.add
-        .text(GAME_WIDTH / 2, PANEL_TOP + 76, "", retroStyle(4, "#a3e635"))
+        .pixelText(GAME_WIDTH / 2, PANEL_TOP + 76, "", retroStyle(4, "#a3e635"))
         .setOrigin(0.5)
         .setAlign("center")
         .setLineSpacing(4),
@@ -117,20 +118,20 @@ export class KitchenUI {
     MEAL_KEYS.forEach((k, i) => {
       const y = ROW_Y + i * ROW_GAP;
       this.icons.push(fixed(scene.add.image(NAME_X + 16, y, `icon-${k}`).setScale(0.5)));
-      this.names.push(fixed(scene.add.text(NAME_X + ICON_DX, y, MEALS[k].name, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
-      this.statuses.push(fixed(scene.add.text(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
+      this.names.push(fixed(scene.add.pixelText(NAME_X + ICON_DX, y, MEALS[k].name, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
+      this.statuses.push(fixed(scene.add.pixelText(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
     });
-    this.cursor = fixed(scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
-    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
+    this.cursor = fixed(scene.add.pixelText(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
+    this.info = fixed(scene.add.pixelText(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0")).setOrigin(0.5));
     for (let i = 0; i < MAX_NEEDS; i++) {
       this.needIcons.push(fixed(scene.add.image(NAME_X + 16, NEED_Y + i * NEED_GAP, "icon-corn").setScale(0.5)));
-      this.needs.push(fixed(scene.add.text(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
+      this.needs.push(fixed(scene.add.pixelText(NAME_X + ICON_DX, NEED_Y + i * NEED_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
     }
-    this.table = fixed(scene.add.text(TABLE_X, NEED_Y, "", retroStyle(5, "#fdba74")).setOrigin(0, 0.5));
-    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 412, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
+    this.table = fixed(scene.add.pixelText(TABLE_X, NEED_Y, "", retroStyle(5, "#fdba74")).setOrigin(0, 0.5));
+    this.msg = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 412, "", bodyStyle(22, "#f5f5f5")).setOrigin(0.5));
     // touch names the d-pad rather than JK (the arrows it sends move here too)
     this.hint = fixed(
-      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 450, "", retroStyle(4, DIM_TEXT)), () =>
+      bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 450, "", retroStyle(4, DIM_TEXT)), () =>
         keyHint("JK: MOVE   Z: COOK   ESC: CLOSE", "D-PAD: MOVE   Z: COOK   ESC: CLOSE"),
       ).setOrigin(0.5),
     );

@@ -6,6 +6,7 @@ import { MATERIALS, type MaterialKey } from "../drops";
 import { econDay, GameState, isNight } from "../gameState";
 import { BEDS_LEVEL, GARDEN_LEVEL, GARDEN_YIELD, gardenPick, HOUSE_STAGES, type HouseStage } from "../home";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -58,16 +59,16 @@ export class HomeUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private goldText: Phaser.GameObjects.Text;
-  private builtText: Phaser.GameObjects.Text;
-  private names: Phaser.GameObjects.Text[] = [];
-  private statuses: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private info: Phaser.GameObjects.Text;
-  private lines: Phaser.GameObjects.Text[] = [];
-  private msg: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
+  private title: PixelText;
+  private goldText: PixelText;
+  private builtText: PixelText;
+  private names: PixelText[] = [];
+  private statuses: PixelText[] = [];
+  private cursor: PixelText;
+  private info: PixelText;
+  private lines: PixelText[] = [];
+  private msg: PixelText;
+  private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
 
   private upQueued = false;
@@ -90,24 +91,24 @@ export class HomeUI {
       scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
       151,
     );
-    this.title = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 40, "HOME", retroStyle(8, "#9f9fd0")).setOrigin(0.5));
+    this.title = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "HOME", retroStyle(8, "#9f9fd0")).setOrigin(0.5));
     this.goldText = fixed(
-      scene.add.text(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff")).setOrigin(1, 0.5),
+      scene.add.pixelText(GAME_WIDTH / 2 + PANEL_W / 2 - 30, PANEL_TOP + 40, "", retroStyle(6, "#8ecbff")).setOrigin(1, 0.5),
     );
-    this.builtText = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 78, "", retroStyle(5, "#fdba74")).setOrigin(0.5));
+    this.builtText = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 78, "", retroStyle(5, "#fdba74")).setOrigin(0.5));
     ROWS.forEach((row, i) => {
       const y = ROW_Y + i * ROW_GAP;
-      this.names.push(fixed(scene.add.text(NAME_X, y, row, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
-      this.statuses.push(fixed(scene.add.text(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
+      this.names.push(fixed(scene.add.pixelText(NAME_X, y, row, retroStyle(6, "#ffffff")).setOrigin(0, 0.5)));
+      this.statuses.push(fixed(scene.add.pixelText(STATUS_X, y, "", retroStyle(6, DIM_TEXT)).setOrigin(0, 0.5)));
     });
-    this.cursor = fixed(scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
-    this.info = fixed(scene.add.text(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0")).setOrigin(0.5));
+    this.cursor = fixed(scene.add.pixelText(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5));
+    this.info = fixed(scene.add.pixelText(GAME_WIDTH / 2, INFO_Y, "", retroStyle(5, "#9f9fd0")).setOrigin(0.5));
     for (let i = 0; i < 3; i++) {
-      this.lines.push(fixed(scene.add.text(NAME_X, LINE_Y + i * LINE_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
+      this.lines.push(fixed(scene.add.pixelText(NAME_X, LINE_Y + i * LINE_GAP, "", retroStyle(5, "#ffffff")).setOrigin(0, 0.5)));
     }
-    this.msg = fixed(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 392, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
+    this.msg = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 392, "", retroStyle(6, "#f5f5f5")).setOrigin(0.5));
     this.hint = fixed(
-      bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 430, "", retroStyle(4, DIM_TEXT)), () =>
+      bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 430, "", retroStyle(4, DIM_TEXT)), () =>
         keyHint("JK: MOVE   Z: OK   ESC: CLOSE", "D-PAD: MOVE   Z: OK   ESC: CLOSE"),
       ).setOrigin(0.5),
     );
