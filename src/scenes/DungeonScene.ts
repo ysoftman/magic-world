@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { abyssOpen, abyssResume } from "../abyss";
+import { abyssOpen } from "../abyss";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
@@ -26,6 +26,7 @@ import {
   addBorderDressing,
   addRoamer,
   addTownExitLabel,
+  askAbyssDive,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -385,10 +386,10 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   // The ABYSS's stair (abyss.ts) under an "ABYSS" tag in the TOWN marker's
-  // look; walking onto it starts a dive at B1, or — once a GUARDIAN has
-  // fallen, or a dive was left by its stair up — asks whether to start at the
-  // checkpoint or the portal instead, the deeper (abyssResume). The dive's
-  // own stair up comes out at the town's cave mouth, not back here.
+  // look; walking onto it starts a dive as the town's gate does
+  // (askAbyssDive: at B1, or asked whether to start at the checkpoint or the
+  // portal). The dive's own stair up comes out at the town's cave mouth, not
+  // back here.
   private addAbyssStairs(): void {
     const { x, y } = ABYSS_STAIRS_POS;
     bakeAbyssStairs(this);
@@ -407,27 +408,10 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, stair, () => {
       if (this.exitingDungeon || this.uiBlocking()) return;
       this.player.setVelocity(0, 0);
-      const resume = abyssResume(GameState.abyssPortal, GameState.abyssCheckpoint);
-      if (!resume) {
-        this.enterAbyss(1);
-        return;
-      }
-      // Y or the first choice dives from there; N, ESC (the last choice, as
-      // on any question) or the second from B1, as ever, which leaves a
-      // portal waiting. Two lines of at most 27 glyphs ("A CHECKPOINT WAITS
-      // AT B996.", "A PORTAL WAITS AT B999." 23) and two choices: all a touch
-      // question holds (DialogueBox).
-      const what = resume.portal ? "A PORTAL" : "A CHECKPOINT";
-      this.dialogue.ask([`${what} WAITS AT B${resume.floor}.`, "START THERE?"], "ABYSS", [`B${resume.floor}`, "B1"], (i) =>
-        this.enterAbyss(i === 0 ? resume.floor : 1),
-      );
+      askAbyssDive(this, this.player, this.dialogue, () => {
+        this.exitingDungeon = true;
+      });
     });
-  }
-
-  private enterAbyss(start: number): void {
-    this.exitingDungeon = true;
-    // a new dive, never a stale { fromBattle } replayed by Phaser
-    walkOut(this, this.player, () => this.scene.start("Abyss", { start }));
   }
 
   // A find (a chest, a treasure map's dig) gets the grace a fight's return

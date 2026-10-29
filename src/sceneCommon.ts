@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { abyssResume } from "./abyss";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "./achievements";
 import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
@@ -699,6 +700,34 @@ export function walkOut(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite,
   hero.setVelocity(0, 0);
   scene.cameras.main.fadeOut(WALK_OUT_FADE, 0, 0, 0);
   scene.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, next);
+}
+
+/**
+ * The way down into the ABYSS (abyss.ts), the cave's stair and the town's
+ * gate alike: a dive at B1, or — once a GUARDIAN has fallen, or a dive was
+ * left by its stair up — the question whether to start at the checkpoint or
+ * the portal instead, the deeper (abyssResume). Y or the first choice dives
+ * from there; N, ESC (the last choice, as on any question) or the second
+ * from B1, as ever, which leaves a portal waiting. Two lines of at most 27
+ * glyphs ("A CHECKPOINT WAITS AT B996.", "A PORTAL WAITS AT B999." 23) and
+ * two choices: all a touch question holds (DialogueBox). `leaving` sets the
+ * scene's own flag as the walk out begins.
+ */
+export function askAbyssDive(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite, dialogue: DialogueBox, leaving: () => void): void {
+  const dive = (start: number): void => {
+    leaving();
+    // a new dive, never a stale { fromBattle } replayed by Phaser
+    walkOut(scene, hero, () => scene.scene.start("Abyss", { start }));
+  };
+  const resume = abyssResume(GameState.abyssPortal, GameState.abyssCheckpoint);
+  if (!resume) {
+    dive(1);
+    return;
+  }
+  const what = resume.portal ? "A PORTAL" : "A CHECKPOINT";
+  dialogue.ask([`${what} WAITS AT B${resume.floor}.`, "START THERE?"], "ABYSS", [`B${resume.floor}`, "B1"], (i) =>
+    dive(i === 0 ? resume.floor : 1),
+  );
 }
 
 /**
