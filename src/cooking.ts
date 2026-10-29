@@ -22,8 +22,17 @@
 // past the first one (16.5) 74% -> 95%, NEW GAME+3's (Lv30, the forged kit,
 // ten HI-POTIONs) 54% -> 77% on BEAN SOUP, 83% with the FEATHER BEDS' WARD
 // as well. The best meal is BEAN SOUP for the KING SLIME, GRILLED FISH for
-// the MOSS and GLACIER GOLEMs. Whether the farm and pond keep that up (two
-// ingredients every five fights) isn't in the sim.
+// the MOSS and GLACIER GOLEMs. Kept up every fight (/tmp/pwcheck/econ-sim
+// cook-sim.ts: a walk HOME the moment a meal runs out, the farm harvested
+// and replanted, the pond fished for what the recipe lacks), those two and
+// FISH STEW never lapse: four BEAN plots ripen each trip (42-63 BEANs an hour
+// against 32-42 eaten), two FISH are ~18s at the pond. The slow crops cap
+// the rest: PUMPKIN PIE is on 26% of fights (43% with the HEARTH, 48% with
+// the HERB GARDEN too), MOON TEA on 50/69/73%, KOI FEAST on 56-80% with a
+// fifth of the hour spent fishing for its RARE FISH. The real cost is the
+// walk: from the volcano a trip every five fights cuts 134 fights an hour to
+// ~105 on BEAN SOUP (111 with the HEARTH), more than any meal gives back on
+// plain hunting.
 
 export const INGREDIENTS = {
   corn: "CORN",
