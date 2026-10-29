@@ -54,7 +54,7 @@
 | BLACKSMITH | FORGE 탭: 몬스터 소재 + 골드로 제작 — LIFE CHARM(최대 HP +20), TALISMAN(독·빙결 차단), GLACIER MAIL(DEF +8), DRAKE BLADE(ATK +8). REFINE 탭(H/L 로 전환): 착용한 무기·방어구(제작한 DRAKE BLADE·GLACIER MAIL 포함, 장신구 제외)를 +1~+5 로 강화, 단계마다 ATK(무기)·DEF(방어구) +1. 비용은 500/1000/2000/3500/5000G 와 장비 등급에 맞는 지역 소재 두 가지(최상급 무기는 +4·+5 에 DRAKE SCALE 1개씩). 강화는 장비 종류별로 기록돼 바꿔 껴도 따라오고 NEW GAME+ 에도 남으며, 그 장비의 마지막 한 개를 팔면 사라진다(상점이 "Its +N will be lost!" 로 한 번 더 묻고, 다시 Z 를 눌러야 판다). 가방·상점·대장간에서 이름 뒤에 +N 이 붙는다 |
 | ARENA | KING SLIME 처치 후. 처치한 보스(쓰러뜨리거나 잡은 TROLL KING 포함) 최대 5연전, 사이마다 HP/MP 20% 회복, 도망 불가. 상금은 보스 골드의 25%로 이긴 판마다 바로 지급·저장(완주 시 합계의 +50% 추가) |
 | FARM | 4칸. CORN, BEAN, PUMPKIN, MOONFLOWER(밤에만 자람). 5% 확률로 황금 수확 x3. 수확하면 골드와 함께 그 작물이 요리 재료로 1개 |
-| FISHING | 마을 연못과 설원 얼음 구멍. 입질("!") 때 Z. 밤에만 나오는 어종, 황금 어종은 포션 동봉. TAB 으로 어류 기록. 낚을 때마다 골드와 함께 요리 재료 FISH 1개(어종 구분 없음). 희귀 어종(포션이 딸린 GOLDEN FISH·AURORA KOI, 밤에만 나오는 MOON EEL·GHOST ICEFISH)은 RARE FISH 를 하나 더 준다 — 낮 약 8%, 밤에는 밤 어종이 더해져 약 16% |
+| FISHING | 마을 연못과 설원 얼음 구멍. 입질("!") 때 Z. 밤에만 나오는 어종, 황금 어종은 포션 동봉. TAB 이나 ←/→·H/L(게임패드는 D-pad 좌우)로 어류 기록. 낚을 때마다 골드와 함께 요리 재료 FISH 1개(어종 구분 없음). 희귀 어종(포션이 딸린 GOLDEN FISH·AURORA KOI, 밤에만 나오는 MOON EEL·GHOST ICEFISH)은 RARE FISH 를 하나 더 준다 — 낮 약 8%, 밤에는 밤 어종이 더해져 약 16% |
 | BOUNTY BOARD | 매일 바뀌는 처치 의뢰(3~6마리)와 소재 납품. 받을 골드가 상한 9999G 를 넘기면 바운티 보상과 납품을 거부한다(소재는 그대로, 주민 부탁도 같음) |
 | GAMBLER | LUCKY WHEEL: 10/50/200/1000G 베팅. 최고 당첨(JACKPOT x5)이 나왔을 때 9999G 를 넘길 베팅은 받지 않는다(그 줄은 흐리게 표시) |
 | RANK BOARD | 영웅 레벨 순위 |

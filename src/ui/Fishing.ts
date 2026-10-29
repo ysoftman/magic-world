@@ -11,8 +11,8 @@ import { isTouchDevice } from "./TouchControls";
 
 // Sized off the widest lines, all Press Start 2P at retroStyle(n) = n*4 px a
 // glyph: "NIGHT ICE FISHING" (17 x 32 = 544), "CAUGHT: GLACIER TROUT!" (22 x
-// 24 = 528) and the hint (28 x 20 = 560) each keep >= 20px inside 640.
-const PANEL_W = 640;
+// 24 = 528) and the keyboard hint (33 x 20 = 660) each keep >= 20px inside 700.
+const PANEL_W = 700;
 const PANEL_H = 340;
 const PANEL_TOP = GAME_HEIGHT / 2 - PANEL_H / 2;
 const WATER_Y = PANEL_TOP + 146;
@@ -51,8 +51,8 @@ const LOG_GAP = 36;
 
 // touch has no TAB: the page switch is the LOG/BACK chip there (see the
 // constructor), so its hints leave TAB out
-const FISH_HINT = isTouchDevice() ? "Z: REEL   ESC: QUIT" : "Z: REEL   TAB: LOG   ESC: QUIT";
-const LOG_HINT = isTouchDevice() ? "ESC: QUIT" : "TAB: BACK   ESC: QUIT";
+const FISH_HINT = isTouchDevice() ? "Z: REEL   ESC: QUIT" : "Z: REEL   HL/TAB: LOG   ESC: QUIT";
+const LOG_HINT = isTouchDevice() ? "ESC: QUIT" : "HL/TAB: BACK   ESC: QUIT";
 
 // one entry per bonusItem value, so a new one is a compile error here
 // instead of a silently mislabeled toast — same shape as gameState.ts's
@@ -173,7 +173,7 @@ export class FishingUI {
       .setDepth(152)
       .setVisible(false);
     // Touch has no TAB key, so the log was out of reach there. This chip sits
-    // right-aligned on the count row (x 840..940 at its widest, "BACK"),
+    // right-aligned on the count row (x 870..970 at its widest, "BACK"),
     // clear of the count's 340px and of the title above, and a tap queues
     // the same page flip TAB does.
     if (isTouchDevice()) {
@@ -211,10 +211,18 @@ export class FishingUI {
       this.escQueued = true;
     });
     // TAB flips pages like it flips the shop's buy/sell; no scene maps it to
-    // a field action, so a press here can't leak out after the panel closes
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB).on(Phaser.Input.Keyboard.Events.DOWN, () => {
+    // a field action, so a press here can't leak out after the panel closes.
+    // Left/right flip them too, as nothing else here uses them: a gamepad
+    // sends no TAB (Gamepad.ts), and its d-pad comes in as the arrows. A
+    // press while closed is dropped by open(), like TAB's.
+    const flip = () => {
       this.tabQueued = true;
-    });
+    };
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB).on(Phaser.Input.Keyboard.Events.DOWN, flip);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on(Phaser.Input.Keyboard.Events.DOWN, flip);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on(Phaser.Input.Keyboard.Events.DOWN, flip);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.H).on(Phaser.Input.Keyboard.Events.DOWN, flip);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.L).on(Phaser.Input.Keyboard.Events.DOWN, flip);
   }
 
   open(): void {
@@ -358,7 +366,7 @@ export class FishingUI {
     // re-read every cast: the clock keeps running while the panel is open,
     // so the title flips the moment the night fish start biting (or a derby
     // starts or ends). A derby swaps the title rather than growing it —
-    // "NIGHT FISHING DERBY" (608px) would leave the 640 panel 16px a side
+    // "NIGHT FISHING DERBY" (608px) left the panel, then 640, 16px a side
     this.title.setText(
       this.derby()
         ? isNight()
@@ -372,7 +380,7 @@ export class FishingUI {
     this.bobTween?.resume();
     // the title has no room left (night and derby already swap it), so the
     // weather says itself under CASTING...; the longest, "BLIZZARD: SLOW
-    // BITES", is 20 x 24 = 480px (x 400..880) inside the 640 panel
+    // BITES", is 20 x 24 = 480px (x 400..880) inside the 700 panel
     this.status.setText(weather ? `CASTING...\n${weather.note}` : "CASTING...");
     // a Z press while casting must not carry into the bite window — only a
     // press inside the window (700ms) should count as a catch
@@ -430,7 +438,7 @@ export class FishingUI {
     }
     this.status.setText(`CAUGHT: ${fish.name}!\n${reward}`);
     // under the reward, the ingredient for the kitchen (cooking.ts) and any
-    // log news: "+1 FISH TO COOK  NEW BEST!" is 26 x 20 = 520px of the 600.
+    // log news: "+1 FISH TO COOK  NEW BEST!" is 26 x 20 = 520px of the 660.
     // A rare bite's "+1 FISH +1 RARE FISH TO COOK" is 28 (560px), so its
     // news takes a line of its own below.
     const news = logged === "new" ? "NEW!" : logged === "best" ? "NEW BEST!" : "";
