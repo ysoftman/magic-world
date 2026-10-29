@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD, PIXEL } from "../config";
-import { isRefinable } from "../drops";
+import { isRefinable, REFINE_STEP } from "../drops";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
 import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
@@ -16,18 +16,20 @@ const sellPrice = (price: number): number => Math.max(1, Math.floor(price / 2));
 const CONFIRM_HOLD_MS = 2400;
 
 // A bought piece goes straight on when its slot is empty or it beats what's
-// worn on every count the stats read (effAtk/effDef's EQUIP_BONUS,
+// worn on every count the stats read (effAtk/effDef's EQUIP_BONUS and REFINE,
 // effMaxHp's EQUIP_MAXHP, resists()' EQUIP_RESIST) and on one of them by
 // more. Bought and not worn, a SWORD left ATK where it was until the player
 // found Z on page 2 of ITEMS. A charm for the AMULET is a trade (poison
-// against +10 max HP), so that one stays the player's call.
+// against +10 max HP), so that one stays the player's call. Without the
+// REFINE, a MYTHRIL SWORD (6) went on over an IRON SWORD+3 (7) for ATK -1.
 function outclassesWorn(key: EquipmentKey): boolean {
   const worn = GameState.equipped[EQUIP_SLOT[key]];
   if (!worn) return true;
+  const bonus = (k: EquipmentKey): number => EQUIP_BONUS[k] + GameState.refineOf(k) * REFINE_STEP;
   const hp = (k: EquipmentKey): number => EQUIP_MAXHP[k] ?? 0;
   const resists = (k: EquipmentKey) => EQUIP_RESIST[k] ?? [];
-  const noWorse = EQUIP_BONUS[key] >= EQUIP_BONUS[worn] && hp(key) >= hp(worn) && resists(worn).every((r) => resists(key).includes(r));
-  return noWorse && (EQUIP_BONUS[key] > EQUIP_BONUS[worn] || hp(key) > hp(worn) || resists(key).length > resists(worn).length);
+  const noWorse = bonus(key) >= bonus(worn) && hp(key) >= hp(worn) && resists(worn).every((r) => resists(key).includes(r));
+  return noWorse && (bonus(key) > bonus(worn) || hp(key) > hp(worn) || resists(key).length > resists(worn).length);
 }
 
 // "MYTHRIL SHIELD" -> "Mythril Shield", the case the shop's messages use
