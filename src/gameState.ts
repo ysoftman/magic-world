@@ -449,6 +449,17 @@ const backupKey = (slot: number): string => `${slotKey(slot)}-prev`;
 const corruptPrefix = (slot: number): string => `${slotKey(slot)}-corrupt-`;
 const corruptKey = (slot: number): string => `${corruptPrefix(slot)}${Date.now()}`;
 
+// localStorage.getItem, but null when storage is blocked (site data off),
+// where even the read throws: the title then shows empty slots and the game
+// carries on from memory, as save() does when a write is refused
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 const parses = (raw: string): boolean => {
   try {
     JSON.parse(raw);
@@ -471,7 +482,7 @@ function writeVerified(key: string, value: string): boolean {
 // Removes a slot's save, parking it first if it doesn't parse. false (slot
 // untouched) when the parking copy couldn't be written.
 function dropSlot(slot: number): boolean {
-  const raw = localStorage.getItem(slotKey(slot));
+  const raw = safeGet(slotKey(slot));
   if (raw === null) return true;
   if (!parses(raw) && !writeVerified(corruptKey(slot), raw)) return false;
   localStorage.removeItem(slotKey(slot));
@@ -1109,7 +1120,7 @@ export const GameState = {
 
   // `slot` defaults to the one in use, here and in clearSave/export/import
   hasSave(slot?: number): boolean {
-    return localStorage.getItem(slotKey(slot ?? this.saveSlot)) !== null;
+    return safeGet(slotKey(slot ?? this.saveSlot)) !== null;
   },
 
   // switch the slot saves go to (the title screen's picker); remembered
@@ -1191,7 +1202,7 @@ export const GameState = {
   // exactly where it is: the title shows it as DAMAGED and it is only moved
   // aside (under a "-corrupt" key) when the slot is about to be reused.
   load(): boolean {
-    const raw = localStorage.getItem(slotKey(this.saveSlot));
+    const raw = safeGet(slotKey(this.saveSlot));
     if (!raw) return false;
     try {
       const data = JSON.parse(raw);
@@ -1394,7 +1405,7 @@ export const GameState = {
   // the caller must then leave the slot alone.
   backupSave(slot?: number): boolean {
     const n = slot ?? this.saveSlot;
-    const raw = localStorage.getItem(slotKey(n));
+    const raw = safeGet(slotKey(n));
     if (raw === null) return true;
     return writeVerified(parses(raw) ? backupKey(n) : corruptKey(n), raw);
   },
@@ -1403,12 +1414,16 @@ export const GameState = {
   retireSave(slot?: number): boolean {
     const n = slot ?? this.saveSlot;
     if (!this.backupSave(n)) return false;
-    localStorage.removeItem(slotKey(n));
+    try {
+      localStorage.removeItem(slotKey(n));
+    } catch {
+      // storage blocked: nothing was read there to remove (safeGet)
+    }
     return true;
   },
 
   hasBackup(slot?: number): boolean {
-    return localStorage.getItem(backupKey(slot ?? this.saveSlot)) !== null;
+    return safeGet(backupKey(slot ?? this.saveSlot)) !== null;
   },
 
   // Swaps the slot with its backup, so a restore can itself be undone and
@@ -1417,9 +1432,9 @@ export const GameState = {
   // with every save still held somewhere (the slot, the backup or scratch).
   restoreSave(slot?: number): boolean {
     const n = slot ?? this.saveSlot;
-    const prev = localStorage.getItem(backupKey(n));
+    const prev = safeGet(backupKey(n));
     if (prev === null) return false;
-    const cur = localStorage.getItem(slotKey(n));
+    const cur = safeGet(slotKey(n));
     const scratch = `${backupKey(n)}-swap`;
     if (cur !== null && !writeVerified(scratch, cur)) return false;
     if (!writeVerified(slotKey(n), prev)) {
@@ -1440,7 +1455,7 @@ export const GameState = {
   // UTF-8-safe Base64: player names can be non-Latin1, and plain btoa would
   // throw on them, so the JSON goes through TextEncoder bytes first
   exportSaveCode(slot?: number): string {
-    const raw = localStorage.getItem(slotKey(slot ?? this.saveSlot));
+    const raw = safeGet(slotKey(slot ?? this.saveSlot));
     if (!raw) return "";
     let bin = "";
     for (const b of new TextEncoder().encode(raw)) bin += String.fromCharCode(b);
@@ -1507,17 +1522,17 @@ function ngPlusOf(data: { ngPlus?: unknown } | null | undefined): number {
  * save or it doesn't parse.
  */
 export function readSaveSummary(slot = GameState.saveSlot): SaveSummary | null {
-  return summarize(localStorage.getItem(slotKey(slot)));
+  return summarize(safeGet(slotKey(slot)));
 }
 
 // the slot's backup, read the same way (the title's RESTORE question names it)
 export function readBackupSummary(slot = GameState.saveSlot): SaveSummary | null {
-  return summarize(localStorage.getItem(backupKey(slot)));
+  return summarize(safeGet(backupKey(slot)));
 }
 
 // a save is there but won't even parse; the title shows it as DAMAGED
 export function isSaveDamaged(slot = GameState.saveSlot): boolean {
-  const raw = localStorage.getItem(slotKey(slot));
+  const raw = safeGet(slotKey(slot));
   return raw !== null && !parses(raw);
 }
 
@@ -1527,9 +1542,13 @@ export function isSaveDamaged(slot = GameState.saveSlot): boolean {
 export function damagedCopyKeys(slot = GameState.saveSlot): string[] {
   const prefix = corruptPrefix(slot);
   const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(prefix)) keys.push(key);
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+  } catch {
+    // storage blocked: none to list (safeGet)
   }
   return keys.sort();
 }

@@ -150,7 +150,14 @@ export function loadMapOverride(): void {
       }
     }
   } catch {
-    clearMapOverride();
+    // a bad override is dropped; with storage blocked (site data off) the
+    // read above threw and so would the removal, which would stop the boot
+    mapOverride = null;
+    try {
+      localStorage.removeItem(MAP_KEY);
+    } catch {
+      /* nothing stored to drop */
+    }
   }
 }
 
