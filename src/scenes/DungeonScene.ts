@@ -710,7 +710,13 @@ export class DungeonScene extends Phaser.Scene {
     const note = this.add
       .text(chest.x, chest.y - 52, `+${gold} GOLD${loot}`, retroStyle(6, "#ffd166"))
       .setOrigin(0.5)
+      // on the map, and over the ABYSS tag from the stair's chest: outlined
+      .setStroke("#1a1028", 4)
       .setDepth(120);
+    // 20px inside the screen: from the far corner's chest (22,14) "+30 GOLD
+    // POTION!" (16 glyphs x 24px, 384px) ran 96px past its right edge
+    const view = this.cameras.main.worldView;
+    note.setX(Phaser.Math.Clamp(note.x, view.x + note.width / 2 + 20, view.right - note.width / 2 - 20));
     this.tweens.add({
       targets: note,
       y: note.y - 40,
