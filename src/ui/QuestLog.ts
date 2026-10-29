@@ -6,6 +6,7 @@ import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
 
@@ -208,9 +209,9 @@ const ALL_DONE: Objective = {
 };
 
 interface ActiveRow {
-  title: Phaser.GameObjects.Text;
-  progress: Phaser.GameObjects.Text;
-  detail: Phaser.GameObjects.Text;
+  title: PixelText;
+  progress: PixelText;
+  detail: PixelText;
 }
 
 // Quest journal shown with U: what's still open (with progress and where to
@@ -221,29 +222,29 @@ export class QuestLog {
   private scene: Phaser.Scene;
   private active = false;
   private root: Phaser.GameObjects.Container;
-  private title: Phaser.GameObjects.Text;
+  private title: PixelText;
   private activeRows: ActiveRow[] = [];
-  private doneRows: Phaser.GameObjects.Text[] = [];
+  private doneRows: PixelText[] = [];
   private closeQueued = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const text = (x: number, y: number, size: number, color: string, value = ""): Phaser.GameObjects.Text =>
-      scene.add.text(x, y, value, retroStyle(size, color)).setOrigin(0, 0.5);
+    const text = (x: number, y: number, size: number, color: string, value = ""): PixelText =>
+      scene.add.pixelText(x, y, value, retroStyle(size, color)).setOrigin(0, 0.5);
 
     for (let i = 0; i < ACTIVE_ROWS; i++) {
       const y = ROW_Y + i * ACTIVE_GAP;
       this.activeRows.push({
         title: text(ACTIVE_X, y, 5, "#ffffff"),
         progress: text(PROGRESS_R, y, 5, PROGRESS_COLOR).setOrigin(1, 0.5),
-        detail: scene.add.text(ACTIVE_X, y + DETAIL_DY, "", bodyStyle(22, HINT_COLOR)).setOrigin(0, 0.5),
+        detail: scene.add.pixelText(ACTIVE_X, y + DETAIL_DY, "", bodyStyle(22, HINT_COLOR)).setOrigin(0, 0.5),
       });
     }
     for (let i = 0; i < DONE_ROWS; i++) {
       this.doneRows.push(text(DONE_X, ROW_Y + i * DONE_GAP, 5, "#7fbf7f"));
     }
     // "QUEST JOURNAL  NG+99" on a replay: 20 x 32 = 640px, x=320..960
-    this.title = scene.add.text(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
+    this.title = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
 
     this.root = scene.add
       .container(0, 0, [
@@ -255,7 +256,7 @@ export class QuestLog {
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
         ...this.doneRows,
-        bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, HINT_COLOR)), () =>
+        bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 30, "", retroStyle(4, HINT_COLOR)), () =>
           keyHint("U/ESC: CLOSE"),
         ).setOrigin(0.5),
       ])

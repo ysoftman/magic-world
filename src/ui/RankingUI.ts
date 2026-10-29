@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
 import { DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { getRanks, MAX_RANKS } from "../ranking";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
@@ -37,16 +38,16 @@ export class RankingUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private headers: Phaser.GameObjects.Text[] = [];
-  private footer: Phaser.GameObjects.Text;
-  private rankCells: Phaser.GameObjects.Text[] = [];
-  private nameCells: Phaser.GameObjects.Text[] = [];
-  private levelCells: Phaser.GameObjects.Text[] = [];
-  private arenaCells: Phaser.GameObjects.Text[] = [];
-  private ngCells: Phaser.GameObjects.Text[] = [];
-  private abyssCells: Phaser.GameObjects.Text[] = [];
-  private dateCells: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private headers: PixelText[] = [];
+  private footer: PixelText;
+  private rankCells: PixelText[] = [];
+  private nameCells: PixelText[] = [];
+  private levelCells: PixelText[] = [];
+  private arenaCells: PixelText[] = [];
+  private ngCells: PixelText[] = [];
+  private abyssCells: PixelText[] = [];
+  private dateCells: PixelText[] = [];
 
   private keyEsc: Phaser.Input.Keyboard.Key;
   private keyZ: Phaser.Input.Keyboard.Key;
@@ -67,7 +68,7 @@ export class RankingUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 44, "RANKING", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "RANKING", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -86,7 +87,7 @@ export class RankingUI {
     for (const h of headers) {
       this.headers.push(
         scene.add
-          .text(h.x, headerY, h.label, retroStyle(5, "#8ecbff"))
+          .pixelText(h.x, headerY, h.label, retroStyle(5, "#8ecbff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -94,7 +95,7 @@ export class RankingUI {
       );
     }
     // touch hides Z while the board is up (see open()), leaving ESC to close
-    this.footer = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(5, "#9f9fd0")), () =>
+    this.footer = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(5, "#9f9fd0")), () =>
       keyHint("TOP 10 BY LEVEL   ESC/Z: CLOSE", "TOP 10 BY LEVEL   ESC: CLOSE"),
     )
       .setOrigin(0.5)
@@ -106,29 +107,44 @@ export class RankingUI {
       const y = ROWS_START + i * ROW_H;
       this.rankCells.push(
         scene.add
-          .text(COL_RANK, y, `${i + 1}.`, retroStyle(6, "#9f9fd0"))
+          .pixelText(COL_RANK, y, `${i + 1}.`, retroStyle(6, "#9f9fd0"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
           .setVisible(false),
       );
       this.nameCells.push(
-        scene.add.text(COL_NAME, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add.pixelText(COL_NAME, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.levelCells.push(
-        scene.add.text(COL_LEVEL, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add
+          .pixelText(COL_LEVEL, y, "", retroStyle(6, "#ffffff"))
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(152)
+          .setVisible(false),
       );
       this.arenaCells.push(
-        scene.add.text(COL_ARENA, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add
+          .pixelText(COL_ARENA, y, "", retroStyle(6, "#ffffff"))
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(152)
+          .setVisible(false),
       );
       this.ngCells.push(
-        scene.add.text(COL_NG, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add.pixelText(COL_NG, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
       this.abyssCells.push(
-        scene.add.text(COL_ABYSS, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add
+          .pixelText(COL_ABYSS, y, "", retroStyle(6, "#ffffff"))
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(152)
+          .setVisible(false),
       );
       this.dateCells.push(
-        scene.add.text(COL_DATE, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
+        scene.add.pixelText(COL_DATE, y, "", retroStyle(6, "#ffffff")).setOrigin(0, 0.5).setScrollFactor(0).setDepth(152).setVisible(false),
       );
     }
 
@@ -186,7 +202,7 @@ export class RankingUI {
     this.close();
   }
 
-  private cells(): Phaser.GameObjects.Text[][] {
+  private cells(): PixelText[][] {
     return [this.rankCells, this.nameCells, this.levelCells, this.arenaCells, this.ngCells, this.abyssCells, this.dateCells];
   }
 
