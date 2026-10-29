@@ -14,6 +14,7 @@ import {
   buildTileLayers,
   createWalkAnimations,
   FieldKeys,
+  FieldPanels,
   fadeAreaTitle,
   isWalkableCell,
   noteFightSpot,
@@ -30,7 +31,7 @@ import { DialogueBox } from "../ui/DialogueBox";
 import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
-import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { addHelpPopup } from "../ui/HelpPopup";
 import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
@@ -120,11 +121,7 @@ export class SnowScene extends Phaser.Scene {
 
   private hud!: StatusHud;
   private minimap!: Minimap;
-  private inventory!: InventoryUI;
-  private bestiary!: BestiaryUI;
-  private achievementsUI!: AchievementsUI;
-  private questLog!: QuestLog;
-  private settingsUI!: SettingsUI;
+  private panels!: FieldPanels;
   private dialogue!: DialogueBox;
   private fishing!: FishingUI;
   private night!: NightOverlay;
@@ -316,14 +313,16 @@ export class SnowScene extends Phaser.Scene {
     // thin highland shade by day, a proper night on top of it
     this.night = new NightOverlay(this, 0.1, 0.45);
 
-    this.inventory = new InventoryUI(this);
-    this.bestiary = new BestiaryUI(this);
-    this.achievementsUI = new AchievementsUI(this);
-    this.questLog = new QuestLog(this);
+    this.panels = new FieldPanels(this, this.fieldKeys);
+    this.panels.add(new InventoryUI(this), "I");
+    this.panels.add(new BestiaryUI(this), "B");
+    this.panels.add(new AchievementsUI(this), "A");
+    this.panels.add(new QuestLog(this), "U");
     // the quit question (askQuitToTitle)
-    this.dialogue = new DialogueBox(this, []);
+    this.dialogue = this.panels.add(new DialogueBox(this, []));
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
-    this.settingsUI = new SettingsUI(this, () => this.quit());
+    this.panels.add(new SettingsUI(this, () => this.quit()), "O");
+    this.panels.add(this.fishing);
 
     // under a panel, the fishing hole's, the quit question or the help the
     // map's tags go, toasts wait
@@ -336,13 +335,7 @@ export class SnowScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
       this.minimap.destroy();
-      this.inventory.destroy();
-      this.bestiary.destroy();
-      this.achievementsUI.destroy();
-      this.questLog.destroy();
-      this.settingsUI.destroy();
-      this.dialogue.destroy();
-      this.fishing.destroy();
+      this.panels.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
@@ -399,48 +392,14 @@ export class SnowScene extends Phaser.Scene {
     // battle.
     if (this.uiBlocking()) {
       this.zQueued = false;
-      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
-      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
-      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
-      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
-      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.inventory.update();
-      this.bestiary.update();
-      this.achievementsUI.update();
-      this.questLog.update();
-      this.settingsUI.update();
-      this.fishing.update();
-      this.dialogue.update();
+      this.panels.update();
       this.updateRoamers(delta);
       return;
     }
 
-    if (this.fieldKeys.take("I")) {
-      this.inventory.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("B")) {
-      this.bestiary.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("A")) {
-      this.achievementsUI.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("U")) {
-      this.questLog.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("O")) {
-      this.settingsUI.open();
-      return;
-    }
+    if (this.panels.takeOpenKey()) return;
 
     if (this.zQueued) {
       this.zQueued = false;
@@ -501,16 +460,7 @@ export class SnowScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return (
-      this.inventory.isActive() ||
-      this.bestiary.isActive() ||
-      this.achievementsUI.isActive() ||
-      this.questLog.isActive() ||
-      this.settingsUI.isActive() ||
-      this.fishing.isActive() ||
-      this.dialogue.isActive() ||
-      helpOpen(this)
-    );
+    return this.panels.blocking();
   }
 
   // YES to the quit question, or the settings' QUIT chip on touch

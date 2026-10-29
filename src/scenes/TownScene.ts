@@ -62,6 +62,7 @@ import {
   buildTileLayers,
   createWalkAnimations,
   FieldKeys,
+  FieldPanels,
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
@@ -81,7 +82,7 @@ import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
-import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { addHelpPopup } from "../ui/HelpPopup";
 import { placeHeroGear } from "../ui/HeroGear";
 import { HomeUI } from "../ui/HomeUI";
 import { InventoryUI } from "../ui/InventoryUI";
@@ -231,10 +232,9 @@ export class TownScene extends Phaser.Scene {
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private layers!: TileLayers;
+  private panels!: FieldPanels;
   private dialogue!: DialogueBox;
   private shop!: ShopUI;
-  private inventory!: InventoryUI;
-  private bestiary!: BestiaryUI;
   private rankBoard!: RankingUI;
   private fishing!: FishingUI;
   private farm!: FarmUI;
@@ -267,10 +267,8 @@ export class TownScene extends Phaser.Scene {
   private level: number[][] = [];
   private editorQueued = false;
   private luckyWheel!: LuckyWheel;
-  private achievementsUI!: AchievementsUI;
   private questLog!: QuestLog;
   private lookPicker!: LookPicker;
-  private settingsUI!: SettingsUI;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer[] = [];
   private wispRoamer?: Roamer;
@@ -751,32 +749,35 @@ export class TownScene extends Phaser.Scene {
         if (!e.repeat) this.editorQueued = true;
       },
     );
+    this.panels = new FieldPanels(this, this.fieldKeys);
     // every talk, and the quit question (askQuitToTitle)
-    this.dialogue = new DialogueBox(this, []);
-    this.shop = new ShopUI(this);
-    this.inventory = new InventoryUI(this);
-    this.bestiary = new BestiaryUI(this);
-    this.rankBoard = new RankingUI(this);
-    this.fishing = new FishingUI(this);
-    this.farm = new FarmUI(this);
-    this.blacksmith = new BlacksmithUI(this);
-    this.kitchen = new KitchenUI(this);
-    this.home = new HomeUI(this, {
-      rest: () => this.rest(),
-      cook: () => this.kitchen.open(),
-      built: (level) => this.houseBuilt(level),
-    });
-    this.mapEditor = new MapEditor(this, this.layers, level, (name, x, y) => this.moveLandmark(name, x, y));
+    this.dialogue = this.panels.add(new DialogueBox(this, []));
+    this.shop = this.panels.add(new ShopUI(this));
+    this.panels.add(new InventoryUI(this), "I");
+    this.panels.add(new BestiaryUI(this), "B");
+    this.rankBoard = this.panels.add(new RankingUI(this));
+    this.fishing = this.panels.add(new FishingUI(this));
+    this.farm = this.panels.add(new FarmUI(this));
+    this.blacksmith = this.panels.add(new BlacksmithUI(this));
+    this.kitchen = this.panels.add(new KitchenUI(this));
+    this.home = this.panels.add(
+      new HomeUI(this, {
+        rest: () => this.rest(),
+        cook: () => this.kitchen.open(),
+        built: (level) => this.houseBuilt(level),
+      }),
+    );
+    this.mapEditor = this.panels.add(new MapEditor(this, this.layers, level, (name, x, y) => this.moveLandmark(name, x, y)));
     // ?edit in the URL opens the editor without a keypress — a way in that
     // survives whatever swallows the hotkey (a Mac's F-keys, an IME holding
     // keydown, a stale tab from an older bundle)
     if (new URLSearchParams(window.location.search).has("edit")) this.editorQueued = true;
-    this.luckyWheel = new LuckyWheel(this);
-    this.achievementsUI = new AchievementsUI(this);
-    this.questLog = new QuestLog(this);
-    this.lookPicker = new LookPicker(this);
+    this.luckyWheel = this.panels.add(new LuckyWheel(this));
+    this.panels.add(new AchievementsUI(this), "A");
+    this.questLog = this.panels.add(new QuestLog(this), "U");
+    this.lookPicker = this.panels.add(new LookPicker(this));
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
-    this.settingsUI = new SettingsUI(this, () => this.quit());
+    this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 
     const help = addHelpPopup(
       this,
@@ -879,23 +880,8 @@ export class TownScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.pos = { x: this.player.x, y: this.player.y };
       GameState.save();
-      this.dialogue.destroy();
-      this.shop.destroy();
-      this.inventory.destroy();
-      this.bestiary.destroy();
-      this.rankBoard.destroy();
-      this.fishing.destroy();
-      this.farm.destroy();
-      this.blacksmith.destroy();
-      this.kitchen.destroy();
-      this.home.destroy();
-      this.mapEditor.destroy();
-      this.luckyWheel.destroy();
-      this.achievementsUI.destroy();
+      this.panels.destroy();
       this.villagers.destroy();
-      this.questLog.destroy();
-      this.lookPicker.destroy();
-      this.settingsUI.destroy();
       this.minimap.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
@@ -1259,29 +1245,12 @@ export class TownScene extends Phaser.Scene {
   }
 
   // true while a modal panel owns input — every place that checks this must
-  // use this method instead of listing the panels itself, or a newly added
-  // panel silently stops blocking (this happened once already: overlap
-  // callbacks kept a stale copy of this check and missed BestiaryUI).
+  // use this method instead of listing the panels itself, and every panel
+  // goes in through this.panels.add(), or a newly added panel silently stops
+  // blocking (this happened once already: overlap callbacks kept a stale copy
+  // of this check and missed BestiaryUI).
   private uiBlocking(): boolean {
-    return (
-      this.dialogue.isActive() ||
-      this.shop.isActive() ||
-      this.inventory.isActive() ||
-      this.bestiary.isActive() ||
-      this.rankBoard.isActive() ||
-      this.fishing.isActive() ||
-      this.farm.isActive() ||
-      this.blacksmith.isActive() ||
-      this.kitchen.isActive() ||
-      this.home.isActive() ||
-      this.mapEditor.isActive() ||
-      this.luckyWheel.isActive() ||
-      this.achievementsUI.isActive() ||
-      this.questLog.isActive() ||
-      this.lookPicker.isActive() ||
-      this.settingsUI.isActive() ||
-      helpOpen(this)
-    );
+    return this.panels.blocking();
   }
 
   // The day only counts as announced once the toast is handed over: a Town
@@ -1390,29 +1359,9 @@ export class TownScene extends Phaser.Scene {
 
     if (this.uiBlocking()) {
       this.zQueued = false;
-      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
-      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
-      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
-      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
-      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.dialogue.update();
-      this.shop.update();
-      this.inventory.update();
-      this.bestiary.update();
-      this.rankBoard.update();
-      this.fishing.update();
-      this.farm.update();
-      this.blacksmith.update();
-      this.kitchen.update();
-      this.home.update();
-      this.mapEditor.update();
-      this.luckyWheel.update();
-      this.achievementsUI.update();
-      this.questLog.update();
-      this.lookPicker.update();
-      this.settingsUI.update();
+      this.panels.update();
       this.updateRoamers(delta);
       // the town keeps living behind a panel; whoever is talking stands still
       this.villagers.update(delta, this.player, this.dialogue.isActive());
@@ -1436,30 +1385,7 @@ export class TownScene extends Phaser.Scene {
       this.announceSeason();
     }
 
-    if (this.fieldKeys.take("I")) {
-      this.inventory.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("B")) {
-      this.bestiary.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("A")) {
-      this.achievementsUI.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("U")) {
-      this.questLog.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("O")) {
-      this.settingsUI.open();
-      return;
-    }
+    if (this.panels.takeOpenKey()) return;
 
     if (this.cQueued) {
       this.cQueued = false;

@@ -7,6 +7,7 @@ import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_T
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { DialogueBox } from "./ui/DialogueBox";
+import { helpOpen } from "./ui/HelpPopup";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
 import type { Weather } from "./weather";
@@ -742,6 +743,96 @@ export class FieldKeys {
    */
   takeQuitKey(dialogue: DialogueBox, blocked: () => boolean, quit: () => void): void {
     if (this.take("Q") && !blocked()) askQuitToTitle(dialogue, quit);
+  }
+}
+
+/** The keys that open a panel, in the order a frame reads them. */
+type PanelKey = Extract<FieldKey, "I" | "B" | "A" | "U" | "O">;
+const PANEL_KEYS: readonly PanelKey[] = ["I", "B", "A", "U", "O"];
+
+/** What FieldPanels asks of a panel: whether it is up, its frame, its teardown. */
+export interface FieldPanel {
+  isActive(): boolean;
+  update(): void;
+  destroy(): void;
+}
+
+/** A panel one of I B A U O opens and closes. */
+export interface KeyedPanel extends FieldPanel {
+  open(): void;
+  close(): void;
+}
+
+/**
+ * Every panel a map scene puts over its map: the bag (I), the bestiary (B),
+ * the trophies (A), the journal (U) and the settings (O), which their keys
+ * open and close, and the scene's own, which it opens itself (its dialogue
+ * box, the ice hole, the town's shop and the rest). Any of them up, or the
+ * help, is the scene's uiBlocking() (blocking()): the scene stands its hero
+ * still and runs them (update()) instead.
+ *
+ * Each is add()ed as the scene builds it, so they are built in the scene's
+ * own order as before — a panel registers its key listeners and draws as it
+ * is made, which settles which of two listeners on a shared key (ESC, Z, the
+ * arrows) hears a press first — and run in that order: the town's dialogue
+ * box first, so a talk's answer that opens the shop has the shop running that
+ * same frame. Built in create() on the scene's FieldKeys, which queue the
+ * keys; the scene's SHUTDOWN handler calls destroy().
+ */
+export class FieldPanels {
+  private readonly panels: FieldPanel[] = [];
+  private readonly keyed = new Map<PanelKey, KeyedPanel>();
+  private readonly scene: Phaser.Scene;
+  private readonly keys: FieldKeys;
+
+  constructor(scene: Phaser.Scene, keys: FieldKeys) {
+    this.scene = scene;
+    this.keys = keys;
+  }
+
+  /** `panel`, with the key that opens it if it has one; returned for the scene to keep. */
+  add<P extends KeyedPanel>(panel: P, key: PanelKey): P;
+  add<P extends FieldPanel>(panel: P): P;
+  add(panel: FieldPanel, key?: PanelKey): FieldPanel {
+    this.panels.push(panel);
+    if (key) this.keyed.set(key, panel as KeyedPanel);
+    return panel;
+  }
+
+  /** A panel or the help up: the scene's uiBlocking(). */
+  blocking(): boolean {
+    return this.panels.some((p) => p.isActive()) || helpOpen(this.scene);
+  }
+
+  /**
+   * A frame under a panel: a panel key closes its own panel when that is the
+   * one up and is dropped otherwise (it would open a second one over it),
+   * then every panel runs.
+   */
+  update(): void {
+    for (const key of PANEL_KEYS) {
+      const panel = this.keyed.get(key);
+      if (this.keys.take(key) && panel?.isActive()) panel.close();
+    }
+    for (const panel of this.panels) panel.update();
+  }
+
+  /**
+   * With none up: the first panel key pressed opens its panel and the
+   * scene's update() ends there for the frame (true); the rest wait and are
+   * dropped under it.
+   */
+  takeOpenKey(): boolean {
+    for (const key of PANEL_KEYS) {
+      if (!this.keys.take(key)) continue;
+      this.keyed.get(key)?.open();
+      return true;
+    }
+    return false;
+  }
+
+  destroy(): void {
+    for (const panel of this.panels) panel.destroy();
   }
 }
 

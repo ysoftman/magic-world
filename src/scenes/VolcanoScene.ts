@@ -26,6 +26,7 @@ import {
   buildTileLayers,
   createWalkAnimations,
   FieldKeys,
+  FieldPanels,
   fadeAreaTitle,
   isWalkableCell,
   noteFightSpot,
@@ -41,7 +42,7 @@ import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
-import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { addHelpPopup } from "../ui/HelpPopup";
 import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
@@ -123,11 +124,7 @@ export class VolcanoScene extends Phaser.Scene {
 
   private hud!: StatusHud;
   private minimap!: Minimap;
-  private inventory!: InventoryUI;
-  private bestiary!: BestiaryUI;
-  private achievementsUI!: AchievementsUI;
-  private questLog!: QuestLog;
-  private settingsUI!: SettingsUI;
+  private panels!: FieldPanels;
   private dialogue!: DialogueBox;
   private night!: NightOverlay;
   private touch?: TouchControls;
@@ -287,14 +284,15 @@ export class VolcanoScene extends Phaser.Scene {
       lightsOverTiles(level, new Set([T_LAVA_A, T_LAVA_B]), { radius: 136, color: 0xff5a1f, strength: 0.36, pulseMs: LAVA_ANIM_DELAY * 4 }),
     );
 
-    this.inventory = new InventoryUI(this);
-    this.bestiary = new BestiaryUI(this);
-    this.achievementsUI = new AchievementsUI(this);
-    this.questLog = new QuestLog(this);
+    this.panels = new FieldPanels(this, this.fieldKeys);
+    this.panels.add(new InventoryUI(this), "I");
+    this.panels.add(new BestiaryUI(this), "B");
+    this.panels.add(new AchievementsUI(this), "A");
+    this.panels.add(new QuestLog(this), "U");
     // the quit question (askQuitToTitle)
-    this.dialogue = new DialogueBox(this, []);
+    this.dialogue = this.panels.add(new DialogueBox(this, []));
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
-    this.settingsUI = new SettingsUI(this, () => this.quit());
+    this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 
     // under a panel, the quit question or the help the map's tags go and toasts wait
     whilePanelUp(this, () => this.uiBlocking());
@@ -306,12 +304,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
       this.minimap.destroy();
-      this.inventory.destroy();
-      this.bestiary.destroy();
-      this.achievementsUI.destroy();
-      this.questLog.destroy();
-      this.settingsUI.destroy();
-      this.dialogue.destroy();
+      this.panels.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
@@ -363,47 +356,14 @@ export class VolcanoScene extends Phaser.Scene {
     );
 
     if (this.uiBlocking()) {
-      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
-      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
-      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
-      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
-      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.inventory.update();
-      this.bestiary.update();
-      this.achievementsUI.update();
-      this.questLog.update();
-      this.settingsUI.update();
-      this.dialogue.update();
+      this.panels.update();
       this.updateRoamers(delta);
       return;
     }
 
-    if (this.fieldKeys.take("I")) {
-      this.inventory.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("B")) {
-      this.bestiary.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("A")) {
-      this.achievementsUI.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("U")) {
-      this.questLog.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("O")) {
-      this.settingsUI.open();
-      return;
-    }
+    if (this.panels.takeOpenKey()) return;
 
     let vx = 0;
     let vy = 0;
@@ -448,15 +408,7 @@ export class VolcanoScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return (
-      this.inventory.isActive() ||
-      this.bestiary.isActive() ||
-      this.achievementsUI.isActive() ||
-      this.questLog.isActive() ||
-      this.settingsUI.isActive() ||
-      this.dialogue.isActive() ||
-      helpOpen(this)
-    );
+    return this.panels.blocking();
   }
 
   // YES to the quit question, or the settings' QUIT chip on touch

@@ -27,6 +27,7 @@ import {
   buildTileLayers,
   createWalkAnimations,
   FieldKeys,
+  FieldPanels,
   fadeAreaTitle,
   fadeInAfterAreaTitle,
   isWalkableCell,
@@ -40,7 +41,7 @@ import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
-import { addHelpPopup, helpOpen } from "../ui/HelpPopup";
+import { addHelpPopup } from "../ui/HelpPopup";
 import { placeHeroGear } from "../ui/HeroGear";
 import { InventoryUI } from "../ui/InventoryUI";
 import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
@@ -237,11 +238,7 @@ export class AbyssScene extends Phaser.Scene {
 
   private hud!: StatusHud;
   private minimap!: Minimap;
-  private inventory!: InventoryUI;
-  private bestiary!: BestiaryUI;
-  private achievementsUI!: AchievementsUI;
-  private questLog!: QuestLog;
-  private settingsUI!: SettingsUI;
+  private panels!: FieldPanels;
   private night!: NightOverlay;
   private touch?: TouchControls;
 
@@ -463,14 +460,15 @@ export class AbyssScene extends Phaser.Scene {
       { x: down.x, y: down.y, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true },
     ]);
 
-    this.inventory = new InventoryUI(this);
-    this.bestiary = new BestiaryUI(this);
-    this.achievementsUI = new AchievementsUI(this);
-    this.questLog = new QuestLog(this);
+    this.panels = new FieldPanels(this, this.fieldKeys);
+    this.panels.add(new InventoryUI(this), "I");
+    this.panels.add(new BestiaryUI(this), "B");
+    this.panels.add(new AchievementsUI(this), "A");
+    this.panels.add(new QuestLog(this), "U");
     // the stair up's question (askLeave) and the quit question (askQuitToTitle)
-    this.dialogue = new DialogueBox(this, []);
+    this.dialogue = this.panels.add(new DialogueBox(this, []));
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
-    this.settingsUI = new SettingsUI(this, () => this.quit());
+    this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 
     // under a panel, the stair's question or the help the map's tags (TOWN,
     // the stair down's) go and toasts wait
@@ -483,12 +481,7 @@ export class AbyssScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       GameState.save();
       this.minimap.destroy();
-      this.inventory.destroy();
-      this.bestiary.destroy();
-      this.achievementsUI.destroy();
-      this.questLog.destroy();
-      this.dialogue.destroy();
-      this.settingsUI.destroy();
+      this.panels.destroy();
       this.night.destroy();
       this.companionFollower.destroy();
       help.destroy();
@@ -563,19 +556,9 @@ export class AbyssScene extends Phaser.Scene {
     );
 
     if (this.uiBlocking()) {
-      if (this.fieldKeys.take("I") && this.inventory.isActive()) this.inventory.close();
-      if (this.fieldKeys.take("B") && this.bestiary.isActive()) this.bestiary.close();
-      if (this.fieldKeys.take("A") && this.achievementsUI.isActive()) this.achievementsUI.close();
-      if (this.fieldKeys.take("U") && this.questLog.isActive()) this.questLog.close();
-      if (this.fieldKeys.take("O") && this.settingsUI.isActive()) this.settingsUI.close();
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.inventory.update();
-      this.bestiary.update();
-      this.achievementsUI.update();
-      this.questLog.update();
-      this.settingsUI.update();
-      this.dialogue.update();
+      this.panels.update();
       this.updateRoamers(delta);
       return;
     }
@@ -583,30 +566,7 @@ export class AbyssScene extends Phaser.Scene {
     // stepped off the stair up: the next step onto it asks again
     if (this.stairAsked && !this.physics.overlap(this.player, this.upStair)) this.stairAsked = false;
 
-    if (this.fieldKeys.take("I")) {
-      this.inventory.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("B")) {
-      this.bestiary.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("A")) {
-      this.achievementsUI.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("U")) {
-      this.questLog.open();
-      return;
-    }
-
-    if (this.fieldKeys.take("O")) {
-      this.settingsUI.open();
-      return;
-    }
+    if (this.panels.takeOpenKey()) return;
 
     let vx = 0;
     let vy = 0;
@@ -648,15 +608,7 @@ export class AbyssScene extends Phaser.Scene {
   }
 
   private uiBlocking(): boolean {
-    return (
-      this.inventory.isActive() ||
-      this.bestiary.isActive() ||
-      this.achievementsUI.isActive() ||
-      this.questLog.isActive() ||
-      this.settingsUI.isActive() ||
-      this.dialogue.isActive() ||
-      helpOpen(this)
-    );
+    return this.panels.blocking();
   }
 
   // The stair up asks before it leaves for town (abyss.ts): STAY is the
