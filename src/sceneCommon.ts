@@ -713,6 +713,22 @@ export class FieldKeys {
   }
 
   /**
+   * Whether the scene has begun to leave: every way off a map (a fight, an
+   * exit or a stair, a new season) fades its camera out and changes scene
+   * as the fade ends, and the town's rest fades out the same way before it
+   * fades back in. Q (takeQuitKey), the panel keys (FieldPanels) and the
+   * scenes' own (the help, a treasure map's or the ice hole's Z) are dropped
+   * meanwhile, as under a panel: a bag or a question opened in a fight's
+   * 300ms fade was still up as the battle took over, and a dig in it saved.
+   * The quit's wait for the title has no fade; the scenes hold it with their
+   * `quitting`.
+   */
+  leaving(): boolean {
+    const fade = this.scene.cameras.main.fadeEffect;
+    return fade.direction && (fade.isRunning || fade.isComplete);
+  }
+
+  /**
    * S, CTRL+S and M, which answer under a panel too, so a scene takes them
    * ahead of its quit and panel gates: the HUD on or off (kept with the
    * settings; boundCameraToMap follows it), a save, and the sound, said on
@@ -739,10 +755,11 @@ export class FieldKeys {
 
   /**
    * Q: the quit question (askQuitToTitle), never while `blocked()` — over an
-   * open panel the question's ESC would close that panel too.
+   * open panel the question's ESC would close that panel too — nor once the
+   * scene is leaving().
    */
   takeQuitKey(dialogue: DialogueBox, blocked: () => boolean, quit: () => void): void {
-    if (this.take("Q") && !blocked()) askQuitToTitle(dialogue, quit);
+    if (this.take("Q") && !blocked() && !this.leaving()) askQuitToTitle(dialogue, quit);
   }
 }
 
@@ -820,11 +837,13 @@ export class FieldPanels {
   /**
    * With none up: the first panel key pressed opens its panel and the
    * scene's update() ends there for the frame (true); the rest wait and are
-   * dropped under it.
+   * dropped under it. All are taken and dropped once the scene is leaving
+   * (FieldKeys.leaving).
    */
   takeOpenKey(): boolean {
+    const leaving = this.keys.leaving();
     for (const key of PANEL_KEYS) {
-      if (!this.keys.take(key)) continue;
+      if (!this.keys.take(key) || leaving) continue;
       this.keyed.get(key)?.open();
       return true;
     }

@@ -196,7 +196,7 @@ export class VolcanoScene extends Phaser.Scene {
     new TreasureDigger(this, "volcano", this.player, {
       toastY: FIELD_TOAST_Y,
       ownKey: true,
-      blocked: () => this.quitting || this.uiBlocking(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       dug: () => this.holdFights(),
     });
 
@@ -264,7 +264,7 @@ export class VolcanoScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "BEWARE THE FLAME DRAKE!",
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // exit + unopened chests; the drake's crater is deliberately not marked

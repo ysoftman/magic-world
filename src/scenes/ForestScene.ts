@@ -200,7 +200,7 @@ export class ForestScene extends Phaser.Scene {
     new TreasureDigger(this, "forest", this.player, {
       toastY: FIELD_TOAST_Y,
       ownKey: true,
-      blocked: () => this.quitting || this.uiBlocking(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       dug: () => this.holdFights(),
     });
 
@@ -269,7 +269,7 @@ export class ForestScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "FIND THE MOSS GOLEM!",
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // exit + unopened chests; the golem's clearing is deliberately not marked

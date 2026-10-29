@@ -803,7 +803,7 @@ export class TownScene extends Phaser.Scene {
       // the chain's current step, read when the popup opens: the ELDER pays
       // out and the HUNTER hires without the scene restarting
       () => objectiveLine(GameState.quest),
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // key landmarks in world px, drawn as colored dots over the tile map
@@ -1348,10 +1348,9 @@ export class TownScene extends Phaser.Scene {
       return;
     }
 
-    // the question waits as under a panel, and once the walk into the cave has begun its fade
     this.fieldKeys.takeQuitKey(
       this.dialogue,
-      () => this.uiBlocking() || this.enteringDungeon,
+      () => this.uiBlocking(),
       () => this.quit(),
     );
 

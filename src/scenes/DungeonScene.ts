@@ -215,7 +215,7 @@ export class DungeonScene extends Phaser.Scene {
     new TreasureDigger(this, "dungeon", this.player, {
       toastY: FIELD_TOAST_Y,
       ownKey: true,
-      blocked: () => this.quitting || this.uiBlocking(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       dug: () => this.holdFights(),
     });
 
@@ -303,7 +303,7 @@ export class DungeonScene extends Phaser.Scene {
           : abyssOpen(GameState.quest, GameState.ngPlus)
             ? "ABYSS STAIR: FAR SOUTH-EAST CORNER"
             : objectiveLine(GameState.quest),
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // exit + unopened chests (+ the ABYSS stair); the king's lair is

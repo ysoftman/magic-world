@@ -431,7 +431,7 @@ export class AbyssScene extends Phaser.Scene {
       ],
       // built per visit, so back from felling the guardian it says what's next
       floor.guardian && !r.guardianDown ? "DEFEAT THE GUARDIAN!" : "FIND THE STAIRS DOWN!",
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // both stairs and an unopened chest; the zones show on the map already

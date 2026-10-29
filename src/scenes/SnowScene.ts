@@ -290,7 +290,7 @@ export class SnowScene extends Phaser.Scene {
         ["?", "HELP"],
       ],
       "BEWARE THE GLACIER GOLEM!",
-      () => this.uiBlocking() || this.quitting,
+      () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
     // exit + unopened chests; the golem's basin is deliberately not marked
@@ -401,8 +401,11 @@ export class SnowScene extends Phaser.Scene {
 
     if (this.panels.takeOpenKey()) return;
 
-    if (this.zQueued) {
-      this.zQueued = false;
+    // dropped once the scene is leaving, as Q is (FieldKeys.leaving): in a
+    // fight's fade a dig saved and the ice hole opened under the battle
+    const zPressed = this.zQueued && !this.fieldKeys.leaving();
+    this.zQueued = false;
+    if (zPressed) {
       // a treasure map's X (ui/TreasureDig.ts) before the ice hole: it is the
       // nearer, smaller target and is kept 2 tiles clear of the hole
       if (this.treasure.tryDig()) return;
