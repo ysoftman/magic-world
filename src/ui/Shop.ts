@@ -6,6 +6,7 @@ import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
 import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
@@ -96,17 +97,18 @@ export class ShopUI {
 
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private items: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private items: PixelText[] = [];
   private icons: Phaser.GameObjects.Image[] = [];
-  private prices: Phaser.GameObjects.Text[] = [];
-  private headers: Phaser.GameObjects.Text[] = [];
-  private cursor: Phaser.GameObjects.Text;
-  private goldText: Phaser.GameObjects.Text;
-  private msg: Phaser.GameObjects.Text;
-  private info: Phaser.GameObjects.Text;
-  private hint: Phaser.GameObjects.Text;
-  private modeChip?: Phaser.GameObjects.Text;
+  private prices: PixelText[] = [];
+  private headers: PixelText[] = [];
+  private cursor: PixelText;
+  private goldText: PixelText;
+  private msg: PixelText;
+  private info: PixelText;
+  private hint: PixelText;
+  private modeChip?: PixelText;
+  private modeChipBack?: Phaser.GameObjects.Rectangle;
   private msgTimer?: Phaser.Time.TimerEvent;
   // the row whose sale waits on a second Z (see sell()), -1 for none
   private pendingSell = -1;
@@ -149,7 +151,7 @@ export class ShopUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + 40, "SHOP", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "SHOP", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -158,7 +160,7 @@ export class ShopUI {
     ["SUPPLIES", "EQUIPMENT"].forEach((label, col) => {
       this.headers.push(
         scene.add
-          .text(NAME_X + col * COL_W, PANEL_TOP + 84, label, retroStyle(5, "#8ecbff"))
+          .pixelText(NAME_X + col * COL_W, PANEL_TOP + 84, label, retroStyle(5, "#8ecbff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -181,7 +183,7 @@ export class ShopUI {
       );
       this.items.push(
         scene.add
-          .text(x + ICON_DX, y, item.name, retroStyle(6, "#ffffff"))
+          .pixelText(x + ICON_DX, y, item.name, retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
@@ -189,29 +191,34 @@ export class ShopUI {
       );
       this.prices.push(
         scene.add
-          .text(x + PRICE_DX[col], y, "", retroStyle(6, "#ffffff"))
+          .pixelText(x + PRICE_DX[col], y, "", retroStyle(6, "#ffffff"))
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(152)
           .setVisible(false),
       );
     });
-    this.cursor = scene.add.text(0, 0, ">", retroStyle(6, "#ffd166")).setOrigin(0.5).setScrollFactor(0).setDepth(152).setVisible(false);
+    this.cursor = scene.add
+      .pixelText(0, 0, ">", retroStyle(6, "#ffd166"))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(152)
+      .setVisible(false);
 
     this.goldText = scene.add
-      .text(GAME_WIDTH / 2 + PANEL_W / 2 - 40, PANEL_TOP + 40, "G 0", retroStyle(6, "#8ecbff"))
+      .pixelText(GAME_WIDTH / 2 + PANEL_W / 2 - 40, PANEL_TOP + 40, "G 0", retroStyle(6, "#8ecbff"))
       .setOrigin(1, 0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.msg = scene.add
-      .text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
+      .pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 50, "", bodyStyle(22, "#f5f5f5"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     this.info = scene.add
-      .text(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
+      .pixelText(GAME_WIDTH / 2, INFO_Y, "", bodyStyle(22, "#9f9fd0"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
@@ -221,7 +228,7 @@ export class ShopUI {
     // with LB/RB (B/U, below) and its line is as long, 57 glyphs (912px), so
     // on a touch screen it gives up D-PAD: MOVE: 43 glyphs, x 296..984, clear
     // of the d-pad (x<=258) and Z (x>=1076) on its y 578..594.
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), () =>
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 20, "", retroStyle(4, DIM_TEXT)), () =>
       keyHint("HJKL: MOVE   Z: BUY/SELL   TAB: SWITCH MODE   ESC: CLOSE", "D-PAD: MOVE   Z: BUY/SELL   ESC: CLOSE", {
         pad: `${isTouchDevice() ? "" : "HJKL: MOVE   "}Z: BUY/SELL   B/U: SWITCH MODE   ESC: CLOSE`,
       }),
@@ -232,17 +239,23 @@ export class ShopUI {
       .setVisible(false);
     // Touch has no TAB key, so selling was out of reach there; this chip on
     // the title row (x 120..220, clear of the centered title) names the other
-    // mode and a tap queues the same switch TAB does
+    // mode and a tap queues the same switch TAB does. The chip is its label
+    // 10px in from the left of a slate back 8px taller each way, the back
+    // the tap target.
     if (isTouchDevice()) {
       this.modeChip = scene.add
-        .text(NAME_X, PANEL_TOP + 40, "", retroStyle(5, "#ffd166"))
+        .pixelText(NAME_X + 10, PANEL_TOP + 40, "", retroStyle(5, "#ffd166"))
         .setOrigin(0, 0.5)
-        .setPadding(10, 8, 10, 8)
-        .setBackgroundColor("#334155")
         .setScrollFactor(0)
         .setDepth(152)
         .setVisible(false);
-      this.modeChip.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+      this.modeChipBack = scene.add
+        .rectangle(NAME_X, PANEL_TOP + 40, 20, this.modeChip.height + 16, 0x334155)
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0)
+        .setDepth(151.99)
+        .setVisible(false);
+      this.modeChipBack.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
         this.tabQueued = true;
       });
     }
@@ -312,6 +325,7 @@ export class ShopUI {
     this.info.setVisible(true);
     this.hint.setVisible(true);
     this.modeChip?.setVisible(true);
+    this.modeChipBack?.setVisible(true);
     for (const t of this.items) t.setVisible(true);
     for (const t of this.icons) t.setVisible(true);
     for (const t of this.prices) t.setVisible(true);
@@ -462,7 +476,10 @@ export class ShopUI {
     const market = eventToday()?.kind === "market";
     this.goldText.setText(`G ${GameState.gold}`);
     this.title.setText(this.mode === "sell" ? "SHOP - SELL" : market ? `SHOP - MARKET DAY -${Math.round(MARKET_DISCOUNT * 100)}%` : "SHOP");
-    this.modeChip?.setText(this.mode === "buy" ? "SELL" : "BUY");
+    if (this.modeChip) {
+      this.modeChip.setText(this.mode === "buy" ? "SELL" : "BUY");
+      this.modeChipBack?.setSize(this.modeChip.width + 20, this.modeChip.height + 16);
+    }
     for (let i = 0; i < SHOP_ITEMS.length; i++) {
       const item = SHOP_ITEMS[i];
       if (this.mode === "sell") {
@@ -520,6 +537,7 @@ export class ShopUI {
     this.info.setVisible(false);
     this.hint.setVisible(false);
     this.modeChip?.setVisible(false);
+    this.modeChipBack?.setVisible(false);
     this.msgTimer?.remove();
     for (const t of this.items) t.setVisible(false);
     for (const t of this.icons) t.setVisible(false);
@@ -537,6 +555,7 @@ export class ShopUI {
     this.info.destroy();
     this.hint.destroy();
     this.modeChip?.destroy();
+    this.modeChipBack?.destroy();
     this.msgTimer?.remove();
     for (const t of this.items) t.destroy();
     for (const t of this.icons) t.destroy();
