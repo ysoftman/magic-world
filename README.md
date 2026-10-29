@@ -15,7 +15,7 @@
 | 숲 | KING SLIME 처치 | WASP, SPIDER, ORC (드물게 SILVER WASP) | MOSS GOLEM (1부 끝: TO BE CONTINUED, 마을로) |
 | 설원 | MOSS GOLEM 처치 | FROST MOTH, YETI (드물게 AURORA MOTH) | GLACIER GOLEM |
 | 화산 | GLACIER GOLEM 처치 | MAGMA SLIME, FIRE IMP, SALAMANDER | FLAME DRAKE (진엔딩: THE TRUE END) |
-| 심연(ABYSS) | FLAME DRAKE 처치(NEW GAME+ 는 처음부터), 동굴 남동쪽 끝 계단 | 층이 깊을수록 동굴 → 숲 → 설원 → 화산 순 | 5층마다 처치한 보스가 GUARDIAN 으로 |
+| 심연(ABYSS) | FLAME DRAKE 처치(NEW GAME+ 는 처음부터), 동굴 남동쪽 끝 계단(보라빛으로 빛남) | 층이 깊을수록 동굴 → 숲 → 설원 → 화산 순 | 5층마다 처치한 보스가 GUARDIAN 으로 |
 
 최대 레벨은 30. 처음 열리는 지역·기능과 처음 얻은 소재·CANDY·요리 재료의 쓰임새는 마을에서 한 번씩 토스트로 알려 준다.
 

@@ -327,10 +327,22 @@ export class DungeonScene extends Phaser.Scene {
 
     // the cave is dim whatever the hour; night just deepens it
     this.night = new NightOverlay(this, 0.35, 0.25);
-    // a faint blue light off the pools, shimmering slower than the lava's
-    this.night.addLights(
-      lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), { radius: 112, color: 0x3b82f6, strength: 0.18, pulseMs: 4200, air: true }),
-    );
+    // a faint blue light off the pools, shimmering slower than the lava's, and
+    // the ABYSS stair glowing violet as the ABYSS's own stair down does
+    // (AbyssScene). Unlit, its grey steps read as one more of the pocket's
+    // boulders (mean luma 39.6 to their 41.1): a player took it for gone. In
+    // the air, as the pools': the lightmap would only give back its near-black
+    // pit, and would cost the cave a 3.7MB texture it has done without.
+    this.night.addLights([
+      ...lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), {
+        radius: 112,
+        color: 0x3b82f6,
+        strength: 0.18,
+        pulseMs: 4200,
+        air: true,
+      }),
+      ...(abyss ? [{ ...ABYSS_STAIRS_POS, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true }] : []),
+    ]);
 
     this.inventory = new InventoryUI(this);
     this.bestiary = new BestiaryUI(this);
