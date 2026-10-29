@@ -58,13 +58,14 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import { recordRank } from "../ranking";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { skyOverlay } from "../ui/NightOverlay";
 import { isTouchDevice } from "../ui/TouchControls";
+import { TypedText } from "../ui/TypedText";
 import { battleBgKey } from "./BootScene";
 import type { EndingData } from "./EndingScene";
 
@@ -275,7 +276,7 @@ export class BattleScene extends Phaser.Scene {
   private playerSprite!: Phaser.GameObjects.Sprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
   private shieldOverlay!: Phaser.GameObjects.Sprite;
-  private msgText!: Phaser.GameObjects.Text;
+  private msgText!: TypedText;
 
   private menuButtons: MenuButton[] = [];
   private menuTexts: Phaser.GameObjects.Text[] = [];
@@ -624,10 +625,12 @@ export class BattleScene extends Phaser.Scene {
     // bodyStyle(33) with its 5px leading: 54 glyphs a row, and a second row's
     // descenders end at y=697
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92).setStrokeStyle(1, 0xffffff);
-    this.msgText = this.add
-      .text(64, GAME_HEIGHT - 104, "", bodyStyle(33, "#f5f5f5"))
-      .setLineSpacing(5)
-      .setWordWrapWidth(GAME_WIDTH - 128);
+    this.msgText = new TypedText(this, 64, GAME_HEIGHT - 104, bodyStyle(33, "#f5f5f5"), {
+      glyphW: BODY_GLYPH_W[33],
+      wrapWidth: GAME_WIDTH - 128,
+      lineSpacing: 5,
+      rows: 2,
+    });
 
     const menuY = GAME_HEIGHT - 184;
     this.menuButtons = [
@@ -2560,14 +2563,14 @@ export class BattleScene extends Phaser.Scene {
 
   private say(text: string): Promise<void> {
     return new Promise((resolve) => {
-      this.msgText.setText("");
+      this.msgText.setText(text);
       let i = 0;
       const ev = this.time.addEvent({
         delay: this.anim(14, TYPE_MIN_MS),
         repeat: text.length,
         callback: () => {
           i++;
-          this.msgText.setText(text.slice(0, i));
+          this.msgText.reveal(i);
           if (i >= text.length) {
             ev.remove();
             this.awaitAdvance(resolve);
