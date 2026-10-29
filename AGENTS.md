@@ -35,7 +35,7 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 | --- | --- |
 | 키보드·마우스·터치·게임패드 입력 | `input-keyboard-mouse-touch` |
 | 씬 시작·재시작·data 전달·병렬 씬 | `scenes` |
-| Text 스타일·웹폰트·줄바꿈 | `text-and-bitmaptext` |
+| BitmapText(PixelText)·웹폰트·줄바꿈 | `text-and-bitmaptext` |
 | 화면 배율·FIT·선명도 | `scale-and-responsive` |
 | tween·easing | `tweens` |
 | 텍스처 굽기(RenderTexture/DynamicTexture) | `render-textures` |
@@ -82,22 +82,25 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 (실제 사례: FARM 패널을 620px로 만들었는데 씨앗 안내 줄이 660px라 패널 밖으로 삐져나감)
 
 - `Press Start 2P` 는 고정폭이고 글자 하나가 1em 이다. `retroStyle(n)` 텍스트의 폭은
-  **`문자수 x n x PIXEL(4)` px** — 예: `retroStyle(6)` 26글자 = 26 x 24 = 624px.
+  **`문자수 x n x PIXEL(4)` px** — 예: `retroStyle(6)` 26글자 = 26 x 24 = 624px. 소문자 `fi`·`fl`
+  도 두 칸이다(Text 는 이 글꼴의 합자로 한 칸에 그려 폭과 줄바꿈이 한 글자씩 어긋났다).
 - **긴 글은 `bodyStyle`, 짧은 글은 `retroStyle`.** 대화창 본문, 전투 메시지, 상점·가방·대장간·
   부엌의 INFO·msg 줄, 도움말 본문, 업적 설명, 퀘스트 상세는 `bodyStyle(22|33)`(Departure
   Mono)로 쓴다. 제목·HUD·메뉴·이름표·선택지·토스트·키 안내 줄은 `retroStyle` 그대로다. 실제
   사례: Press Start 2P 32px 다섯 줄은 행간이 없어 한 덩어리로 읽혔다.
 - Departure Mono 도 고정폭이다. 글자 폭은 **`size x 7/11`** — `bodyStyle(33)` 21px,
-  `bodyStyle(22)` 14px(`pixelart.ts` 의 `BODY_GLYPH_W`). 11px 격자라 22·33 외의 크기는 흐리다.
-  줄 높이(Phaser metrics)는 39 / 26px 로 retroStyle 보다 크고, 대문자는 줄 위에서 8 / 6px
-  아래(악센트 자리), 내림획은 37 / 24px 까지 내려온다. 세로 여백은 이 값으로 계산한다.
+  `bodyStyle(22)` 14px(`pixelart.ts` 의 `BODY_GLYPH_W`). 11px 격자라 22·33 만 정수배이고 다른
+  크기는 점 굵기가 고르지 않다. 줄 높이는 13/11 em, 39 / 26px 로 retroStyle 보다 크고, 대문자는
+  줄 위에서 9 / 6px 아래(악센트 자리)에서 시작하고, 내림획은 줄 바닥(39 / 26px)까지 내려온다.
+  세로 여백은 이 값으로 계산한다.
   retroStyle(6·8) 줄을 33으로, (4·5) 줄을 22로 바꾸면 가로 폭은 늘 줄어든다.
 - 글꼴은 `@fontsource/press-start-2p` 의 latin subset 과 같은 범위로 자른 Departure Mono
   (`src/assets/fonts/`, 자른 명령은 그 CSS 주석)를 번들로 쓴다(`src/main.ts` 의 CSS import,
-  부팅 전에 두 글꼴을 다 기다린다). 그 범위(U+0000-00FF, U+2000-206F 등, 패키지 `unicode.json`
-  의 `latin`) 밖 글자는 fallback 폰트로 그려져 위 폭 규칙이 맞지 않으니, 새 문구는 범위 안
-  글자만 쓰고 ★ 는 쓰지 않는다. 실제 사례: 예전 Google Fonts CDN 을 막으면 전 화면이 fallback 이 되어 `HOME` 이름표가
-  84→53px 로 줄었다. 지금은 번들이라 오프라인에서도 같다.
+  부팅 전에 두 글꼴을 최대 2초 기다리고, 그 뒤에 들어오면 아틀라스를 다시 굽는다). 아틀라스에는
+  출력 가능한 ASCII 와 `—` 만 들어 있다(`pixelText.ts` 의 `CHARS`, 게임 문구와 이름 입력이 쓰는
+  전부). 그 밖의 글자는 그려지지 않으니 새 문구는 이 범위 안 글자만 쓰고 ★ 는 쓰지 않는다.
+  실제 사례: 예전 Google Fonts CDN 을 막으면 전 화면이 fallback 이 되어 `HOME` 이름표가 84→53px 로
+  줄었다. 지금은 번들이라 오프라인에서도 같다.
 - 확인 순서
   1. 그 텍스트가 그릴 수 있는 **가장 긴 문자열**로 계산한다. 몬스터/아이템 이름, 카운트다운
      (`12H00M`), 골드(`9999`) 같은 동적 값은 최대 길이 기준.
@@ -118,7 +121,7 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   `#0b0b2b` 위 4.96:1)를 쓴다. `#666666`(3.33:1)·`#444444`(1.97:1) 같은 더 어두운 회색은 새로
   쓰지 않는다 — 실제 사례: 업적 설명·재고 0 아이템 등 87줄이 WCAG 4.5:1 미만이었다.
 - 패널 밖, 그림(맵·전투 배경) 위에 직접 놓이는 글자는 외곽선(`setStroke("#1a1028" 또는
-  "#0b0b2b", 4)`)이나 뒷판(`setBackgroundColor` + `setPadding`)을 단다. 실제 사례: 대화창
+  "#0b0b2b", 4)`)이나 뒷판(글자 뒤 Rectangle, 아래 "글자 그리기")을 단다. 실제 사례: 대화창
   이름표 `ELDER` 가 뒤의 `BLACKSMITH` 이름표와 섞였고, 전투 `Z:CONTINUE` 는 풀밭 위에서 1.4:1 이었다.
   그래서 패널·도움말·대화가 열려 있는 동안에는 맵 이름표를 전부 숨긴다(`sceneCommon` 의
   `whilePanelUp(scene, () => this.uiBlocking())`, 모든 필드 씬). 반투명 패널 뒤로 이름표가
@@ -146,21 +149,32 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   뒷판 역할도 한다. 실제 사례: 0.25 에서 새 게임 첫 화면의 `BLACKSMITH` 이름표가 D-pad 뒤로
   거의 그대로 비쳐 화살표와 섞였다(화살표 대비 약 2.7:1, 0.5 에서 약 5.5:1). 원판을 다시
   옅게 하지 않는다.
-- 크기: Press Start 2P 는 8px 격자라 `retroStyle(n)` 의 짝수 n(16·24·32px)이 선명하다.
-  `retroStyle(5)`(20px)는 글자 픽셀이 2.5px 라 조금 흐리지만, 패널·HUD 폭이 거기 맞춰져 있어
-  그대로 두었다. 새로 만드는 줄은 4 또는 6을 쓴다.
-- 해상도: 텍스트는 `retroStyle`·`bodyStyle` 의 `TEXT_RESOLUTION`(1~3)배로 크게 구운 뒤 nearest 로
-  1280x720 캔버스에 줄여 그린다. 캔버스는 어느 화면에서나 1280x720 이라, 크게 구워도 기기 픽셀에
-  1:1 로 맞지 않는다. 얻는 것은 nearest 가 고를 깨끗한 표본, 즉 회색 AA 테두리 픽셀이 줄어드는
-  것이다. 실제 사례: HUD 20px 줄의 중간 밝기 픽셀이 1·2·3 에서 30.2·17.8·8.5% 였고, 1x·2x 화면에서
-  똑같았다(캔버스가 같으므로). 화면이 게임 1픽셀을 2기기픽셀 이상으로 키우면 그 차이가 보이므로
-  배율(DPR x 표시 폭/1280)이 2 이상이면 3, 그 아래는 올림한 값이다(맥북 DPR2 의 정확한 2배는 3).
-  그래서 Text 는 반드시 `retroStyle` 이나 `bodyStyle` 로 만든다. 메모리는 배율의 제곱이라 상한이
-  3이다(마을 Text 497개 기준 4.1·16.4·36.8MB). 값은 `watchTextResolution`(main.ts)이 매 프레임
-  확인하고, 창 크기·브라우저 확대·다른 DPR 화면으로 옮길 때 모든 씬의 Text 를 다시 굽는다.
-  실제 사례: 작게(640x360, DPR2) 연 창을 키워도 새로고침 전까지 1로 남아 흐렸다. DPR 만 바뀌는
-  경우는 resize 가 나지 않고, `matchMedia("(resolution: …dppx)")` 의 change 도 헤드리스
-  Chrome 에서는 오지 않아 확인할 수 없었다. 그래서 이벤트 대신 매 프레임 두 숫자를 비교한다.
+- 크기: Press Start 2P 는 8px 격자라 `retroStyle(n)` 의 짝수 n(16·24·32px)이 글자 픽셀이 고른
+  정수배다. 홀수 n 은 글자 픽셀이 반 픽셀에 걸려(`retroStyle(5)`, 20px 는 2.5px) 2px·3px 이
+  번갈아 나온다. 선명하고 2칸 획은 늘 5px 지만 1칸 획은 굵기가 다르다. 패널·HUD 폭이 5 에 맞춰져
+  있어 그대로 두었다. 새로 만드는 줄은 4 또는 6을 쓴다.
+- 글자 그리기: 글자는 `scene.add.pixelText(x, y, 글, retroStyle(n) | bodyStyle(n))`
+  (`src/pixelText.ts` 의 `PixelText`, BitmapText)로 만든다. `scene.add.text` 는 쓰지 않는다. 두
+  글꼴을 부팅 때 격자 크기(8px / 11px)로 한 번 읽어 켜짐/꺼짐 픽셀 아틀라스로 굽고 정수배로
+  그려서, DPR·창 크기·브라우저 확대와 상관없이 글자 픽셀이 늘 게임 픽셀 블록이다(중간 밝기 픽셀
+  0%). 글자마다 텍스처가 없어 setText 는 쿼드만 옮긴다. 실제 사례: 예전 Text 는 글자마다 캔버스
+  텍스처였고, DPR2 에서 선명하게 하려고 3배로 구워 마을 Text 502개가 36.8MB(GPU 에 같은 양 더)였고
+  20px 줄은 그래도 8.5% 가 회색 테두리였으며, 창이나 화면 배율이 바뀔 때마다 전부 다시 구웠다. 지금
+  아틀라스는 격자 크기 두 장(31·43KB)에 정수배가 아닌 크기와 외곽선 조합마다 한 장(46~763KB)을
+  처음 쓸 때 굽는다.
+  - Text 와 같은 인자·메서드: `setText`, `text`(설정한 원문, 줄바꿈 전), `setColor`,
+    `setStroke`, `setWordWrapWidth(w, advanced)`(Text 의 줄바꿈을 옮긴 것이라 결과가 같다),
+    `getWrappedText`, `setAlign`, `setLineSpacing(px)`, `setFontSize`, `setStyle`, `setShadow`.
+    상자·origin·줄 간격도 Text 와 같은 픽셀에 오고, 위치는 Text 처럼 정수 픽셀로 맞춘다.
+  - 외곽선(`setStroke(색, 두께)`)은 두께/2 px 의 네모 외곽선을 아틀라스에 따로 굽고, 글자색이
+    외곽선에도 곱해진다(`#1a1028` × 글자색, 같거나 더 어둡다). `setShadow` 는 외곽선까지 포함한
+    글리프 전체를 그 색으로 밀어 그린다(blur 없음, 어느 DPR 에서나 적힌 오프셋 그대로).
+  - 배경색·padding·crop 은 없다. 뒷판은 글자 뒤에 Rectangle 을 두고 글이 바뀌면 `setSize` 로
+    맞추며, 누를 수 있는 칩이면 클릭 범위도 뒷판에 건다(`Shop` 의 `modeChipBack`, `DialogueBox`
+    의 `namePlate`). 타자기는 `TypedText` 처럼 줄바꿈한 글의 앞부분을 `setText` 한다.
+  - `width`/`height` 는 BitmapText 라 scale 이 곱해진 값이다. 글자를 찾는 코드는
+    `instanceof PixelText`(type `"BitmapText"`)로 본다(`sceneCommon` 의 이름표 숨기기, 하네스의
+    `audit()`).
 - 화면 배율: 표시 크기는 `main.ts` 의 `scale.snap`(320x180)으로 그 배수까지 내려 잡는다. 그래서
   아트 1픽셀이 늘 정수 CSS px 이고, 맥북 DPR2 에서는 정확히 2배다. 실제 사례: 2.19배일 때 같은 글자
   획이 16·17·18 기기픽셀로 섞였다. 대가로 화면이 한 단계까지 작아진다(맥북 91%).
@@ -253,7 +267,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   닿을 수 없는 자리라 그대로 둔다.
 - 확인 방법: `src/levels.ts` 의 `*_POS` 상수를 import 해서 라벨 사각형 목록을 만들고 AABB
   겹침을 검사하는 일회용 스크립트를 `/tmp/pwcheck/` 에 두고 `bun` 으로 돌린다. 라벨 목록은
-  각 씬 `create()` 의 `.text(...)` 호출이 원본이다.
+  각 씬 `create()` 의 `.pixelText(...)` 호출이 원본이다.
 
 ## 오버월드 맵 레이아웃
 
@@ -384,6 +398,12 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   "c'd" 가 "CC''D" 로 들어갔다. `src/keyboardQueueFix.ts` 를 main.ts 에서 게임 생성 전에 불러
   플러그인마다 이벤트를 한 번만 처리하게 보정한다. Phaser 를 올리면 이 보정이 아직 필요한지 다시
   확인한다(window 에 keydown 3개를 한 번에 보내 씬의 `keydown` 리스너가 각 1회만 받는지).
+- `PixelText`(`src/pixelText.ts`)는 Phaser 4.2.1 BitmapText 의 공개되지 않은 부분에 기댄다:
+  `_text`·`_dirty`·`_bounds`·`_displayOriginX` 필드, `getTextBounds` 가 크기를 잴 때 `text` 를
+  읽는 것(그동안 줄바꿈한 글을 돌려준다), 프로토타입의 `renderWebGL`(정수 픽셀 스냅으로 감싼다)이
+  `this` 없이 render step 으로 불리는 것, 글자 데이터의 `xAdvance` 와 아래에서부터 센 v 좌표. Phaser 를
+  올리면 화면의 PixelText 마다 같은 설정의 Text 를 만들어 width·height·origin·줄바꿈이 같은지 비교하고,
+  DPR1·2 스크린샷으로 위치·선명도가 그대로인지, 외곽선 글자와 그림자가 나오는지 다시 본다.
 - Phaser 4.2.1 RenderTexture GL 텍스처 누수: `TextureSource.init` 이 렌더 텍스처 소스에 제 크기의
   GL 텍스처를 만들고, `DynamicTexture` 생성자가 그 자리에 DrawingContext 의 텍스처를 넣으면서 첫
   텍스처를 지우지 않아 RenderTexture 하나마다 텍스처 하나가 영영 남았다. 실제 사례: 마을·화산
