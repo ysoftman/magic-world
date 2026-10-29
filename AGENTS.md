@@ -289,13 +289,17 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   실제 사례: 여섯 씬이 같은 키 등록·플래그·처리를 각자 들고 있어, 최근 커밋 150개 중 21개가 이 씬
   3개 이상을 함께 고쳤다. 공통 키를 더하려면 `FieldKey` 타입과 생성자를 고치고 TouchControls 의
   `MENU`·Gamepad 의 `FIELD` 표도 같이 본다.
+- 키를 누른 채 씬이 바뀌면 새 씬의 Key 는 그 키의 반복 keydown(`e.repeat`)을 첫 DOWN 으로 받는다. 그래서
+  `FieldKeys` 는 반복을 모두 버리고, 씬이 직접 등록하는 키도 `!e.repeat` 일 때만 큐에 담는다(마을 Z·SPACE·C·F2,
+  설원 Z). 실제 사례: 출구나 전투 끝에 I 를 누르고 있으면 마을에 들어서자마자 가방이 열렸고, S·M 은 누른
+  씬에서 HUD·소리를 끈 뒤 새 씬에서 도로 켰다.
 - 맵 위에 뜨는 패널은 `sceneCommon` 의 `FieldPanels` 에 모은다. 새 필드 씬은 FieldKeys 다음에
   `this.panels = new FieldPanels(this, this.fieldKeys)` 를 만들고, 패널을 만드는 그 자리에서 `add` 한다.
   I·B·A·U·O 패널은 키와 함께(`this.panels.add(new InventoryUI(this), "I")`), 대화창·얼음 낚시·마을 상점처럼
   씬이 직접 여는 패널은 키 없이(`this.dialogue = this.panels.add(new DialogueBox(this, []))`) 넣는다.
   `uiBlocking()` 은 `this.panels.blocking()`(패널과 도움말), update() 의 막힌 분기는 영웅을 세운 뒤
   `this.panels.update()`(그 패널의 키로 닫기와 모든 패널의 update), 열기는 `if (this.panels.takeOpenKey())
-  return;`, SHUTDOWN 은 `this.panels.destroy()` 다. add 순서가 만드는 순서이자 update 순서다. 패널은
+  return;`, SHUTDOWN 은 `saveOnShutdown` 목록의 `this.panels` 다. add 순서가 만드는 순서이자 update 순서다. 패널은
   만들 때 키 리스너를 등록하므로 같은 키(ESC·Z·방향키)를 누가 먼저 듣는지가 이 순서로 정해지고, 마을은
   대화창이 먼저라 대화의 답으로 연 상점이 같은 프레임에 돈다. `add` 하지 않은 패널은 uiBlocking 에서
   빠진다. 실제 사례: 여섯 씬이 다섯 패널의 필드·생성·uiBlocking·닫기·update·열기·destroy 를 씬마다
@@ -307,6 +311,26 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   끝에서 씬을 바꾼다. 실제 사례: 조우 페이드 300ms 안에 누른 I 는 가방을 연 채 전투로 넘어갔고, Q 는
   출구 페이드 위에 질문을 띄웠고, 설원 Z 는 페이드 중에 얼음 낚시를 열거나 보물을 파고 저장했다. 종료
   대기 700ms 는 페이드가 없어 각 씬의 `quitting` 이 막는다.
+- 필드 씬마다 똑같던 나머지도 `sceneCommon` 의 도우미를 쓴다. 새 필드 씬은 이렇게 넣는다.
+  - 토스트: create() 맨 앞에서(첫 SHUTDOWN 리스너가 되게) `this.toasts = new FieldToasts(this, { blocked: () =>
+    this.uiBlocking() })`, update() 에서 `this.toasts.update(delta)`. 저장마다 SAVED 를, 1초마다 업적·해금
+    팁·외형 해금 토스트를 낸다(패널이 열려 있으면 기다림). 씬이 직접 알리는 저장(새 기록, 계절 소식)은
+    `this.toasts.quietSave()` 로 해서 SAVED 가 그 소식 뒤에 줄 서지 않게 한다. 마을은 `toastY:
+    STATUS_HUD_TOAST_Y`·`tip: "town"`·대화 중에는 SAVED 를 보이는 `savedHeld`, 설원은 `tip: "snow"` 다.
+  - 걷기: 씬 키를 등록하는 자리에서 `this.walk = new HeroWalk(this, this.player, { shadow, companion, weapon,
+    shield })`, update() 에서 `const moving = this.walk.step(떠나는 중인지)`, 막힌 분기에서 `this.walk.halt()`,
+    계절 전환처럼 세워서 돌려세울 때 `this.walk.idle()`.
+  - 몬스터: `addRoamer(this, group, zone, kind, texture, boss)` 를 `this.roamers` 에 넣고, update() 의 모든
+    분기(막힘·quitting 포함)에서 `wanderRoamers(this.roamers, delta)`.
+  - 출구·계단: 씬 플래그를 세운 뒤 `walkOut(this, this.player, () => this.scene.start(...))`(200ms 페이드).
+  - SHUTDOWN: create() 끝에서 `saveOnShutdown(this, [this.minimap, this.panels, this.night,
+    this.companionFollower, help, this.touch])`. 저장한 뒤 차례로 destroy 한다. 마을은 그 바로 앞의 SHUTDOWN
+    리스너에서 `GameState.pos` 를 적는다.
+  실제 사례: 여섯 씬이 씬마다 업적 확인·SAVED 구독 40줄, 걷기 60줄, 로머 70줄 남짓과 출구 페이드를 각자
+  들고 있었다. 패널 위의 SAVED 를 막는 조건이 심연에만 빠져 가방을 열어 둔 채 저장하면 SAVED 가 패널 위에
+  떴고, 토스트 큐가 생긴 뒤 마을의 저장 플래그 주석만 고쳐져 다른 다섯 씬은 "SAVED 가 같은 Text 를
+  덮어쓴다"는 옛 설명을 그대로 들고 있었다. 조우(쿨다운·굴림)는 굴리는 조건이 씬마다 달라(마을 키 큰 풀,
+  심연 수호자 방·밤 없음, 출구 둘레 안전 상자) 씬에 남아 있다.
 - 필드의 패널 키나 전투 키를 새로 만들면 터치와 게임패드도 같이 본다. 터치 오른쪽 세로 줄은
   `TouchControls` 의 `MENU`(씬이 등록한 키만 버튼이 됨), 패드는 `src/ui/Gamepad.ts` 의
   `FIELD`/`BATTLE` 표다. 둘 다 `sendKey` 로 키보드 이벤트를 합성해 보내서 씬은 키보드만
