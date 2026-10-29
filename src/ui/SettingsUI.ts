@@ -3,6 +3,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { BATTLE_SPEEDS, GameState, TEXT_SPEEDS, TIME_SPEEDS } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
@@ -86,13 +87,13 @@ export class SettingsUI {
   private scene: Phaser.Scene;
   private dim: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
-  private title: Phaser.GameObjects.Text;
-  private rows: Phaser.GameObjects.Text[] = [];
+  private title: PixelText;
+  private rows: PixelText[] = [];
   private rowsHit: Phaser.GameObjects.Zone;
-  private hint: Phaser.GameObjects.Text;
+  private hint: PixelText;
   private closeChip: Phaser.GameObjects.Container;
   private quitChip?: Phaser.GameObjects.Container;
-  private quitText?: Phaser.GameObjects.Text;
+  private quitText?: PixelText;
   private offFullscreen: () => void;
 
   constructor(scene: Phaser.Scene, onQuit?: () => void) {
@@ -109,14 +110,14 @@ export class SettingsUI {
       .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
-      .text(GAME_WIDTH / 2, TITLE_Y, "SETTINGS", retroStyle(8, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2, TITLE_Y, "SETTINGS", retroStyle(8, "#ffd166"))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(152)
       .setVisible(false);
     LABELS.forEach((_, i) => {
       const row = scene.add
-        .text(GAME_WIDTH / 2, ROW_Y + i * ROW_GAP, "", retroStyle(6, "#f5f5f5"))
+        .pixelText(GAME_WIDTH / 2, ROW_Y + i * ROW_GAP, "", retroStyle(6, "#f5f5f5"))
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(152)
@@ -129,7 +130,7 @@ export class SettingsUI {
     // the d-pad: the title opens SETTINGS too and has no TouchControls. A
     // pad's line is 57 (912px, x 184..1096); on a touch screen it leaves out
     // START (O) for 51 (x 232..1048), between the up arrow and Z.
-    this.hint = bindKeyHint(scene.add.text(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(4, "#8ecbff")), () =>
+    this.hint = bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(4, "#8ecbff")), () =>
       keyHint("JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ESC/O: CLOSE", "TAP: TOGGLE/APPLY   TAP LEFT/RIGHT: -/+", {
         pad: `JK: SELECT   HL: ADJUST   Z: APPLY/CLOSE   ${isTouchDevice() ? "ESC" : "ESC/O"}: CLOSE`,
       }),
@@ -139,7 +140,7 @@ export class SettingsUI {
       .setDepth(152)
       .setVisible(false);
 
-    const chipText = scene.add.text(0, 0, "CLOSE", retroStyle(5, "#8ecbff")).setOrigin(0.5);
+    const chipText = scene.add.pixelText(0, 0, "CLOSE", retroStyle(5, "#8ecbff")).setOrigin(0.5);
     const chipW = chipText.width + CHIP_PAD * 2;
     const chipH = chipText.height + CHIP_PAD * 2;
     const chipBox = scene.add.rectangle(0, 0, chipW, chipH, 0x0b0b2b).setStrokeStyle(2, 0x8ecbff);
@@ -156,7 +157,7 @@ export class SettingsUI {
     });
 
     if (onQuit && isTouchDevice()) {
-      const quitText = scene.add.text(0, 0, "SURE?", retroStyle(5, "#ff8a8a")).setOrigin(0.5);
+      const quitText = scene.add.pixelText(0, 0, "SURE?", retroStyle(5, "#ff8a8a")).setOrigin(0.5);
       const quitW = quitText.width + CHIP_PAD * 2;
       const quitH = quitText.height + CHIP_PAD * 2;
       const quitBox = scene.add.rectangle(0, 0, quitW, quitH, 0x0b0b2b).setStrokeStyle(2, 0xff8a8a);
