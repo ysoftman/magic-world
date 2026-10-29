@@ -120,6 +120,8 @@ export class ShopUI {
   private keyL: Phaser.Input.Keyboard.Key;
   private keyZ: Phaser.Input.Keyboard.Key;
   private keyTab: Phaser.Input.Keyboard.Key;
+  private keyB: Phaser.Input.Keyboard.Key;
+  private keyU: Phaser.Input.Keyboard.Key;
   private keyEsc: Phaser.Input.Keyboard.Key;
 
   private upQueued = false;
@@ -254,6 +256,8 @@ export class ShopUI {
     this.keyL = kb.addKey(Phaser.Input.Keyboard.KeyCodes.L);
     this.keyZ = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
     this.keyTab = kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
+    this.keyB = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+    this.keyU = kb.addKey(Phaser.Input.Keyboard.KeyCodes.U);
     this.keyEsc = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     const DOWN = Phaser.Input.Keyboard.Events.DOWN;
@@ -271,9 +275,16 @@ export class ShopUI {
     this.keyZ.on(DOWN, () => {
       this.zQueued = true;
     });
-    this.keyTab.on(DOWN, () => {
+    // B and U switch too: a gamepad sends no TAB, its left/right move between
+    // the columns, and its shoulder pair LB/RB comes in as B and U
+    // (Gamepad.ts). Under the shop the town takes those two and drops them
+    // (TownScene's uiBlocking branch), so neither opens its own panel.
+    const switchMode = () => {
       this.tabQueued = true;
-    });
+    };
+    this.keyTab.on(DOWN, switchMode);
+    this.keyB.on(DOWN, switchMode);
+    this.keyU.on(DOWN, switchMode);
     this.keyEsc.on(DOWN, () => {
       this.escQueued = true;
     });
