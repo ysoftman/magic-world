@@ -455,10 +455,15 @@ export class DungeonScene extends Phaser.Scene {
 
     let vx = 0;
     let vy = 0;
-    if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
-    else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
-    if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
-    else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    // stood still through a scene change's fade: walked on, the fight's spot
+    // could land on the exit or the ABYSS stair, which took the hero there
+    // (the stair at B1, unasked) the moment the battle returned
+    if (!this.exitingDungeon) {
+      if (this.keyLeft.isDown || this.keyH.isDown) vx = -240;
+      else if (this.keyRight.isDown || this.keyL.isDown) vx = 240;
+      if (this.keyUp.isDown || this.keyK.isDown) vy = -240;
+      else if (this.keyDown.isDown || this.keyJ.isDown) vy = 240;
+    }
 
     this.player.setVelocity(vx, vy);
 
