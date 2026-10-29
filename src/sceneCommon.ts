@@ -675,14 +675,14 @@ export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" 
  * run faded out would otherwise act on this run's first frame. The scene's
  * keys go at its shutdown, these listeners with them.
  *
- * A repeat keydown is dropped, but on S and M, which never checked. Phaser
- * sends a Key's DOWN for the first keydown of a press only, so a repeat here
- * is a key held through the scene switch, and would act on the new scene's
- * first frame. The town's I took one too, from before the check (no reason
- * kept): an I held through a field's exit or a fight's end opened the bag on
- * arrival in town, and nowhere else. Built before the scene's TouchControls,
- * so touch gets a button for each of these its MENU has. `toastY` is the
- * scene's toast line (the town's sits under the HUD, the fields' lower).
+ * A repeat keydown is dropped. Phaser sends a Key's DOWN for the first
+ * keydown of a press only, so a repeat here is a key held through the scene
+ * switch, and would act on the new scene's first frame: an I held through a
+ * field's exit or a fight's end opened the town's bag on arrival, and an S
+ * or an M held so flipped the HUD or the sound straight back. Built before
+ * the scene's TouchControls, so touch gets a button for each of these its
+ * MENU has. `toastY` is the scene's toast line (the town's sits under the
+ * HUD, the fields' lower).
  */
 export class FieldKeys {
   private readonly queued = new Set<FieldKey>();
@@ -694,22 +694,20 @@ export class FieldKeys {
     this.toastY = toastY;
     const kb = scene.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
-    const on = (code: number, key: (e: KeyboardEvent) => FieldKey | null): void => {
+    const on = (code: number, key: FieldKey | ((e: KeyboardEvent) => FieldKey)): void => {
       kb.addKey(code).on(Phaser.Input.Keyboard.Events.DOWN, (_k: Phaser.Input.Keyboard.Key, e: KeyboardEvent) => {
-        const pressed = key(e);
-        if (pressed) this.queued.add(pressed);
+        if (!e.repeat) this.queued.add(typeof key === "function" ? key(e) : key);
       });
     };
-    const once = (code: number, key: FieldKey): void => on(code, (e) => (e.repeat ? null : key));
     on(K.S, (e) => (e.ctrlKey ? "CTRL+S" : "S"));
-    on(K.M, () => "M");
-    once(K.T, "T");
-    once(K.I, "I");
-    once(K.B, "B");
-    once(K.A, "A");
-    once(K.U, "U");
-    once(K.O, "O");
-    once(K.Q, "Q");
+    on(K.M, "M");
+    on(K.T, "T");
+    on(K.I, "I");
+    on(K.B, "B");
+    on(K.A, "A");
+    on(K.U, "U");
+    on(K.O, "O");
+    on(K.Q, "Q");
   }
 
   /** Whether `key` was pressed since it was last taken; taking it clears it. */
