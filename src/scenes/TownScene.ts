@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { abyssOpen } from "../abyss";
 import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
@@ -9,6 +10,7 @@ import { encounterOut } from "../fx";
 import { cropProgress, type DeliveryState, econDay, FARM_PLOTS, FIRE_BEASTS, GameState, isNight, type VillagerKey } from "../gameState";
 import { BEDS_LEVEL, houseTexture } from "../home";
 import {
+  ABYSS_GATE_POS,
   ARENA_POS,
   BLACKSMITH_POS,
   BOUNTY_BOARD_POS,
@@ -49,6 +51,7 @@ import type { PixelText } from "../pixelText";
 import {
   addExitArrow,
   addRoamer,
+  askAbyssDive,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -410,6 +413,7 @@ export class TownScene extends Phaser.Scene {
         .setDepth(11),
     );
     this.fixedLabels.push(rectOf(caveTag));
+    if (abyssOpen(GameState.quest, GameState.ngPlus)) this.addAbyssGate();
 
     this.addSign("RANK_BOARD_POS", RANK_BOARD_POS, "RANK BOARD", "#c084fc");
     this.addSign("BOUNTY_BOARD_POS", BOUNTY_BOARD_POS, "BOUNTY BOARD", "#facc15");
@@ -768,6 +772,9 @@ export class TownScene extends Phaser.Scene {
       { x: VOLCANO_POS.x, y: VOLCANO_POS.y, color: 0xf97316 },
       { x: FISH_POS.x, y: FISH_POS.y, color: 0x38bdf8 },
       { x: FARM_POS.x, y: FARM_POS.y, color: 0xa3e635 },
+      // violet as the cave's stair is, in its glow's shade: the stair dot's
+      // 0xc084fc is the RANK BOARD's here
+      ...(abyssOpen(GameState.quest, GameState.ngPlus) ? [{ x: ABYSS_GATE_POS.x, y: ABYSS_GATE_POS.y, color: 0x8b5cf6 }] : []),
     ]);
 
     // open ground: no ambient shade, full night range
@@ -960,6 +967,32 @@ export class TownScene extends Phaser.Scene {
     const zone = this.track(landmark, this.add.zone(x, y, w, h));
     this.physics.add.existing(zone, true);
     this.blockers.push(zone);
+  }
+
+  // The ABYSS's gate (abyss.ts) beside the cave, once the ABYSS is open: a Z
+  // there asks what the cave's stair asks (askAbyssDive, in talkSpots), so a
+  // dive starts from town without the walk through the cave. Its vortex
+  // breathes. Solid over the whole tile as a workplace is, not just at its
+  // foot as a prop is: the hero is drawn over it (10 to its 9), so one
+  // behind the ring would stand on it. No lamp at night: a violet one turns
+  // the faces in it violet.
+  private addAbyssGate(): void {
+    const pos = ABYSS_GATE_POS;
+    this.track("ABYSS_GATE_POS", addGroundShadow(this, pos, { w: 56, h: 14 }));
+    this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate").setDepth(9));
+    const glow = this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate-glow").setDepth(9));
+    this.tweens.add({ targets: glow, alpha: 0.2, duration: 1400, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    this.addBlocker("ABYSS_GATE_POS", pos.x, pos.y, 48, TILE);
+    // the cave stair's tag, in the signs' place
+    const tag = this.track(
+      "ABYSS_GATE_POS",
+      this.add
+        .pixelText(pos.x, this.labelY(pos.y, 48), "ABYSS", retroStyle(5, "#c084fc"))
+        .setStroke("#1a1028", 4)
+        .setOrigin(0.5)
+        .setDepth(11),
+    );
+    this.fixedLabels.push(rectOf(tag));
   }
 
   // signpost + name tag, the shape every interactive spot shares
@@ -1415,6 +1448,18 @@ export class TownScene extends Phaser.Scene {
           this.blacksmith.open();
         },
       },
+      ...(abyssOpen(GameState.quest, GameState.ngPlus)
+        ? [
+            {
+              x: ABYSS_GATE_POS.x,
+              y: ABYSS_GATE_POS.y,
+              run: () =>
+                askAbyssDive(this, this.player, this.dialogue, () => {
+                  this.enteringDungeon = true;
+                }),
+            },
+          ]
+        : []),
     ];
   }
 

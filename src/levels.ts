@@ -480,6 +480,15 @@ export const ARENA_POS = { ...LANDMARKS.ARENA_POS };
 // monster materials into gear)
 export const BLACKSMITH_POS = { ...LANDMARKS.BLACKSMITH_POS };
 
+// The ABYSS's gate (TownScene, once the ABYSS is open), on the grass two tiles
+// east of the cave's spur road and three rows down from the mouth: 231px from
+// the CAVE and from the GUARD, and 143px from where a hero coming up out of
+// the cave or the ABYSS is set down (two tiles south of the mouth), so a Z
+// there isn't taken for it. Its tag sits under the CAVE's (flipped below the
+// mouth, TownScene.labelY), not beside it: a row higher, the two would share
+// a line 30px apart and read as one, "CAVE ABYSS".
+export const ABYSS_GATE_POS = { ...LANDMARKS.ABYSS_GATE_POS };
+
 // Filled here rather than at the declaration because it needs every landmark
 // above to exist first. The map editor moves whatever is listed.
 // Terrain a landmark owns, as tile offsets from its own tile. The map editor
@@ -542,6 +551,7 @@ Object.assign(EDITABLE_POS, {
   VOLCANO_POS,
   ARENA_POS,
   BLACKSMITH_POS,
+  ABYSS_GATE_POS,
 });
 
 // The keepers whose workplace TownScene draws behind them: a 2x2-tile building

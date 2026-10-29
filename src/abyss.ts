@@ -20,25 +20,29 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 //   can't be caught (no free TROLL KING). A catch is a catch, though: an
 //   ordinary foe caught down here counts for the HUNTER's catch job and his
 //   fire-beast job like one caught anywhere, as both read the catch list.
+// - Two ways down ask the same (sceneCommon's askAbyssDive): the cave's
+//   stair, and the town's gate beside the cave mouth (TownScene), which
+//   spares the walk through the cave. The stair up still comes out at the
+//   cave mouth, a few steps from the gate.
 // - A fallen GUARDIAN makes the floor below it a checkpoint (B6, B11...,
-//   GameState.abyssCheckpoint, the deepest only): the cave's stair then
-//   offers a dive from there instead of B1. Nothing else is kept — the
-//   floor in progress isn't saved, so a reload or a quit to the title loses
-//   at most five floors — and a checkpoint start brings the HP and MP the
-//   hero walks in with, no refill (the town's HOME is the place for that).
-//   It is kept through NEW GAME+ like the record beside it; B1 is always
-//   still offered when the cycle's harder foes put it out of reach.
+//   GameState.abyssCheckpoint, the deepest only): the way down then offers
+//   a dive from there instead of B1. Nothing else is kept — the floor in
+//   progress isn't saved, so a reload or a quit to the title loses at most
+//   five floors — and a checkpoint start brings the HP and MP the hero
+//   walks in with, no refill (the town's HOME is the place for that). It is
+//   kept through NEW GAME+ like the record beside it; B1 is always still
+//   offered when the cycle's harder foes put it out of reach.
 // - The stair up asks before it leaves (STAY first, and on ESC: walking onto
 //   it by mistake ended deep runs), and leaving by it from B2 down opens a
 //   portal there (GameState.abyssPortal, saved the moment LEAVE is picked,
-//   so a reload or a quit to the title leaves none): the cave's stair then
-//   offers the deeper of it and the checkpoint. The walk home to rest and
-//   back is its price, so it costs nothing else. It is used up once taken,
-//   and gone on a fall anywhere down here, so a death still costs the
-//   floors; a dive from B1 leaves it waiting, and leaving again keeps the
-//   deeper of the two. The floor is built anew and the hero walks in with HP
-//   and MP as they are, as from a checkpoint; NEW GAME+ keeps it on the same
-//   terms.
+//   so a reload or a quit to the title leaves none): the way down then
+//   offers the deeper of it and the checkpoint. Its price is the walk
+//   across town to rest at HOME and back to the gate (no longer the cave on
+//   top), so it costs nothing else. It is used up once taken, and gone on a
+//   fall anywhere down here, so a death still costs the floors; a dive from
+//   B1 leaves it waiting, and leaving again keeps the deeper of the two. The
+//   floor is built anew and the hero walks in with HP and MP as they are, as
+//   from a checkpoint; NEW GAME+ keeps it on the same terms.
 // - No day or night underground: no night stat/loot shift, no night
 //   encounter rate, a standing gloom instead of the clock's.
 export const ABYSS_W = 22;
@@ -52,18 +56,19 @@ export const ABYSS_FLOOR_MAX = 999;
 // never shallower than one already waiting
 export const portalOnLeave = (floor: number, portal: number): number => (floor >= 2 ? Math.max(floor, portal) : portal);
 
-// where a dive from the cave's stair may start instead of B1: the deeper of
-// the portal and the checkpoint (the portal on a tie, so taking it uses it
-// up), or null when neither is past B1
+// where a dive (the cave's stair, the town's gate) may start instead of B1:
+// the deeper of the portal and the checkpoint (the portal on a tie, so taking
+// it uses it up), or null when neither is past B1
 export function abyssResume(portal: number, checkpoint: number): { floor: number; portal: boolean } | null {
   const floor = Math.max(portal, checkpoint);
   if (floor <= 1) return null;
   return { floor, portal: portal >= checkpoint };
 }
 
-// The stair opens once the FLAME DRAKE has fallen. NEW GAME+ wipes that flag,
-// but only a hero who has beaten the drake can start a cycle, so the stair
-// stays open through every replay — like the record it keeps (abyssBest).
+// The stair (and the town's gate) opens once the FLAME DRAKE has fallen. NEW
+// GAME+ wipes that flag, but only a hero who has beaten the drake can start a
+// cycle, so the stair stays open through every replay — like the record it
+// keeps (abyssBest).
 export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean {
   return q.volcanoBoss || ngPlus > 0;
 }
@@ -114,9 +119,10 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
 //   beat it, and every fight that deep still risks half the purse. The
 //   portal (above) undoes the sim's attrition: a hero low on HP can walk
 //   home to rest and come back to the same floor, so deep floors are easier
-//   to reach than these one-go figures, at the price of the walk. Slipping
-//   past roamers instead of fighting them all (there is always a way round,
-//   see the zones below) eases it too, and isn't in the sim either.
+//   to reach than these one-go figures, at the price of the walk home and
+//   back (the town's gate spares the cave). Slipping past roamers instead
+//   of fighting them all (there is always a way round, see the zones below)
+//   eases it too, and isn't in the sim either.
 //   Gold also stops at MAX_GOLD (9999) whatever the source.
 // - materials: drops.ts rollDrop as anywhere else, the count x2 from B11 and
 //   x3 from B21. The shop won't buy materials, so this is forge and delivery

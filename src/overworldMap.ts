@@ -49,5 +49,6 @@ export const OVERWORLD_MAP = {
     VOLCANO_POS: { x: 25 * T + T / 2, y: 19 * T + T / 2 },
     ARENA_POS: { x: 13 * T + T / 2, y: 6 * T + T / 2 },
     BLACKSMITH_POS: { x: 2 * T + T / 2, y: 10 * T + T / 2 },
+    ABYSS_GATE_POS: { x: 25 * T + T / 2, y: 5 * T + T / 2 },
   },
 };
