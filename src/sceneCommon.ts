@@ -1,8 +1,9 @@
 import Phaser from "phaser";
+import { ACHIEVEMENTS, announceLooks, claimAchievements } from "./achievements";
 import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { PIXEL } from "./config";
-import { GameState } from "./gameState";
+import { GameState, onSaved } from "./gameState";
 import { OBJECT_TILES, SOLID, T_GRASS, T_LAVA_A, T_LAVA_B, T_PATH, T_SCORCH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "./levels";
 import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { TILE_VARIANTS } from "./scenes/BootScene";
@@ -10,6 +11,7 @@ import type { DialogueBox } from "./ui/DialogueBox";
 import { helpOpen } from "./ui/HelpPopup";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
+import { showUnlockTip, type TipPlace } from "./unlockTips";
 import type { Weather } from "./weather";
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -855,6 +857,85 @@ export class FieldPanels {
 
   destroy(): void {
     for (const panel of this.panels) panel.destroy();
+  }
+}
+
+// how often a map scene claims what it has earned (FieldToasts.update)
+const CLAIM_EVERY_MS = 1000;
+// the time since a scene's last claim, kept across its runs as each scene's
+// own counter was: Phaser reuses the instance, and nothing reset it
+const sinceClaim = new WeakMap<Phaser.Scene, number>();
+
+/**
+ * The toasts every map scene shows alike, on its toast line (`toastY`).
+ *
+ * SAVED after each save, but a quiet one (quietSave) or one made while
+ * `savedHeld()`, by default `blocked()`: a save made in a panel (an equip, a
+ * potion, a companion picked) is already told on the panel's own message
+ * line, and this toast landed on its top rows (the bag's MATERIALS header).
+ *
+ * Once a second, with nothing `blocked()` (a panel, a talk or the help up),
+ * the achievements the state now meets, the place's next unlock tip (`tip`,
+ * unlockTips.ts) and any look the achievements unlock. Earned anywhere, a
+ * boss's trophy toasts on the way back from its fight rather than once the
+ * hero wanders back to town, the one scene that used to look. A tip or
+ * trophy drawn over a panel covered its top rows; the claim just waits for
+ * it to close. Either is saved quietly, or the SAVED toast would queue up
+ * behind its own news.
+ *
+ * Built first in create(): its SHUTDOWN unsubscribe has to run before the
+ * scene's SHUTDOWN save, or that save would toast on a scene tearing down,
+ * and SHUTDOWN listeners run in the order they were added.
+ */
+export class FieldToasts {
+  private quiet = false;
+  private readonly scene: Phaser.Scene;
+  private readonly toastY: number;
+  private readonly tip?: TipPlace;
+  private readonly blocked: () => boolean;
+
+  constructor(
+    scene: Phaser.Scene,
+    {
+      toastY = FIELD_TOAST_Y,
+      tip,
+      blocked,
+      savedHeld = blocked,
+    }: { toastY?: number; tip?: TipPlace; blocked: () => boolean; savedHeld?: () => boolean },
+  ) {
+    this.scene = scene;
+    this.toastY = toastY;
+    this.tip = tip;
+    this.blocked = blocked;
+    const unsubscribe = onSaved(() => {
+      if (!this.quiet && !savedHeld()) showToast(scene, "SAVED", toastY);
+    });
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribe);
+  }
+
+  /** A save with no SAVED toast, for one whose news the scene toasts itself. */
+  quietSave(): void {
+    this.quiet = true;
+    GameState.save();
+    this.quiet = false;
+  }
+
+  /** The once-a-second claim; the scene's update() calls this every frame. */
+  update(delta: number): void {
+    const since = (sinceClaim.get(this.scene) ?? 0) + delta;
+    sinceClaim.set(this.scene, since);
+    if (since < CLAIM_EVERY_MS || this.blocked()) return;
+    sinceClaim.set(this.scene, 0);
+    const earned = claimAchievements();
+    const tipped = this.tip !== undefined && showUnlockTip(this.scene, this.tip, this.toastY);
+    if (tipped || earned.length > 0) this.quietSave();
+    // showToast keeps one line per scene, so several earned in the same
+    // claim (an 8-hit combo that also fells a boss) go in one toast
+    const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
+    if (names.length > 0) {
+      showToast(this.scene, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, this.toastY);
+    }
+    announceLooks(this.scene, earned, this.toastY);
   }
 }
 

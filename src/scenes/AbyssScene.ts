@@ -12,11 +12,10 @@ import {
   generateFloor,
   portalOnLeave,
 } from "../abyss";
-import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
-import { GameState, onSaved } from "../gameState";
+import { GameState } from "../gameState";
 import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
@@ -28,6 +27,7 @@ import {
   createWalkAnimations,
   FieldKeys,
   FieldPanels,
+  FieldToasts,
   fadeAreaTitle,
   fadeInAfterAreaTitle,
   isWalkableCell,
@@ -229,12 +229,7 @@ export class AbyssScene extends Phaser.Scene {
   private keyL!: Phaser.Input.Keyboard.Key;
   private fieldKeys!: FieldKeys;
   private quitting = false;
-  private unsubSaved: () => void = () => {};
-  // claims achievements at most once per second, like every field scene
-  private achievementCheckAccum = 0;
-  // true while a quiet save is in flight (a trophy, a depth record), so the
-  // onSaved "SAVED" toast doesn't clobber the toast announcing it
-  private suppressSavedToast = false;
+  private toasts!: FieldToasts;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -280,14 +275,10 @@ export class AbyssScene extends Phaser.Scene {
     // stair up: no question until a step off it
     this.stairAsked = fromBattle;
 
-    // Registered before the SHUTDOWN handler below that calls GameState.save()
-    // — SHUTDOWN listeners fire in registration order, so this unsubscribes
-    // before that save happens and no toast gets created on a scene that's
-    // already tearing down. Keep this the first SHUTDOWN listener.
-    this.unsubSaved = onSaved(() => {
-      if (!this.suppressSavedToast) showToast(this, "SAVED", FIELD_TOAST_Y);
-    });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
+    // SAVED and the achievements; the first SHUTDOWN listener (FieldToasts).
+    // SAVED shows under a panel or the stair's question too, as it always
+    // has down here (no reason kept), where the fields hold it back
+    this.toasts = new FieldToasts(this, { blocked: () => this.uiBlocking(), savedHeld: () => false });
 
     // the same seed rebuilds the floor a battle was fought on, exactly
     const floor = generateFloor(r.floor, floorSeed(r.seed, r.floor, GameState.ngPlus));
@@ -491,9 +482,7 @@ export class AbyssScene extends Phaser.Scene {
     // News, queued under the floor's title. "NEW RECORD: B999!" is 17 glyphs
     // and "A GUARDIAN SEALS THE STAIRS!" 28 (560px) at retroStyle(5).
     if (record) {
-      this.suppressSavedToast = true;
-      GameState.save();
-      this.suppressSavedToast = false;
+      this.toasts.quietSave();
       // B1 is everyone's first record; only a new depth is news
       if (r.floor > 1) showToast(this, `NEW RECORD: B${r.floor}!`, FIELD_TOAST_Y);
     }
@@ -501,9 +490,7 @@ export class AbyssScene extends Phaser.Scene {
       Sfx.levelup();
       showToast(this, "THE STAIRS ARE OPEN!", FIELD_TOAST_Y);
       if (checkpoint) {
-        this.suppressSavedToast = true;
-        GameState.save();
-        this.suppressSavedToast = false;
+        this.toasts.quietSave();
         // "CHECKPOINT: B996!" is 17 glyphs, as the record's
         showToast(this, `CHECKPOINT: B${GameState.abyssCheckpoint}!`, FIELD_TOAST_Y);
       }
@@ -516,26 +503,7 @@ export class AbyssScene extends Phaser.Scene {
     GameState.minutes += (delta / 1000) * GameState.timeSpeed;
     this.hud.update();
 
-    this.achievementCheckAccum += delta;
-    // only with no panel up: a trophy toast drawn over an open panel covered
-    // its top rows. Nothing is lost: the check just waits for it to close.
-    if (this.achievementCheckAccum >= 1000 && !this.uiBlocking()) {
-      this.achievementCheckAccum = 0;
-      const earned = claimAchievements();
-      if (earned.length > 0) {
-        this.suppressSavedToast = true;
-        GameState.save();
-        this.suppressSavedToast = false;
-      }
-      // showToast reuses one Text per scene, so several achievements earned in
-      // the same tick would otherwise clobber each other with only the last
-      // one ever visible — batch every name earned this tick into one toast.
-      const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
-      if (names.length > 0) {
-        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, FIELD_TOAST_Y);
-      }
-      announceLooks(this, earned, FIELD_TOAST_Y);
-    }
+    this.toasts.update(delta);
 
     this.fieldKeys.takeSystemKeys(this.hud);
 
@@ -638,9 +606,7 @@ export class AbyssScene extends Phaser.Scene {
       (i) => {
         if (i !== 1) return;
         GameState.abyssPortal = portal;
-        this.suppressSavedToast = true;
-        GameState.save();
-        this.suppressSavedToast = false;
+        this.toasts.quietSave();
         this.leave(() => {
           run = null;
           this.scene.start("Town", { fromDungeon: true });

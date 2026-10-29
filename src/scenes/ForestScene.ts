@@ -1,12 +1,11 @@
 import Phaser from "phaser";
-import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { FOREST_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
-import { econDay, GameState, isNight, onSaved } from "../gameState";
+import { econDay, GameState, isNight } from "../gameState";
 import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
-import { addGroundShadow, FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
+import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
   addTownExitSign,
@@ -15,6 +14,7 @@ import {
   createWalkAnimations,
   FieldKeys,
   FieldPanels,
+  FieldToasts,
   fadeAreaTitle,
   isWalkableCell,
   noteFightSpot,
@@ -107,15 +107,7 @@ export class ForestScene extends Phaser.Scene {
   // look (turnSeason)
   private season: Season = "spring";
   private turningSeason = false;
-  private unsubSaved: () => void = () => {};
-  // claims achievements at most once per second so earned-here achievements
-  // (e.g. defeating a boss) toast immediately instead of waiting for the
-  // player to wander back to Town, the only scene that used to poll this
-  private achievementCheckAccum = 0;
-  // true while an achievement save is in flight, so the onSaved "SAVED" toast
-  // doesn't clobber the "ACHIEVEMENT: ...!" toast on the same shared text
-  // object (showToast reuses one per scene)
-  private suppressSavedToast = false;
+  private toasts!: FieldToasts;
 
   private hud!: StatusHud;
   private minimap!: Minimap;
@@ -146,17 +138,8 @@ export class ForestScene extends Phaser.Scene {
     this.quitting = false;
     this.turningSeason = false;
 
-    // Registered before the SHUTDOWN handler below that calls GameState.save()
-    // — SHUTDOWN listeners fire in registration order, so this unsubscribes
-    // before that save happens and no toast gets created on a scene that's
-    // already tearing down. Keep this the first SHUTDOWN listener.
-    // Not over an open panel: an equip, a potion or a companion picked there
-    // is already reported on the panel's own message line, and this toast
-    // (y 176..200) landed on the bag's MATERIALS header or its first rows.
-    this.unsubSaved = onSaved(() => {
-      if (!this.suppressSavedToast && !this.uiBlocking()) showToast(this, "SAVED", FIELD_TOAST_Y);
-    });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
+    // SAVED and the achievements; the first SHUTDOWN listener (FieldToasts)
+    this.toasts = new FieldToasts(this, { blocked: () => this.uiBlocking() });
 
     const level = buildForest();
     this.level = level;
@@ -324,26 +307,7 @@ export class ForestScene extends Phaser.Scene {
     GameState.minutes += (delta / 1000) * GameState.timeSpeed;
     this.updateStatus();
 
-    this.achievementCheckAccum += delta;
-    // only with no panel up: a trophy toast drawn over an open panel covered
-    // its top rows. Nothing is lost: the check just waits for it to close.
-    if (this.achievementCheckAccum >= 1000 && !this.uiBlocking()) {
-      this.achievementCheckAccum = 0;
-      const earned = claimAchievements();
-      if (earned.length > 0) {
-        this.suppressSavedToast = true;
-        GameState.save();
-        this.suppressSavedToast = false;
-      }
-      // showToast reuses one Text per scene, so several achievements earned in
-      // the same tick would otherwise clobber each other with only the last
-      // one ever visible — batch every name earned this tick into one toast.
-      const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
-      if (names.length > 0) {
-        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, FIELD_TOAST_Y);
-      }
-      announceLooks(this, earned, FIELD_TOAST_Y);
-    }
+    this.toasts.update(delta);
 
     this.fieldKeys.takeSystemKeys(this.hud);
 

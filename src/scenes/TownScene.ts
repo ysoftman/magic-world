@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import { ACHIEVEMENTS, announceLooks, claimAchievements } from "../achievements";
 import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
@@ -7,17 +6,7 @@ import { canDeliver, deliver, deliveryReward, materialName, rollDeliveryIfStale 
 import { eventToday } from "../events";
 import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, materialNameOf } from "../favors";
 import { encounterOut } from "../fx";
-import {
-  cropProgress,
-  type DeliveryState,
-  econDay,
-  FARM_PLOTS,
-  FIRE_BEASTS,
-  GameState,
-  isNight,
-  onSaved,
-  type VillagerKey,
-} from "../gameState";
+import { cropProgress, type DeliveryState, econDay, FARM_PLOTS, FIRE_BEASTS, GameState, isNight, type VillagerKey } from "../gameState";
 import { BEDS_LEVEL, houseTexture } from "../home";
 import {
   ARENA_POS,
@@ -63,6 +52,7 @@ import {
   createWalkAnimations,
   FieldKeys,
   FieldPanels,
+  FieldToasts,
   isWalkableCell,
   OBJECT_LAYER_DEPTH,
   paintTile,
@@ -100,7 +90,6 @@ import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHu
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { type Rect, Villagers } from "../ui/Villagers";
-import { showUnlockTip } from "../unlockTips";
 import { bakeHero, seasonSkin } from "./BootScene";
 
 // The last day whose town event (events.ts) was announced. Module scope, so
@@ -298,20 +287,12 @@ export class TownScene extends Phaser.Scene {
   private zQueued = false;
   private gCheatQueued = false;
   private cQueued = false;
-  // claims achievements at most once per second; the checks read live
-  // GameState, so battle/fishing/treasure mutations made while a modal or
-  // another scene owns input are caught on the next tick after returning here
-  private achievementCheckAccum = 0;
   private quitting = false;
   // the season the town was built in, and the fade out to building it again
   // once the clock moves it into another look (turnSeason)
   private season: Season = "spring";
   private turningSeason = false;
-  private unsubSaved: () => void = () => {};
-  // true while an achievement save is in flight; the onSaved "SAVED" toast is
-  // skipped so it doesn't queue up behind the "ACHIEVEMENT: ...!" toast for
-  // the same save (showToast shows one toast at a time per scene)
-  private suppressSavedToast = false;
+  private toasts!: FieldToasts;
 
   private keyLeft!: Phaser.Input.Keyboard.Key;
   private keyRight!: Phaser.Input.Keyboard.Key;
@@ -377,21 +358,19 @@ export class TownScene extends Phaser.Scene {
     this.wasNight = isNight();
     this.eventToastPending = false;
 
-    // Registered before the SHUTDOWN handler below that calls GameState.save()
-    // — SHUTDOWN listeners fire in registration order, so this unsubscribes
-    // before that save happens and no toast gets created on a scene that's
-    // already tearing down. Keep this the first SHUTDOWN listener.
-    // Not over an open panel: a save made in one (a buy, an equip, a forge, a
-    // companion picked) is already reported on the panel's own message line,
-    // and this toast (y 100..124) landed on its top rows — the shop, the bag
-    // and the forge hang from y 28 on touch screens, and their titles sit at
-    // y 85..139 on a keyboard. The dialogue box (y 456..688) is clear of it,
-    // so a save made while talking (a bounty paid, a favor taken) still shows.
-    this.unsubSaved = onSaved(() => {
-      if (this.suppressSavedToast || (this.uiBlocking() && !this.dialogue.isActive())) return;
-      showToast(this, "SAVED", STATUS_HUD_TOAST_Y);
+    // SAVED, the achievements and the town's unlock tips, under the HUD; the
+    // first SHUTDOWN listener (FieldToasts). SAVED is held back over a panel
+    // as in the fields — its line here (y 100..124) met the shop, the bag and
+    // the forge, which hang from y 28 on touch screens and have their titles
+    // at y 85..139 on a keyboard — but not over a talk: the dialogue box (y
+    // 456..688) is clear of it, so a save made while talking (a bounty paid, a
+    // favor taken) still shows.
+    this.toasts = new FieldToasts(this, {
+      toastY: STATUS_HUD_TOAST_Y,
+      tip: "town",
+      blocked: () => this.uiBlocking(),
+      savedHeld: () => this.uiBlocking() && !this.dialogue.isActive(),
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubSaved());
 
     const level = buildLevel();
     this.level = level;
@@ -1314,28 +1293,7 @@ export class TownScene extends Phaser.Scene {
       this.flashNote(`+${gained}G (CHEAT)`);
     }
 
-    this.achievementCheckAccum += delta;
-    // only with no panel or talk up: a tip or trophy toast drawn over an open
-    // panel (the bag, the journal...) covered its top rows. Nothing is lost:
-    // the check just waits for the panel to close.
-    if (this.achievementCheckAccum >= 1000 && !this.uiBlocking()) {
-      this.achievementCheckAccum = 0;
-      const earned = claimAchievements();
-      if (showUnlockTip(this, "town", STATUS_HUD_TOAST_Y) || earned.length > 0) {
-        this.suppressSavedToast = true;
-        GameState.save();
-        this.suppressSavedToast = false;
-      }
-      // showToast reuses one Text per scene, so several achievements earned in
-      // the same tick (e.g. an 8-hit combo that also fells a boss) would
-      // otherwise clobber each other with only the last one ever visible —
-      // batch every name earned this tick into a single toast instead.
-      const names = earned.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.name).filter((n): n is string => !!n);
-      if (names.length > 0) {
-        showToast(this, names.length === 1 ? `ACHIEVEMENT: ${names[0]}!` : `ACHIEVEMENTS: ${names.join(", ")}!`, STATUS_HUD_TOAST_Y);
-      }
-      announceLooks(this, earned, STATUS_HUD_TOAST_Y);
-    }
+    this.toasts.update(delta);
 
     this.fieldKeys.takeSystemKeys(this.hud);
 
@@ -1733,9 +1691,7 @@ export class TownScene extends Phaser.Scene {
   private announceSeason(delay = 0): void {
     const news = seasonNews();
     if (!news) return;
-    this.suppressSavedToast = true;
-    GameState.save();
-    this.suppressSavedToast = false;
+    this.toasts.quietSave();
     this.time.delayedCall(delay, () => showToast(this, news, STATUS_HUD_TOAST_Y));
   }
 
