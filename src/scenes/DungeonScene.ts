@@ -67,6 +67,13 @@ const ENTRY_GRACE = 1200;
 const MAX_COOLDOWN_STEP = 50;
 const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
+// On touch the camera may sink a tile below the map's foot. Held at the
+// bottom-right corner, where the ABYSS stair's pocket is, the ESC disc
+// (TouchControls, screen y 628..708) sat on the stair's violet pit (y
+// 636..648); a tile up the stair ends 40px above the disc, and its tag
+// (x 942..1042) stays left of Z. What shows below the bottom rock row is the
+// game's dark backdrop, behind the d-pad, Z and ESC.
+const TOUCH_CAMERA_FOOT = TILE;
 // same per-roll rarity as TownScene's GOLDEN_SLIME_CHANCE, applied to
 // goblin rolls only — a dungeon-exclusive jackpot, tint-only reskin
 const CURSED_GOBLIN_CHANCE = 0.08;
@@ -264,7 +271,7 @@ export class DungeonScene extends Phaser.Scene {
     startWaterAnimation(this, this.layer);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    boundCameraToMap(this, DUNGEON_W * TILE, DUNGEON_H * TILE);
+    boundCameraToMap(this, DUNGEON_W * TILE, DUNGEON_H * TILE + (isTouchDevice() ? TOUCH_CAMERA_FOOT : 0));
 
     const kb = this.input.keyboard!;
     this.keyLeft = kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
