@@ -316,16 +316,19 @@ export const DUNGEON_ZONES: MonsterZone[] = [
 ];
 
 // The stair down to the ABYSS (abyss.ts), shown once the FLAME DRAKE has
-// fallen: the dead end of the cave's south-east pocket, reached only past the
-// chest at (22,12), the cave's deepest corner. Its "ABYSS" tag (100px) sits
-// at x 1198..1298, y 838..872 — over the pocket's boulders, clear of the chest
-// and inside the map.
+// fallen: the dead end of the cave's south-east pocket, reached only through
+// the one-tile gap at (22,12), the cave's deepest corner. Its "ABYSS" tag
+// (100px) sits at x 1198..1298, y 838..872 — over the pocket's boulders, clear
+// of the chest and inside the map.
 export const ABYSS_STAIRS_POS = { x: 19 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 };
 
 export const TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
   { id: "dungeon-1", x: 7 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 },
   { id: "dungeon-2", x: 17 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 },
-  { id: "dungeon-3", x: 22 * TILE + TILE / 2, y: 12 * TILE + TILE / 2 },
+  // In the stair's pocket, off the way in: it stood in the gap at (22,12),
+  // where it read as a wall across the only way to the stair (a player took
+  // the stair for gone). Three tiles east of the stair, its corner.
+  { id: "dungeon-3", x: 22 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 },
 ];
 
 // The cave's walls and pillars are T_ROCK, the volcano's boulder: a tree
