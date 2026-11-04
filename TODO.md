@@ -17,3 +17,4 @@
 - 필드 씬 공통화 남은 것: 조우(encounterCooldown·ENTRY_GRACE·holdFights·checkEncounter)가 6개 씬에 중복. 굴리는 조건이 씬마다 달라(마을 키 큰 풀, 심연 수호자 방·밤 없음, 출구 안전 상자) 공통 부분이 쿨다운 숫자뿐이라 보류
 - 터치에서 필드 맵의 오른쪽 아래 모서리가 Z·ESC 원판 밑에 깔림(동굴 상자 (22,14) 는 Z 아래 반쯤, 그쪽을 걷는 영웅도). 동굴만 카메라를 한 타일 더 내렸다(`TOUCH_CAMERA_FOOT`) — sceneCommon `boundCameraToMap` 에 터치 여백을 일반화할지 검토
 - 엔딩 불꽃(`EndingScene` 의 `addFireworks`, 1px)이 모바일·DPR2 실기기에서 너무 가늘지 않은지, 그 화면의 프레임(헤드리스 update p95 1.7ms, 캔버스 두 장 업로드)과 pop 소리 크기 확인
+- 상점 판매 금화(14px)·도감 하트(1px)가 모바일 실기기에서 읽히는지 확인

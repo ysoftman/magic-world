@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import * as charmed from "pixelfx/fx/status/charmed";
 import { Sfx } from "../audio";
 import { COMPANION_SKILLS } from "../companionSkills";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
@@ -6,6 +7,7 @@ import { GameState } from "../gameState";
 import { CATCHABLE, ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { type FieldFx, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 
@@ -68,6 +70,45 @@ const PANEL_H = COUNTER_TOP + COUNTER_H + 20 - PANEL_TOP;
 const MSG_HOLD_MS = 1400;
 const NEWS_HOLD_MS = 2600;
 
+// A new companion's moment (ui/fieldFx.ts): a heart beats twice over its
+// icon, throwing a heart-shaped ring with each beat, and little hearts float
+// up out of the icon (status/charmed, its bond). The effect wraps a body
+// (o.actor); this one is 20 blank pixels from the icon's middle up, so it
+// paints no eyes or blush, only hearts: the big one 30 over the middle, in the
+// 12px gap over the row's block, and all of it within 21 either side, the
+// icon column (the names start 44 right of the icon's middle), from 49 over
+// the middle to 10 under. One pixelfx pixel to a screen pixel, at the icon's
+// own (64px art at 0.63): at 2px the heart would be 28px and the whole 84 x
+// 118, over the names and two rows up.
+const HEART_BODY = 20;
+const HEARTS: FieldFx = {
+  key: "fx-bestiary-hearts",
+  sheet: {
+    fx: charmed,
+    opts: {
+      actor: {
+        mask: { w: HEART_BODY, h: HEART_BODY, data: new Uint8Array(HEART_BODY * HEART_BODY) },
+        pixels: new Uint32Array(HEART_BODY * HEART_BODY),
+        x: -HEART_BODY / 2,
+        y: -HEART_BODY,
+        w: HEART_BODY,
+        h: HEART_BODY,
+        k: 2,
+        head: [0, -HEART_BODY],
+        chest: [0, -HEART_BODY / 2],
+        eyes: [],
+      },
+    },
+    // two beats of the loop, from just before a beat: 30 frames, 1440x64
+    span: [1, 3],
+    frames: 30,
+    crop: [6, 16, 54, 80],
+  },
+  ms: 2000,
+  // in before the first beat (0.25s), out after the last hearts' pops
+  fade: [200, 500],
+};
+
 // A seen species' combat notes (weakness, special move, enrage) sit on a
 // small second line under its name. Sharing the name's line meant
 // abbreviating and then measure-and-dropping them, and once specials were
@@ -127,6 +168,8 @@ export class BestiaryUI {
   private canNotes: PixelText[] = [];
   private partnerTags: PixelText[] = [];
   private cursor: PixelText;
+  // a new companion's hearts over its icon
+  private fx: PanelFx;
 
   private keyEsc: Phaser.Input.Keyboard.Key;
   private keyB: Phaser.Input.Keyboard.Key;
@@ -148,6 +191,7 @@ export class BestiaryUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, HEARTS);
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
       .setScrollFactor(0)
@@ -318,6 +362,8 @@ export class BestiaryUI {
     this.showMsg(`COMPANION: ${def.name}`);
     GameState.save();
     this.refresh();
+    const icon = this.icons[this.index % PER_PAGE];
+    this.fx.play(HEARTS, icon.x, icon.y, 1);
   }
 
   private showMsg(text: string, hold = MSG_HOLD_MS): void {
@@ -336,6 +382,7 @@ export class BestiaryUI {
 
   open(): void {
     this.active = true;
+    this.fx.warm();
     this.index = 0;
     this.page = 0;
     this.closeQueued = false;
@@ -358,6 +405,7 @@ export class BestiaryUI {
 
   close(): void {
     this.active = false;
+    this.fx.clear();
     this.clearMsg();
     this.dim.setVisible(false);
     this.panel.setVisible(false);
@@ -408,6 +456,8 @@ export class BestiaryUI {
       const page = Math.floor(this.index / PER_PAGE);
       if (page !== this.page) {
         this.page = page;
+        // the hearts were over the last page's icon
+        this.fx.clear();
         this.refresh();
       } else {
         this.renderCursor();
@@ -422,6 +472,7 @@ export class BestiaryUI {
   private turnPage(dir: number): void {
     if (PAGES === 1) return;
     this.page = (this.page + dir + PAGES) % PAGES;
+    this.fx.clear();
     // same slot on the new page, or its last species if that page is shorter
     this.index = Math.min(this.page * PER_PAGE + (this.index % PER_PAGE), SPECIES.length - 1);
     Sfx.move();
@@ -506,6 +557,7 @@ export class BestiaryUI {
   }
 
   destroy(): void {
+    this.fx.clear();
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();
