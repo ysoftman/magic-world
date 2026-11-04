@@ -227,6 +227,7 @@ export class LuckyWheel {
 
   open(): void {
     this.active = true;
+    this.fx.warm();
     this.dirty = false;
     this.index = 0;
     this.state = "select";

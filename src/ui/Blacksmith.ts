@@ -309,6 +309,7 @@ export class BlacksmithUI {
 
   open(): void {
     this.active = true;
+    this.fx.warm();
     this.mode = "forge";
     this.index = 0;
     this.confirming = false;

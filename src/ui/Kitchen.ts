@@ -158,6 +158,7 @@ export class KitchenUI {
 
   open(): void {
     this.active = true;
+    this.fx.warm();
     this.index = 0;
     this.confirming = false;
     this.upQueued = false;

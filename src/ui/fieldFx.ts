@@ -92,13 +92,26 @@ const PANEL_FX_DEPTH = 151.5;
  */
 export class PanelFx {
   private scene: Phaser.Scene;
+  private fx: FieldFx[];
+  private warmed = false;
   private playing = new Set<Phaser.GameObjects.Sprite>();
 
   constructor(scene: Phaser.Scene, ...fx: FieldFx[]) {
     this.scene = scene;
-    // from the scene's create on, a slice a frame: in well before a panel
-    // can be opened and played
-    warmFieldFx(scene, ...fx);
+    this.fx = fx;
+  }
+
+  /**
+   * Bakes the panel's sheets a slice a frame from now (warmFieldFx), once a
+   * scene: called as the panel opens, as its moments come a key or two after
+   * that, and a panel never opened bakes nothing. Made in the town's create,
+   * the five panels' sheets put 4.6MiB in at once and a 32-49ms frame on its
+   * first entry. A moment that comes first bakes its sheet then (playFieldFx).
+   */
+  warm(): void {
+    if (this.warmed) return;
+    this.warmed = true;
+    warmFieldFx(this.scene, ...this.fx);
   }
 
   /** One play of `fx` with its anchor on (x, y), at `scale` screen px a pixelfx pixel. */
