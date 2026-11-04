@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
+import * as swordSlash from "pixelfx/fx/melee/sword-slash";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { ART_PX } from "./pixelart";
@@ -181,55 +183,6 @@ function sparkle(put: Cells, x: number, y: number, size: number, core: number, a
 const C = 15.5;
 
 const SHEETS: Record<string, Sheet> = {
-  // FIGHT: a crescent slash from top right to bottom left, grown in, then thinned out
-  "fx-slash": {
-    cells: 32,
-    frames: 5,
-    draw: (put, f, rand) => {
-      const [t0, t1] = [
-        [0, 0.4],
-        [0, 0.85],
-        [0.1, 1],
-        [0.45, 1],
-        [0.8, 1],
-      ][f];
-      for (let i = 0; i <= 60; i++) {
-        const t = t0 + ((t1 - t0) * i) / 60;
-        const x = 27 - 22 * t - 5 * Math.sin(Math.PI * t);
-        const y = 4 + 23 * t - 5 * Math.sin(Math.PI * t);
-        const w = (f < 3 ? 2.6 : 1.4) * Math.sin(Math.PI * t) + 0.4;
-        // a blue rim keeps it apart from the foe, flashed white by the blow
-        line(put, x, y, x, y, w, [0xffffff, 0xffffff, 0xe0f2fe, 0x3b82f6]);
-      }
-      if (f >= 2) for (let k = 0; k < 4; k++) put(Math.round(6 + rand() * 20), Math.round(6 + rand() * 20), 0xfff3c4);
-    },
-  },
-  // a crit: eight rays out of a white core, then breaking into flying sparks
-  "fx-crit": {
-    cells: 32,
-    frames: 6,
-    draw: (put, f, rand) => {
-      const len = [6, 11, 14, 15, 15, 15][f];
-      const from = [0, 0, 2, 7, 10, 13][f];
-      for (let k = 0; k < 8; k++) {
-        const a = (k * Math.PI) / 4 + Math.PI / 8;
-        const l = k % 2 ? len * 0.7 : len;
-        const s = k % 2 ? from * 0.7 : from;
-        line(
-          put,
-          C + Math.cos(a) * s,
-          C + Math.sin(a) * s,
-          C + Math.cos(a) * l,
-          C + Math.sin(a) * l,
-          f < 3 ? 1 : 0.5,
-          [0xffffff, 0xfde047, 0xfb923c],
-        );
-      }
-      const core = [4, 5, 4, 2, 1, 0][f];
-      if (core) disc(put, C, C, core, [0xffffff, 0xfff3c4]);
-      if (f >= 3) for (let k = 0; k < 6; k++) sparkle(put, Math.round(4 + rand() * 24), Math.round(4 + rand() * 24), 1, 0xffffff, 0xfde047);
-    },
-  },
   // FIRE: a ball of flame that blooms, then breaks into embers and smoke
   "fx-fire": {
     cells: 32,
@@ -557,6 +510,8 @@ interface PixelSheet {
   focus?: [number, number];
   /** drawn facing right: mirrored when the blow goes left, onto the hero */
   directional?: boolean;
+  /** kept at the 4px cell over a boss or giant too, for one that would reach the stat windows at 6px */
+  sameOnBoss?: boolean;
 }
 
 // a 32-cell battler's middle to its feet, in art cells: an impact this high
@@ -567,15 +522,26 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // a blow landing: a lopsided cross flare round a white core, then a cone of
   // sparks that falls and bounces
   "fx-hit": { fx: hitSpark, opts: { height: FEET }, span: [0, 0.45], focus: [0, -FEET], directional: true },
+  // a crit: a jagged white starburst, a ring breaking into arcs, a flare,
+  // shards to the floor (they lie there past 0.6s, left off). The ring grows
+  // to 40 cells: at a boss's 6px its arcs crossed the foe's HP bar.
+  "fx-crit": { fx: critHit, opts: { height: FEET }, span: [0, 0.6], focus: [0, -FEET], directional: true, sameOnBoss: true },
+  // FIGHT: a crescent whipped over the foe, white cooling to blue, sparks off
+  // its tip. Radius 30 of 42 fits it to a 32-cell foe, and its arc's centre
+  // (6, -26) sits 12 cells left of and 6 under the foe's middle, so the
+  // crescent cuts across the body, not round it. From 1/30s, when it shows.
+  "fx-slash": { fx: swordSlash, opts: { radius: 30 }, span: [1 / 30, 0.5], focus: [18, -32], directional: true },
 };
 
 // a sheet's frames, how many texels to an art cell, the texture point put on
-// (x, y) as a fraction of a frame, and whether it turns to face the blow
+// (x, y) as a fraction of a frame, whether it turns to face the blow and
+// whether it keeps the normal cell over a boss
 interface SheetInfo {
   frames: number;
   texel: number;
   origin: [number, number];
   directional: boolean;
+  sameOnBoss: boolean;
 }
 
 function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number } {
@@ -585,13 +551,19 @@ function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number }
 
 function infoOf(key: string): SheetInfo {
   const pixel = PIXEL_SHEETS[key];
-  if (!pixel) return { frames: SHEETS[key].frames, texel: FX_CELL, origin: [0.5, 0.5], directional: false };
+  if (!pixel) return { frames: SHEETS[key].frames, texel: FX_CELL, origin: [0.5, 0.5], directional: false, sameOnBoss: false };
   const {
     size: [w, h],
     origin: [ax, ay],
   } = pixel.fx.meta;
   const [fx, fy] = pixel.focus ?? [0, 0];
-  return { frames: spanOf(pixel).frames, texel: 1, origin: [(ax + fx) / w, (ay + fy) / h], directional: !!pixel.directional };
+  return {
+    frames: spanOf(pixel).frames,
+    texel: 1,
+    origin: [(ax + fx) / w, (ay + fy) / h],
+    directional: !!pixel.directional,
+    sameOnBoss: !!pixel.sameOnBoss,
+  };
 }
 
 // the widest texture a sheet may be: some mobile GPUs go no further (AGENTS.md)
@@ -673,12 +645,15 @@ export function bakeBattleFx(scene: Phaser.Scene): void {
   for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
 }
 
+// the scale battlers are shown at, a boss's or giant's above it
+const BATTLER_SCALE = 2;
+
 // a sheet's sprite at (x, y) on the cell of a battler shown at `scale`; a
 // negative scaleX mirrors it round its origin (flipX turns a frame round its
 // middle, which would move an off-centre origin)
 function fxSprite(scene: Phaser.Scene, key: string, x: number, y: number, scale: number, left: boolean): Phaser.GameObjects.Sprite {
-  const { texel, origin, directional } = infoOf(key);
-  const s = (scale * ART_PX) / texel;
+  const { texel, origin, directional, sameOnBoss } = infoOf(key);
+  const s = ((sameOnBoss ? Math.min(scale, BATTLER_SCALE) : scale) * ART_PX) / texel;
   return scene.add
     .sprite(x, y, key, 0)
     .setOrigin(...origin)
@@ -698,7 +673,7 @@ export function playFx(
   x: number,
   y: number,
   ms: number,
-  scale = 2,
+  scale = BATTLER_SCALE,
   left = false,
 ): Phaser.GameObjects.Sprite {
   const { frames } = infoOf(key);
@@ -714,7 +689,14 @@ export function playFx(
 }
 
 /** A sheet's frames over and over, `frameMs` each, until the caller destroys it. */
-export function loopFx(scene: Phaser.Scene, key: string, x: number, y: number, frameMs: number, scale = 2): Phaser.GameObjects.Sprite {
+export function loopFx(
+  scene: Phaser.Scene,
+  key: string,
+  x: number,
+  y: number,
+  frameMs: number,
+  scale = BATTLER_SCALE,
+): Phaser.GameObjects.Sprite {
   const { frames } = infoOf(key);
   const sprite = fxSprite(scene, key, x, y, scale, false);
   let f = 0;
