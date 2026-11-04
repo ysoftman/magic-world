@@ -74,7 +74,8 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   `navigator.userActivation.isActive` 가드와 거부 토스트를 같이 둔다. ScaleManager 는 게임에 하나라
   씬 UI 가 건 리스너는 SHUTDOWN 에서 뗀다. Phaser 를 올리면 `startFullscreen` 이 promise 를
   처리하게 됐는지 다시 본다.
-- 브라우저로 직접 확인하는 일은 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
+- 브라우저로 직접 확인하는 일은 ego lite(`ego-browser` 스킬)를 먼저 쓰고, 게임 내부에 닿거나 자동으로
+  재야 하면 이 저장소 전용 `magic-world-playtest` 스킬을 쓴다("기타" 절).
 
 ## UI 텍스트가 패널/화면을 벗어나지 않는지 확인
 
@@ -432,9 +433,20 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   도중 타이틀로 돌아간다. 테스트 페이지의 init script 에서 URL 이 `/_bun/hmr`
   인 WebSocket 을 가짜 객체(`EventTarget` + 빈 `send`/`close`)로 바꾸면 불러온 시점의 코드로
   끝까지 돈다. 저장소 코드는 건드리지 않는다.
-- 브라우저 점검(playwright)은 `.claude/skills/magic-world-playtest` 의 `scripts/harness.py` 를
-  쓴다(위 함정들이 이미 들어 있다). 스모크: `python3 -I .claude/skills/magic-world-playtest/scripts/harness.py smoke`.
-  `.claude` 가 개인 전역 gitignore 에 걸린 환경이면 이 스킬 파일을 고칠 때 `git add -f` 로 올린다.
+- 브라우저가 필요하면 ego lite(`ego-browser` 스킬, `ego-browser nodejs` 로 스크립트를 돌린다)를 먼저
+  쓴다. 화면을 보며 키를 눌러 확인하는 일(타이틀·패널·전투 흐름, 스크린샷 몇 장)이 대상이다. 사용자의
+  실제 브라우저 프로필에서 돌므로 `localStorage` 의 저장 슬롯·설정을 지우거나 덮어쓰지 않는다. 새
+  게임은 빈 슬롯에서만 하고, 슬롯 고르기도 설정에 기억되니 끝에 원래 슬롯으로 되돌린다. 실제 사례:
+  `page.keyboard` 키는 클릭 없이 캔버스 게임에 들어갔지만, 페이지 확대 110%(DPR 2.2)에서
+  `page.screenshot()` 이 뷰포트 오른쪽·아래 1/11 을 잘랐다. 게임만 찍을 때는 캔버스
+  `getBoundingClientRect()` 에 `outerWidth / innerWidth` 를 곱한 `clip` 을 준다(그때 1920x1080, 게임의
+  1.5배). dev 번들은 게임 객체를 `window` 에 내놓지 않아 `page.evaluate` 로는 DOM 과 `localStorage` 까지만
+  닿고, 페이지가 `/_bun/hmr` WebSocket 을 열어 두며 init script 가 없어 위 HMR 차단도 못 한다.
+- ego lite 가 없거나 하네스만 되는 일(번들 패치로 GameState·씬에 닿기, HMR 차단, 세이브 주입, 헤드리스로
+  여러 판 재기·화면 감사·1280x720 DPR1 픽셀 측정)은 `.claude/skills/magic-world-playtest` 의
+  `scripts/harness.py`(python playwright)를 쓴다(위 playwright 함정들이 이미 들어 있다). 스모크:
+  `python3 -I .claude/skills/magic-world-playtest/scripts/harness.py smoke`. `.claude` 가 개인 전역
+  gitignore 에 걸린 환경이면 이 스킬 파일을 고칠 때 `git add -f` 로 올린다.
 
 ## 픽셀 그리드 검증 (`bun run check:art`)
 

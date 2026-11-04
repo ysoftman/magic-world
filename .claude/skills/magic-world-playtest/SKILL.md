@@ -1,6 +1,6 @@
 ---
 name: magic-world-playtest
-description: magic-world 를 실제 브라우저(python playwright, 헤드리스)로 띄워 플레이·스크린샷·화면 감사를 할 때 쓴다. 새 게임 스모크, 진행 상태 당기기(세이브 주입·GameState 조작), 전투·필드·패널 화면 확인, 터치·게임패드 흉내, 글자 이탈·겹침·대비 점검, 키 입력 중복 확인이 대상. "플레이테스트", "QA", "브라우저로 확인", "실제 게임에서 확인", "스크린샷 찍어", "화면 겹침 점검", "터치로 확인", "게임패드 확인", "playwright", "playtest", "screenshot the game" 같은 요청에 쓴다. 코드만 읽는 리뷰나 sim:battle 같은 밸런스 계산에는 쓰지 않는다.
+description: magic-world 를 실제 브라우저(python playwright, 헤드리스)로 띄워 플레이·스크린샷·화면 감사를 할 때 쓴다. 눈으로 보며 키를 눌러 보는 확인은 ego lite(ego-browser 스킬)가 먼저이고, 이 하네스는 ego lite 가 없거나 GameState·씬 접근, 세이브 주입, HMR 차단, 헤드리스 자동 측정이 필요할 때 쓴다. 새 게임 스모크, 진행 상태 당기기(세이브 주입·GameState 조작), 전투·필드·패널 화면 확인, 터치·게임패드 흉내, 글자 이탈·겹침·대비 점검, 키 입력 중복 확인이 대상. "플레이테스트", "QA", "브라우저로 확인", "실제 게임에서 확인", "스크린샷 찍어", "화면 겹침 점검", "터치로 확인", "게임패드 확인", "playwright", "playtest", "screenshot the game" 같은 요청에 쓴다. 코드만 읽는 리뷰나 sim:battle 같은 밸런스 계산에는 쓰지 않는다.
 ---
 
 # magic-world 플레이테스트
@@ -9,6 +9,7 @@ description: magic-world 를 실제 브라우저(python playwright, 헤드리스
 
 ## 시작 전
 
+- 눈으로 보며 조작하는 확인(타이틀·패널·전투 흐름, 스크린샷 몇 장)은 ego lite(`ego-browser` 스킬)를 먼저 쓴다. 이 하네스는 내부 접근(GameState·씬), HMR 차단, 세이브 주입, 헤드리스 자동 측정·화면 감사용이다(AGENTS.md "기타").
 - dev 서버는 5199 하나만 쓴다(AGENTS.md "Dev 서버 관리"). 이미 떠 있으면 그대로 쓰고, 팀 작업 중이면 남이 띄운 서버를 죽이거나 새로 띄우지 않는다. 확인: `curl -s -o /dev/null -w "%{http_code}" http://localhost:5199/`
 - 스크립트와 스크린샷은 `/tmp/pwcheck/<주제>/` 에만 둔다. 저장소에는 훅·산출물을 남기지 않는다(AGENTS.md "작업 완료 후 중간 산출물 정리").
 
