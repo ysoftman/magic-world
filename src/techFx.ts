@@ -66,7 +66,7 @@ export const TECH_SHEET_KEYS: Record<TechName, string[]> = {
 };
 
 // Every tech sheet is drawn on the battlers' 4px cell (playFx's scale 2),
-// over a boss or giant too (sameOnBoss). A blow plays on the foe's feet (a
+// a boss's and a giant's too. A blow plays on the foe's feet (a
 // flier's up in the air with it), what stands on the floor on the ground
 // under the foe, and what whirls round the hero on the ground under the hero;
 // techSheets.ts crops each to the screen's limits from there.

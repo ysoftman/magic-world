@@ -636,7 +636,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 
 - 새 이펙트는 `fx.ts` 의 `PIXEL_SHEETS` 에 한 줄로 넣는다: 모듈(`import * as x from
   "pixelfx/fx/<범주>/<이름>"`), `opts`(팔레트·시드·이펙트 옵션), `span`, `frames`, `focus`(전투원 중심에
-  놓일 이펙트 좌표, 앵커 기준), `directional`, `sameOnBoss`, `crop`. `playFx`·`loopFx`·`fxOn` 이 그대로
+  놓일 이펙트 좌표, 앵커 기준), `directional`, `crop`. `playFx`·`loopFx`·`fxOn` 이 그대로
   쓴다. pixelfx 1px 이 아트 한 칸(전투 4px, 48칸을 2배로 그리는 보스·거인도 4px)이다.
 - `playFx` 는 시트를 주어진 ms 에 펼치므로 전투 속도는 그대로고 긴 이펙트는 빨라진다. 꼬리는 `span` 으로
   자르고, 프레임은 15fps 안팎이면 끊겨 보이지 않는다. 실제 사례: crit-hit 0.9초를 300ms 에 넣으려고
@@ -651,9 +651,9 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   (`GROUND_Y`)에 `fx-block`(pixelfx impacts/shield-block, 적 쪽 반구)을 띄운다(`blockOn`). `guardHit` 이 돌려주는
   `braced` 로 가르고, WARD 가 받은 일격은 뺀다. WARD 는 제 거품이 있고, WARD 가 걸려 있으면 DEFEND·GUARD 는
   적용되지 않는다. 색은 DEFEND 라벨의 slate 회색 램프다(결정: WARD 의 파랑은 이미 WARD 를 뜻한다).
-- `sameOnBoss` 는 보스·거인이 6px 칸(3배)이던 때 상태창에 닿는 이펙트를 그 위에서도 4px 로 두던 표시다.
-  실제 사례: crit 의 고리(40칸)가 6px 에서 적 HP 막대를 가로질렀다. 보스가 2배(4px)가 되어 지금은 효과가
-  없고, 정리할 예정이다.
+- 보스·거인도 4px 칸이라(48칸 격자를 2배로) 이펙트는 어느 적 위에서나 같은 크기다. `playFx` 에 2 보다 큰
+  배율을 넘기지 않는다. 실제 사례: 보스가 6px 칸(3배)이던 때 crit 의 고리(40칸)가 적 HP 막대를 가로질러, 그런
+  시트만 4px 로 두는 `sameOnBoss` 를 따로 들고 있었다(보스를 48칸으로 다시 그린 뒤 걷어 냄).
 - `crop` 은 빈 줄이나 떨어져 나온 조각을 잘라 낸다. 잘린 가장자리 8px(`EDGE_FADE`)는 글로우가 흐려지므로,
   그림이 같아야 하면 그만큼 여유를 두고 픽셀 비교로 확인한다. 실제 사례: NOVA 구슬은 앵커 바닥에 고인
   빛을 잘라 냈고(날아가는 동안 그 빛 줄이 메뉴 줄을 따라 지나갔다), fx-coins 는 1920x352 →
@@ -704,12 +704,19 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   위에 네모 판이 보였다(0.45s 부터, light 0.5).
 - BOMB 은 `icon-bomb` 을 영웅 손에서 적 발밑으로 포물선으로 던지고(BattleScene `lobBomb`), 떨어진 자리(`GROUND_Y`)에서
   fx-bomb(explosions/grenade 의 BLOW 1.62s 이후만)이 터진다. 나는 적도 땅에서 터진다. 실제 사례: grenade 파편 줄기는
-  원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224), 보스도 4px.
+  원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224).
 - 동료 스킬은 제 시트(`fx.ts` 의 `COMPANION_SHEETS`, BattleScene `SKILL_FX`·`skillFxOn`)로 fx-hit 를 대신한다(GOO HEAL·
   BULWARK·CHILL 은 원래 연출, FIREBALL 은 fx-fireball·fx-fire 를 동료 자리에서 던지고, PILFER 는 fx-coin 이 적에서 고블린
   자리로 튄다). 한 전투에 동료는 하나라 타이틀에서 굽지 않고 그 전투 create 가 `warmFx` 로 제 동료 것만 나눠 굽는다
-  (첫 스킬은 빨라야 영웅 첫 턴 뒤). 모두 `sameOnBoss` 이고 위는 y 208(나는 적)·224(땅), 아래는 y 488(fx-bomb 과 같음)로
-  자른다. 적이 그 안에 서는 고리·거미줄은 `layer` 로 뒤("back", 적 아래로 `moveBelow`)·앞을 따로 굽는다.
+  (첫 스킬은 빨라야 영웅 첫 턴 뒤). 위는 y 208(나는 적)·224(땅), 아래는 y 488(fx-bomb 과 같음)로 자른다. 적이 그
+  안에 서는 고리·거미줄은 `layer` 로 뒤("back", 적 아래로 `moveBelow`)·앞을 따로 굽는다.
+- SKILL 목록의 스킬·기술 시트는 `skillSheets.ts`·`techSheets.ts` 의 표를 `fx.ts` 의 `SHEETS` 에 펼쳐 넣고, 놓는 자리와
+  맞는 순간(`onHit`)은 `skillFx.ts`·`techFx.ts` 가 정한다. 시트 표는 pixelfx·`sheetFx.ts`·`PixelSheet` 타입만 불러
+  fx.ts 와 값이 돌지 않게 한다. crop 은 땅 기준 위 58칸·아래 8칸, 적 발 기준 위 46칸이다(`sheetFx.ts` 의 `around`,
+  `GROUND_UP`·`FEET_UP`·`DOWN`). 같은 파일의 래퍼: `squeezeX`(길이가 정해진 빔의 가운데를 줄여 손~적 사이에 맞춤),
+  `soften`(crop 가장자리 8칸의 솔리드 픽셀을 Bayer 디더로 녹임. 실제 사례: 연기·불꽃 머리가 y 224 에서 직선으로
+  잘렸다), `half`(몸보다 훨씬 큰 효과를 반 크기로). 래퍼는 pixelfx painter 의 `frame` 필드와 createFx 안의 createFx 에
+  기대므로, pixelfx 를 올리면 시트를 전·후 픽셀 비교로 다시 본다.
 - 그 밖의 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
   8ms(`BAKE_BUDGET_MS`)를 나눠 쓰고, 비싼 시트는 여러 프레임에 나눠 굽는다. 한 프레임에 시트는 최대 하나만

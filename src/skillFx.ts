@@ -77,8 +77,7 @@ export const SKILL_SHEET_KEYS: Record<SkillName, string[]> = {
 };
 
 // Every skill sheet is drawn on the battlers' 4px cell (playFx's scale 2),
-// over a boss or giant too (sameOnBoss): at 6px the tallest reach the stat
-// windows. What stands on the floor plays at the ground (groundY), a flier's
+// a boss's and a giant's too. What stands on the floor plays at the ground (groundY), a flier's
 // too: thorns, spikes, a pillar or a quake come up out of the ground under
 // it, a meteor or a star or a smite comes down onto it.
 const CELL = 2;

@@ -76,9 +76,10 @@ interface StatusSheet extends PixelSheet {
   ownSeed?: boolean;
   /**
    * screen px over its anchor (the feet) where it is gone, faded out over the
-   * CEILING_FADE effect pixels under that: what it throws up off a boss's
-   * head at 6px would reach into the foe's window. In screen px, so a
-   * battler's cell (4px, 6px on a boss) makes it the same line on screen.
+   * CEILING_FADE effect pixels under that: what it throws up off a big
+   * foe's head would reach into the foe's window. In screen px, so it is
+   * the same line on screen whatever the cell (4px, 4.6px at enrage's
+   * 1.15x throb).
    */
   ceiling?: number;
   /**
@@ -93,7 +94,7 @@ interface StatusSheet extends PixelSheet {
 }
 
 // rage's ceiling and the deaths': over the feet at GROUND_Y (456), y 222,
-// under the foe's window (to y 200) with the fade's 48px at 6px
+// under the foe's window (to y 200), the fade's 8 cells (32px) under that
 const WINDOW_CEILING = 234;
 
 // how many effect pixels a sheet's ceiling fades out over
@@ -148,13 +149,14 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // at its brow, stress lines and steam burst off its head, the floor cracks
   // hot and spits embers; the calm after it fades out. Once, not looped for
   // the rest of the fight: every beat repaints the body, over a hit's white
-  // flash and a wind-up's colour, and the steam and lines rising off a boss
-  // at 6px would keep reaching for the foe's window. Its red glow on the
+  // flash and a wind-up's colour, and the steam and lines rising off a big
+  // foe's head would keep reaching for the foe's window. Its red glow on the
   // beat lights a disc some 300px across: a faint one with FLASHES off.
-  // The steam and the lines off the tallest, the FLAME DRAKE (its head 30
-  // cells up, at y 276), rose to y 180, into the window (to 200): gone 39
-  // cells (234px) over the feet, y 222, and at the 1.15x throb's peak (feet
-  // at 470, 6.9px cells) y 201.
+  // The steam and the lines off the tallest, the FLAME DRAKE (its top 47
+  // cells up, at y 268), rise some 16 cells over its head: to y 180, into
+  // the window (to 200), when bosses were drawn at 6px, and to about y 204
+  // at 4px. Gone 234px (58 cells) over the feet, y 222, and at the 1.15x
+  // throb's peak (feet at 470, 4.6px cells) y 201.
   rage: {
     fx: rage,
     span: [0, 0.75],
@@ -172,10 +174,11 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // drawBack under the golem), wrapped in bands of wind, litter swirling at
   // its feet. Its leaves in the golem's own moss greens (MOSS_GOLEM_PALETTE
   // n, m, M), the wind in its eyes' glow (e, #8ce99a); its autumn golds and
-  // reds left out, which read as a wind attack. Not sized to the body: at the
-  // boss's 6px its rings are 15-24 cells out, 90-144px round a golem 96px
-  // half-wide, and it rises 64 cells, cut at the ceiling (y 222), a few cells
-  // over the head. 18 frames of the 2.4s loop, a row a layer (2016x104).
+  // reds left out, which read as a wind attack. Not sized to the body: at
+  // 4px its rings are 15-24 cells out, 60-96px round a golem 94px half-wide
+  // (90-144px when bosses were drawn at 6px), and it rises 64 cells (256px),
+  // cut at the ceiling (y 222), some 10 cells over the head. 18 frames of the
+  // 2.4s loop, a row a layer (2016x104).
   regrow: {
     fx: leafStorm,
     opts: {
@@ -472,7 +475,7 @@ export class StatusFx {
 
   /**
    * Plays `kind` on `target` for `ms`, its anchor on the battler's feet at the
-   * battler's own scale (3 on a boss). It follows the battler, which breathes
+   * battler's own scale (2, a boss's and a giant's too). It follows the battler, which breathes
    * and throbs under it, so a repainted body stays on the sprite.
    */
   play(target: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number): void {

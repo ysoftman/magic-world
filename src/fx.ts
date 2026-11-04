@@ -115,7 +115,8 @@ export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
 // Duprez). A pixelfx effect is code drawing into a pixel buffer over time;
 // here it is sampled into a sheet's frames at boot, one pixelfx pixel to a
 // texel. Its pixels are drawn for a 24x38 figure, so one is one art cell:
-// shown at ART_PX x the battler's scale, 4px (6px on a boss).
+// shown at ART_PX x the battler's scale, 4px, over any foe: a boss or giant
+// is drawn on a bigger grid (48 cells), not at a bigger scale.
 export interface PixelSheet {
   /** the effect: `import * as name from "pixelfx/fx/<category>/<name>"` */
   fx: FxModule;
@@ -132,8 +133,6 @@ export interface PixelSheet {
   focus?: [number, number];
   /** drawn facing right: mirrored when the blow goes left, onto the hero */
   directional?: boolean;
-  /** kept at the 4px cell over a boss or giant too, for one that would reach the stat windows at 6px */
-  sameOnBoss?: boolean;
   /** the part of the effect's canvas (meta.size) baked, [x0, y0, x1, y1]: a smaller texture, or a stray part left off */
   crop?: [number, number, number, number];
   /** only what goes behind a battler ("back", played under its sprite) or in front ("front"); both by default */
@@ -178,8 +177,8 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   "fx-hit": { fx: hitSpark, opts: { height: FEET }, span: [0, 0.45], focus: [0, -FEET], directional: true },
   // a crit: a jagged white starburst, a ring breaking into arcs, a flare,
   // shards to the floor (they lie there past 0.6s, left off). The ring grows
-  // to 40 cells: at a boss's 6px its arcs crossed the foe's HP bar.
-  "fx-crit": { fx: critHit, opts: { height: FEET }, span: [0, 0.6], focus: [0, -FEET], directional: true, sameOnBoss: true },
+  // to 40 cells (160px).
+  "fx-crit": { fx: critHit, opts: { height: FEET }, span: [0, 0.6], focus: [0, -FEET], directional: true },
   // FIGHT: a crescent whipped over the foe, white cooling to blue, sparks off
   // its tip. Radius 30 of 42 fits it to a 32-cell foe, and its arc's centre
   // (6, -26) sits 12 cells left of and 6 under the foe's middle, so the
@@ -199,7 +198,6 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     span: [0, 0.4],
     frames: 10,
     focus: [0, -12],
-    sameOnBoss: true,
     crop: [98, 122, 206, 224],
   },
   // ICE's shot: a faceted spear, a pulse down its core, rings of cold air
@@ -208,7 +206,7 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // ICE's burst: frost gathers and flashes white in a ring, then six-armed
   // flakes spin out (from just before the flash; their drift down after
   // 0.85s left off). The flakes' middle, 52 cells over its ground, on the foe's.
-  "fx-ice": { fx: snowflakeBurst, span: [0.15, 0.85], frames: 10, focus: [-2, -52], sameOnBoss: true, crop: [28, 8, 116, 112] },
+  "fx-ice": { fx: snowflakeBurst, span: [0.15, 0.85], frames: 10, focus: [-2, -52], crop: [28, 8, 116, 112] },
   // BOLT's shot: a white-hot blob, a corona crackling over it, its tail
   // necking into droplets that tear off
   "fx-spark": { fx: plasmaShot, opts: { palette: BOLT_RAMP }, span: SHOT_SPAN, crop: [30, 6, 130, 56] },
@@ -220,7 +218,6 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     span: [0.03, 0.47],
     frames: 10,
     directional: true,
-    sameOnBoss: true,
     crop: [2, 18, 118, 94],
   },
   // NOVA's shot: an orb of smoky glass, a swirl round a white heart, two
@@ -238,14 +235,13 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     span: [0.83, 1.45],
     frames: 10,
     focus: [112, -26],
-    sameOnBoss: true,
     crop: [86, 36, 172, 110],
   },
   // a foe going down (victory, arenaVictory): a white pop, a ring of smoke
   // balls, little stars, the cloud lifting away. Its anchor is the floor, so
   // BattleScene plays it on the ground under the foe (GROUND_Y), a flier's
-  // too; at 4px on a boss, whose 6px stars reached up into the stat window.
-  "fx-poof": { fx: poof, span: [0, 1.2], frames: 18, sameOnBoss: true },
+  // too.
+  "fx-poof": { fx: poof, span: [0, 1.2], frames: 18 },
   // the foe's gold, with fx-poof: coins spin out of a small puff (lost in the
   // poof's cloud), bounce along the ground, twinkle and wink out. Cropped to
   // what it draws (13, 16, 146, 87) grown just enough that every pixel bakes
@@ -258,7 +254,6 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     opts: { smoke: ["#9aa6c4", "#c4cee6", "#e6edf8", "#ffffff"] },
     span: [0, 2.8],
     frames: 42,
-    sameOnBoss: true,
     crop: [7, 10, 153, 88],
   },
   // a level up, and a TREASURE MAP found: a gold flash and cross, a ring
@@ -277,9 +272,9 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // 1.62s: the lob, bounce and fizzing roll before it are the hero's toss
   // here) to 2.7s, the smoke thinning after left off. The blast is 40 cells
   // right of its anchor, the floor: on the foe's x at GROUND_Y. Cropped 90
-  // cells either side and 58 up (y 224 at 4px, kept at 4px on a boss: the
-  // streaks ran up to y 36, through the foe's window) and 8 under the floor.
-  "fx-bomb": { fx: grenade, span: [1.63, 2.7], frames: 15, focus: [40, 0], sameOnBoss: true, crop: [110, 112, 290, 178] },
+  // cells either side and 58 up (y 224: the streaks ran up to y 36, through
+  // the foe's window) and 8 under the floor.
+  "fx-bomb": { fx: grenade, span: [1.63, 2.7], frames: 15, focus: [40, 0], crop: [110, 112, 290, 178] },
   "fx-restore-hp": restore(["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#4ade80", "#bbf7d0", "#ffffff"]),
   "fx-restore-mp": restore(["#0c1a3d", "#172554", "#1e3a8a", "#1d4ed8", "#3b82f6", "#60a5fa", "#bfdbfe", "#ffffff"]),
   "fx-restore-all": restore(["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc", "#ffffff"]),
@@ -306,12 +301,12 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
 // warms its companion's (warmFx) over its opening, and the first use bakes
 // what is still missing (playFx). Each sits on the foe's feet (its anchor's
 // floor on them) or, for what lands on the floor, on the ground under it
-// (GROUND_Y, a flier's too), at 4px over a boss: at 6px the tallest reach the
-// foe's window. Their tops are cut 46 cells over a flier's feet (y 208) and 58
-// over the ground (y 224), their floors 8 under (y 488, as fx-bomb's).
+// (GROUND_Y, a flier's too). Their tops are cut 46 cells over a flier's feet
+// (y 208) and 58 over the ground (y 224), under the foe's window, their floors
+// 8 under (y 488, as fx-bomb's).
 const PSN_SHEET_RAMP = ["#1a0533", "#3b0764", "#7e22ce", "#a855f7", "#c084fc", "#e9d5ff", "#ffffff"];
 // a sheet baked twice, its back and its front, for a battler to stand in
-const BLAZE: PixelSheet = { fx: fireRing, opts: { reach: 30 }, span: [0.28, 2.2], frames: 20, sameOnBoss: true, crop: [40, 34, 184, 100] };
+const BLAZE: PixelSheet = { fx: fireRing, opts: { reach: 30 }, span: [0.28, 2.2], frames: 20, crop: [40, 34, 184, 100] };
 const WEB: PixelSheet = {
   fx: rootSnare,
   opts: {
@@ -320,7 +315,6 @@ const WEB: PixelSheet = {
   },
   span: [0, 1.6],
   frames: 20,
-  sameOnBoss: true,
   crop: [21, 32, 107, 86],
 };
 const COMPANION_SHEETS: Record<string, PixelSheet> = {
@@ -338,7 +332,6 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
     frames: 9,
     focus: [36, 0],
     directional: true,
-    sameOnBoss: true,
     crop: [22, 38, 112, 92],
   },
   // BLOOD SIP (BAT): the foe is struck, a ring snaps out, blood drops fall
@@ -348,20 +341,20 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
   // baked, 80 cells either way (the streaks leave it at x 640), the caster's
   // crimson flush left off. Its target 24 cells over the floor, on the
   // foe's x on the ground.
-  "fx-sip": { fx: lifeSteal, span: [0, 0.85], frames: 13, focus: [104, 0], sameOnBoss: true, crop: [60, 34, 184, 100] },
+  "fx-sip": { fx: lifeSteal, span: [0, 0.85], frames: 13, focus: [104, 0], crop: [60, 34, 184, 100] },
   // SMASH (TROLL KING): a hammer of force drops over the foe in a wedge of
   // motion, a white slam with rays, a dome of force, a dent with cracks,
   // rocks thrown up that bounce and settle in dust. The slam 21 cells right
   // of its anchor, on the ground under the foe; from just before the slam
   // (0.12s of its 0.15s, the head coming down, so it lands some 30ms after
   // the blow's number), the dust thinning after 1s left off.
-  "fx-smash": { fx: hammerSmash, span: [0.12, 1], frames: 12, focus: [21, 0], sameOnBoss: true, crop: [21, 34, 179, 100] },
+  "fx-smash": { fx: hammerSmash, span: [0.12, 1], frames: 12, focus: [21, 0], crop: [21, 34, 179, 100] },
   // AVALANCHE (YETI), three of them: an icicle drops, stabs the floor under
   // the foe and bursts into skidding shards, splinters and rolling frost.
   // From its fall (0.88s, landing at 0.95s), its frosted root up top (75
   // cells up) cut off, so it falls out of the sky; the last frost melting
   // after 1.6s left off.
-  "fx-icicle": { fx: icicleFall, span: [0.88, 1.6], frames: 11, sameOnBoss: true, crop: [0, 42, 152, 108] },
+  "fx-icicle": { fx: icicleFall, span: [0.88, 1.6], frames: 11, crop: [0, 42, 152, 108] },
   // BLAZE (SALAMANDER), which sets the foe burning: a flash at its feet,
   // then flames race out along the floor in a ring round it (reach 30, 120px
   // out), flare and burn down. Its back half (fx-blaze-back) goes under the
@@ -378,7 +371,6 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
     span: [0, 0.45],
     frames: 7,
     focus: [49, 0],
-    sameOnBoss: true,
     crop: [14, 16, 154, 70],
   },
   // MELT (MAGMA SLIME), which goes through DEF: a molten gob bursts into a
@@ -391,7 +383,6 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
     opts: { palette: ["#2a0c06", "#4a1408", "#7c2d12", "#9a3412", "#c2410c", "#ea580c", "#fdba74", "#fff1c2"] },
     span: [0.25, 1.5],
     frames: 15,
-    sameOnBoss: true,
     crop: [28, 42, 157, 108],
   },
   // WEB SNARE (SPIDER), which holds the foe a turn: strands burst up and
@@ -411,13 +402,11 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
 const SHEETS: Record<string, PixelSheet> = { ...PIXEL_SHEETS, ...COMPANION_SHEETS, ...SKILL_SHEETS, ...TECH_SHEETS };
 
 // a sheet's frames, the texture point put on (x, y) as a fraction of a frame,
-// whether it turns to face the blow and whether it keeps the normal cell over
-// a boss
+// and whether it turns to face the blow
 interface SheetInfo {
   frames: number;
   origin: [number, number];
   directional: boolean;
-  sameOnBoss: boolean;
 }
 
 const cropOf = (sheet: PixelSheet): [number, number, number, number] => sheet.crop ?? [0, 0, ...sheet.fx.meta.size];
@@ -429,7 +418,7 @@ export function spanOf(sheet: PixelSheet): { from: number; to: number; frames: n
 
 const infoOf = (key: string): SheetInfo => sheetInfo(SHEETS[key]);
 
-/** A baked sheet's frame count, the point its origin puts on (x, y), and how it turns and scales. */
+/** A baked sheet's frame count, the point its origin puts on (x, y), and whether it turns. */
 export function sheetInfo(pixel: PixelSheet): SheetInfo {
   const [x0, y0, x1, y1] = cropOf(pixel);
   const [ax, ay] = pixel.fx.meta.origin;
@@ -438,7 +427,6 @@ export function sheetInfo(pixel: PixelSheet): SheetInfo {
     frames: spanOf(pixel).frames,
     origin: [(ax + fx - x0) / (x1 - x0), (ay + fy - y0) / (y1 - y0)],
     directional: !!pixel.directional,
-    sameOnBoss: !!pixel.sameOnBoss,
   };
 }
 
@@ -609,7 +597,7 @@ export function warmFx(scene: Phaser.Scene, keys: string[]): void {
   warmSheets(scene, Object.fromEntries(keys.map((key) => [key, SHEETS[key]])));
 }
 
-// the scale battlers are shown at, a boss's or giant's above it
+// the scale battlers are shown at, a boss's and a giant's too
 const BATTLER_SCALE = 2;
 
 // a sheet's sprite at (x, y) on the cell of a battler shown at `scale`; a
@@ -618,8 +606,8 @@ const BATTLER_SCALE = 2;
 function fxSprite(scene: Phaser.Scene, key: string, x: number, y: number, scale: number, left: boolean): Phaser.GameObjects.Sprite {
   // a companion sheet its battle's warm has not got to yet (warmFx)
   if (!scene.textures.exists(key)) bakePixelSheet(scene, key, SHEETS[key]);
-  const { origin, directional, sameOnBoss } = infoOf(key);
-  const s = (sameOnBoss ? Math.min(scale, BATTLER_SCALE) : scale) * ART_PX;
+  const { origin, directional } = infoOf(key);
+  const s = scale * ART_PX;
   return scene.add
     .sprite(x, y, key, 0)
     .setOrigin(...origin)
