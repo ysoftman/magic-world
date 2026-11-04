@@ -52,6 +52,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { addProp, LAVA_BUBBLES } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -68,6 +69,27 @@ const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 // lava churns slower than water ripples (WATER_ANIM_DELAY is 400)
 const LAVA_ANIM_DELAY = 700;
+const LAVA = new Set([T_LAVA_A, T_LAVA_B]);
+// The bubbles (propFx.ts) over the lava and its rounded shore (the transition
+// overlay, 1), under the basalt and the border's boulders (2 and up), which
+// the vapour rising off them goes behind.
+const LAVA_BUBBLE_DEPTH = 1.5;
+
+// Where lava bubbles: tiles with lava on three sides or more, so the domes and
+// their spatter stay on lava, picked row by row three tiles or more apart, one
+// in each stretch of the volcano's lava (six). The anchor, the floor line the
+// domes rise from, 12px under the tile's middle puts them round its middle.
+function lavaVents(level: readonly (readonly number[])[]): Array<{ x: number; y: number }> {
+  const lava = (x: number, y: number): boolean => LAVA.has(level[y]?.[x] ?? -1);
+  const picked: Array<[number, number]> = [];
+  level.forEach((row, y) => {
+    row.forEach((_, x) => {
+      const sides = [lava(x, y - 1), lava(x, y + 1), lava(x - 1, y), lava(x + 1, y)].filter(Boolean).length;
+      if (lava(x, y) && sides >= 3 && picked.every(([px, py]) => Math.max(Math.abs(px - x), Math.abs(py - y)) >= 3)) picked.push([x, y]);
+    });
+  });
+  return picked.map(([x, y]) => ({ x: (x + 0.5) * TILE, y: (y + 0.5) * TILE + 12 }));
+}
 
 // The last region, past the GLACIER GOLEM: same skeleton as SnowScene (roamer
 // zones, chests, an exit back to town, a boss that roams its own corner) on
@@ -122,6 +144,9 @@ export class VolcanoScene extends Phaser.Scene {
     addBorderDressing(this, level, undefined, [VOLCANO_ENTRY, { x: VOLCANO_ENTRY.x - 2 * TILE, y: VOLCANO_ENTRY.y }]);
     this.layer = layers.terrain;
     this.objectLayer = layers.objects;
+    // out of step with each other, so the field never bubbles as one
+    const vents = lavaVents(level);
+    for (const [i, v] of vents.entries()) addProp(this, LAVA_BUBBLES, v.x, v.y, LAVA_BUBBLE_DEPTH, i / vents.length);
 
     this.physics.world.setBounds(0, 0, VOLCANO_W * TILE, VOLCANO_H * TILE);
 
@@ -228,9 +253,7 @@ export class VolcanoScene extends Phaser.Scene {
     // a smoke haze by day, a full night on top of it
     this.night = new NightOverlay(this, 0.12, 0.4);
     // the lava glows red into the dark, swelling slowly with its own churn
-    this.night.addLights(
-      lightsOverTiles(level, new Set([T_LAVA_A, T_LAVA_B]), { radius: 136, color: 0xff5a1f, strength: 0.36, pulseMs: LAVA_ANIM_DELAY * 4 }),
-    );
+    this.night.addLights(lightsOverTiles(level, LAVA, { radius: 136, color: 0xff5a1f, strength: 0.36, pulseMs: LAVA_ANIM_DELAY * 4 }));
 
     this.panels = new FieldPanels(this, this.fieldKeys);
     this.panels.add(new InventoryUI(this), "I");
