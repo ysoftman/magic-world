@@ -1786,6 +1786,9 @@ export class BattleScene extends Phaser.Scene {
       this.chilled = true;
       this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
       this.updateEnemyStatus();
+      // frosted over as ICE's CHL leaves it (landSpellEffect): CHILL never
+      // ticks, so this is the one time the frost shows
+      this.statusOn(this.enemySprite, "chill", STATUS_FX_MS, STATUS_POP_MIN_MS);
       tail = `${dmg} dmg ATK DN`;
     } else if (weak) {
       tail = `WEAK! ${dmg} dmg`;
