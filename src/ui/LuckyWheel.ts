@@ -1,10 +1,12 @@
 import Phaser from "phaser";
+import * as confetti from "pixelfx/fx/ui/confetti";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { isEventToday } from "../events";
 import { GameState } from "../gameState";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized by the key hint (retroStyle(4), 16px a glyph): "D-PAD: MOVE   Z:
@@ -50,6 +52,27 @@ const LUCKY_TABLE: WheelOutcome[] = [
   { name: "JACKPOT", mult: 5, chance: 0.03 },
 ];
 
+// A win's picture (ui/fieldFx.ts), at the game's 2px art cell, with nothing
+// on a BUST or a REFUND: a DOUBLE bursts gold over the result line, a JACKPOT
+// bursts and two party poppers on the floor under that line bang, throwing
+// paper bits and streamers up as high as the 1000G row that tumble down and
+// settle (ui/confetti). Its poppers 140px either side of the middle, the bits
+// within 190: inside the panel's 300 a side.
+const CONFETTI: FieldFx = {
+  key: "fx-wheel-confetti",
+  // from just before the first pop to the last bits gone from the floor; the
+  // crop is everything it draws, the floor's lowest row or two of bits left
+  // off: 10 frames a row, 1900x252
+  sheet: { fx: confetti, span: [0.1, 3.3], frames: 30, crop: [6, 48, 196, 132] },
+  ms: 2200,
+};
+// the poppers' floor, between the result line (to y+342) and the hint (from y+382)
+const CONFETTI_FLOOR = PANEL_TOP + 366;
+// the gold burst's heart in the gap over the result line (y+318..342), under
+// the last wager row (to y+286): on the line itself its white flash, behind
+// the white words, washed them out for its first frames
+const BURST_Y = PANEL_TOP + 302;
+
 const todayTable = (): WheelOutcome[] => (isEventToday("lucky") ? LUCKY_TABLE : WHEEL_TABLE);
 
 // A wager whose best win would carry the purse past MAX_GOLD is refused, as
@@ -87,6 +110,7 @@ export class LuckyWheel {
   private cursor: PixelText;
   private status: PixelText;
   private hint: PixelText;
+  private fx: PanelFx;
 
   private keyUp: Phaser.Input.Keyboard.Key;
   private keyDown: Phaser.Input.Keyboard.Key;
@@ -102,6 +126,7 @@ export class LuckyWheel {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, GOLD_BURST, CONFETTI);
 
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
@@ -320,6 +345,8 @@ export class LuckyWheel {
     } else {
       Sfx.victory();
       this.status.setText(`${outcome.name}! +${gained}G`);
+      if (outcome.mult > 1) this.fx.play(GOLD_BURST, GAME_WIDTH / 2, BURST_Y, ART_PX);
+      if (outcome.name === "JACKPOT") this.fx.play(CONFETTI, GAME_WIDTH / 2, CONFETTI_FLOOR, ART_PX);
     }
     // write the result out now, not on close() — a bust reloaded before
     // closing the panel must not get to keep the pre-spin gold (Shop/Fishing
@@ -353,6 +380,7 @@ export class LuckyWheel {
     this.cursor.setVisible(false);
     this.status.setVisible(false);
     this.hint.setVisible(false);
+    this.fx.clear();
     if (this.dirty) GameState.save();
   }
 
@@ -365,6 +393,7 @@ export class LuckyWheel {
     this.cursor.destroy();
     this.status.destroy();
     this.hint.destroy();
+    this.fx.clear();
     // keys are shared instances from kb.addKey (same keycode → same object);
     // destroying them would wipe other panels' listeners. Scene shutdown
     // already tears every Key down via KeyboardPlugin.removeAllKeys(true).
