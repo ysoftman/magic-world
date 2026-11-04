@@ -574,7 +574,7 @@ export class TownScene extends Phaser.Scene {
 
     // petals by day, fireflies at night; this replaces the town's own
     // player-following fireflies, which would double up with it
-    addAmbient(this, "town");
+    addAmbient(this, "town", { level });
 
     this.spawnMonsters();
 

@@ -172,7 +172,7 @@ export class ForestScene extends Phaser.Scene {
     // falling leaves by day, fireflies by night, rain on wet days; caption
     // names the day's weather under the area title (on a season's turn only
     // if the sky changed with it)
-    addAmbient(this, "forest", { caption: true, since: turn?.weather ?? back?.weather });
+    addAmbient(this, "forest", { caption: true, since: turn?.weather ?? back?.weather, level });
     // butterflies and birds by day, frogs by the ponds
     addCritters(this, "forest", { level, avoid: [FOREST_ENTRY, ...FOREST_TREASURE_POS] });
 

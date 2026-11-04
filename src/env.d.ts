@@ -35,6 +35,8 @@ declare module "pixelfx" {
   export function createFrame(w: number, h: number, ox?: number, oy?: number): FxFrame;
   export function clearFrame(frame: FxFrame): FxFrame;
   export function createFx(mod: FxModule, opts?: Record<string, unknown>): Fx;
+  /** a palette's hex strings as `n` colours, stepped (an effect's own palette option) */
+  export function fit(ramp: readonly string[], n: number): number[];
   export function composite(frame: FxFrame, out: Uint8ClampedArray, bg: null, lightK?: number): Uint8ClampedArray;
 }
 declare module "pixelfx/fx/*" {

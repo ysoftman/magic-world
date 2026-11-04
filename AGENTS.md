@@ -800,6 +800,13 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   (Ambient 의 `CAVE_DRIP`, 880x66 232KB). 동굴 create 에서 `warmFieldFx` 로 굽고 `playFieldFxOnce` 로 `ART_PX`·
   `AMBIENT_DEPTH` 에 튼다. 씬이 `addAmbient` 에 `{ level }` 을 넘기면 바닥·물웅덩이 칸에만 떨어지고, 물결 양 끝(±18칸)·
   아래(+5칸)도 바위가 아닌 자리만 고른다(`DRIP_RING`, 12번 안에 못 찾으면 그 차례는 건너뜀).
+- 마을·숲 연못의 물결 고리도 같은 drip 이다(Ambient 의 `pondRing`). 착수 0.02초 전부터 고리가 다 사라질 때까지(0.77s)
+  굽고, back 층의 웅덩이는 빼되 고리의 뒤쪽 절반은 drawBack 과 같은 식으로 직접 그린다(연못이 웅덩이 역할). 비 오는 날
+  연못에 떨어진 빗방울은 전부 고리가 되고(땅은 예전처럼 2/5 물튀김), 맑은 날은 2.5~6초마다 물고기 고리와 작은 물소리가
+  난다. 고리 전체(±22·±7칸, `POND_REACH`)가 물 칸 위인 자리만, 동시에 8개(`POND_RING_CAP`)까지, 깊이 3.5(물가 1~3 위,
+  발자국 4·개구리 5 아래, 밤 그늘 아래)다. 색은 그 물에 맞춘다: 마을은 pixelfx 기본 WATER, 숲은 `FOREST_WATER_PALETTE`,
+  겨울은 `SNOW_WATER_PALETTE` 계열(`POND_RAMPS`). 빛은 0.5 — 1 이면 착수점 둘레 웅덩이 빛이 crop 전체에 옅은 판으로 깔렸다.
+  씬이 `addAmbient` 에 `{ level }` 을 넘겨야 나온다.
 
 ## 필드 소품 (`src/ui/propFx.ts`)
 

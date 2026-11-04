@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { clearFrame, createFx, type FxModule } from "pixelfx";
+import { clearFrame, createFx, type FxModule, fit } from "pixelfx";
+import * as waterLib from "pixelfx/fx/water/_lib";
 import * as drip from "pixelfx/fx/water/drip";
 import * as godRays from "pixelfx/fx/weather/god-rays";
 import { type AmbienceCue, Sfx } from "../audio";
@@ -173,7 +174,8 @@ interface Effect {
  * entry and whenever the day turns while the player is here. On entry only if
  * it isn't still `since`, the weather the player last saw here: a scene built
  * again round a hero who never left (a season's turn) says it only if the sky
- * changed with it. `level` is the map's grid: the cave's drips land only on
+ * changed with it. `level` is the map's grid: the town's and forest's ponds
+ * ring under the rain and a rising fish (pondRing); the cave's drips land only on
  * its floor and its pools, not on a rock (anywhere in view without it).
  *
  * The emitters are screen-space (scrollFactor 0) so the effect always covers
@@ -242,7 +244,7 @@ export function addAmbient(
 }
 
 const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix, level?: readonly (readonly number[])[]) => Effect> = {
-  forest(scene, mix) {
+  forest(scene, mix, level) {
     const season = seasonal();
     // autumn brings down twice the leaves, turned; the bare winter wood none
     const leaves = addLayer(scene, {
@@ -258,7 +260,7 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix, level?: read
       maxAliveParticles: season.autumn ? 44 : 26,
     });
     const fireflies = addFireflies(scene);
-    const rain = addRain(scene, mix, "forest");
+    const rain = addRain(scene, mix, "forest", level);
     const snow = addSnowfall(scene, mix);
     const rays = addSunRays(scene);
     // birds by day, an owl and insects by night; the rain hushes them all,
@@ -430,7 +432,7 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix, level?: read
 
   // petals by day, fireflies at night, rain on a wet day; the butterflies are
   // the critters' (Critters.ts), drawn on the hero's own cell
-  town(scene, mix) {
+  town(scene, mix, level) {
     const season = seasonal();
     // autumn's leaves blow through on the petals' breeze; winter has neither
     const petals = addLayer(scene, {
@@ -446,7 +448,7 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix, level?: read
       maxAliveParticles: 12,
     });
     const fireflies = addFireflies(scene);
-    const rain = addRain(scene, mix, "town");
+    const rain = addRain(scene, mix, "town", level);
     const snow = addSnowfall(scene, mix);
     // birdsong by day, crickets by night; the rain hushes both, and winter
     // keeps only a few birds
@@ -520,6 +522,115 @@ function dripSpot(scene: Phaser.Scene, level?: readonly (readonly number[])[]): 
     if (!level || DRIP_RING.every(([dx, dy]) => open(x + dx * ART_PX, y + dy * ART_PX))) return { x, y };
   }
   return undefined;
+}
+
+// Rings on a pond (town and forest): a raindrop landing on the water (addRain)
+// or, on a dry day, a fish rising (addFishRises). The drip's plink from just
+// before the hit, a flash, a crown and a rebound, with its rings whole: the far
+// half of them, which pixelfx draws in the back layer over its puddle (the pond
+// is the puddle here), drawn as drawBack has them. Played on past the loop's
+// end (1.6s) until the rings have faded out (0.75s after the hit). 23 frames
+// of 44x22 cells, 12 over the landing to 10 under it.
+const DRIP_LAND = 0.78 + Math.sqrt((2 * 62) / 760);
+const POND_RING_S = 0.75;
+type Painter = unknown;
+const { ring } = waterLib as unknown as {
+  ring(p: Painter, x: number, y: number, r: number, sy: number, k: number, C: number[], o: object): void;
+};
+const dripDraw = (drip as unknown as { draw(p: Painter, t: number, o: { palette: string[] }): void }).draw;
+const outCubic = (k: number): number => 1 - (1 - k) ** 3;
+const pondRings = {
+  meta: { ...drip.meta, loop: false, duration: DRIP_LAND + POND_RING_S },
+  draw(p: Painter, t: number, o: { palette: string[] }): void {
+    const C = fit(o.palette, 8);
+    const u = t - DRIP_LAND;
+    const v = u - 0.26;
+    if (u >= 0) ring(p, 0, 0, 2 + 17 * outCubic(u / 0.75), 0.28, 1.1 * (1 - u / 0.75), C, { n: 2, gap: 2.5, half: -1, seed: 1, wob: 0.4 });
+    if (v >= 0) ring(p, 0, 0, 1.5 + 9 * outCubic(v / 0.5), 0.28, 0.9 * (1 - v / 0.5), C, { n: 1, half: -1, seed: 2 });
+    dripDraw(p, t, o);
+  },
+} as unknown as FxModule;
+const [DRIP_OX, DRIP_OY] = drip.meta.origin;
+// Each pond's own water (art/tilesets.ts), dark to white: the rings are its
+// steps 4-6. pixelfx's WATER ramp is the town's blue already (its 0x86d3f5 by
+// the crests' 0x7fc6f0); over the forest's dark teal its cyan rings and the
+// blue of its light stood apart from the pale green scum on the crests, and
+// over the winter skin's grey-blue they were bluer than its icy foam.
+const POND_RAMPS: Record<"town" | "forest" | "winter", string[] | undefined> = {
+  town: undefined,
+  forest: ["#081c1f", "#0f2c2f", "#163a3c", "#2f5f5a", "#5a8c7e", "#8db8a0", "#cfe6d6", "#ffffff"],
+  winter: ["#123a57", "#1b4d72", "#2a6690", "#5d9ac0", "#90c2dc", "#c4e6f5", "#e6f5fc", "#ffffff"],
+};
+// The drip's light at half: it holds a glow round the landing all the way
+// through (its puddle's), at 1 a pale patch over the crop (alpha up to 25)
+// that went out with the sprite.
+const POND_RING_LIGHT = 0.5;
+const pondRing = (look: keyof typeof POND_RAMPS): FieldFx => ({
+  key: look === "town" ? "fx-pond-ring" : `fx-pond-ring-${look}`,
+  sheet: {
+    fx: pondRings,
+    opts: { source: false, light: POND_RING_LIGHT, ...(POND_RAMPS[look] && { palette: POND_RAMPS[look] }) },
+    span: [DRIP_LAND - 0.02, DRIP_LAND + POND_RING_S],
+    frames: 23,
+    crop: [DRIP_OX - 22, DRIP_OY - 12, DRIP_OX + 22, DRIP_OY + 10],
+  },
+  ms: (POND_RING_S + 0.02) * 1000,
+});
+// on the water, under the frogs (5) and footprints (4), over the shore (1-3)
+const POND_RING_DEPTH = 3.5;
+// most rings on a pond at once, so a downpour over a big pond stays a few
+const POND_RING_CAP = 8;
+// Its rings reach 19 cells either side and 5 over and under the landing; 3
+// and 2 more keep them off the shore's foam, which runs a few pixels into the
+// water's own tile (a ring at 19 touched it).
+const POND_REACH: ReadonlyArray<[number, number]> = [
+  [0, 0],
+  [-22, 0],
+  [22, 0],
+  [0, -7],
+  [0, 7],
+];
+type Level = readonly (readonly number[])[];
+const isWater = (level: Level, x: number, y: number): boolean => {
+  const tile = level[Math.floor(y / TILE)]?.[Math.floor(x / TILE)];
+  return tile === T_WATER_A || tile === T_WATER_B;
+};
+const onPond = (level: Level, x: number, y: number): boolean =>
+  POND_REACH.every(([dx, dy]) => isWater(level, x + dx * ART_PX, y + dy * ART_PX));
+
+/**
+ * Plays a ring at (x, y) on `region`'s water (in the season's skin), unless
+ * the ponds already hold POND_RING_CAP or it isn't baked yet; says whether it did.
+ */
+function pondRinger(scene: Phaser.Scene, region: "town" | "forest"): (x: number, y: number) => boolean {
+  const fx = pondRing(seasonLook(region) === "winter" ? "winter" : region);
+  warmFieldFx(scene, fx);
+  let alive = 0;
+  return (x, y) => {
+    if (alive >= POND_RING_CAP || !scene.textures.exists(fx.key)) return false;
+    alive++;
+    playFieldFxOnce(scene, fx, x, y, ART_PX, POND_RING_DEPTH).once(Phaser.GameObjects.Events.DESTROY, () => alive--);
+    return true;
+  };
+}
+
+// Now and then on a dry day, a fish rises somewhere on a pond in view: a ring
+// and a soft plink. None in the rain, whose drops ring the ponds instead.
+function addFishRises(scene: Phaser.Scene, mix: Mix, level: Level, ringAt: (x: number, y: number) => boolean): void {
+  everyFew(scene, 2500, 6000, () => {
+    if (mix.rain > 0.3) return;
+    const view = scene.cameras.main.worldView;
+    const tiles: [number, number][] = [];
+    for (let ty = Math.floor(view.y / TILE); ty * TILE < view.bottom; ty++)
+      for (let tx = Math.floor(view.x / TILE); tx * TILE < view.right; tx++) if (isWater(level, tx * TILE, ty * TILE)) tiles.push([tx, ty]);
+    for (let tries = 0; tries < 8 && tiles.length > 0; tries++) {
+      const [tx, ty] = tiles[Phaser.Math.Between(0, tiles.length - 1)];
+      const [x, y] = [(tx + Math.random()) * TILE, (ty + Math.random()) * TILE];
+      if (!onPond(level, x, y) || !view.contains(x, y)) continue;
+      if (ringAt(x, y)) Sfx.ambience("drip", Phaser.Math.FloatBetween(0.4, 0.6));
+      return;
+    }
+  });
 }
 
 // Fires `play` every `minMs`..`maxMs`, each gap drawn fresh, for as long as the
@@ -707,19 +818,32 @@ function addSnowfall(scene: Phaser.Scene, mix: Mix): { layers: Layer[]; tick: ()
 // Slanted rain with a splash where each drop lands (two in five, to keep the
 // count down), a darker sky, the sound of it, and in a storm denser, louder
 // rain and the odd lightning and thunder. Shared by the town and the forest,
-// which share one sky.
+// which share one sky. On `level`'s ponds a drop rings the water instead
+// (pondRing), and on a dry day a fish rises there now and then.
 function addRain(
   scene: Phaser.Scene,
   mix: Mix,
   region: "town" | "forest",
+  level?: Level,
 ): { layers: Layer[]; tick: () => void; sound: () => { rain: number; wind: number } } {
   const { rain, splash: splashes } = rainParticles(region);
   const drops = addLayer(scene, { ...rain, emitting: mix.rain > 0 });
   const splash = addLayer(scene, splashes, { wrap: false });
+  const ringAt = level && pondRinger(scene, region);
+  if (level && ringAt) addFishRises(scene, mix, level, ringAt);
+  const cam = scene.cameras.main;
   drops.emitter.onParticleDeath((p: Particle) => {
     // not while addAmbient prewarms the drops: the splash layer isn't stepped
     // then, so they would all land on the first frame at once
-    if (!drops.emitter.skipping && Math.random() < 0.4) splash.emitter.emitParticleAt(p.x, p.y, 1);
+    if (drops.emitter.skipping) return;
+    // the drops are screen-space (addAmbient)
+    const [x, y] = [p.x + cam.scrollX, p.y + cam.scrollY];
+    // Every drop on a pond rings it: two in five, as the splashes, rang the
+    // town's pond 0.55 times a second and left it bare most of the time (0.4
+    // rings on it on average, 0.3 on a forest pond). A ring is one sprite
+    // under a cap, not a particle in a crowd.
+    if (level && ringAt && onPond(level, x, y)) ringAt(x, y);
+    else if (Math.random() < 0.4) splash.emitter.emitParticleAt(p.x, p.y, 1);
   });
   const clouds = addOvercast(scene, 0x1c2433);
   // only once the storm has fully rolled in, not while it eases in or out
