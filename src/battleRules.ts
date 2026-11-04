@@ -276,45 +276,55 @@ export const SPELLS: Spell[] = [
 ];
 
 // Skills: the battle's second book (BattleScene's X:SKILL list), learned at
-// their level gates as spells are, so nothing about them is saved either.
-// Where a spell is magic, a skill is a blow: each hit is its power plus up to
-// half again (spellRoll's spread) less the foe's DEF (rollDamage's floor),
-// and a one-hit skill crits as FIGHT does. A multi-hit one never crits, and
-// pays DEF on every hit, so it hurts soft foes most; LASER `pierce`s DEF.
+// their level gates as spells are, so nothing about them is saved either. 26
+// moves in three styles:
+// - "blow" (the 14 skills, skillFx.ts): each hit is its power plus up to half
+//   again (spellRoll's spread) less the foe's DEF (rollDamage's floor), and a
+//   one-hit one crits as FIGHT does. A multi-hit one never crits, and pays DEF
+//   on every hit, so it hurts soft foes most; LASER `pierce`s DEF.
+// - "weapon" (8 techs, techFx.ts): FIGHT's roll on the hero's ATK x `mult`
+//   less DEF (SPEAR SWEEP meets half of it), the hero dashing in for it as it
+//   does to FIGHT. A one-hit tech crits (WHIP CRACK at 35%), a multi-hit one
+//   never. It is a blow of the weapon: one more hit in the combo, though it
+//   takes no combo bonus itself. Its MP is a share of max MP (skillCost): its
+//   damage grows with ATK, and at a flat cost DOUBLE SLASH (2 MP at Lv2) was
+//   ~9 damage a MP over a FIGHT at Lv30 against ~1.5 for every spell.
+// - "spell" (4 techs, techFx.ts): an attack spell's roll (spellRoll): no
+//   DEF, no crit. BLACK HOLE is the game's biggest blow because of it.
 // fire/ice/bolt ones take the weakness x1.5, CHAIN the combo, finish WEAK
 // and double their effect's odds on a weakness, as attack spells do; the
-// rest reset the combo. Effects reuse the spells' and the companions' rules
-// (spellEffectCanLand): burn (BURN_PROOF), chill (CHILL_PROOF), shock (no
-// boss or giant), and THORNS' poison, VENOM STING's PSN (never on a PSN/BRN
-// already ticking). SOUL DRAIN heals half its damage, as BLOOD SIP does.
-// QUAKE can't reach a flier: the list greys it out against one.
+// other blows and spells reset the combo. Effects reuse the spells' and the
+// companions' rules (spellEffectCanLand): burn (BURN_PROOF), chill
+// (CHILL_PROOF), shock (no boss or giant), and THORNS' poison, VENOM STING's
+// PSN (never on a PSN/BRN already ticking). SOUL DRAIN heals half its damage
+// as BLOOD SIP does, SCYTHE REAP 30%. QUAKE can't reach a flier: the list
+// greys it out against one. UPPERCUT hits a flier x1.2 harder.
 //
-// Sized against the attack spells with sim:battle --skill-table (mean damage
-// a cast; a spell ignores DEF, so a skill is read at DEF 3, a mid-game foe's).
-// Per MP no skill beats FIRE's 4.0 off a weakness or a spell's 5.5-6.0 on
-// one; what a skill gets for its MP is a bigger turn, another element or an
-// effect:
-//   ARCANE BEAM 12.7 (3.2 / MP) beside FIRE's 12 (4.0), 14.8 on a soft foe;
-//   MISSILES 22.5 at DEF 1, ICE's turn two levels early, 16.5 at DEF 3;
-//   FLAME PILLAR 31 on a fire weakness (FIRE 17.8) with a 20% burn, 20.9 off
-//   one; CHAIN BOLT 27 (39.6 weak) before BOLT; ICE SPIKES 31.9 (47.6 weak,
-//   5.3 / MP against ICE's 5.5); LASER 28 through any DEF for 8 MP, under
-//   BOLT's 37 for 10; SOUL DRAIN 31.9 and half of it back; QUAKE 47.3
-//   (3.9 / MP), paid for by missing fliers; SMITE 51.1 (3.7); METEOR 67.7,
-//   under NOVA's 74.5 off a weakness for 2 MP less, 101 on one; STAR FALL 70
-//   (80 on a soft foe, 45 through the FLAME DRAKE's DEF 8); VOID 86.9, the
-//   biggest blow in the game, at NOVA's 3.1 / MP. THORNS and EMP hit lightly
-//   for their poison and stun.
-// FLAME PILLAR was 22 power for 8 MP: four casts on a fire weakness were the
-// MOSS GOLEM's 140 HP in one Lv12 MP bar, and sim:battle --skills took a lone
-// Lv12 hero's fight there from 11.3 rounds (--greedy, spells alone) to 5.4.
-// At 18 for 9 MP it is 8.1 (4.9 beside a WOLF, 5.9 without the list). The
-// other bosses at their intended levels move a round or less beside the
-// WOLF (GLACIER GOLEM 6.2 -> 5.6), their first level at a 90% win one or two
-// lower at most.
-// The level gates fill the gaps between spells (3, 4, 7, 10, 12, 13 ...),
-// so a level up mostly brings one new thing. Names are the effects'
-// (skillFx.ts SkillName, which must match) and the hit counts its SKILL_HITS.
+// Sized with sim:battle --skill-table: the mean damage a cast at its level
+// (the hero's ATK there in the gear of the boss before it, against the DEF of
+// the region it is learned in) over a FIGHT's there, a MP, and the same at
+// Lv30 (ATK 47, DEF 5). A spell gains 1.2-1.7 a MP at its level; so do the
+// moves: blows 1.1-1.7 (FLAME PILLAR 0.7 off a fire weakness, 1.9 on one),
+// weapon techs 1.3-1.6, spell techs 1.2-1.8, THORNS and EMP less for their
+// poison and stun, SOUL DRAIN 0.8 and its healing. At Lv30 a FIGHT outgrows
+// every flat move but the biggest (NOVA 1.2, VOID 1.4, BLACK HOLE 1.5); the
+// weapon techs keep 1.3-1.7 there, as their MP grows with max MP. On a
+// weakness no move beats its element's spell per MP (FIRE 6.0, ICE 5.5,
+// BOLT 5.5 against FIRE TORNADO 5.3, ICE SPIKES 5.3, FROST NOVA 4.5 ...).
+// The biggest turns are BLACK HOLE 92, VOID 86 (at DEF 4), NOVA 74.5 and
+// HEAVY CLEAVE ~97 at Lv30.
+// sim:battle --skills (a hero casting the most damage it can afford each
+// turn) against --greedy (the same pick from the spells alone), beside the
+// WOLF at each boss's intended level: KING SLIME 5.8 -> 4.9 rounds, TROLL
+// KING 4.8 -> 4.8, MOSS GOLEM 6.0 -> 4.9, GLACIER GOLEM 6.2 -> 5.6, FLAME
+// DRAKE 5.3 -> 4.4; the first level at a 90% win one or two lower at most.
+// The two that moved most were cut back: FLAME PILLAR was 22 power for 8 MP,
+// four casts on a fire weakness the MOSS GOLEM's 140 HP in one Lv12 MP bar (a
+// lone Lv12 hero's fight there 11.3 rounds -> 5.4; at 18 for 9 MP, 8.1), and
+// FROST NOVA was 17 MP with a 30% chill (60% on the drake's weakness), the
+// FLAME DRAKE beside a WOLF in 4.1 rounds with 14% of max HP lost.
+// Names are the effects' (skillFx.ts SkillName, techFx.ts TechName, which
+// must match) and the hit counts their SKILL_HITS / TECH_HITS.
 export type SkillEffect = SpellEffect | "poison";
 export const SKILL_NAMES = [
   "ARCANE BEAM",
@@ -333,27 +343,83 @@ export const SKILL_NAMES = [
   "VOID",
 ] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
+export const TECH_NAMES = [
+  "DOUBLE SLASH",
+  "UPPERCUT",
+  "WHIP CRACK",
+  "DAGGER FLURRY",
+  "SPEAR SWEEP",
+  "SPIN SLASH",
+  "HEAVY CLEAVE",
+  "SCYTHE REAP",
+  "FIRE TORNADO",
+  "THUNDERCLAP",
+  "FROST NOVA",
+  "BLACK HOLE",
+] as const;
+export type TechName = (typeof TECH_NAMES)[number];
 
-export interface Skill {
-  name: SkillName;
-  cost: number;
+interface MoveBase {
   learnLevel: number;
-  power: number; // each hit's
   hits: number;
   color: number; // the foe's flash as a hit lands
   element?: Element;
   effect?: { kind: SkillEffect; chance: number }; // x SPELL_EFFECT_WEAK_MULT on a weakness
   drain?: number; // the share of its damage back as HP
-  pierce?: boolean; // rolled against DEF 0
   grounded?: boolean; // misses a flier, so it can't be picked against one
-  // the list's INFO line after "<NAME>  <MP> MP  ": <= 33 glyphs, so the
-  // longest (FLAME PILLAR, 12) fills a message row's 54 at most
+  // the list's INFO line after "<NAME>  <MP> MP  ", in the message box's 54
+  // glyphs: name + 9 + info <= 54 (BattleScene SKILL_INFO_Y)
   info: string;
 }
+export interface BlowSkill extends MoveBase {
+  style: "blow";
+  name: SkillName;
+  cost: number;
+  power: number; // each hit's
+  pierce?: boolean; // rolled against DEF 0
+}
+export interface WeaponTech extends MoveBase {
+  style: "weapon";
+  name: TechName;
+  mpShare: number; // its MP, a share of max MP (skillCost)
+  mult: number; // each hit's, on the hero's ATK
+  crit?: number; // a one-hit tech's crit odds, CRIT_CHANCE if not given
+  defShare?: number; // the share of the foe's DEF it meets
+  flierMult?: number; // x this on a flier
+}
+export interface SpellTech extends MoveBase {
+  style: "spell";
+  name: TechName;
+  cost: number;
+  power: number;
+}
+export type Skill = BlowSkill | WeaponTech | SpellTech;
 
+// In the order they are learned, which is the list's (a blow before a tech
+// at one level)
 export const SKILLS: Skill[] = [
-  { name: "ARCANE BEAM", cost: 4, learnLevel: 3, power: 12, hits: 1, color: 0xc4b5fd, info: "A beam of raw magic, no element." },
   {
+    style: "weapon",
+    name: "DOUBLE SLASH",
+    mpShare: 0.2,
+    learnLevel: 2,
+    mult: 0.8,
+    hits: 2,
+    color: 0xe2e8f0,
+    info: "Two quick cuts of your weapon.",
+  },
+  {
+    style: "blow",
+    name: "ARCANE BEAM",
+    cost: 4,
+    learnLevel: 3,
+    power: 12,
+    hits: 1,
+    color: 0xc4b5fd,
+    info: "A beam of raw magic, no element.",
+  },
+  {
+    style: "blow",
     name: "THORNS",
     cost: 4,
     learnLevel: 4,
@@ -363,8 +429,40 @@ export const SKILLS: Skill[] = [
     effect: { kind: "poison", chance: 0.5 },
     info: "A light hit. Poisons 50% (PSN).",
   },
-  { name: "MISSILES", cost: 6, learnLevel: 7, power: 7, hits: 3, color: 0xa5b4fc, info: "Three magic darts, no element." },
   {
+    style: "weapon",
+    name: "UPPERCUT",
+    mpShare: 0.2,
+    learnLevel: 5,
+    mult: 1.4,
+    flierMult: 1.2,
+    hits: 1,
+    color: 0xfde68a,
+    info: "A rising blow, harder on fliers.",
+  },
+  {
+    style: "blow",
+    name: "MISSILES",
+    cost: 6,
+    learnLevel: 7,
+    power: 7,
+    hits: 3,
+    color: 0xa5b4fc,
+    info: "A volley of magic darts, 3 hits.",
+  },
+  {
+    style: "weapon",
+    name: "WHIP CRACK",
+    mpShare: 0.2,
+    learnLevel: 8,
+    mult: 1.2,
+    crit: 0.35,
+    hits: 1,
+    color: 0xfca5a5,
+    info: "A snapping lash. Crits 35%.",
+  },
+  {
+    style: "blow",
     name: "FLAME PILLAR",
     cost: 9,
     learnLevel: 10,
@@ -376,6 +474,17 @@ export const SKILLS: Skill[] = [
     info: "Fire. Burns 20% (BRN).",
   },
   {
+    style: "weapon",
+    name: "DAGGER FLURRY",
+    mpShare: 0.22,
+    learnLevel: 11,
+    mult: 0.5,
+    hits: 4,
+    color: 0xcbd5e1,
+    info: "Four quick stabs.",
+  },
+  {
+    style: "blow",
     name: "CHAIN BOLT",
     cost: 9,
     learnLevel: 12,
@@ -387,6 +496,7 @@ export const SKILLS: Skill[] = [
     info: "Bolt, three hits. Stuns 8%.",
   },
   {
+    style: "blow",
     name: "ICE SPIKES",
     cost: 9,
     learnLevel: 13,
@@ -397,10 +507,74 @@ export const SKILLS: Skill[] = [
     effect: { kind: "chill", chance: 0.1 },
     info: "Ice. Chills 10% (ATK DN).",
   },
-  { name: "LASER", cost: 8, learnLevel: 15, power: 6, hits: 4, color: 0xff5577, pierce: true, info: "Four hits that ignore DEF." },
-  { name: "SOUL DRAIN", cost: 10, learnLevel: 16, power: 26, hits: 1, color: 0xc084fc, drain: 0.5, info: "Heals you half the damage." },
-  { name: "QUAKE", cost: 12, learnLevel: 18, power: 37, hits: 1, color: 0xd6a76c, grounded: true, info: "A huge blow. Fliers dodge it." },
   {
+    style: "weapon",
+    name: "SPEAR SWEEP",
+    mpShare: 0.22,
+    learnLevel: 14,
+    mult: 1.4,
+    defShare: 0.5,
+    hits: 1,
+    color: 0xe5e7eb,
+    info: "A thrust through half the DEF.",
+  },
+  {
+    style: "blow",
+    name: "LASER",
+    cost: 8,
+    learnLevel: 15,
+    power: 7,
+    hits: 4,
+    color: 0xff5577,
+    pierce: true,
+    info: "Four hits that ignore DEF.",
+  },
+  {
+    style: "blow",
+    name: "SOUL DRAIN",
+    cost: 10,
+    learnLevel: 16,
+    power: 26,
+    hits: 1,
+    color: 0xc084fc,
+    drain: 0.5,
+    info: "Heals you half the damage.",
+  },
+  {
+    style: "weapon",
+    name: "SPIN SLASH",
+    mpShare: 0.2,
+    learnLevel: 17,
+    mult: 0.6,
+    hits: 3,
+    color: 0xbae6fd,
+    info: "A whirling slash, 3 hits.",
+  },
+  {
+    style: "blow",
+    name: "QUAKE",
+    cost: 12,
+    learnLevel: 18,
+    power: 37,
+    hits: 1,
+    color: 0xd6a76c,
+    grounded: true,
+    info: "A huge blow. Fliers dodge it.",
+  },
+  {
+    style: "spell",
+    name: "FIRE TORNADO",
+    cost: 13,
+    learnLevel: 19,
+    power: 37,
+    hits: 1,
+    color: 0xf97316,
+    element: "fire",
+    effect: { kind: "burn", chance: 0.25 },
+    info: "Fire, a spell. Burns 25%.",
+  },
+  {
+    style: "blow",
     name: "EMP",
     cost: 8,
     learnLevel: 20,
@@ -410,8 +584,40 @@ export const SKILLS: Skill[] = [
     effect: { kind: "shock", chance: 1 },
     info: "A light hit. Stuns, not bosses.",
   },
-  { name: "SMITE", cost: 14, learnLevel: 21, power: 40, hits: 1, color: 0xfff3b0, info: "A heavy blow, no element." },
   {
+    style: "weapon",
+    name: "HEAVY CLEAVE",
+    mpShare: 0.45,
+    learnLevel: 20,
+    mult: 2,
+    hits: 1,
+    color: 0xfecaca,
+    info: "One crushing weapon blow.",
+  },
+  {
+    style: "blow",
+    name: "SMITE",
+    cost: 14,
+    learnLevel: 21,
+    power: 40,
+    hits: 1,
+    color: 0xfff3b0,
+    info: "A heavy blow, no element.",
+  },
+  {
+    style: "spell",
+    name: "THUNDERCLAP",
+    cost: 15,
+    learnLevel: 22,
+    power: 42,
+    hits: 1,
+    color: 0xfde047,
+    element: "bolt",
+    effect: { kind: "shock", chance: 0.35 },
+    info: "Bolt, a spell. Stuns 35%.",
+  },
+  {
+    style: "blow",
     name: "METEOR",
     cost: 22,
     learnLevel: 23,
@@ -422,26 +628,107 @@ export const SKILLS: Skill[] = [
     effect: { kind: "burn", chance: 0.2 },
     info: "Fire, a huge blow. Burns 20%.",
   },
-  { name: "STAR FALL", cost: 22, learnLevel: 26, power: 14, hits: 5, color: 0xfef08a, info: "Five falling stars." },
-  { name: "VOID", cost: 28, learnLevel: 28, power: 66, hits: 1, color: 0x8b5cf6, info: "The strongest blow, no element." },
+  {
+    style: "spell",
+    name: "FROST NOVA",
+    cost: 19,
+    learnLevel: 24,
+    power: 46,
+    hits: 1,
+    color: 0x67e8f9,
+    element: "ice",
+    effect: { kind: "chill", chance: 0.2 },
+    info: "Ice, a spell. Chills 20%.",
+  },
+  {
+    style: "weapon",
+    name: "SCYTHE REAP",
+    mpShare: 0.4,
+    learnLevel: 25,
+    mult: 1.8,
+    hits: 1,
+    color: 0xa855f7,
+    drain: 0.3,
+    info: "Heals you 30% of the damage.",
+  },
+  {
+    style: "blow",
+    name: "STAR FALL",
+    cost: 22,
+    learnLevel: 26,
+    power: 14,
+    hits: 5,
+    color: 0xfef08a,
+    info: "Five falling stars.",
+  },
+  {
+    style: "blow",
+    name: "VOID",
+    cost: 28,
+    learnLevel: 28,
+    power: 66,
+    hits: 1,
+    color: 0x8b5cf6,
+    info: "A blow of nothing, no element.",
+  },
+  {
+    style: "spell",
+    name: "BLACK HOLE",
+    cost: 30,
+    learnLevel: 29,
+    power: 74,
+    hits: 1,
+    color: 0x6d28d9,
+    info: "The strongest spell, past DEF.",
+  },
 ];
 
+// a move's MP now: a weapon tech's share of max MP (never under 1)
+export const skillCost = (skill: Skill, maxMp: number): number =>
+  skill.style === "weapon" ? Math.max(1, Math.round(maxMp * skill.mpShare)) : skill.cost;
+
+// what a hit is thrown at: the hero's ATK (a weapon tech's), the foe's DEF,
+// weakness and whether it flies
+export interface SkillTarget {
+  atk: number;
+  def: number;
+  weakness?: Element;
+  flying?: boolean;
+}
+
 /**
- * One hit of a skill: its power plus up to half again, less DEF (0 for a
- * pierce) with rollDamage's floor, doubled on a crit (one-hit skills only,
- * `rand` called for it first as rollDamage does), x1.5 on the weakness.
+ * One hit of a move (see the styles above), x1.5 on the weakness. A blow:
+ * power plus up to half again, less DEF (0 for a pierce). A weapon tech:
+ * FIGHT's roll (ATK x 0.8-1.2) on ATK x mult (x flierMult on a flier) less
+ * its share of DEF. Both with rollDamage's floor, doubled on a crit (one-hit
+ * ones only, `rand` called for it first as rollDamage does). A spell tech:
+ * spellRoll's, no DEF, no crit.
  */
 export function skillHit(
   skill: Skill,
-  def: number,
-  weakness: Element | undefined,
+  target: SkillTarget,
   rand: () => number = Math.random,
 ): { dmg: number; crit: boolean; weak: boolean } {
-  const crit = skill.hits === 1 && rand() < CRIT_CHANCE;
-  const roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
-  const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - (skill.pierce ? 0 : def));
-  const weak = skill.element !== undefined && weakness === skill.element;
-  return { dmg: Math.floor((crit ? hit * CRIT_MULT : hit) * (weak ? WEAKNESS_MULT : 1)), crit, weak };
+  const weak = skill.element !== undefined && target.weakness === skill.element;
+  const w = weak ? WEAKNESS_MULT : 1;
+  if (skill.style === "spell") {
+    const roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
+    return { dmg: Math.floor(roll * w), crit: false, weak };
+  }
+  const odds = skill.hits > 1 ? 0 : skill.style === "weapon" ? (skill.crit ?? CRIT_CHANCE) : CRIT_CHANCE;
+  const crit = odds > 0 && rand() < odds;
+  let roll: number;
+  let def: number;
+  if (skill.style === "blow") {
+    roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
+    def = skill.pierce ? 0 : target.def;
+  } else {
+    const mult = skill.mult * (target.flying ? (skill.flierMult ?? 1) : 1);
+    roll = Math.floor(target.atk * mult * (0.8 + rand() * 0.4));
+    def = Math.round(target.def * (skill.defShare ?? 1));
+  }
+  const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - def);
+  return { dmg: Math.floor((crit ? hit * CRIT_MULT : hit) * w), crit, weak };
 }
 
 // ...and a foe's HP stays three digits: BattleScene's enemy window has room

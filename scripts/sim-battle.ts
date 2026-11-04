@@ -57,12 +57,9 @@ const {
   BOSS_TELL_COOLDOWN,
   BURN_PROOF,
   CHILL_PROOF,
-  CRIT_CHANCE,
-  CRIT_MULT,
   ENRAGE_ATK_MULT,
   ENRAGE_HP_SHARE,
   FREEZE_GRACE_TURNS,
-  MIN_DAMAGE_SHARE,
   POISON_TURNS,
   SKILLS,
   SPELLS,
@@ -78,6 +75,7 @@ const {
   regenAmount,
   rollDamage,
   scaleEnemy,
+  skillCost,
   skillHit,
   spellRoll,
 } = await import("../src/battleRules");
@@ -244,19 +242,21 @@ function spellMean(spell: Spell, weak: boolean): number {
   return sum / spread;
 }
 
-// a skill's damage over all its hits (skillHit), every roll of its spread
-// and the crit a one-hit skill may roll
-function skillMean(skill: Skill, def: number, weak: boolean): number {
-  const spread = Math.ceil(skill.power / 2);
-  const crit = skill.hits === 1 ? CRIT_CHANCE : 0;
-  const w = weak ? WEAKNESS_MULT : 1;
-  let sum = 0;
-  for (let r = 0; r < spread; r++) {
-    const roll = skill.power + r;
-    const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - (skill.pierce ? 0 : def));
-    sum += (1 - crit) * Math.floor(hit * w) + crit * Math.floor(hit * CRIT_MULT * w);
+// a move's damage over all its hits (skillHit), crits counted, sampled once
+// a move, ATK, DEF, weakness and flier; `weak` gives the foe the move's
+// element as its weakness
+const skillMeans = new Map<string, number>();
+function skillMean(skill: Skill, atk: number, def: number, weak: boolean, flying = false): number {
+  const key = `${skill.name}:${atk}:${def}:${weak}:${flying}`;
+  let mean = skillMeans.get(key);
+  if (mean === undefined) {
+    const target = { atk, def, weakness: weak ? skill.element : undefined, flying };
+    let sum = 0;
+    for (let i = 0; i < 20000; i++) for (let h = 0; h < skill.hits; h++) sum += skillHit(skill, target).dmg;
+    mean = sum / 20000;
+    skillMeans.set(key, mean);
   }
-  return (sum / spread) * skill.hits;
+  return mean;
 }
 
 // a FIGHT's damage, crits counted, before the combo (rollDamage), sampled
@@ -360,9 +360,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (value > most) [best, most] = [{ kind: "magic", spell }, value];
     }
     for (const skill of hero.skills) {
-      if (mp < skill.cost || (skill.grounded && foe.flying)) continue;
+      if (mp < skillCost(skill, hero.maxMp) || (skill.grounded && foe.flying)) continue;
       const weak = skill.element !== undefined && skill.element === foe.weakness;
-      const value = skillMean(skill, foe.def, weak) + dotValue(skill.effect, weak);
+      const value = skillMean(skill, hero.atk, foe.def, weak, !!foe.flying) + dotValue(skill.effect, weak);
       if (value > most) [best, most] = [{ kind: "skill", skill }, value];
     }
     return best;
@@ -414,7 +414,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   // effect rolled before the hits, landed if the foe outlives them; a hit
   // the foe is already down for isn't thrown
   const useSkill = (skill: Skill): void => {
-    mp -= skill.cost;
+    mp -= skillCost(skill, hero.maxMp);
     const weak = skill.element !== undefined && skill.element === foe.weakness;
     const fx = skill.effect;
     const canLand =
@@ -429,12 +429,12 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     const effect = fx && canLand && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
     let total = 0;
     for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
-      const { dmg } = skillHit(skill, foe.def, foe.weakness);
+      const { dmg } = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying });
       foe.curHp = Math.max(0, foe.curHp - dmg);
       total += dmg;
     }
-    // CHAIN, as an attack spell
-    combo = weak ? combo + 1 : 0;
+    // CHAIN, as an attack spell; a weapon tech one more hit, as a FIGHT
+    combo = weak || skill.style === "weapon" ? combo + 1 : 0;
     if (skill.drain) hp += Math.min(hero.maxHp - hp, Math.ceil(total * skill.drain));
     if (!effect || foe.curHp <= 0) return;
     if (effect === "burn" || effect === "poison") enemyDot = COMPANION_DOT_TURNS;
@@ -587,36 +587,51 @@ const COLS = [
 const pct = (x: number): string => `${Math.round(x * 100)}%`.padStart(4);
 const fmt = (c: Cell): string => `${pct(c.win)} ${c.rounds.toFixed(1).padStart(5)} ${pct(c.lost)}`;
 
-// --skill-table: each attack spell and skill a cast, at the DEF it can meet
-// (a spell's ignores DEF), on a weakness at DEF 3, and per MP at DEF 3,
-// beside a FIGHT at its level in the gear of the boss before it, against
-// DEF 3 (no combo). What it leaves (poison, burn, chill, stun, HP) isn't in
-// the damage.
+// --skill-table: what each attack spell and SKILL-list move deals a cast
+// (all its hits), against what a FIGHT (no combo) would: at the level it is
+// learned, the hero there in the gear of the boss before it against the DEF
+// of the region it is learned in (DEF 1 to Lv7, 2 to Lv12, 3 to Lv18, then
+// 4), and at Lv30 (LATE). GAIN is the cast's damage over the FIGHT's, a MP:
+// what the MP buys. WEAK is the cast on a foe weak to its element. What it
+// leaves (poison, burn, chill, stun, HP) isn't in the damage.
+const LATE = { level: 30, atk: 47, def: 5 }; // MYTHRIL's 41, the bestiary's +5, a PARTNER's +1
+const regionDef = (lv: number): number => (lv < 8 ? 1 : lv < 13 ? 2 : lv < 19 ? 3 : 4);
 if (args.includes("--skill-table")) {
-  type Row = { name: string; lv: number; mp: number; hits: number; at: (def: number, weak: boolean) => number; note: string };
+  type Row = {
+    name: string;
+    lv: number;
+    mp: (maxMp: number) => number;
+    hits: number;
+    at: (atk: number, def: number, weak: boolean) => number;
+    note: string;
+  };
   const effectNote = (e: Skill["effect"]): string => (e ? `${e.kind} ${Math.round(e.chance * 100)}%` : "");
   const rows: Row[] = [
     ...SPELLS.filter((s) => s.kind === "attack").map(
       (s): Row => ({
         name: s.name,
         lv: s.learnLevel,
-        mp: s.cost,
+        mp: () => s.cost,
         hits: 1,
-        at: (_def, weak) => spellMean(s, weak && s.element !== undefined),
-        note: `spell${s.element ? ` ${s.element}` : ""} ${effectNote(s.effect)}`.trim(),
+        at: (_atk, _def, weak) => spellMean(s, weak && s.element !== undefined),
+        note: `SPELL ${[s.element, effectNote(s.effect)].filter(Boolean).join(", ")}`,
       }),
     ),
     ...SKILLS.map(
       (s): Row => ({
         name: s.name,
         lv: s.learnLevel,
-        mp: s.cost,
+        mp: (maxMp) => skillCost(s, maxMp),
         hits: s.hits,
-        at: (def, weak) => skillMean(s, def, weak && s.element !== undefined),
+        at: (atk, def, weak) => skillMean(s, atk, def, weak && s.element !== undefined),
         note: [
+          s.style === "weapon" ? `weapon x${s.mult}${s.hits > 1 ? " each" : ""}` : s.style,
           s.element,
           effectNote(s.effect),
-          s.pierce && "ignores DEF",
+          s.style === "blow" && s.pierce && "ignores DEF",
+          s.style === "weapon" && s.defShare && `meets DEF x${s.defShare}`,
+          s.style === "weapon" && s.crit && `crit ${s.crit * 100}%`,
+          s.style === "weapon" && s.flierMult && `flier x${s.flierMult}`,
           s.drain && `drain ${s.drain * 100}%`,
           s.grounded && "misses fliers",
         ]
@@ -625,16 +640,24 @@ if (args.includes("--skill-table")) {
       }),
     ),
   ].sort((a, b) => a.lv - b.lv);
-  const f = (x: number): string => x.toFixed(1).padStart(6);
-  console.log("ATTACK SPELLS AND SKILLS: mean damage a cast (all hits)");
-  console.log(`${"NAME".padEnd(13)} LV  MP  HITS   DEF1   DEF3   DEF5   DEF8  WEAK3  /MP@3  FIGHT  NOTE`);
+  const f = (x: number, w = 6): string => x.toFixed(1).padStart(w);
+  const late = makeHero(LATE.level, null);
+  console.log("ATTACK SPELLS AND SKILL-LIST MOVES: mean damage a cast (all hits), and its gain over a FIGHT a MP");
+  console.log(`${"".padEnd(13)}    | at its level                         | at Lv${LATE.level}, ATK ${LATE.atk} DEF ${LATE.def}`);
+  console.log(`${"NAME".padEnd(13)} LV | ATK DEF MP    DMG  FIGHT  GAIN   WEAK | MP    DMG  GAIN | NOTE`);
   for (const r of rows) {
     const gear = [...BOSSES].reverse().find((b) => b.level <= r.lv)?.gear ?? BOSSES[0].gear;
-    const fightAt = fightMean(makeHero(r.lv, gear).atk, 3);
+    const hero = makeHero(r.lv, gear);
+    const def = regionDef(r.lv);
+    const mp = r.mp(hero.maxMp);
+    const dmg = r.at(hero.atk, def, false);
+    const fight = fightMean(hero.atk, def);
+    const lateMp = r.mp(late.maxMp);
+    const lateDmg = r.at(LATE.atk, LATE.def, false);
     console.log(
-      `${r.name.padEnd(13)} ${String(r.lv).padStart(2)}  ${String(r.mp).padStart(2)}  ${String(r.hits).padStart(4)} ` +
-        `${f(r.at(1, false))} ${f(r.at(3, false))} ${f(r.at(5, false))} ${f(r.at(8, false))} ${f(r.at(3, true))} ` +
-        `${f(r.at(3, false) / r.mp)} ${f(fightAt)}  ${r.note}`,
+      `${r.name.padEnd(13)} ${String(r.lv).padStart(2)} | ${String(hero.atk).padStart(3)} ${String(def).padStart(3)} ${String(mp).padStart(2)} ` +
+        `${f(dmg)} ${f(fight)} ${f((dmg - fight) / mp, 5)} ${f(r.at(hero.atk, def, true))} | ${String(lateMp).padStart(2)} ` +
+        `${f(lateDmg)} ${f((lateDmg - fightMean(LATE.atk, LATE.def)) / lateMp, 5)} | ${r.note}`,
     );
   }
   process.exit(0);

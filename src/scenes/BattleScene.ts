@@ -39,6 +39,7 @@ import {
   STREAK_CAP,
   STREAK_MIN,
   scaleEnemy,
+  skillCost,
   skillHit,
   spellRoll,
   WARD_COLOR,
@@ -69,6 +70,7 @@ import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
+import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
@@ -306,23 +308,34 @@ const ITEM_COL_X = [24, 319, 637, 908];
 const TOUCH_ITEM_HINT = "TAP:SELECT  TAP AGAIN:USE  TAP OUTSIDE:BACK";
 
 // The SKILL list (X) works as the item list does, on the backdrop under the
-// fighters, but the 14 skills take up to four rows of four, in the order
-// they are learned: rows 32px apart from y 488, so y 474..598, where the
+// fighters, the 26 moves in the order they are learned, in pages of three
+// columns by four rows: rows 32px apart from y 488, so y 474..598, where the
 // item list's info line and hint were. Those two go into the message box (y
 // 604..716) while the list is up, over the battle's last line, hidden till
-// it closes. Each column as wide as its longest name at 24px glyphs plus the
-// 4px outline, with the cursor's ITEM_TEXT_OFFSET in front: ARCANE BEAM
-// 32 + 268, ICE SPIKES 32 + 244, MISSILES 32 + 196, FLAME PILLAR 32 + 292 =
-// 1128px over x 24..1254, 34px between columns.
-const SKILLS_PER_ROW = 4;
-const SKILL_COL_X = [24, 358, 668, 930];
+// it closes. Four columns of 24px glyphs don't fit the longest names (DAGGER
+// FLURRY 13, FLAME PILLAR / FIRE TORNADO / HEAVY CLEAVE / DOUBLE SLASH 12
+// each in a column of their own: 49 glyphs and four cursors, 1320px), and four
+// rows are all there is room for, so 12 a page (3 pages at Lv29). Columns a
+// third of x 24..1256 apart, each name after the cursor's ITEM_TEXT_OFFSET:
+// the longest, DAGGER FLURRY, 316px from x 466 to 782, FLAME PILLAR from 876
+// to 1168.
+const SKILLS_PER_ROW = 3;
+const SKILL_ROWS = 4;
+const SKILLS_PER_PAGE = SKILLS_PER_ROW * SKILL_ROWS;
+const SKILL_COL_X = [24, 434, 844];
 const SKILL_ROW_Y = [488, 520, 552, 584];
 // In the message box: the cursor's skill on the battle line's own row
-// ("FLAME PILLAR  9 MP  Fire. Burns 20% (BRN)." in bodyStyle(33), 54 glyphs
-// at most: battleRules Skill.info), the key hint under it, 16px glyphs at y
-// 682..698. Its touch line, TOUCH_ITEM_HINT, is 688px, x 296..984.
+// ("DOUBLE SLASH  14 MP  Two quick cuts of your weapon." in bodyStyle(33), 54
+// glyphs at most: battleRules MoveBase.info), the key hint under it, 16px
+// glyphs at y 682..698, and with more than one page "< 1/3 >" right of it (x
+// 1104..1216, tapped on a half to turn back or on). The touch hint,
+// TOUCH_ITEM_HINT, is 688px, x 296..984.
 const SKILL_INFO_Y = GAME_HEIGHT - 104;
 const SKILL_HINT_Y = GAME_HEIGHT - 30;
+const SKILL_PAGE_RIGHT = GAME_WIDTH - 64;
+// the move the list was last left on, kept for the next battle's cursor (not
+// saved: a reload starts at the top)
+let lastSkill: string | undefined;
 // how long a skill's effects may run before its hits land regardless
 // (playSkill not settling would hold the battle there for good)
 const SKILL_FX_TIMEOUT_MS = 8000;
@@ -330,12 +343,15 @@ const SKILL_FX_TIMEOUT_MS = 8000;
 // row centred on the foe, so five stars' numbers don't pile on one spot
 const SKILL_POP_STEP = 40;
 
-// skillFx.ts plays as many blows as it lists; the rules deal as many as
-// battleRules lists. They must agree (castSkill would land the rest at the
-// end of the effects, or leave a blow without damage).
+// skillFx.ts and techFx.ts play as many blows as they list, the rules deal
+// as many as battleRules lists, and a weapon tech is one techFx.ts plays up
+// close. They must agree (castSkill would land the rest at the end of the
+// effects, or leave a blow without damage, or dash in for a spell).
+const fxHits = (s: Skill): number => (s.style === "blow" ? SKILL_HITS[s.name] : TECH_HITS[s.name]);
 if (process.env.NODE_ENV !== "production") {
   for (const s of SKILLS) {
-    if (SKILL_HITS[s.name] !== s.hits) console.error(`${s.name}: ${s.hits} hits in battleRules.ts, ${SKILL_HITS[s.name]} in skillFx.ts`);
+    if (fxHits(s) !== s.hits) console.error(`${s.name}: ${s.hits} hits in battleRules.ts, ${fxHits(s)} in its effects`);
+    if (s.style !== "blow" && TECH_MELEE[s.name] !== (s.style === "weapon")) console.error(`${s.name}: weapon or spell?`);
   }
 }
 
@@ -441,6 +457,8 @@ export class BattleScene extends Phaser.Scene {
   private skillCursor!: PixelText;
   private skillInfoText!: PixelText;
   private skillHintText!: PixelText;
+  // "< 1/3 >" beside the hint while there is more than one page
+  private skillPageText!: PixelText;
   private pendingSkill!: Skill;
 
   private pendingSpell!: Spell;
@@ -838,7 +856,7 @@ export class BattleScene extends Phaser.Scene {
       ...this.knownSpells().map(
         (s): MenuButton => ({ label: `${s.name[0]}:${s.name}`, action: "magic", spell: s, enabled: () => this.canCast(s) }),
       ),
-      // once the first skill is learned (Lv3); greyed out, as ITEM is, when
+      // once the first move is learned (Lv2); greyed out, as ITEM is, when
       // nothing on the list can be used now (MP, a QUAKE on a flier)
       ...(this.knownSkills().length > 0
         ? [{ label: "X:SKILL", action: "skills", enabled: () => this.canUseAnySkill() } satisfies MenuButton]
@@ -904,12 +922,19 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(30)
       .setVisible(false);
 
-    // the SKILL list, outlined as the item list is (see SKILL_COL_X)
-    this.knownSkills().forEach((skill, i) => {
+    // the SKILL list, outlined as the item list is (see SKILL_COL_X), each
+    // move at its place on its page; the cursor where the last battle left it
+    const known = this.knownSkills();
+    this.skillIndex = Math.max(
+      0,
+      known.findIndex((k) => k.name === lastSkill),
+    );
+    known.forEach((skill, i) => {
+      const cell = i % SKILLS_PER_PAGE;
       const t = this.add
         .pixelText(
-          SKILL_COL_X[i % SKILLS_PER_ROW] + ITEM_TEXT_OFFSET,
-          SKILL_ROW_Y[Math.floor(i / SKILLS_PER_ROW)],
+          SKILL_COL_X[cell % SKILLS_PER_ROW] + ITEM_TEXT_OFFSET,
+          SKILL_ROW_Y[Math.floor(cell / SKILLS_PER_ROW)],
           skill.name,
           retroStyle(6, "#ffffff"),
         )
@@ -928,6 +953,10 @@ export class BattleScene extends Phaser.Scene {
     this.skillHintText = this.add
       .pixelText(GAME_WIDTH / 2, SKILL_HINT_Y, "", retroStyle(4, "#9f9fd0"))
       .setOrigin(0.5)
+      .setVisible(false);
+    this.skillPageText = this.add
+      .pixelText(SKILL_PAGE_RIGHT, SKILL_HINT_Y, "", retroStyle(4, "#ffd166"))
+      .setOrigin(1, 0.5)
       .setVisible(false);
 
     // drawn once, by the first battle; later ones reuse the textures
@@ -1119,9 +1148,16 @@ export class BattleScene extends Phaser.Scene {
     if (!this.waitingAction) return;
 
     if (this.inSkills) {
+      // the page chip, in the message box: its halves turn back and on
+      const chip = this.skillPageText;
+      if (chip.visible && Phaser.Geom.Rectangle.Inflate(chip.getBounds(), 8, 12).contains(pointer.x, pointer.y)) {
+        this.turnSkillPage(pointer.x < chip.getBounds().centerX ? -1 : 1);
+        return;
+      }
       for (let i = 0; i < this.skillTexts.length; i++) {
         // padded 8px across, 2px down: the rows are 32px apart, the glyphs 28
-        if (!Phaser.Geom.Rectangle.Inflate(this.skillTexts[i].getBounds(), 8, 2).contains(pointer.x, pointer.y)) continue;
+        const t = this.skillTexts[i];
+        if (!t.visible || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, 2).contains(pointer.x, pointer.y)) continue;
         // a first tap reads, a second casts, as in the item list
         if (i !== this.skillIndex) {
           this.skillIndex = i;
@@ -1199,8 +1235,8 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff).setDepth(STAT_DEPTH);
   }
 
-  // Up to Lv2 the 6 buttons (41 glyphs, 820px + 24) fit one row with 68px
-  // gaps, and SKILL (Lv3) keeps it one: 48 glyphs, 988px, 32px gaps. HEAL
+  // At Lv1 the 6 buttons (41 glyphs, 820px + 24) fit one row with 68px
+  // gaps, and SKILL (Lv2) keeps it one: 48 glyphs, 988px, 32px gaps. HEAL
   // (Lv5) makes it 54 glyphs (10px gaps, under MENU_MIN_GAP), so from Lv5 the
   // attacks (FIGHT and the spells) take a row of their own above SKILL / ITEM
   // / DEFEND / STEAL / RUN (35 glyphs, 700 + 5 x 4 + 4 x 40 = 880px), each
@@ -1308,30 +1344,63 @@ export class BattleScene extends Phaser.Scene {
     return SKILLS.filter((s) => GameState.player.level >= s.learnLevel);
   }
 
+  // its MP now (a weapon tech's grows with max MP: battleRules skillCost)
+  private skillCost(skill: Skill): number {
+    return skillCost(skill, GameState.player.maxMp);
+  }
+
   // the MP for it, and a foe it can reach (QUAKE never reaches a flier)
   private canUseSkill(skill: Skill): boolean {
-    return GameState.player.mp >= skill.cost && !(skill.grounded && this.enemy.flying);
+    return GameState.player.mp >= this.skillCost(skill) && !(skill.grounded && this.enemy.flying);
   }
 
   private canUseAnySkill(): boolean {
     return this.knownSkills().some((s) => this.canUseSkill(s));
   }
 
-  // The SKILL list's cursor after a vim key or an arrow: across a row,
-  // wrapping round the whole list as the item list does; up and down within
-  // its column, wrapping from the bottom row to the top (a partial last row
-  // has no cell under some columns, and a mod over the list's length would
-  // slide the cursor sideways there). null for any other key.
+  // The SKILL list's cursor after a vim key or an arrow. Across a row, and
+  // off its end onto the next page's (or back onto the last page's) same row,
+  // so H and L also turn the pages; up and down within the column on this
+  // page, wrapping from its bottom move to its top (a partial last row has no
+  // cell under some columns). null for any other key.
   private skillMove(code: string): number | null {
-    const n = this.skillTexts.length;
     const i = this.skillIndex;
-    if (code === "ArrowLeft" || code === "KeyH") return (i + n - 1) % n;
-    if (code === "ArrowRight" || code === "KeyL") return (i + 1) % n;
-    const col = i % SKILLS_PER_ROW;
-    const lastInCol = col + Math.floor((n - 1 - col) / SKILLS_PER_ROW) * SKILLS_PER_ROW;
-    if (code === "ArrowDown" || code === "KeyJ") return i + SKILLS_PER_ROW < n ? i + SKILLS_PER_ROW : col;
-    if (code === "ArrowUp" || code === "KeyK") return i - SKILLS_PER_ROW >= 0 ? i - SKILLS_PER_ROW : lastInCol;
+    const page = Math.floor(i / SKILLS_PER_PAGE);
+    const first = page * SKILLS_PER_PAGE;
+    const end = Math.min(first + SKILLS_PER_PAGE, this.skillTexts.length);
+    const col = (i - first) % SKILLS_PER_ROW;
+    const row = Math.floor((i - first) / SKILLS_PER_ROW);
+    if (code === "ArrowRight" || code === "KeyL") {
+      return col < SKILLS_PER_ROW - 1 && i + 1 < end ? i + 1 : this.skillAt(page + 1, row, 0);
+    }
+    if (code === "ArrowLeft" || code === "KeyH") return col > 0 ? i - 1 : this.skillAt(page - 1, row, SKILLS_PER_ROW - 1);
+    if (code === "ArrowDown" || code === "KeyJ") return i + SKILLS_PER_ROW < end ? i + SKILLS_PER_ROW : first + col;
+    if (code === "ArrowUp" || code === "KeyK") {
+      if (row > 0) return i - SKILLS_PER_ROW;
+      let last = first + col;
+      while (last + SKILLS_PER_ROW < end) last += SKILLS_PER_ROW;
+      return last;
+    }
     return null;
+  }
+
+  // the move at row, col of a page (wrapping round the pages), or that page's
+  // last when the cell is empty
+  private skillAt(page: number, row: number, col: number): number {
+    const pages = Math.ceil(this.skillTexts.length / SKILLS_PER_PAGE);
+    const first = (((page % pages) + pages) % pages) * SKILLS_PER_PAGE;
+    return Math.min(first + row * SKILLS_PER_ROW + col, this.skillTexts.length - 1);
+  }
+
+  // the "< 1/3 >" chip tapped: a page back on its left half, on on its right,
+  // the cursor at the same place on it
+  private turnSkillPage(by: number): void {
+    const i = this.skillIndex;
+    const page = Math.floor(i / SKILLS_PER_PAGE);
+    const cell = i - page * SKILLS_PER_PAGE;
+    this.skillIndex = this.skillAt(page + by, Math.floor(cell / SKILLS_PER_ROW), cell % SKILLS_PER_ROW);
+    Sfx.move();
+    this.renderSkills();
   }
 
   private openSkills(): void {
@@ -1340,21 +1409,24 @@ export class BattleScene extends Phaser.Scene {
     this.renderSkills();
   }
 
-  // Each skill white when it can be used now, else dim; the cursor's in the
-  // message box with its cost and what it does, the battle's line hidden
-  // behind it (SKILL_INFO_Y)
+  // The cursor's page, each move white when it can be used now, else dim;
+  // the cursor's in the message box with its MP and what it does, the
+  // battle's line hidden behind it (SKILL_INFO_Y), and the page chip
   private renderSkills(): void {
     const skills = this.knownSkills();
+    const page = Math.floor(this.skillIndex / SKILLS_PER_PAGE);
+    const pages = Math.ceil(skills.length / SKILLS_PER_PAGE);
     skills.forEach((s, i) => {
-      this.skillTexts[i].setVisible(true).setColor(this.canUseSkill(s) ? "#ffffff" : DIM_TEXT);
+      this.skillTexts[i].setVisible(Math.floor(i / SKILLS_PER_PAGE) === page).setColor(this.canUseSkill(s) ? "#ffffff" : DIM_TEXT);
     });
     const target = this.skillTexts[this.skillIndex];
     this.skillCursor.setPosition(target.x - ITEM_TEXT_OFFSET, target.y).setVisible(true);
     const skill = skills[this.skillIndex];
     this.msgText.setVisible(false);
-    this.skillInfoText.setText(`${skill.name}  ${skill.cost} MP  ${skill.info}`).setVisible(true);
+    this.skillInfoText.setText(`${skill.name}  ${this.skillCost(skill)} MP  ${skill.info}`).setVisible(true);
     this.skillHintText.setVisible(true);
     bindKeyHint(this.skillHintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
+    this.skillPageText.setText(`< ${page + 1}/${pages} >`).setVisible(pages > 1);
   }
 
   private hideSkills(): void {
@@ -1362,6 +1434,7 @@ export class BattleScene extends Phaser.Scene {
     this.skillCursor.setVisible(false);
     this.skillInfoText.setVisible(false);
     this.skillHintText.setVisible(false);
+    this.skillPageText.setVisible(false);
     this.msgText.setVisible(true);
   }
 
@@ -1382,6 +1455,7 @@ export class BattleScene extends Phaser.Scene {
     }
     this.inSkills = false;
     this.hideSkills();
+    lastSkill = skill.name;
     this.pendingSkill = skill;
     this.resolveAction("skill");
   }
@@ -1586,19 +1660,19 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyHp();
   }
 
-  // A skill (battleRules SKILLS): its effects (skillFx.ts) call each blow as
-  // it lands, and the blow's damage, number and flash go in then; a blow the
-  // foe is already down for falls on nothing. The side effect is rolled up
-  // front from what could take now and lands after the last blow if the foe
-  // still stands, as castSpell's does; CHAIN and WEAK FINISH as there. Lines,
-  // at most two message rows: "CRITICAL! WEAKNESS! FLAME PILLAR! 999 damage!
-  // BURN! CHAIN x99!" is 64 glyphs, "WEAKNESS! CHAIN BOLT! 99+99+99 damage!
-  // STUN! CHAIN x99!" 55.
+  // A move off the SKILL list (battleRules SKILLS): its effects (skillFx.ts
+  // for a blow, techFx.ts for a tech) call each hit as it lands, and the
+  // hit's damage, number and flash go in then; a hit the foe is already down
+  // for falls on nothing. A weapon tech dashes the hero up to the foe first
+  // (meleeX), plays there and comes back. The side effect is rolled up front
+  // from what could take now and lands after the last hit if the foe still
+  // stands, as castSpell's does; CHAIN and WEAK FINISH as there, and a weapon
+  // tech keeps the combo going as a FIGHT does. Lines, at most two message
+  // rows: "CRITICAL! WEAKNESS! FLAME PILLAR! 999 damage! BURN! CHAIN x99!" is
+  // 64 glyphs, "WEAKNESS! CHAIN BOLT! 99+99+99 damage! STUN! CHAIN x99!" 55.
   private async castSkill(skill: Skill): Promise<void> {
-    // the three biggest take NOVA's sound
-    if (skill.cost >= 20) Sfx.nova();
-    else Sfx.magic();
-    GameState.player.mp -= skill.cost;
+    this.moveSfx(skill, "cast");
+    GameState.player.mp -= this.skillCost(skill);
     this.updatePlayerStats();
     const weak = skill.element !== undefined && this.enemy.weakness === skill.element;
     const fx = skill.effect;
@@ -1610,19 +1684,23 @@ export class BattleScene extends Phaser.Scene {
     let blows = 0;
     let over = false;
     let unflash: Phaser.Time.TimerEvent | undefined;
-    // the blows' numbers in a row across the foe, centred on it
+    // the hits' numbers in a row across the foe, centred on it
     const popX = (i: number): number => this.enemySprite.x + (i - (skill.hits - 1) / 2) * SKILL_POP_STEP;
     const land = (): void => {
       if (over || blows >= skill.hits) return;
       const i = blows++;
       if (this.enemy.curHp <= 0) return;
-      const hit = skillHit(skill, this.enemy.def, this.enemy.weakness);
+      const hit = skillHit(skill, {
+        atk: this.heroAtk(),
+        def: this.enemy.def,
+        weakness: this.enemy.weakness,
+        flying: this.enemy.flying,
+      });
       this.enemy.curHp = Math.max(0, this.enemy.curHp - hit.dmg);
       dealt.push(hit.dmg);
       crit ||= hit.crit;
-      Sfx.strike();
-      if (hit.crit) Sfx.critical();
-      // the first blow on a weakness rings and shakes as a weakness spell does
+      this.moveSfx(skill, "hit", hit.crit);
+      // the first hit on a weakness rings and shakes as a weakness spell does
       if (hit.weak && i === 0) {
         Sfx.critical();
         shake(this.cameras.main, 120, 0.01);
@@ -1640,6 +1718,9 @@ export class BattleScene extends Phaser.Scene {
         this.updatePlayerStats();
       }
     };
+    const melee = skill.style === "weapon";
+    const home = this.playerSprite.x;
+    if (melee) await this.dashIn();
     const stage: SkillStage = {
       hero: this.playerSprite,
       foe: this.enemySprite,
@@ -1648,24 +1729,64 @@ export class BattleScene extends Phaser.Scene {
       foeFeetY: GROUND_Y - (this.enemy.flying ? FLY_LIFT : 0),
       anim: (ms) => this.anim(ms),
     };
-    await Promise.race([playSkill(this, skill.name, stage, land), this.wait(this.anim(SKILL_FX_TIMEOUT_MS))]);
+    const play = skill.style === "blow" ? playSkill(this, skill.name, stage, land) : playTech(this, skill.name, stage, land);
+    await Promise.race([play, this.wait(this.anim(SKILL_FX_TIMEOUT_MS))]);
     // whatever the effects didn't land, so the damage is always dealt
     while (blows < skill.hits) land();
     over = true;
+    if (melee) await this.dashBack(home);
     unflash?.remove();
     this.restoreEnemyTint();
     const down = this.enemy.curHp <= 0;
-    if (weak) this.addCombo();
+    if (weak || melee) this.addCombo();
     else this.resetCombo();
     this.weakFinish = weak && down;
     const tail = effect && !down ? this.landSkillEffect(effect) : "";
     const chain = weak && !down && this.combo >= 2 ? ` CHAIN x${this.combo}!` : "";
+    const combo = melee && !down && this.combo >= 2 ? ` COMBO x${this.combo}!` : "";
     const finish = this.weakFinish ? " WEAK FINISH!" : "";
     const drained = healed > 0 ? ` +${healed} HP` : "";
     const head = `${crit ? "CRITICAL! " : ""}${weak ? "WEAKNESS! " : ""}${skill.name}!`;
-    await this.say(`${head} ${dealt.join("+")} damage!${drained}${tail}${chain}${finish}`);
+    await this.say(`${head} ${dealt.join("+")} damage!${drained}${tail}${chain}${combo}${finish}`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
+  }
+
+  // A move's sounds, all in this one place (a move-by-move set can take it
+  // over later): a weapon tech's swing or a spell's cast as it starts (the
+  // three biggest blows and BLACK HOLE NOVA's), a strike on each hit
+  private moveSfx(skill: Skill, at: "cast" | "hit", crit = false): void {
+    if (at === "hit") {
+      Sfx.strike();
+      if (crit) Sfx.critical();
+    } else if (skill.style === "weapon") Sfx.attack();
+    else if (skill.cost >= 20) Sfx.nova();
+    else Sfx.magic();
+  }
+
+  // where the hero stands to strike the foe: a step off its near side (x-80
+  // for a 128px foe, as FIGHT always went), a boss's or giant's 192px body
+  // too, which the old x-80 put the hero inside of
+  private meleeX(): number {
+    return this.enemySprite.x - this.enemySprite.displayWidth / 2 - 16;
+  }
+
+  // A weapon tech's dash, FIGHT's lunge in two halves with the tech's
+  // effects between: out with the afterimages and the weapon swung down,
+  // then (dashBack) home with the weapon back up
+  private async dashIn(): Promise<void> {
+    if (GameState.equipped.weapon) {
+      this.weaponOverlay.setAngle(-20);
+      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
+    }
+    await this.tweenPromise(this.playerSprite, { x: this.meleeX() }, this.anim(LUNGE_OUT_MS), this.ghostTrail(this.playerSprite));
+  }
+
+  private async dashBack(home: number): Promise<void> {
+    if (GameState.equipped.weapon) {
+      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
+    }
+    await this.tweenPromise(this.playerSprite, { x: home }, this.anim(LUNGE_BACK_MS));
   }
 
   // a skill's side effect landed: THORNS' poison here (VENOM STING's dot, in
@@ -2657,7 +2778,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async lunge(): Promise<void> {
     const startX = this.playerSprite.x;
-    const targetX = this.enemySprite.x - 80;
+    const targetX = this.meleeX();
     const hasWeapon = !!GameState.equipped.weapon;
     const trail = this.ghostTrail(this.playerSprite);
     if (hasWeapon) {
@@ -2883,8 +3004,8 @@ export class BattleScene extends Phaser.Scene {
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
-    // the hero's skills' sheets (skillFx.ts), wanted from the first turn
-    const skillSheets = new Set(skills.flatMap((s) => SKILL_SHEET_KEYS[s.name]));
+    // the hero's moves' sheets (skillFx.ts, techFx.ts), wanted from the first turn
+    const skillSheets = new Set(skills.flatMap((s) => (s.style === "blow" ? SKILL_SHEET_KEYS[s.name] : TECH_SHEET_KEYS[s.name])));
     if (skillSheets.size > 0) warmFx(this, [...skillSheets]);
     // the companion's skill sheets (fx.ts COMPANION_SHEETS): its first skill
     // comes after the hero's first turn at the soonest
@@ -3219,9 +3340,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // The level up's second row, what it taught: nothing announced a spell, and
-  // the SKILL button turning up at Lv3 would go unexplained. "New spell: WARD
-  // New skill: QUAKE" (Lv18, the one level with both) is 32 glyphs; a jump
-  // over many gates at once, past a row's 54, only says there are some.
+  // the SKILL button turning up at Lv2 would go unexplained. The longest of
+  // one level, "New spell: NOVA  New skill: FROST NOVA" (Lv24), is 37 glyphs;
+  // a jump over many gates at once, past a row's 54, only says there are some.
   private learnedLine(from: number): string {
     const level = GameState.player.level;
     const learned = (list: ReadonlyArray<{ name: string; learnLevel: number }>): string[] =>
