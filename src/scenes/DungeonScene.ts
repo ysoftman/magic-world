@@ -58,6 +58,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { addProp, TORCH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -82,6 +83,15 @@ const TOUCH_CAMERA_FOOT = TILE;
 // same per-roll rarity as TownScene's GOLDEN_SLIME_CHANCE, applied to
 // goblin rolls only — a dungeon-exclusive jackpot, tint-only reskin
 const CURSED_GOBLIN_CHANCE = 0.08;
+
+// A torch on each rock face of the way out (propFx.ts), its plate on the
+// face's middle column, half a loop apart so the two do not flicker as one.
+// At the mouth's 9, added after it and before the TOWN tag (also 9), so over
+// the rock and under the tag the smoke rises behind; under the hero (10).
+const EXIT_TORCHES = [
+  { x: DUNGEON_ENTRY.x - 44, y: DUNGEON_ENTRY.y + 28, phase: 0 },
+  { x: DUNGEON_ENTRY.x + 42, y: DUNGEON_ENTRY.y + 28, phase: 0.5 },
+];
 
 type CaveKind = "slime" | "goblin" | "king" | "bat" | "cursedGoblin";
 
@@ -158,6 +168,7 @@ export class DungeonScene extends Phaser.Scene {
 
     addGroundShadow(this, DUNGEON_ENTRY, { w: 104, h: 24, yOffset: 56 });
     this.add.image(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y, "cave").setDepth(9);
+    for (const t of EXIT_TORCHES) addProp(this, TORCH, t.x, t.y, 9, t.phase);
 
     const at = back ?? { x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y + TILE * 2 };
     this.player = this.physics.add.sprite(at.x, at.y, "hero-idle-down");
@@ -288,7 +299,7 @@ export class DungeonScene extends Phaser.Scene {
     // (AbyssScene). Unlit, its grey steps read as one more of the pocket's
     // boulders (mean luma 39.6 to their 41.1): a player took it for gone. In
     // the air, as the pools': the lightmap would only give back its near-black
-    // pit, and would cost the cave a 3.7MB texture it has done without.
+    // pit.
     this.night.addLights([
       ...lightsOverTiles(level, new Set([T_WATER_A, T_WATER_B]), {
         radius: 112,
@@ -298,6 +309,11 @@ export class DungeonScene extends Phaser.Scene {
         air: true,
       }),
       ...(abyss ? [{ ...ABYSS_STAIRS_POS, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true }] : []),
+      // the exit torches' flames, lamps in the lightmap (3.7MB the cave did
+      // without before them): the mouth's grey rock and whoever stands under
+      // them come back to their own colours, its doorway stays black. In the
+      // air the glow washed the doorway brown and the TOWN tag orange.
+      ...EXIT_TORCHES.map((t) => ({ x: t.x, y: t.y - 60, radius: 96, color: 0xff9a3c, strength: 0.5, pulseMs: 800 })),
     ]);
 
     this.panels = new FieldPanels(this, this.fieldKeys);
