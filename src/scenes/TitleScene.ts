@@ -14,6 +14,7 @@ import {
 } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { CRITTER_SHEETS } from "../ui/Critters";
 import { bindKeyHint, keyHint, keyNames, onInputChange, usingPad } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { LookPicker } from "../ui/LookPicker";
@@ -122,9 +123,10 @@ export class TitleScene extends Phaser.Scene {
     this.buttons = [];
     Sfx.playBgm(TITLE_THEME);
     // every game passes through here before its first encounter: the
-    // mosaic's shader and the battle's sheets are made ready here
+    // mosaic's shader and the battle's sheets are made ready here, then the
+    // field critters'
     warmEncounterOut(this.cameras.main);
-    warmBattleFx(this);
+    warmBattleFx(this, CRITTER_SHEETS);
 
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "title-bg");
 

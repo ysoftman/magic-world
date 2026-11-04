@@ -19,11 +19,11 @@ type EmitterConfig = Phaser.Types.GameObjects.Particles.ParticleEmitterConfig;
 // and under the NightOverlay (90), so dusk darkens the weather with the ground.
 // The area title (95), minimap (96), HUD (110) and every panel (150+) stay on
 // top.
-const AMBIENT_DEPTH = 11.5;
+export const AMBIENT_DEPTH = 11.5;
 // Fireflies and volcano embers are the exception: they are lights, so they sit
 // just over the NightOverlay instead of being dimmed by it, still under the
 // area title (95).
-const GLOW_DEPTH = 90.5;
+export const GLOW_DEPTH = 90.5;
 // Weather tints the whole view (rain clouds, whiteout, ash smog) just under the
 // NightOverlay, so night still darkens on top; lightning brightens over that.
 const OVERCAST_DEPTH = 89.5;
@@ -33,7 +33,6 @@ const CAPTION_Y = STATUS_HUD_HEIGHT + 66;
 
 // the one texture every ambient, battle-weather and footstep particle is cut from
 export const SHEET = "ambient-px";
-const BUTTERFLY_ANIM = "ambient-butterfly";
 
 // Simulated on entry so the air is already full instead of filling up from
 // nothing while the player watches.
@@ -55,8 +54,6 @@ const TAU = Math.PI * 2;
 const LEAF_A = [".lg.", "lggd", ".gd."];
 const LEAF_B = ["lg.", "glg", ".gd"];
 const PETAL_PALETTE = { p: 0xf9a8d4, q: 0xfbcfe8 };
-// white wings so the emitter's `tint` can colour each butterfly
-const BUTTERFLY_PALETTE = { w: 0xffffff, b: 0x3b2a20 };
 
 const SPRITES: Record<string, { rows: string[]; palette: PixelMap }> = {
   // the canopy floor is dark green, so the leaves sit a step lighter to read
@@ -80,8 +77,6 @@ const SPRITES: Record<string, { rows: string[]; palette: PixelMap }> = {
   "petal-a": { rows: ["pq"], palette: PETAL_PALETTE },
   "petal-b": { rows: ["q", "p"], palette: PETAL_PALETTE },
   "petal-c": { rows: ["wv"], palette: { w: 0xffffff, v: 0xf3e8ff } },
-  "bfly-open": { rows: ["ww.ww", "wwbww", ".wbw."], palette: BUTTERFLY_PALETTE },
-  "bfly-shut": { rows: [".w.w.", ".wbw.", "..b.."], palette: BUTTERFLY_PALETTE },
   "ember-a": { rows: ["y"], palette: { y: 0xfff0a0 } },
   "ember-b": { rows: ["o"], palette: { o: 0xff8a30 } },
   // a hot head with a cooler tail trailing below it as it rises
@@ -443,19 +438,9 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
     };
   },
 
-  // petals and butterflies by day, fireflies at night, rain on a wet day
+  // petals by day, fireflies at night, rain on a wet day; the butterflies are
+  // the critters' (Critters.ts), drawn on the hero's own cell
   town(scene, mix) {
-    if (!scene.anims.exists(BUTTERFLY_ANIM)) {
-      scene.anims.create({
-        key: BUTTERFLY_ANIM,
-        frames: [
-          { key: SHEET, frame: "bfly-open" },
-          { key: SHEET, frame: "bfly-shut" },
-        ],
-        frameRate: 8,
-        repeat: -1,
-      });
-    }
     const season = seasonal();
     // autumn's leaves blow through on the petals' breeze; winter has neither
     const petals = addLayer(scene, {
@@ -470,19 +455,6 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
       frequency: 900,
       maxAliveParticles: 12,
     });
-    const butterflies = addLayer(scene, {
-      anim: BUTTERFLY_ANIM,
-      ...ANYWHERE_ON_SCREEN,
-      lifespan: { min: 9000, max: 13000 },
-      speed: { min: 16, max: 32 },
-      accelerationX: sway(14, 1.2),
-      // quick bobbing on top of the wander: the flutter
-      accelerationY: sway(120, 9),
-      tint: [0xffffff, 0xfde68a, 0xf9a8d4, 0xa5d8ff],
-      alpha: fadeInOut(0.95),
-      frequency: 3500,
-      maxAliveParticles: 4,
-    });
     const fireflies = addFireflies(scene);
     const rain = addRain(scene, mix, "town");
     const snow = addSnowfall(scene, mix);
@@ -491,11 +463,10 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
     everyFew(scene, 3000, 8000, () => cue("bird", season.birds * (1 - nightFactor()) * (1 - 0.8 * mix.rain)));
     everyFew(scene, 1500, 4000, () => cue("cricket", season.insects * nightFactor() * (1 - 0.7 * mix.rain)));
     return {
-      layers: [petals, butterflies, fireflies, ...rain.layers, ...snow.layers],
+      layers: [petals, fireflies, ...rain.layers, ...snow.layers],
       tick: (night) => {
-        // the rain replaces the petals and butterflies outright
+        // the rain replaces the petals outright
         show(petals, season.leaves * (1 - night) * (1 - mix.rain));
-        show(butterflies, season.butterflies * (1 - night) * (1 - mix.rain));
         show(fireflies, season.insects * night * (1 - 0.75 * mix.rain), night);
         rain.tick();
         snow.tick();
@@ -609,9 +580,9 @@ function addFireflies(scene: Phaser.Scene): Layer {
 }
 
 // What the season (season.ts) puts in the town's and the forest's air, as
-// levels for show() and the ambience cues. Read once, when the scene builds,
-// the way its map skin is, so the two always agree.
-function seasonal(): { autumn: boolean; leaves: number; butterflies: number; insects: number; birds: number } {
+// levels for show(), the ambience cues and the critters (Critters.ts). Read
+// once, when the scene builds, the way its map skin is, so the two always agree.
+export function seasonal(): { autumn: boolean; leaves: number; butterflies: number; insects: number; birds: number } {
   const season = seasonToday();
   const winter = season === "winter";
   return {
@@ -789,7 +760,7 @@ function wrapOnScreen(p: Particle): void {
 // The ambient sprites are drawn in half-size art pixels (2px), finer than the
 // 4px world they drift over, in one of two ways. What reads as a point (dust,
 // sparks, small flakes, drops) simply halves. What reads by its outline (rain,
-// fireflies, leaves, butterflies, petals, haze, the big flake) keeps its size
+// fireflies, leaves, petals, haze, the big flake) keeps its size
 // and is redrawn through Scale2x, so only its edges get finer: halved, the
 // rain shrank to 4x12px streaks that all but vanished over the grass (a
 // third of the pixels it changed) and a firefly to a 10px fleck. Footsteps.ts's

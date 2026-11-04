@@ -34,6 +34,7 @@ import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { addCritters } from "../ui/Critters";
 import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addGuideArrow } from "../ui/GuideArrow";
@@ -172,6 +173,8 @@ export class ForestScene extends Phaser.Scene {
     // names the day's weather under the area title (on a season's turn only
     // if the sky changed with it)
     addAmbient(this, "forest", { caption: true, since: turn?.weather ?? back?.weather });
+    // butterflies and birds by day, wisps by night, frogs by the ponds
+    addCritters(this, "forest", { level, avoid: [FOREST_ENTRY, ...FOREST_TREASURE_POS] });
 
     this.spawnMonsters();
 

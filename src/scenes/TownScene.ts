@@ -77,6 +77,7 @@ import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { BlacksmithUI } from "../ui/Blacksmith";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { addCritters } from "../ui/Critters";
 import { DialogueBox } from "../ui/DialogueBox";
 import { FarmUI } from "../ui/Farm";
 import { FishingUI } from "../ui/Fishing";
@@ -555,8 +556,8 @@ export class TownScene extends Phaser.Scene {
     addFootsteps(this, this.player, level, "town");
     addGuideArrow(this, this.player, "town", () => this.quitting || this.uiBlocking());
 
-    // petals and butterflies by day, fireflies at night; this replaces the
-    // town's own player-following fireflies, which would double up with it
+    // petals by day, fireflies at night; this replaces the town's own
+    // player-following fireflies, which would double up with it
     addAmbient(this, "town");
 
     this.spawnMonsters();
@@ -564,20 +565,19 @@ export class TownScene extends Phaser.Scene {
     // after every fixed tag exists (spawnMonsters adds the zone warnings), and
     // kept off the same spots tryTalk() answers, plus the map exits and the
     // workplaces (their centres: AVOID_RADIUS covers all four tiles)
-    this.villagers = new Villagers(
-      this,
-      level,
-      [
-        ...this.talkSpots(),
-        CAVE_POS,
-        FOREST_POS,
-        SNOW_POS,
-        VOLCANO_POS,
-        ...WORKPLACE_LANDMARKS.map((k) => ({ x: EDITABLE_POS[k].x + TILE / 2, y: EDITABLE_POS[k].y - TILE * 1.5 })),
-      ],
-      MONSTER_ZONES,
-      this.fixedLabels,
-    );
+    const keepClear = [
+      ...this.talkSpots(),
+      CAVE_POS,
+      FOREST_POS,
+      SNOW_POS,
+      VOLCANO_POS,
+      ...WORKPLACE_LANDMARKS.map((k) => ({ x: EDITABLE_POS[k].x + TILE / 2, y: EDITABLE_POS[k].y - TILE * 1.5 })),
+    ];
+    this.villagers = new Villagers(this, level, keepClear, MONSTER_ZONES, this.fixedLabels);
+
+    // butterflies, a bird going over, frogs by the pond; here, not by
+    // addAmbient, for the same fixed tags and spots the villagers keep off
+    addCritters(this, "town", { level, avoid: keepClear, labels: this.fixedLabels });
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       if (this.encounterCooldown > 0) return;

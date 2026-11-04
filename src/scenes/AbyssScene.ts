@@ -46,6 +46,7 @@ import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
+import { addCritters } from "../ui/Critters";
 import { DialogueBox } from "../ui/DialogueBox";
 import { addFootsteps } from "../ui/Footsteps";
 import { addHelpPopup } from "../ui/HelpPopup";
@@ -328,6 +329,8 @@ export class AbyssScene extends Phaser.Scene {
     // The cave's dust and drips. No guide arrow: the quest's goals all lie
     // above, and objective.ts would point at the cave's own exit coordinates.
     addAmbient(this, "dungeon");
+    // and the wisps the cave above has none of
+    addCritters(this, "abyss");
 
     this.spawnMonsters();
 

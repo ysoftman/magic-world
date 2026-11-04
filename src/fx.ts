@@ -241,13 +241,15 @@ interface SheetInfo {
 
 const cropOf = (sheet: PixelSheet): [number, number, number, number] => sheet.crop ?? [0, 0, ...sheet.fx.meta.size];
 
-function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number } {
+export function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number } {
   const [from, to] = sheet.span ?? [0, sheet.fx.meta.duration];
   return { from, to, frames: sheet.frames ?? Math.max(1, Math.round((to - from) * sheet.fx.meta.fps)) };
 }
 
-function infoOf(key: string): SheetInfo {
-  const pixel = PIXEL_SHEETS[key];
+const infoOf = (key: string): SheetInfo => sheetInfo(PIXEL_SHEETS[key]);
+
+/** A baked sheet's frame count, the point its origin puts on (x, y), and how it turns and scales. */
+export function sheetInfo(pixel: PixelSheet): SheetInfo {
   const [x0, y0, x1, y1] = cropOf(pixel);
   const [ax, ay] = pixel.fx.meta.origin;
   const [fx, fy] = pixel.focus ?? [0, 0];
@@ -322,14 +324,16 @@ export function bakeBattleFx(scene: Phaser.Scene): void {
  * (the title, which every game passes through): all at once as that battle
  * started, they held its first frame for some 100-140ms. Textures are the
  * game's, so they outlast the scene; any it leaves unbaked, the battle bakes
- * (bakeBattleFx).
+ * (bakeBattleFx). `after`'s sheets (the field critters, ui/Critters.ts) come
+ * next in the same queue: a queue of their own would bake two a frame.
  */
-export function warmBattleFx(scene: Phaser.Scene): void {
-  const left = Object.keys(PIXEL_SHEETS).filter((key) => !scene.textures.exists(key));
+export function warmBattleFx(scene: Phaser.Scene, after: Record<string, PixelSheet> = {}): void {
+  const sheets = { ...PIXEL_SHEETS, ...after };
+  const left = Object.keys(sheets).filter((key) => !scene.textures.exists(key));
   const step = (): void => {
     const key = left.shift();
     if (key === undefined) scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
-    else if (!scene.textures.exists(key)) bakePixelSheet(scene, key, PIXEL_SHEETS[key]);
+    else if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheets[key]);
   };
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step));
