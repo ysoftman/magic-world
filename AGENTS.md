@@ -620,10 +620,31 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   상태창 10(`STAT_DEPTH`), 힌트 30, STREAK/COMBO·NIGHT/ARENA/ABYSS 안내 120. 실제 사례: 몸을 다시
   칠하는 상태 시트가 같이 터진 주문 폭발을 가렸고, 높이 나는 적·보스 위의 불꽃이 적 창의 HP·WEAK 줄로
   올라갔다.
-- 몸을 다시 그리는 actor 이펙트(화상·냉기·감전·독·빙결·HEAL·WARD)는 `fx.ts` 가 아니라 `statusFx.ts` 의
-  `STATUS_SHEETS` 에 둔다. 전투원 텍스처를 pixelfx 의 `o.actor` 로 넘겨 그 전투에서 처음 쓸 때 전투원·
-  이펙트별로 굽고, 전투가 끝나면 지운다. 실제 사례: pixelfx 의 24x38 대역 인형으로 구우면 그 인형이
-  몬스터 위에 그려졌다(불꽃이 인형 머리 높이에 떴다).
+- 몸을 다시 그리는 actor 이펙트(화상·냉기·감전·독·빙결·묶인 적의 별·격노·HEAL·WARD)는 `fx.ts` 가 아니라
+  `statusFx.ts` 의 `STATUS_SHEETS` 에 둔다. 전투원 텍스처를 pixelfx 의 `o.actor` 로 넘겨 전투원·이펙트별로
+  굽고, 전투가 끝나면 지운다. 실제 사례: pixelfx 의 24x38 대역 인형으로 구우면 그 인형이 몬스터 위에
+  그려졌다(불꽃이 인형 머리 높이에 떴다). 시트는 전투원의 지금 위치·scale 을 매 프레임 따라간다
+  (`play(target, kind, ms)` 에 배율 인자가 없고, 격노의 박동으로 몸이 커지면 같이 커진다).
+  - 머리 둘레를 도는 고리처럼 몸 뒤로 지나가는 이펙트는 `layered` 로 굽는다. `drawBack` 은 전투원 아래(같은
+    깊이에서 `moveBelow`), `draw` 는 위에 한 장씩 따로 굽는다(create 없는 순수 이펙트만). 머리를 기준으로
+    그리는 이펙트는 `trim` 으로 몸의 불투명 칸만 넘긴다. 실제 사례: 프레임 위 빈 줄 때문에 별 고리가 키 작은
+    적의 머리 위에 떴다.
+  - 한 번 보일 때는 `StatusFx.play`, 상태가 이어지는 동안은 `StatusFx.loop` 다(돌려받은 함수를 부르면 250ms
+    페이드아웃). loop 는 실시간이라 BATTLE SPEED 를 따르지 않고, OS 의 reduced motion 이면 첫 프레임에
+    멈춘다. 묶인 적(`stuck`)의 별은 BOLT 의 감전과 동료의 WEB SNARE 가 켜고(`showStun`), 적 턴의 stuck 줄을
+    말한 뒤와 `victory` 에서 끈다(`hideStun`). stuck 을 켜는 길을 새로 만들면 `showStun` 도 부른다.
+  - 격노(rage)는 보스·거인이 격노하는 순간 한 박동(750ms)만 보이고 루프하지 않는다(결정: 박동마다 몸을 다시
+    칠해 타격의 흰 번쩍임과 기 모으기 색을 덮고, 6px 보스에서 김과 선이 적 창으로 자꾸 올라간다). 그래도
+    올라가는 김과 선은 `ceiling`(발 위 39칸) 위를 지운다. 실제 사례: FLAME DRAKE 의 김이 y 180(적 창은 y 200
+    까지)까지 올라갔다. FLASHES 를 끄거나 reduced motion 이면 glow 를 줄여 굽는다(`soft`). pixelfx rage 는
+    바닥 균열을 seed 만으로 캐시해서 전투원마다 시드를 준다(`ownSeed`). 실제 사례: 두 번째 보스가 첫 보스의
+    균열 위에 섰다.
+  - 그 전투에서 나올 수 있는 상태 시트는 create 에서 `statusFx.warm` 으로 미리 나눠 굽는다(`warmSheets`).
+    지금은 보스·거인의 격노(그때 보일 `ENRAGE_TINT` 로), 그 밖의 적은 묶을 수단(감전 주문을 배웠거나 동료가
+    WEB SNARE)이 있을 때의 별이다. 다 굽기 전에 쓰이면 play·loop 가 남은 것을 그 자리에서 굽는다. 실제 사례:
+    별 두 장의 첫 굽기 19~66ms(헤드리스 중앙 23ms)가 같은 턴 감전의 첫 굽기와 겹쳤다(warm 뒤 격노 0.5ms,
+    오프닝 최장 16.8ms).
+  - 동료의 CHILL(FROST MOTH)이 걸리는 순간에는 냉기 시트를 보인다. CHILL 은 틱이 없어 그때만 보인다.
 - 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
   8ms(`BAKE_BUDGET_MS`)를 나눠 쓰고, 비싼 시트는 여러 프레임에 나눠 굽는다. 캔버스를 따로 그려 마지막
