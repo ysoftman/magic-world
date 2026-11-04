@@ -1,4 +1,5 @@
 import { GameState } from "./gameState";
+import { bindSfxOutput, emitSfx, type SfxPlayOpts } from "./sfxKit";
 
 interface Note {
   freq: number | null; // null = rest
@@ -599,6 +600,22 @@ export class Sfx {
   private static bgmBooked: Array<{ osc: OscillatorNode; at: number }> = [];
   private static resuming = false;
 
+  // the kit (sfxKit.ts) plays into the effects bus; muted or before the
+  // context runs it gets nothing, as tone() did
+  static {
+    bindSfxOutput(() => {
+      if (GameState.soundMuted) return null;
+      Sfx.ensure();
+      if (Sfx.ctx?.state !== "running" || !Sfx.sfxBus) return null;
+      return { ctx: Sfx.ctx, bus: Sfx.sfxBus };
+    });
+  }
+
+  /** Plays the kit program registered under `name` (sfxKit.ts registerSfx). */
+  static emit(name: string, opts?: SfxPlayOpts): void {
+    emitSfx(name, opts);
+  }
+
   static ensure(): void {
     if (Sfx.ctx) {
       // autoplay policies can start (or leave) the context suspended when
@@ -771,168 +788,107 @@ export class Sfx {
     return osc;
   }
 
+  // ---- effects ----
+  // Each effect is a program in sfxKit.ts's kit (its sound target sits beside
+  // it); these keep the names every caller already uses and emit the event.
   static move(): void {
-    Sfx.tone(600, 0.03, "square", 0.04);
+    emitSfx("move");
   }
 
   static attack(): void {
-    Sfx.tone(240, 0.08, "square", 0.09);
-    Sfx.tone(180, 0.12, "square", 0.08, 0.03);
+    emitSfx("attack");
   }
 
-  // impact crack for the moment a blow actually lands — attack() above is the
-  // swing, hit() below is the enemy's heavy thud
   static strike(): void {
-    Sfx.tone(900, 0.03, "square", 0.08);
-    Sfx.tone(160, 0.09, "sawtooth", 0.1, 0.02);
+    emitSfx("strike");
   }
 
   static critical(): void {
-    Sfx.tone(150, 0.05, "square", 0.1);
-    Sfx.tone(700, 0.1, "square", 0.09, 0.04);
+    emitSfx("critical");
   }
 
   static magic(): void {
-    Sfx.tone(440, 0.12, "triangle", 0.08);
-    Sfx.tone(660, 0.14, "triangle", 0.07, 0.06);
-    Sfx.tone(880, 0.18, "triangle", 0.06, 0.12);
+    emitSfx("magic");
   }
 
-  // a soft low hum under a held open fifth, so a shield reads as something
-  // settling around the hero rather than another attack spell's rising run
   static ward(): void {
-    Sfx.tone(196, 0.4, "triangle", 0.06);
-    Sfx.tone(523, 0.3, "triangle", 0.06, 0.05);
-    Sfx.tone(784, 0.35, "triangle", 0.05, 0.1);
+    emitSfx("ward");
   }
 
-  // the ultimate: a fast two-octave charge, then the boom timed to
-  // BattleScene.castNova's last blast (~0.7s in) — sawtooth low end so laptop
-  // speakers still carry it
   static nova(): void {
-    [262, 392, 523, 784, 1047].forEach((f, i) => {
-      Sfx.tone(f, 0.08, "square", 0.05, i * 0.05);
-    });
-    Sfx.tone(1568, 0.25, "triangle", 0.05, 0.25);
-    Sfx.tone(90, 0.5, "sawtooth", 0.11, 0.7);
-    Sfx.tone(130, 0.45, "sawtooth", 0.09, 0.72);
+    emitSfx("nova");
   }
 
   static hit(): void {
-    Sfx.tone(110, 0.16, "sawtooth", 0.1);
-    Sfx.tone(80, 0.2, "sawtooth", 0.08, 0.03);
+    emitSfx("hit");
   }
 
-  // two pitches a semitone apart beat against each other, and that sour
-  // wobble reads as sickness; the little pop after it is the bubble. Short
-  // and under hit()'s level because it ticks every turn, often next to a blow.
   static poison(): void {
-    Sfx.tone(220, 0.09, "sawtooth", 0.05);
-    Sfx.tone(233, 0.09, "sawtooth", 0.04);
-    Sfx.tone(520, 0.04, "square", 0.035, 0.07);
+    emitSfx("poison");
   }
 
-  // a brittle crack, then glassy triangle notes high above everything else in
-  // the mix so the frost glints instead of thuds
   static freeze(): void {
-    Sfx.tone(1200, 0.02, "square", 0.05);
-    Sfx.tone(1568, 0.06, "triangle", 0.06, 0.02);
-    Sfx.tone(2093, 0.06, "triangle", 0.05, 0.06);
-    Sfx.tone(1760, 0.07, "triangle", 0.05, 0.1);
-    Sfx.tone(2637, 0.12, "triangle", 0.04, 0.14);
+    emitSfx("freeze");
   }
 
   static victory(): void {
-    Sfx.tone(523, 0.1, "square", 0.07);
-    Sfx.tone(659, 0.1, "square", 0.07, 0.09);
-    Sfx.tone(784, 0.18, "square", 0.07, 0.18);
+    emitSfx("victory");
   }
 
   static levelup(): void {
-    Sfx.tone(523, 0.09, "square", 0.08);
-    Sfx.tone(659, 0.09, "square", 0.08, 0.08);
-    Sfx.tone(784, 0.09, "square", 0.08, 0.16);
-    Sfx.tone(1047, 0.22, "square", 0.08, 0.24);
+    emitSfx("levelup");
   }
 
   static capture(): void {
-    Sfx.tone(784, 0.1, "triangle", 0.08);
-    Sfx.tone(659, 0.1, "triangle", 0.08, 0.09);
-    Sfx.tone(523, 0.2, "triangle", 0.08, 0.18);
+    emitSfx("capture");
   }
 
   static buy(): void {
-    Sfx.tone(880, 0.06, "square", 0.06);
-    Sfx.tone(1320, 0.1, "square", 0.06, 0.05);
+    emitSfx("buy");
   }
 
   static error(): void {
-    Sfx.tone(160, 0.12, "sawtooth", 0.08);
+    emitSfx("error");
   }
 
   static run(): void {
-    Sfx.tone(600, 0.06, "square", 0.06);
-    Sfx.tone(700, 0.06, "square", 0.06, 0.05);
-    Sfx.tone(800, 0.1, "square", 0.06, 0.1);
+    emitSfx("run");
   }
 
   static boss(): void {
-    Sfx.tone(90, 0.35, "sawtooth", 0.11);
-    Sfx.tone(120, 0.35, "sawtooth", 0.09, 0.2);
+    emitSfx("boss");
   }
 
-  // lower than boss() so the two never blur together: a semitone cluster
-  // that shudders, then a tritone above it as the snarl. Sawtooth keeps
-  // enough upper harmonics for laptop speakers that can't play the root.
   static enrage(): void {
-    Sfx.tone(82, 0.4, "sawtooth", 0.11);
-    Sfx.tone(87, 0.4, "sawtooth", 0.09);
-    Sfx.tone(117, 0.35, "sawtooth", 0.1, 0.22);
-    Sfx.tone(124, 0.35, "sawtooth", 0.08, 0.22);
+    emitSfx("enrage");
   }
 
-  // a boss winding up a telegraphed strike: three low steps climbing a
-  // semitone at a time, unresolved on purpose — the answer is next turn's hit
   static charge(): void {
-    Sfx.tone(98, 0.22, "sawtooth", 0.08);
-    Sfx.tone(104, 0.22, "sawtooth", 0.08, 0.2);
-    Sfx.tone(110, 0.4, "sawtooth", 0.09, 0.4);
-    Sfx.tone(220, 0.4, "square", 0.04, 0.4);
+    emitSfx("charge");
   }
 
   static pickup(): void {
-    Sfx.tone(880, 0.07, "square", 0.06);
-    Sfx.tone(1175, 0.12, "square", 0.06, 0.06);
+    emitSfx("pickup");
   }
 
   static spark(): void {
-    Sfx.tone(1400, 0.04, "square", 0.05);
-    Sfx.tone(900, 0.06, "square", 0.04, 0.03);
+    emitSfx("spark");
   }
 
-  // BOLT's stun: a buzzing stutter that leaps high/low, so it reads as
-  // current through the body rather than spark()'s single crackle
   static shock(): void {
-    [1600, 380, 1500, 360, 1400].forEach((f, i) => {
-      Sfx.tone(f, 0.035, "square", 0.05, i * 0.04);
-    });
+    emitSfx("shock");
   }
 
   static chest(): void {
-    Sfx.tone(200, 0.12, "sawtooth", 0.08);
-    Sfx.tone(150, 0.1, "sawtooth", 0.07, 0.08);
-    Sfx.tone(660, 0.14, "square", 0.06, 0.14);
+    emitSfx("chest");
   }
 
   static night(): void {
-    Sfx.tone(330, 0.1, "triangle", 0.05);
+    emitSfx("night");
   }
 
   static gameover(): void {
-    Sfx.tone(392, 0.2, "square", 0.08);
-    Sfx.tone(330, 0.2, "square", 0.08, 0.18);
-    Sfx.tone(262, 0.3, "square", 0.08, 0.36);
-    Sfx.tone(196, 0.5, "square", 0.08, 0.56);
+    emitSfx("gameover");
   }
 
   // ---- weather ----
