@@ -463,7 +463,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   읽는 데 3~30ms 씩 기다려 첫 전투 create 가 36~73ms, 이후 전투도 8~43ms 였다(지금 10~15ms·1~3ms, 헤드리스).
   그래서 그림(`makeTexture`)과 pixelfx 시트(fx.ts `sheetBaker`)는 `readableCanvas`(pixelart.ts)로 제 캔버스를
   만들고, 그림은 `texelsOf` 로 그 캔버스에서 바로 읽는다(새 캔버스에 drawImage 하면 그 캔버스가 GPU 캔버스라
-  다시 기다린다). 그림만 옮겼을 때는 시트 등록이 오히려 느려져(Lv30 전투 warm 41장 합 140~197→232~335ms,
+  다시 기다린다). 그림만 옮겼을 때는 시트 등록이 오히려 느려져(Lv30 전투 warm 41장(기술 34 + 상태 7) 합 140~197→232~335ms,
   2040x132 한 장이 GPU 캔버스 24~48ms, read-frequently 1.3~1.6ms) 시트도 같이 옮겼다(지금 합 24ms). 그려지는
   GL 텍스처는 같다(텍스처를 FBO 로 읽어 비교: 시트 24장 중 23장 같고 shatter 134텍셀 ±1). 새 캔버스 텍스처도
   `textures.createCanvas` 대신 `readableCanvas` + `addCanvas` 로 만든다. Phaser 를 올리면 CanvasPool.create 가
@@ -764,11 +764,12 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   `soften`(crop 가장자리 8칸의 솔리드 픽셀을 Bayer 디더로 녹임. 실제 사례: 연기·불꽃 머리가 y 224 에서 직선으로
   잘렸다), `half`(몸보다 훨씬 큰 효과를 반 크기로). 래퍼는 pixelfx painter 의 `frame` 필드와 createFx 안의 createFx 에
   기대므로, pixelfx 를 올리면 시트를 전·후 픽셀 비교로 다시 본다.
-- 배운 기술의 시트는 그 세션 첫 전투 create 가 `warmStatuses` 에서 `warmFx` 로 굽고(Lv30 은 41장, 헤드리스 1.2초, 프레임
+- 배운 기술의 시트는 그 세션 첫 전투 create 가 `warmStatuses` 에서 `warmFx` 로 굽고(Lv30 은 상태 시트와 함께 41장(기술 34 + 상태 7), 헤드리스 1.2초, 프레임
   최대 약 11ms) 세션 내내 남는다(기술 34장 23.4MB). 순서는 상태 시트 → 처치 시트 → 마지막에 쓴 기술(`lastSkill`) →
   동료 시트 → 나머지 기술을 learnLevel 높은 것부터다. 실제 사례: 배운 순서로 구웠더니 VOID·BLACK HOLE 이 1.1~1.2초에야
   들어와, 첫 턴에 바로 쓰면 그 자리에서 26~46ms 를 구웠다(지금 0.18~0.28초에 준비). `lastSkill` 은 페이지마다 비어서
   세션 첫 전투는 레벨 순서만 탄다. 대가로 낮은 레벨 기술(ARCANE BEAM 등)이 맨 뒤라 첫 턴에 쓰면 약 22ms 를 굽는다.
+  중간 레벨 기술(예: METEOR, 6번째)은 준비가 0.5초 안팎이라 아주 빠른 첫 턴에는 여전히 약 24ms 를 그 자리에서 굽는다.
   이 멈춤은 `pickSkill` 의 promise 체인(게임 스텝 밖)에서 나서 스텝 시간(prestep~postrender)에는 안 잡히고 rAF
   간격으로만 잡힌다.
 - 그 밖의 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
