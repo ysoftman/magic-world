@@ -607,6 +607,8 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - pixelfx 날씨의 seed 는 바꾸지 않는다. seed 마다 노이즈 field(256x128, 15~38ms, 폭풍은 넷에 약 100ms)를
   굽고 비우지 않는 캐시에 넣어서, 새 seed 는 한 프레임을 멈추고 field 하나에 128KB 씩 영영 남긴다. 실제 사례:
   루프마다 새 seed 를 주자 50~70ms 멈춤과 누수가 생겼다. 어디서 시작할지는 seed 대신 루프 시각으로 고른다.
+  같은 seed 의 field 는 타이틀이 미리 굽는다(`warmBattleWeather`, "전투 이펙트" 절의 타이틀 warm 항목). 거기서
+  다 굽지 못한 것만 그 날씨의 첫 전투가 열릴 때 굽는다.
 - 폭풍 번개는 늘 빛 0.3(`STORM_LIGHT`)으로 그리고, FLASHES 를 끄거나 reduced motion 이면 루프의 번개
   구간(`STORM_STRIKES`)을 건너뛴다(이펙트가 시각의 함수라 건너뛰기는 비용이 없다). 루프 시계는 1/15초 격자에
   맞춘다. 그래서 pixelfx 30fps 의 깜빡임 한 획이 한 번만 번쩍이고, 한 쌍(두 획, 또는 막 번개가 두 번
@@ -681,6 +683,11 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   시트 하나가 타이틀 프레임을 76ms 잡았다(지금 가장 긴 프레임 약 12ms, 헤드리스). SHUTDOWN 에서 굽던
   시트를 끝까지 굽게 했을 때는 나비를 굽던 중에 누른 Continue 가 마을 첫 프레임을 146~158ms 로 만들었다
   (버리게 한 뒤 62~78ms, 시트가 다 있을 때 마을 첫 create 는 79~113ms).
+  - 그 뒤 타이틀은 `warmBattleWeather(scene, idle)`(`src/ui/BattleWeather.ts`)로 전투 날씨의 노이즈 field 9장을
+    굽는다. 한 장이 15~38ms 이고 쪼갤 수 없어서, 그 씬 프레임에서 POST_UPDATE 까지 이미 3ms(`BUSY_MS`) 넘게 일한
+    프레임은 건너뛰고 한 프레임에 한 장만 굽는다. 그래서 `warmSheets` 가 8ms 씩 쓰는 동안은 기다렸다가 시트가
+    끝난 뒤에 시작한다. 게임이 시작되면(Continue 등, 타이틀의 `started`) `idle()` 이 거짓이 되어 멈춘다. 실제
+    사례: 굽지 않으면 첫 비·폭풍·눈보라 전투의 create 가 57~105ms 였다(지금 24~39ms).
 - 새 시트는 create 에서 `bakePixelSheet` 로 한꺼번에 굽지 않는다. `warmSheets(scene, 시트 표, done)` 에
   넣고 `done(key)` 뒤에 그 시트를 쓴다(이미 구운 키면 그 자리에서 불린다). 동기 `bakePixelSheet` 는 그
   프레임에 꼭 있어야 하는 곳(`bakeBattleFx`, `statusFx.ts` 의 첫 사용, warm 이 아직 못 구운 시트를
