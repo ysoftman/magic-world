@@ -7,6 +7,13 @@
       "skillPath": "skills/audio-and-sound/SKILL.md",
       "computedHash": "0ac3d8b80936f93f78e437cdaa8399efa6054f08244d90eb78de7b5f5ddec337"
     },
+    "designing-retro-arcade-sound-kits": {
+      "source": "abagames/agentic-gamedev-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/designing-retro-arcade-sound-kits/SKILL.md",
+      "computedHash": "15ac96e4a20698e5bb6a7497cf807d4984e2adab2ed257f59d073cd8e628a99f",
+      "installMode": "copy"
+    },
     "filters-and-postfx": {
       "source": "phaserjs/phaser",
       "sourceType": "github",
