@@ -28,10 +28,12 @@ export const GLOW_DEPTH = 90.5;
 // NightOverlay, so night still darkens on top; lightning brightens over that.
 const OVERCAST_DEPTH = 89.5;
 const FLASH_DEPTH = 89.6;
+// a strike's brightest (addLightning)
+const LIGHTNING_PEAK = 0.12;
 // the area title is drawn at STATUS_HUD_HEIGHT + 24; the caption sits below it
 const CAPTION_Y = STATUS_HUD_HEIGHT + 66;
 
-// the one texture every ambient, battle-weather and footstep particle is cut from
+// the one texture every ambient, footstep and battle ashfall particle is cut from
 export const SHEET = "ambient-px";
 
 // Simulated on entry so the air is already full instead of filling up from
@@ -499,9 +501,9 @@ const ANYWHERE_ON_SCREEN: EmitterConfig = {
   y: { min: 0, max: GAME_HEIGHT },
 };
 
-// The weather's particle setups, shared by the field (the builders above) and
-// the battle screen (BattleWeather.ts); each user adds its own on/off, density
-// and wind on top.
+// The weather's particle setups for the field (the builders above), each
+// adding its own on/off, density and wind on top. The battle screen takes
+// only the ashfall (BattleWeather.ts): its rain and snow are pixelfx's.
 export const WEATHER_PARTICLES = {
   rain: {
     frame: ["rain-a", "rain-a", "rain-b"],
@@ -552,7 +554,7 @@ export const WEATHER_PARTICLES = {
 // The rain and its splash for `region`: the dark streaks over a lowland
 // winter's snow (seasonLook, as the map's skin is chosen), the pale ones on
 // every other ground.
-export function rainParticles(region: Region): { rain: EmitterConfig; splash: EmitterConfig } {
+function rainParticles(region: Region): { rain: EmitterConfig; splash: EmitterConfig } {
   if (seasonLook(region) !== "winter") return { rain: WEATHER_PARTICLES.rain, splash: WEATHER_PARTICLES.splash };
   return {
     rain: { ...WEATHER_PARTICLES.rain, frame: ["rain-a-snow", "rain-a-snow", "rain-b-snow"] },
@@ -645,21 +647,16 @@ function addRain(
 // off (GameState.flashes, see fx.ts) -- read at every pulse, not once here, so
 // flipping it in SETTINGS mid-storm takes effect from the next strike. The
 // thunder 0.3-1.2s after each strike plays either way: a sound is no risk to
-// a photosensitive player, and it keeps the storm a storm. The battle screen
-// strikes softer (`peak`) and without thunder (BattleWeather.ts). Returns the
-// flash, or null under reduced motion.
-export function addLightning(
-  scene: Phaser.Scene,
-  stormy: () => boolean,
-  { peak = 0.12, thunder = true } = {},
-): Phaser.GameObjects.Rectangle | null {
+// a photosensitive player, and it keeps the storm a storm. The battle
+// screen's storm has pixelfx's bolt instead (BattleWeather.ts).
+function addLightning(scene: Phaser.Scene, stormy: () => boolean): void {
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const flash = reducedMotion ? null : addOvercast(scene, 0xe8f0ff, FLASH_DEPTH);
-  const pulse = (peak: number): void => {
+  const pulse = (alpha: number): void => {
     if (!flash || !GameState.flashes) return;
     scene.tweens.add({
       targets: flash,
-      alpha: peak,
+      alpha,
       duration: 90,
       ease: "Quad.easeOut",
       onComplete: () => scene.tweens.add({ targets: flash, alpha: 0, duration: 420, ease: "Quad.easeIn" }),
@@ -668,16 +665,15 @@ export function addLightning(
   const scheduleStrike = (): void => {
     scene.time.delayedCall(Phaser.Math.Between(6000, 14000), () => {
       if (stormy()) {
-        pulse(peak);
+        pulse(LIGHTNING_PEAK);
         // the echo, a little over half as bright
-        if (Math.random() < 0.5) scene.time.delayedCall(520, () => pulse(peak * 0.58));
-        if (thunder) scene.time.delayedCall(Phaser.Math.Between(300, 1200), () => Sfx.thunder(Phaser.Math.FloatBetween(0.7, 1)));
+        if (Math.random() < 0.5) scene.time.delayedCall(520, () => pulse(LIGHTNING_PEAK * 0.58));
+        scene.time.delayedCall(Phaser.Math.Between(300, 1200), () => Sfx.thunder(Phaser.Math.FloatBetween(0.7, 1)));
       }
       scheduleStrike();
     });
   };
   scheduleStrike();
-  return flash;
 }
 
 export function addOvercast(scene: Phaser.Scene, color: number, depth = OVERCAST_DEPTH): Phaser.GameObjects.Rectangle {
