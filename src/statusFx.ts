@@ -21,12 +21,13 @@ import { ART_PX } from "./pixelart";
 
 export type StatusKind = "heal" | "ward" | "burn" | "chill" | "shock" | "poison" | "freeze";
 
-// a fx.ts pixel sheet over the whole canvas, its span and frames set; tinted:
-// the battler's tint at play() baked into its colours
+// a fx.ts pixel sheet over the whole canvas, its span and frames set. body:
+// the battler's colours as handed to the effect, "tinted" with its tint at
+// play(), or "grey" (their brightness only)
 interface StatusSheet extends PixelSheet {
   span: [number, number];
   frames: number;
-  tinted?: boolean;
+  body?: "tinted" | "grey";
 }
 
 // ramps, dark to bright: the battle's own colours for each (the HEAL spell's
@@ -48,13 +49,15 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // one tick of burning: the body flashes white then orange, tongues lick from
   // its outline, scorch, sparks and smoke (a second tick would flash it again)
   burn: { fx: burning, opts: { palette: BURN_RAMP }, span: [0, 0.6], frames: 10 },
-  // frosted over (status/frozen): the body redrawn in ice, rime, snow above, frost underfoot
-  chill: { fx: frozen, opts: { palette: ICE_RAMP }, span: [0, 0.9], frames: 10 },
+  // frosted over (status/frozen): the body redrawn in ice, rime, snow above,
+  // frost underfoot. Ice from its greys: frozen pulls a colour only 38% of the
+  // way to ice, which left a red KING SLIME pink-brown
+  chill: { fx: frozen, opts: { palette: ICE_RAMP }, span: [0, 0.9], frames: 10, body: "grey" },
   // arcs crawling over the outline, two jolts that flare the whole body
   shock: { fx: electrified, span: [0, 1], frames: 10 },
   // one tick of poisoned: purple rolling up the body, blisters popping, a ring
   // on the floor, sweat dripping
-  poison: { fx: poisoned, opts: { palette: PSN_RAMP, veins: "#1a0533" }, span: [0, 0.8], frames: 10, tinted: true },
+  poison: { fx: poisoned, opts: { palette: PSN_RAMP, veins: "#1a0533" }, span: [0, 0.8], frames: 10, body: "tinted" },
   // frost races in and climbs the hero, a block of ice crystallizes round it
   // and glints; it cracks and bursts later, past the span: the hero stays frozen
   freeze: { fx: freeze, opts: { palette: ICE_RAMP }, span: [0.1, 1.5], frames: 12 },
@@ -88,10 +91,15 @@ function tintOf(sprite: Phaser.GameObjects.Sprite): { id: string; apply: (c: Rgb
   return null;
 }
 
+const greyOf = ([r, g, b]: Rgb): Rgb => {
+  const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  return [l, l, l];
+};
+
 // The sprite's frame read back on the art grid: a cell is on when any of its
 // texels is, in that texel's colour. `feet` is the texels from the frame's top
 // to the line under its lowest cell, where the effect's anchor goes.
-function actorOf(sprite: Phaser.GameObjects.Sprite, tint: ((c: Rgb) => Rgb) | null): { actor: Actor; feet: number } | null {
+function actorOf(sprite: Phaser.GameObjects.Sprite, recolor: ((c: Rgb) => Rgb) | null): { actor: Actor; feet: number } | null {
   const frame = sprite.frame;
   const src = frame.source.image;
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
@@ -116,7 +124,7 @@ function actorOf(sprite: Phaser.GameObjects.Sprite, tint: ((c: Rgb) => Rgb) | nu
         if (x >= tw || y >= th) continue;
         const i = (y * tw + x) * 4;
         if (data[i + 3] === 0) continue;
-        const [r, g, b] = tint ? tint([data[i], data[i + 1], data[i + 2]]) : [data[i], data[i + 1], data[i + 2]];
+        const [r, g, b] = recolor ? recolor([data[i], data[i + 1], data[i + 2]]) : [data[i], data[i + 1], data[i + 2]];
         // mirrored as the sprite is drawn
         const at = cy * w + (sprite.flipX ? w - 1 - cx : cx);
         mask[at] = 1;
@@ -155,11 +163,11 @@ export class StatusFx {
    */
   play(target: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number, scale: number): void {
     const sheet = STATUS_SHEETS[kind];
-    const tint = sheet.tinted ? tintOf(target) : null;
+    const tint = sheet.body === "tinted" ? tintOf(target) : null;
     const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tint ? `:${tint.id}` : ""}`;
     let feet = this.feet.get(key);
     if (feet === undefined) {
-      const body = actorOf(target, tint?.apply ?? null);
+      const body = actorOf(target, sheet.body === "grey" ? greyOf : (tint?.apply ?? null));
       if (!body) return;
       bakePixelSheet(this.scene, key, { ...sheet, opts: { ...sheet.opts, actor: body.actor } });
       feet = body.feet;
