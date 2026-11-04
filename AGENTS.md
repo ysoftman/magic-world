@@ -636,7 +636,8 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   (버리게 한 뒤 62~78ms, 시트가 다 있을 때 마을 첫 create 는 79~113ms).
 - 새 시트는 create 에서 `bakePixelSheet` 로 한꺼번에 굽지 않는다. `warmSheets(scene, 시트 표, done)` 에
   넣고 `done(key)` 뒤에 그 시트를 쓴다(이미 구운 키면 그 자리에서 불린다). 동기 `bakePixelSheet` 는 그
-  프레임에 꼭 있어야 하는 곳(`bakeBattleFx`, `statusFx.ts` 의 첫 사용)에만 쓴다. 텍스처 크기와 굽는 시간은
+  프레임에 꼭 있어야 하는 곳(`bakeBattleFx`, `statusFx.ts` 의 첫 사용, warm 이 아직 못 구운 시트를 `fieldFx.ts`
+  가 재생할 때)에만 쓴다. 텍스처 크기와 굽는 시간은
   `span`·`frames`·`crop` 으로 줄인다. crop 은 그리는 비용을 줄이지 못할 수 있다. 실제 사례: 나비는 반짝이는
   먼지 꼬리가 캔버스 거의 전부라 불투명 범위로 crop 해도 굽는 시간이 23.3→22.9ms(bun 단독)였다.
 - `fx.ts` 맨 위 `/*! pixelfx ... MIT License ... */` 줄은 지우지 않는다. Bun 은 minify 할 때 `/*!` 주석만
@@ -678,3 +679,20 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   첫 프레임에 네 시트가 몰린다(타이틀에서 잰 시트별 굽기 시간의 합 약 170ms, 헤드리스).
 - 시트 값(팔레트·`frames`·`crop`)을 바꾸면 타이틀 warm 의 가장 긴 프레임과 critter 텍스처 합을 다시 잰다
   (`TODO.md` 의 실기기 항목).
+
+## 필드·패널 순간 이펙트 (`src/ui/fieldFx.ts`)
+
+보물 파기(`TreasureDig.ts`)의 흙먼지·상자와 낚시(`Fishing.ts`)의 물결·물보라도 pixelfx 시트다. `FieldFx`
+(`key`·`sheet`·한 번 도는 길이 `ms`·`loop`)로 적고 `playFieldFx`·`playFieldFxOnce` 로 재생한다(Phaser anims).
+
+- 시트는 쓰는 쪽 생성자에서 `warmFieldFx(scene, ...)`(`warmSheets`)로 미리 나눠 굽는다. 재생하는 순간에 아직
+  없을 때만 그 자리에서 `bakePixelSheet` 로 굽는다. 보물 파기는 그 지역에 지도가 있을 때만 warm 한다. 지도는
+  전투에서만 생기므로, 지금 없으면 씬이 다시 시작되기 전에는 팔 일이 없다. 실제 사례: `FishingUI` 가 생성자에서
+  시트를 동기로 굽던 때 마을 첫 프레임이 172ms 였다(`warmFieldFx` 로 옮긴 뒤 create 8~16ms).
+- 배율과 깊이는 그리는 자리를 따른다.
+  - 보물 파기: 필드 그림이라 pixelfx 1px 이 `ART_PX`(2px)이다. 상자 10.6, 흙먼지 10.7 이다. 영웅·NPC 10 과
+    안내 화살표 10.5 위라 X 위에 선 영웅에게도 상자가 보이고, 이름표 11(검·방패도 11)과 밤 그늘 90 아래다.
+    흙먼지가 상자 위라 상자가 먼지 속에서 나온다.
+  - 낚시: 패널의 연못·찌가 화면 해상도 도형이라 1px(scale 1, scrollFactor 0)이다. 깊이 152.5 로 연못 152 위,
+    찌와 `!` 153 아래다. 실제 사례: 2px 로 그리면 물결이 연못 테두리 밖으로 14px 나가고 물보라가 FISH CAUGHT
+    줄까지 올라갔다.
