@@ -748,10 +748,15 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - 시트 값(팔레트·`frames`·`crop`)을 바꾸면 타이틀 warm 의 가장 긴 프레임과 critter 텍스처 합을 다시 잰다
   (`TODO.md` 의 실기기 항목).
 - 숲의 맑은 낮(겨울 제외)에는 pixelfx weather/god-rays 빛줄기가 화면에 깔린다(`Ambient` 의 `addSunRays`). 10초
-  루프라 시트로 굽지 않고 PixelWeather 처럼 15fps 로 320x180 캔버스(4px 칸)에 다시 그린다. 빛과 불투명 먼지만 ADD 로
+  루프라 시트로 굽지 않고 PixelWeather 처럼 15fps 로 320x180 캔버스(4px 칸)에 다시 그린다(`lightCanvas.ts`). 빛과 불투명 먼지만 ADD 로
   그리고(밤 배경용 어두운 공기·빔 몸통은 뺌), 캔버스 위 20행에서 서서히 들어와 HUD 를 숨겨도 선이 없다. 깊이 10.8 은
   영웅·보물(10~10.7) 위, 이름표·장비 11 아래(이름표 대비 그대로), 밤 그늘 90 아래다. 비·밤·겨울에는 다시 그리지 않는다.
   critters/fish-school 은 무리(약 4x2.5 타일)가 연못(마을 4x1, 숲 3x3)보다 크고 옆모습 수중 그림이라 넣지 않았다(결정).
+- 마을 축제 밤(20~23시) 불꽃은 pixelfx explosions/firework-burst 다(NightSky 의 `addFireworks`). 불꽃마다 색
+  (`FIREWORK_COLORS` 를 가운데 둔 7단 램프)과 seed 가 달라 시트로 굽지 않고, 첫 불꽃 때 만드는 640x280 캔버스(2px 칸)에
+  20fps 로 다시 그린다. 숲 빛줄기와 같이 `lightCanvas.ts` 의 `addLightCanvas`(빛과 불투명 픽셀만 ADD, 반투명 색은 뺌)를
+  쓴다. 터질 때 효과가 제 하늘을 밝혀 화면 전체 번쩍임은 없앴고, FLASHES 끄기·reduced motion 이면 light 0.35 다. 별이
+  536px 까지 처져 veil 을 y 448 까지 늘렸다. 실제 사례: 겨울 눈 마을에서 흰 팝이 눈에 묻혔다.
 
 ## 필드 소품 (`src/ui/propFx.ts`)
 

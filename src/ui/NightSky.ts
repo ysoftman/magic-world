@@ -1,10 +1,13 @@
 import Phaser from "phaser";
+import { clearFrame, createFx, type Fx } from "pixelfx";
+import * as fireworkBurst from "pixelfx/fx/explosions/firework-burst";
 import { Sfx } from "../audio";
-import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
+import { GAME_WIDTH, PIXEL } from "../config";
 import { eventToday } from "../events";
 import { GameState, hour, nightFactor } from "../gameState";
-import { keepBlocky, makeTexture } from "../pixelart";
+import { ART_PX, makeTexture } from "../pixelart";
 import { isWet, type Region, weatherToday } from "../weather";
+import { addLightCanvas } from "./lightCanvas";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
 
 // Over the night shade (90), its lights (90.4) and Ambient's fireflies and
@@ -17,21 +20,38 @@ const SKY_TOP = STATUS_HUD_HEIGHT + 24;
 const SKY_BOTTOM = 300;
 
 // Festival fireworks: a town event's night (events.ts), 20:00..23:00, one
-// shell every 1.8-4.5s while it isn't raining.
+// shell every 1.8-4.5s while it isn't raining. Each is pixelfx's firework
+// burst (MIT; its notice is the /*! line in fx.ts): the shell climbs, bursts
+// into trailing stars round a gold core, they droop and crackle out in white
+// pops. Its shell colour (the middle of its ramp, shellRamp) and its seed are
+// its own, so no two bursts look alike.
 const FIREWORK_HOURS = [20, 23];
-const FIREWORK_COLORS = [0xff7ab6, 0xffd166, 0x7ee8fa, 0x9cf27a, 0xc59bff];
-const SPARKS_PER_BURST = 36;
-// The sky lights up a little with each burst: a faint wash of the shell's
-// colour, under half the storm's lightning peak (0.12). Off with the FLASHES
-// setting and under prefers-reduced-motion, as the lightning is; the sparks
-// alone are no flash (a few dozen 4px points), so they stay.
-const BURST_GLOW = 0.05;
+const FIREWORK_COLORS = [0xf53cd1, 0x33c4f2, 0x62d93a, 0x9b5cf6, 0xf2483a];
+// One of its pixels to an art cell (ART_PX), the critters' 2px: a burst some
+// 190 cells across is 380px, about the old sparks' spread, where 4px made it
+// 760. Drawn live into one canvas over the sky (lightCanvas.ts) rather than
+// baked: its 3s at 15fps were 45 frames of 170KB, a sheet a colour. The rows
+// reach the deepest a star droops (138 cells under the lowest burst, 536px).
+const FIREWORK_ROWS = 280;
+// redrawn this often; a redraw (~1ms for three bursts, headless) and its
+// upload go on two frames
+const FIREWORK_STEP_MS = 1000 / 20;
+// a burst is over (its last pop out) this long after its launch, and bursts
+// this long after it (the effect's own RISE)
+const FIREWORK_LIFE_S = 3.1;
+const FIREWORK_RISE_MS = 420;
+// Its glow at this strength with the FLASHES setting off or under
+// prefers-reduced-motion: the burst lights a patch of sky 220px round (its
+// light at 0.6, for 1.5s), and the stars and pops alone are no flash.
+const FIREWORK_SOFT_LIGHT = 0.35;
 // While the fireworks are on, the sky behind them darkens a little: the
 // night's navy, deepest under the HUD and gone by FIREWORK_VEIL_H below it,
 // eased in and out over ~2.5s. The snowed-in winter town is pale even at
-// night, and additive sparks barely showed on it.
+// night, and additive sparks barely showed on it. Down to y 448: a burst's
+// stars droop to 536px, and over a veil that stopped at 320 their white pops
+// sank into the snow.
 const FIREWORK_VEIL = 0.45;
-const FIREWORK_VEIL_H = 232;
+const FIREWORK_VEIL_H = 360;
 
 // A shooting star now and then on a clear night: one every 40-110s.
 const METEOR_GAP_MS = [40000, 110000];
@@ -51,11 +71,8 @@ const AURORA_Y = SKY_TOP + 44;
 const AURORA_WAVE = 15;
 // how far the curtain swings either way, in px
 const AURORA_SWAY = 12;
-// For ADD blending, where black is see-through: the spark and the star are
-// grey ramps tinted at emission.
+// For ADD blending, where black is see-through: the star is a grey ramp.
 const SKY_SPRITES: Record<string, { rows: string[]; palette: Record<string, number> }> = {
-  // 2x2: a single art pixel was lost against the snowed-in town at night
-  "sky-spark": { rows: ["ww", "ww"], palette: { w: 0xffffff } },
   // brightest at the head (bottom left), the tail thinning up and right;
   // flipped for a star falling the other way
   "sky-meteor": {
@@ -89,9 +106,6 @@ const SKY_SPRITES: Record<string, { rows: string[]; palette: Record<string, numb
     },
   },
 };
-// the spark stays a full 2x2 block: Scale2x (pixelart.ts) cut its corners
-keepBlocky(SKY_SPRITES["sky-spark"].rows);
-
 // The aurora's strands (frames "a", "b" and "c"), top to bottom: violet
 // fading out at the top, teal, a bright green hem low down and its underside
 // softened, so neither end is a hard edge; "b" leans violet and "c" is "a"
@@ -167,31 +181,55 @@ const fixed = <T extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Comp
   o: T,
 ): T => o.setScrollFactor(0).setDepth(SKY_DEPTH);
 
+// A shell colour's 7 steps, dark to white, as pixelfx's own pink ramp has
+// them round 0xf53cd1: a quarter, 0.45 and 0.7 of it, it, then 35%, 70% and
+// all the way to white.
+function shellRamp(c: number): string[] {
+  const rgb = [c >> 16, (c >> 8) & 255, c & 255];
+  return [0.25, 0.45, 0.7, 1, 1.35, 1.7, 2].map(
+    (k) =>
+      `#${rgb
+        .map((v) =>
+          Math.round(k <= 1 ? v * k : v + (255 - v) * (k - 1))
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("")}`,
+  );
+}
+
 function addFireworks(scene: Phaser.Scene): void {
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  let color = FIREWORK_COLORS[0];
-  // the shell's trail is half a spark
-  let size = 1;
-  const sparks = fixed(
-    scene.add.particles(0, 0, "sky-spark", {
-      // the trail hangs where the shell passed; the burst flies wide
-      speed: { onEmit: () => (size < 1 ? Phaser.Math.Between(4, 16) : Phaser.Math.Between(80, 200)) },
-      angle: { min: 0, max: 360 },
-      gravityY: 60,
-      lifespan: { min: 1000, max: 1600 },
-      scale: { onEmit: () => size },
-      // a quick twinkle riding the fade
-      alpha: { onEmit: () => 1, onUpdate: (_p, _k, t) => (1 - t) * (0.75 + 0.25 * Math.sin(t * 40)) },
-      tint: { onEmit: () => color },
-      maxAliveParticles: 160,
-      emitting: false,
-    }),
-  ).setBlendMode(Phaser.BlendModes.ADD);
-  const glow = reducedMotion
-    ? null
-    : fixed(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 1))
-        .setDepth(SKY_DEPTH - 0.05)
-        .setAlpha(0);
+  // made with the night's first shell: most visits see none
+  let sky: ReturnType<typeof addLightCanvas> | undefined;
+  const bursts: Array<{ fx: Fx; age: number }> = [];
+  let wait = 0;
+  let drawn = false;
+  const step = (_time: number, delta: number): void => {
+    if (!sky) return;
+    if (drawn) {
+      drawn = false;
+      sky.upload();
+      sky.image.setVisible(bursts.length > 0);
+      return;
+    }
+    if (!bursts.length) return;
+    wait += delta;
+    if (wait < FIREWORK_STEP_MS) return;
+    // a tab back from the background hands over seconds at once
+    const dt = Math.min(wait, 100) / 1000;
+    wait = 0;
+    for (const b of bursts) {
+      b.fx.update(dt);
+      b.age += dt;
+    }
+    for (let i = bursts.length - 1; i >= 0; i--) if (bursts[i].age >= FIREWORK_LIFE_S) bursts.splice(i, 1);
+    clearFrame(sky.frame);
+    for (const b of bursts) b.fx.draw(sky.frame);
+    drawn = true;
+  };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
 
   const veil = fixed(scene.add.image(0, STATUS_HUD_HEIGHT, "sky-veil"))
     .setOrigin(0, 0)
@@ -208,31 +246,21 @@ function addFireworks(scene: Phaser.Scene): void {
     callback: () => veil.setAlpha(Phaser.Math.Clamp(veil.alpha + (festive() ? 0.012 : -0.012), 0, FIREWORK_VEIL)),
   });
 
+  // a shell bursting at (x, y) on screen, climbing to it from 144px below
   const launch = (): void => {
-    color = Phaser.Utils.Array.GetRandom(FIREWORK_COLORS);
+    sky ??= addLightCanvas(scene, "sky-fireworks", { cols: GAME_WIDTH / ART_PX, rows: FIREWORK_ROWS, cell: ART_PX, depth: SKY_DEPTH });
     const x = Phaser.Math.Between(140, GAME_WIDTH - 140);
     const y = Phaser.Math.Between(SKY_TOP + 20, SKY_BOTTOM - 40);
-    // the shell climbs from below the sky band, shedding a faint trail
-    const shell = { y: SKY_BOTTOM + 60 };
-    scene.tweens.add({
-      targets: shell,
-      y,
-      duration: 600,
-      ease: "Quad.easeOut",
-      onUpdate: () => {
-        size = 0.5;
-        sparks.emitParticleAt(x, shell.y, 1);
-      },
-      onComplete: () => {
-        size = 1;
-        sparks.emitParticleAt(x, y, SPARKS_PER_BURST);
-        Sfx.ambience("pop", Phaser.Math.FloatBetween(0.7, 1));
-        if (!glow || !GameState.flashes) return;
-        scene.tweens.killTweensOf(glow);
-        glow.setFillStyle(color).setAlpha(0);
-        scene.tweens.add({ targets: glow, alpha: BURST_GLOW, duration: 80, yoyo: true, hold: 40, ease: "Quad.easeOut" });
-      },
+    const fx = createFx(fireworkBurst, {
+      x: x / ART_PX,
+      y: y / ART_PX,
+      palette: shellRamp(Phaser.Utils.Array.GetRandom(FIREWORK_COLORS)),
+      seed: Phaser.Math.Between(1, 9999),
+      // read at every launch, so flipping FLASHES takes effect from the next shell
+      light: reducedMotion || !GameState.flashes ? FIREWORK_SOFT_LIGHT : 1,
     });
+    bursts.push({ fx, age: 0 });
+    scene.time.delayedCall(FIREWORK_RISE_MS, () => Sfx.ambience("pop", Phaser.Math.FloatBetween(0.7, 1)));
   };
   const schedule = (): void => {
     scene.time.delayedCall(Phaser.Math.Between(1800, 4500), () => {
