@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import * as healAoe from "pixelfx/fx/holy/heal-aoe";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
@@ -7,6 +8,7 @@ import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../item
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
+import { type FieldFx, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -110,6 +112,34 @@ const CONSUMABLES: UseItem[] = [
     },
   },
 ];
+
+// A restore's moment (ui/fieldFx.ts): a seed of light sinks under the used
+// item's icon and a ring rolls out from it, plus signs sprouting and floating
+// up as it passes (holy/heal-aoe), in the HUD's colour for what came back
+// (StatusHud's hp/mp, gold for both). One pixelfx pixel to a screen pixel,
+// like the KITCHEN's dish, at half its reach (56): the ring is 114 x 22, under
+// the icon and in the 20px gap below its row. The crop keeps the plus signs
+// (to 50 over the floor) and cuts the seed's top and its flash's glow under
+// the ring, where they reached two rows up and one down: 16 frames, a row of
+// 1984x70.
+const heal = (key: string, palette: string[]): FieldFx => ({
+  key,
+  sheet: { fx: healAoe, opts: { palette, reach: 56 }, span: [0.3, 2.2], frames: 16, crop: [66, 54, 190, 124] },
+  // its 1.9s at 1.6x: the ring out by 0.6s, the last plus gone with the msg
+  ms: 1200,
+});
+const HEAL_HP = heal("fx-item-hp", ["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#4ade80", "#bbf7d0", "#ffffff"]);
+const HEAL_MP = heal("fx-item-mp", ["#0c1a3d", "#172554", "#1e3a8a", "#1d4ed8", "#3b82f6", "#60a5fa", "#bfdbfe", "#ffffff"]);
+const HEAL_ALL = heal("fx-item-elixir", ["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc", "#ffffff"]);
+const HEALS: Partial<Record<ConsumableKey, FieldFx>> = {
+  potion: HEAL_HP,
+  hiPotion: HEAL_HP,
+  mPotion: HEAL_MP,
+  ether: HEAL_MP,
+  elixir: HEAL_ALL,
+};
+// the floor under an icon: its foot (16 under its middle) and 4 more
+const HEAL_FLOOR_DY = 20;
 
 const equip = (label: string, key: EquipmentKey): EquipItem => ({ label, key, kind: "equip" });
 
@@ -258,6 +288,8 @@ export class InventoryUI {
   private mapView: Phaser.GameObjects.Graphics;
   private mapTitle: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
+  // a restore's ring under the used icon
+  private fx: PanelFx;
 
   private keyUp: Phaser.Input.Keyboard.Key;
   private keyDown: Phaser.Input.Keyboard.Key;
@@ -279,6 +311,7 @@ export class InventoryUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, HEAL_HP, HEAL_MP, HEAL_ALL);
 
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
@@ -475,6 +508,7 @@ export class InventoryUI {
     this.cursor.setVisible(true);
     this.showPage();
     this.refresh();
+    this.fx.warm();
   }
 
   isActive(): boolean {
@@ -578,6 +612,9 @@ export class InventoryUI {
     GameState.save();
     this.showMsg(result);
     this.refresh();
+    const heal = HEALS[item.key];
+    const icon = this.icons[this.index];
+    if (heal) this.fx.play(heal, icon.x, icon.y + HEAL_FLOOR_DY, 1);
   }
 
   private showMsg(text: string): void {
@@ -680,6 +717,7 @@ export class InventoryUI {
     this.mapView.setVisible(false);
     this.mapTitle.setVisible(false);
     this.msgTimer?.remove();
+    this.fx.clear();
     for (const t of this.items) t.setVisible(false);
     for (const t of this.counts) t.setVisible(false);
     for (const t of this.icons) t.setVisible(false);
@@ -702,6 +740,7 @@ export class InventoryUI {
     this.mapView.destroy();
     this.mapTitle.destroy();
     this.msgTimer?.remove();
+    this.fx.clear();
     for (const t of this.items) t.destroy();
     for (const t of this.counts) t.destroy();
     for (const t of this.icons) t.destroy();
