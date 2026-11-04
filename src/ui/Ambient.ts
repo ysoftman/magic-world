@@ -10,7 +10,7 @@ import { ART_PX, drawRows, type PixelMap, retroStyle, scale2x } from "../pixelar
 import { seasonLook, seasonToday } from "../season";
 import { type Region, WEATHER_LABEL, type Weather, weatherToday } from "../weather";
 import { type FieldFx, playFieldFxOnce, warmFieldFx } from "./fieldFx";
-import { addLightCanvas } from "./lightCanvas";
+import { addLightCanvas, redrawLive } from "./lightCanvas";
 import { addNightSky } from "./NightSky";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
 
@@ -637,9 +637,9 @@ function addFireflies(scene: Phaser.Scene): Layer {
 // shafts do not start on a hard line. Over the hero, the guide arrow and a dug
 // chest (10..10.7), under the name tags and the hero's gear (11), so a tag
 // keeps the contrast it was measured at; under the night shade (90), which
-// darkens it at dusk on top of the fade. Redrawn RAYS_STEP_MS apart (~1.9ms to
-// draw, headless, then the upload on the next frame), and not at all while it
-// is out (a rainy day, the night, winter).
+// darkens it at dusk on top of the fade. Redrawn RAYS_STEP_MS apart
+// (redrawLive; ~1.9ms to draw, headless), and not at all while it is out (a
+// rainy day, the night, winter).
 const RAYS_DEPTH = 10.8;
 const RAYS_PEAK = 0.6;
 const RAYS_FADE = 20;
@@ -660,25 +660,16 @@ function addSunRays(scene: Phaser.Scene): (level: number) => void {
   fx.update(Math.random() * godRays.meta.duration);
   const top = rows - godRays.meta.origin[1];
   const fade = (y: number): number => Phaser.Math.Clamp((y - top) / RAYS_FADE, 0, 1);
-  let wait = RAYS_STEP_MS;
-  let drawn = false;
-  const step = (_time: number, delta: number): void => {
-    if (!image.visible) return;
-    if (drawn) {
-      drawn = false;
-      upload(fade);
-      return;
-    }
-    wait += delta;
-    if (wait < RAYS_STEP_MS) return;
-    fx.update(Math.min(wait, 250) / 1000);
-    wait = 0;
-    clearFrame(frame);
-    fx.draw(frame);
-    drawn = true;
-  };
-  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
+  redrawLive(scene, RAYS_STEP_MS, {
+    active: () => image.visible,
+    maxMs: 250,
+    draw: (dt) => {
+      fx.update(dt);
+      clearFrame(frame);
+      fx.draw(frame);
+    },
+    upload: () => upload(fade),
+  });
   return (level) => {
     image.setAlpha(RAYS_PEAK * level);
     image.setVisible(level > 0.01);

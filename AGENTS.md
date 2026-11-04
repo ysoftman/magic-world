@@ -786,6 +786,11 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   +0.6~0.7ms(헤드리스)다. 노이즈 field(23ms)는 밤이면서 맑을 때, 게임 스텝 시작(game PRE_STEP)부터 3ms 이하로 일한
   프레임에 한 번 굽는다. 실제 사례: 씬 PRE_UPDATE 기준이면 씬이 만든 프레임에 바로 스텝해 create 프레임에 겹쳐 31ms 가
   됐다.
+- `lightCanvas.ts` 의 실시간 캔버스(숲 빛줄기·축제 불꽃·별똥별·오로라·엔딩 불꽃)는 `redrawLive(scene, stepMs, { draw,
+  upload, active, maxMs })` 로 돌린다. 다시 그리기와 그 업로드를 두 프레임에 나누고, `draw(dt)` 의 dt 는 업로드 프레임까지
+  센 실제 경과 시간이라 효과가 실시간으로 돈다. 실제 사례: 업로드 프레임을 빼고 세던 때 축제·엔딩 불꽃은 0.77배,
+  빛줄기는 0.82배로 돌았고, 불꽃은 pop 소리(발사 420ms 뒤)보다 83~183ms 늦게 터졌다(지금 −17~+34ms). 새 실시간 효과도
+  step 루프를 따로 쓰지 않고 이것을 쓴다.
 - 동굴·심연의 물방울은 pixelfx water/drip 의 front 층만(종유석 `source: false`, back 층의 웅덩이 타원은 뺌) 구운 시트다
   (Ambient 의 `CAVE_DRIP`, 880x66 232KB). 동굴 create 에서 `warmFieldFx` 로 굽고 `playFieldFxOnce` 로 `ART_PX`·
   `AMBIENT_DEPTH` 에 튼다. 씬이 `addAmbient` 에 `{ level }` 을 넘기면 바닥·물웅덩이 칸에만 떨어지고, 물결 양 끝(±18칸)·
@@ -864,4 +869,4 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   그리되, 요약 양옆 빈 칸(`FIREWORK_BOX`, 모든 글자 줄에서 10px: MOSS GOLEM 278x262, 에필로그 330x316)에 한쪽 하나씩
   캔버스를 두고 1px 로 그린다. 60개 seed 로 잰 burst 의 범위(별과 12/255 넘는 빛)는 좌우 98·위 76·아래 149px
   (`BURST_REACH`)라 2px(392x450)로는 칸에 들어가지 않는다. 엔딩 문구나 요약 줄의 위치·폭을 바꾸면 `FIREWORK_BOX` 를
-  다시 잰다.
+  다시 잰다. 쉘 램프(`shellRamp`)·다시 그리는 주기·수명·RISE·soft light 는 NightSky 의 export 를 같이 쓴다.

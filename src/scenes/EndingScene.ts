@@ -8,7 +8,8 @@ import { dayIndex, GameState } from "../gameState";
 import { CATCHABLE } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { bindKeyHint, keyNames, usingPad } from "../ui/Gamepad";
-import { addLightCanvas } from "../ui/lightCanvas";
+import { addLightCanvas, redrawLive } from "../ui/lightCanvas";
+import { FIREWORK_LIFE_S, FIREWORK_RISE_MS, FIREWORK_STEP_MS, SOFT_LIGHT, shellRamp } from "../ui/NightSky";
 import { isTouchDevice } from "../ui/TouchControls";
 
 export interface EndingData {
@@ -51,28 +52,8 @@ const FIREWORK_COLORS = { ending: [0x4ade80, 0x33c4f2, 0x9b5cf6], epilogue: [0xf
 // each, then one every so often, mostly turn about; the true end's oftener
 const FIREWORK_FIRST_MS = [250, 600];
 const FIREWORK_GAP_MS = { ending: [1400, 2800], epilogue: [900, 2000] };
-// as NightSky.ts: redrawn this often, the redraw and its upload on two frames;
-// a burst over by its life, and bursting its RISE after its launch
-const FIREWORK_STEP_MS = 1000 / 20;
-const FIREWORK_LIFE_S = 3.1;
-const FIREWORK_RISE_MS = 420;
-// its glow with FLASHES off or under prefers-reduced-motion, as the festival's
-const FIREWORK_SOFT_LIGHT = 0.35;
-
-// A shell colour's 7 steps, dark to white, as NightSky.ts's shellRamp has them
-function shellRamp(c: number): string[] {
-  const rgb = [c >> 16, (c >> 8) & 255, c & 255];
-  return [0.25, 0.45, 0.7, 1, 1.35, 1.7, 2].map(
-    (k) =>
-      `#${rgb
-        .map((v) =>
-          Math.round(k <= 1 ? v * k : v + (255 - v) * (k - 1))
-            .toString(16)
-            .padStart(2, "0"),
-        )
-        .join("")}`,
-  );
-}
+// the shells' ramps, redraw step, life, RISE and soft glow are the festival's
+// (NightSky.ts)
 
 function addFireworks(scene: Phaser.Scene, epilogue: boolean): void {
   const [x0, y0, x1, y1] = FIREWORK_BOX[epilogue ? "epilogue" : "ending"];
@@ -85,39 +66,29 @@ function addFireworks(scene: Phaser.Scene, epilogue: boolean): void {
     sky.image.setPosition(left, y0);
     return { sky, bursts: [] as Array<{ fx: Fx; age: number }>, drawn: false };
   });
-  let wait = 0;
-  let uploading = false;
-  const step = (_time: number, delta: number): void => {
-    if (uploading) {
-      uploading = false;
+  redrawLive(scene, FIREWORK_STEP_MS, {
+    active: () => sides.some((s) => s.bursts.length),
+    draw: (dt) => {
+      for (const s of sides) {
+        if (!s.bursts.length) continue;
+        for (const b of s.bursts) {
+          b.fx.update(dt);
+          b.age += dt;
+        }
+        s.bursts = s.bursts.filter((b) => b.age < FIREWORK_LIFE_S);
+        clearFrame(s.sky.frame);
+        for (const b of s.bursts) b.fx.draw(s.sky.frame);
+        s.drawn = true;
+      }
+    },
+    upload: () => {
       for (const s of sides) {
         if (s.drawn) s.sky.upload();
         s.drawn = false;
         s.sky.image.setVisible(s.bursts.length > 0);
       }
-      return;
-    }
-    if (!sides.some((s) => s.bursts.length)) return;
-    wait += delta;
-    if (wait < FIREWORK_STEP_MS) return;
-    // a tab back from the background hands over seconds at once
-    const dt = Math.min(wait, 100) / 1000;
-    wait = 0;
-    for (const s of sides) {
-      if (!s.bursts.length) continue;
-      for (const b of s.bursts) {
-        b.fx.update(dt);
-        b.age += dt;
-      }
-      s.bursts = s.bursts.filter((b) => b.age < FIREWORK_LIFE_S);
-      clearFrame(s.sky.frame);
-      for (const b of s.bursts) b.fx.draw(s.sky.frame);
-      s.drawn = true;
-    }
-    uploading = true;
-  };
-  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
+    },
+  });
 
   const launch = (side: number): void => {
     const x = Phaser.Math.Between(x0 + BURST_REACH.left, x1 - BURST_REACH.right);
@@ -127,7 +98,7 @@ function addFireworks(scene: Phaser.Scene, epilogue: boolean): void {
         y: Phaser.Math.Between(y0 + BURST_REACH.up, y1 - BURST_REACH.down),
         palette: shellRamp(Phaser.Utils.Array.GetRandom(colors)),
         seed: Phaser.Math.Between(1, 9999),
-        light: soft() ? FIREWORK_SOFT_LIGHT : 1,
+        light: soft() ? SOFT_LIGHT : 1,
       }),
       age: 0,
     });

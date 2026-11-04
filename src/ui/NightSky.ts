@@ -11,7 +11,7 @@ import { eventToday } from "../events";
 import { GameState, hour, nightFactor } from "../gameState";
 import { ART_PX } from "../pixelart";
 import { isWet, type Region, weatherToday } from "../weather";
-import { addLightCanvas } from "./lightCanvas";
+import { addLightCanvas, redrawLive } from "./lightCanvas";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
 
 // pixelfx's painter and the helpers the shooting star and the aurora are
@@ -52,8 +52,8 @@ const SKY_BOTTOM = 300;
 // FLASHES setting off or under prefers-reduced-motion: a burst lights a patch
 // of sky 220px round (its light at 0.6, for 1.5s), a flare one 80px round,
 // and the sparks and stars alone are no flash. Read at each burst or fall, so
-// flipping FLASHES takes effect from the next.
-const SOFT_LIGHT = 0.35;
+// flipping FLASHES takes effect from the next. The ending's fireworks too.
+export const SOFT_LIGHT = 0.35;
 const skyLight = (reducedMotion: boolean): number => (reducedMotion || !GameState.flashes ? SOFT_LIGHT : 1);
 
 // Festival fireworks: a town event's night (events.ts), 20:00..23:00, one
@@ -70,13 +70,13 @@ const FIREWORK_COLORS = [0xf53cd1, 0x33c4f2, 0x62d93a, 0x9b5cf6, 0xf2483a];
 // baked: its 3s at 15fps were 45 frames of 170KB, a sheet a colour. The rows
 // reach the deepest a star droops (138 cells under the lowest burst, 536px).
 const FIREWORK_ROWS = 280;
-// redrawn this often; a redraw (~1ms for three bursts, headless) and its
-// upload go on two frames
-const FIREWORK_STEP_MS = 1000 / 20;
+// redrawn this often (redrawLive; ~1ms for three bursts, headless); the
+// ending's fireworks too
+export const FIREWORK_STEP_MS = 1000 / 20;
 // a burst is over (its last pop out) this long after its launch, and bursts
 // this long after it (the effect's own RISE)
-const FIREWORK_LIFE_S = 3.1;
-const FIREWORK_RISE_MS = 420;
+export const FIREWORK_LIFE_S = 3.1;
+export const FIREWORK_RISE_MS = 420;
 // While the fireworks are on, the sky behind them darkens a little: the
 // night's navy, deepest under the HUD and gone by FIREWORK_VEIL_H below it,
 // eased in and out over ~2.5s. The snowed-in winter town is pale even at
@@ -105,9 +105,7 @@ const METEOR_GAP_MS = [40000, 110000];
 // third of their light, near gone.
 const METEOR_COLS = 320;
 const METEOR_ROWS = 240;
-// redrawn this often, a redraw (0.1-0.5ms, headless) and its upload on two
-// frames, as the fireworks; the upload's frame counts towards the next, so
-// the star burns at its own speed
+// redrawn this often (redrawLive; 0.1-0.5ms, headless), as the fireworks
 const METEOR_STEP_MS = 1000 / 20;
 // how long the train lingers after the head burns out (the effect's TRAIN)
 const METEOR_TRAIN_S = 1.6;
@@ -151,9 +149,9 @@ const AURORA_SEAM = 28;
 // rows faded in at the band's top and out at its bottom, so neither is a line
 const AURORA_FADE = 10;
 const AURORA_PEAK = 0.7;
-// a half redrawn this often, the halves in turn (2-3ms to draw one in
-// headless Chrome, then the upload on the next frame), so each moves at
-// 10fps; not at all while it is out (day, cloud, snow)
+// a half redrawn this often (redrawLive), the halves in turn (2-3ms to draw
+// one in headless Chrome), so each moves at 10fps; not at all while it is out
+// (day, cloud, snow)
 const AURORA_STEP_MS = 1000 / 20;
 // up with the dark over this long, and down as fast when it clouds over
 const AURORA_EASE_MS = 3500;
@@ -205,8 +203,8 @@ const fixed = <T extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Comp
 
 // A shell colour's 7 steps, dark to white, as pixelfx's own pink ramp has
 // them round 0xf53cd1: a quarter, 0.45 and 0.7 of it, it, then 35%, 70% and
-// all the way to white.
-function shellRamp(c: number): string[] {
+// all the way to white. The ending's fireworks too.
+export function shellRamp(c: number): string[] {
   const rgb = [c >> 16, (c >> 8) & 255, c & 255];
   return [0.25, 0.45, 0.7, 1, 1.35, 1.7, 2].map(
     (k) =>
@@ -224,34 +222,24 @@ function addFireworks(scene: Phaser.Scene): void {
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   // made with the night's first shell: most visits see none
   let sky: ReturnType<typeof addLightCanvas> | undefined;
-  const bursts: Array<{ fx: Fx; age: number }> = [];
-  let wait = 0;
-  let drawn = false;
-  const step = (_time: number, delta: number): void => {
-    if (!sky) return;
-    if (drawn) {
-      drawn = false;
-      sky.upload();
-      sky.image.setVisible(bursts.length > 0);
-      return;
-    }
-    if (!bursts.length) return;
-    wait += delta;
-    if (wait < FIREWORK_STEP_MS) return;
-    // a tab back from the background hands over seconds at once
-    const dt = Math.min(wait, 100) / 1000;
-    wait = 0;
-    for (const b of bursts) {
-      b.fx.update(dt);
-      b.age += dt;
-    }
-    for (let i = bursts.length - 1; i >= 0; i--) if (bursts[i].age >= FIREWORK_LIFE_S) bursts.splice(i, 1);
-    clearFrame(sky.frame);
-    for (const b of bursts) b.fx.draw(sky.frame);
-    drawn = true;
-  };
-  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
+  let bursts: Array<{ fx: Fx; age: number }> = [];
+  redrawLive(scene, FIREWORK_STEP_MS, {
+    active: () => bursts.length > 0,
+    draw: (dt) => {
+      if (!sky) return;
+      for (const b of bursts) {
+        b.fx.update(dt);
+        b.age += dt;
+      }
+      bursts = bursts.filter((b) => b.age < FIREWORK_LIFE_S);
+      clearFrame(sky.frame);
+      for (const b of bursts) b.fx.draw(sky.frame);
+    },
+    upload: () => {
+      sky?.upload();
+      sky?.image.setVisible(bursts.length > 0);
+    },
+  });
 
   const veil = fixed(scene.add.image(0, STATUS_HUD_HEIGHT, "sky-veil"))
     .setOrigin(0, 0)
@@ -298,33 +286,24 @@ function addMeteors(scene: Phaser.Scene, clear: () => boolean): void {
   // made with the first star: most visits see none
   let sky: ReturnType<typeof addLightCanvas> | undefined;
   let star: { m: Meteor; age: number; x: number; y: number; flip: boolean; seed: number; light: number } | undefined;
-  let wait = 0;
-  let drawn = false;
-  const step = (_time: number, delta: number): void => {
-    if (!sky) return;
-    wait += delta;
-    if (drawn) {
-      drawn = false;
-      sky.upload();
-      sky.image.setVisible(!!star);
-      return;
-    }
-    if (!star) return;
-    if (wait < METEOR_STEP_MS) return;
-    // a tab back from the background hands over seconds at once
-    star.age += Math.min(wait, 100) / 1000;
-    wait = 0;
-    clearFrame(sky.frame);
-    if (star.age >= meteorEnd(star.m)) star = undefined;
-    else {
-      const p = painterFor(sky.frame).place(star.x, star.y, star.flip);
-      p.lightK = star.light;
-      drawMeteor(p, star.age, star.m, star.seed, palette);
-    }
-    drawn = true;
-  };
-  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
+  redrawLive(scene, METEOR_STEP_MS, {
+    active: () => !!star,
+    draw: (dt) => {
+      if (!sky || !star) return;
+      star.age += dt;
+      clearFrame(sky.frame);
+      if (star.age >= meteorEnd(star.m)) star = undefined;
+      else {
+        const p = painterFor(sky.frame).place(star.x, star.y, star.flip);
+        p.lightK = star.light;
+        drawMeteor(p, star.age, star.m, star.seed, palette);
+      }
+    },
+    upload: () => {
+      sky?.upload();
+      sky?.image.setVisible(!!star);
+    },
+  });
 
   const fall = (): void => {
     sky ??= addLightCanvas(scene, "sky-meteor", { cols: METEOR_COLS, rows: METEOR_ROWS, cell: ART_PX, depth: SKY_DEPTH });
@@ -342,7 +321,6 @@ function addMeteors(scene: Phaser.Scene, clear: () => boolean): void {
       seed: Phaser.Math.Between(1, 9999),
       light: skyLight(reducedMotion),
     };
-    wait = METEOR_STEP_MS;
   };
   const schedule = (): void => {
     scene.time.delayedCall(Phaser.Math.Between(METEOR_GAP_MS[0], METEOR_GAP_MS[1]), () => {
@@ -501,37 +479,33 @@ function addAurora(scene: Phaser.Scene, clear: () => boolean): void {
   // where in its loop it starts: anywhere, so no two nights open alike
   let t = Math.random() * aurora.meta.duration;
   let level = 0;
-  let wait = AURORA_STEP_MS;
-  let drawn = false;
-  let right = false;
-  const step = (_time: number, delta: number): void => {
-    // up with the dark and gone in daylight, eased so a clear night that
-    // clouds over at midnight fades rather than snaps
-    const ease = delta / AURORA_EASE_MS;
-    level = Phaser.Math.Clamp(level + Phaser.Math.Clamp(wanted() - level, -ease, ease), 0, 1);
-    const shown = baked && level > 0.01;
+  let shown = false;
+  // up with the dark and gone in daylight, eased so a clear night that clouds
+  // over at midnight fades rather than snaps; before redrawLive's, so it
+  // reads this frame's
+  const ease = (_time: number, delta: number): void => {
+    const most = delta / AURORA_EASE_MS;
+    level = Phaser.Math.Clamp(level + Phaser.Math.Clamp(wanted() - level, -most, most), 0, 1);
+    shown = baked && level > 0.01;
     image.setVisible(shown).setAlpha(AURORA_PEAK * level);
-    if (!shown) return;
-    wait += delta;
-    if (drawn) {
-      drawn = false;
-      upload(fade, seam);
-      return;
-    }
-    if (wait < AURORA_STEP_MS) return;
-    // a tab back from the background hands over seconds at once
-    t = (t + Math.min(wait, 250) / 1000) % aurora.meta.duration;
-    wait = 0;
-    drawHalf(right, right ? t + AURORA_OFFSET_S : t);
-    right = !right;
-    drawn = true;
   };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, ease);
+  let right = false;
+  redrawLive(scene, AURORA_STEP_MS, {
+    active: () => shown,
+    maxMs: 250,
+    draw: (dt) => {
+      t = (t + dt) % aurora.meta.duration;
+      drawHalf(right, right ? t + AURORA_OFFSET_S : t);
+      right = !right;
+    },
+    upload: () => upload(fade, seam),
+  });
   scene.game.events.on(Phaser.Core.Events.PRE_STEP, mark);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, bakeField);
-  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
     scene.game.events.off(Phaser.Core.Events.PRE_STEP, mark);
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, bakeField);
-    scene.events.off(Phaser.Scenes.Events.UPDATE, step);
+    scene.events.off(Phaser.Scenes.Events.UPDATE, ease);
   });
 }
