@@ -201,12 +201,13 @@ bun run sim:battle
 
 ### Claude Code 스킬(선택)
 
-Claude Code 로 이 저장소를 작업할 때 Phaser 공식 에이전트 스킬을 쓰려면 저장소 루트에서 설치한다. 출처는 [phaserjs/phaser](https://github.com/phaserjs/phaser) 저장소의 `skills/`(Phaser 공식, MIT)이고, 그중 이 게임에 쓰는 10개만 고른다.
+Claude Code 로 이 저장소를 작업할 때 Phaser 공식 에이전트 스킬을 쓰려면 저장소 루트에서 설치한다. 출처는 [phaserjs/phaser](https://github.com/phaserjs/phaser) 저장소의 `skills/`(Phaser 공식, MIT)이고, 그중 이 게임에 쓰는 15개만 고른다.
 
 ```bash
 DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add phaserjs/phaser -a claude-code --copy -y \
   -s input-keyboard-mouse-touch scenes text-and-bitmaptext scale-and-responsive tweens \
-     render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration
+     render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration \
+     animations cameras events-system time-and-timers graphics-and-shapes
 ```
 
 - bun 이 없으면 `bunx` 를 `npx` 로 바꾸면 된다

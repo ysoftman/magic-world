@@ -1,11 +1,25 @@
 {
   "version": 1,
   "skills": {
+    "animations": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/animations/SKILL.md",
+      "computedHash": "7e5ce476a4bf1a65ba07bd8e0e38e4e8d95c7491563b309ea1e457ac3545ed5f",
+      "installMode": "copy"
+    },
     "audio-and-sound": {
       "source": "phaserjs/phaser",
       "sourceType": "github",
       "skillPath": "skills/audio-and-sound/SKILL.md",
       "computedHash": "0ac3d8b80936f93f78e437cdaa8399efa6054f08244d90eb78de7b5f5ddec337"
+    },
+    "cameras": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/cameras/SKILL.md",
+      "computedHash": "773a3ec2fb544a1504648c68c27a2ce59968e295b4a6c37697bda3f713b3a8f8",
+      "installMode": "copy"
     },
     "designing-retro-arcade-sound-kits": {
       "source": "abagames/agentic-gamedev-skills",
@@ -14,11 +28,25 @@
       "computedHash": "15ac96e4a20698e5bb6a7497cf807d4984e2adab2ed257f59d073cd8e628a99f",
       "installMode": "copy"
     },
+    "events-system": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/events-system/SKILL.md",
+      "computedHash": "8a8248a782f4310e24111c774493a139fcc6057d4afe9ba3e5482145a0848f2b",
+      "installMode": "copy"
+    },
     "filters-and-postfx": {
       "source": "phaserjs/phaser",
       "sourceType": "github",
       "skillPath": "skills/filters-and-postfx/SKILL.md",
       "computedHash": "ed35388be4933697fc56db45d68f3f890fc59f55db9ddaba046cf067dd165e60"
+    },
+    "graphics-and-shapes": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/graphics-and-shapes/SKILL.md",
+      "computedHash": "3ebe08ee9696547649afdf574b290ffd1d676128c722b8e14dea41e883c44520",
+      "installMode": "copy"
     },
     "input-keyboard-mouse-touch": {
       "source": "phaserjs/phaser",
@@ -49,6 +77,13 @@
       "sourceType": "github",
       "skillPath": "skills/text-and-bitmaptext/SKILL.md",
       "computedHash": "8be79e05d2a6c524894f098d22336f28f49b7e108fe533af61d0b74638f84911"
+    },
+    "time-and-timers": {
+      "source": "phaserjs/phaser",
+      "sourceType": "github",
+      "skillPath": "skills/time-and-timers/SKILL.md",
+      "computedHash": "eb877f8396458d3d6bea9398980c7fc33477ae2e84bdb3f84a0e61b8c525d268",
+      "installMode": "copy"
     },
     "tweens": {
       "source": "phaserjs/phaser",

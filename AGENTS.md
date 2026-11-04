@@ -41,6 +41,11 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 | 텍스처 굽기(RenderTexture/DynamicTexture) | `render-textures` |
 | 필터·후처리 | `filters-and-postfx` |
 | 사운드 | `audio-and-sound` |
+| 애니메이션(anims)·구운 시트 재생 | `animations` |
+| 카메라 fade·scroll·필터 | `cameras` |
+| 이벤트·리스너(SHUTDOWN 등) | `events-system` |
+| 시간·타이머(delayedCall·time) | `time-and-timers` |
+| 도형(Rectangle 뒷판·Graphics) | `graphics-and-shapes` |
 | Phaser 4 새 기능, v3 습관 피하기 | `v4-new-features`, `v3-to-v4-migration` |
 
 - 설치는 저장소 루트에서 아래 명령으로 한다(사용자가 설치한 그대로). 출처와 내용 해시는
@@ -50,7 +55,8 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   ```bash
   DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add phaserjs/phaser -a claude-code --copy -y \
     -s input-keyboard-mouse-touch scenes text-and-bitmaptext scale-and-responsive tweens \
-       render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration
+       render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration \
+       animations cameras events-system time-and-timers graphics-and-shapes
   ```
 
 - 효과음을 설계하거나 고칠 때는 `designing-retro-arcade-sound-kits`(abagames/agentic-gamedev-skills, MIT)를 먼저
