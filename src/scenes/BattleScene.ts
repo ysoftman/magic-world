@@ -2287,10 +2287,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
-  // boss or giant as the sprite itself is
+  // boss or giant as the sprite itself is; on the hero it turns to face left,
+  // the way the foe's blows go
   private fxOn(sprite: Phaser.GameObjects.Sprite, key: string, ms: number, min = 0): void {
     const big = sprite === this.enemySprite && (this.enemy.boss || this.enemy.giant);
-    playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2);
+    playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2, sprite === this.playerSprite);
   }
 
   // an animation's duration at the player's BATTLE SPEED, never below min

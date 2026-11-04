@@ -1,6 +1,9 @@
 import Phaser from "phaser";
+import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
+import { ART_PX } from "./pixelart";
 
 // Camera shake and full-screen flash behind the SCREEN SHAKE / FLASHES
 // settings. Call these instead of camera.shake()/camera.flash() so a player
@@ -73,11 +76,12 @@ export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
 }
 
 // The battle's effects as pixel-art sprite sheets, drawn here in code when the
-// first battle starts (bakeBattleFx): a sheet is a row of square frames on a
-// 2px cell -- 32 cells (64px) for a burst, 16 (32px) for a projectile --
-// and BattleScene shows them at 2x, the same 4px cell the 32-cell monsters
-// are shown at. Each frame is drawn from a few shapes (rays, rings, blobs,
-// jagged lines) through a seeded random, so every boot draws the same sheet.
+// first battle starts (bakeBattleFx). Two kinds: pixelfx effects
+// (PIXEL_SHEETS, below) sampled into frames, and the older hand-drawn ones
+// (SHEETS), a row of square frames on a 2px cell -- 32 cells (64px) for a
+// burst, 16 (32px) for a projectile -- each drawn from a few shapes (rays,
+// rings, blobs, jagged lines) through a seeded random, so every boot draws the
+// same sheet. Either way a sheet is shown on the battlers' own 4px cell.
 // playFx() steps a sheet's frames across a given duration, so an effect fills
 // exactly the time the old circle or burst it replaced took, and the battle's
 // pace does not change.
@@ -488,28 +492,6 @@ const SHEETS: Record<string, Sheet> = {
       }
     },
   },
-  // a blow landing on the hero: a small star of impact
-  "fx-hit": {
-    cells: 32,
-    frames: 4,
-    draw: (put, f) => {
-      const len = [5, 9, 10, 10][f];
-      const from = [0, 2, 5, 8][f];
-      for (let k = 0; k < 6; k++) {
-        const a = (k * Math.PI) / 3;
-        line(
-          put,
-          C + Math.cos(a) * from,
-          C + Math.sin(a) * from,
-          C + Math.cos(a) * len,
-          C + Math.sin(a) * len,
-          f < 2 ? 1 : 0.5,
-          [0xffffff, 0xfde047, 0xfb923c],
-        );
-      }
-      if (f < 2) disc(put, C, C, 3 - f, [0xffffff, 0xfde047]);
-    },
-  },
   // the projectiles, 16 cells, two frames of flicker each, flying right
   "fx-fireball": {
     cells: 16,
@@ -554,13 +536,128 @@ const SHEETS: Record<string, Sheet> = {
   },
 };
 
+// The pixelfx effects (github:patch-gg/pixelfx, MIT, by Patch and Hugo
+// Duprez). A pixelfx effect is code drawing into a pixel buffer over time;
+// here it is sampled into a sheet's frames at boot like the ones above, one
+// pixelfx pixel to a texel. Its pixels are drawn for a 24x38 figure, so one is
+// one art cell: shown at ART_PX x the battler's scale, 4px (6px on a boss).
+interface PixelSheet {
+  /** the effect: `import * as name from "pixelfx/fx/<category>/<name>"` */
+  fx: FxModule;
+  /** over the effect's own options (its meta.options): palette, seed, knobs */
+  opts?: Record<string, unknown>;
+  /**
+   * the stretch of the effect's own time sampled, in seconds, 0..duration by
+   * default: playFx squeezes it into its ms, so a long tail is left off here
+   */
+  span?: [number, number];
+  /** frames sampled evenly across the span; one per 1/meta.fps by default */
+  frames?: number;
+  /** the point put on the battler's middle, in the effect's pixels from its anchor; 0, 0 by default */
+  focus?: [number, number];
+  /** drawn facing right: mirrored when the blow goes left, onto the hero */
+  directional?: boolean;
+}
+
+// a 32-cell battler's middle to its feet, in art cells: an impact this high
+// (its `height`) has its sparks bounce on the ground the battler stands on
+const FEET = 16;
+
+const PIXEL_SHEETS: Record<string, PixelSheet> = {
+  // a blow landing: a lopsided cross flare round a white core, then a cone of
+  // sparks that falls and bounces
+  "fx-hit": { fx: hitSpark, opts: { height: FEET }, span: [0, 0.45], focus: [0, -FEET], directional: true },
+};
+
+// a sheet's frames, how many texels to an art cell, the texture point put on
+// (x, y) as a fraction of a frame, and whether it turns to face the blow
+interface SheetInfo {
+  frames: number;
+  texel: number;
+  origin: [number, number];
+  directional: boolean;
+}
+
+function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number } {
+  const [from, to] = sheet.span ?? [0, sheet.fx.meta.duration];
+  return { from, to, frames: sheet.frames ?? Math.max(1, Math.round((to - from) * sheet.fx.meta.fps)) };
+}
+
+function infoOf(key: string): SheetInfo {
+  const pixel = PIXEL_SHEETS[key];
+  if (!pixel) return { frames: SHEETS[key].frames, texel: FX_CELL, origin: [0.5, 0.5], directional: false };
+  const {
+    size: [w, h],
+    origin: [ax, ay],
+  } = pixel.fx.meta;
+  const [fx, fy] = pixel.focus ?? [0, 0];
+  return { frames: spanOf(pixel).frames, texel: 1, origin: [(ax + fx) / w, (ay + fy) / h], directional: !!pixel.directional };
+}
+
+// the widest texture a sheet may be: some mobile GPUs go no further (AGENTS.md)
+const MAX_TEXTURE_W = 2048;
+// glow fades out over a frame's last pixels, so a halo the frame cuts off does
+// not end in a straight edge (as pixelfx's own sheet export does)
+const EDGE_FADE = 8;
+
+function fadeEdges({ w, h, light }: FxFrame): void {
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const e = Math.min(x, y, w - 1 - x, h - 1 - y);
+      if (e >= EDGE_FADE || !(light[i] & 0xffffff)) continue;
+      const u = (e + 0.5) / EDGE_FADE;
+      const k = u * u * (3 - 2 * u);
+      const l = light[i];
+      light[i] =
+        (l & 0xff000000) |
+        Math.round((l & 255) * k) |
+        (Math.round(((l >>> 8) & 255) * k) << 8) |
+        (Math.round(((l >>> 16) & 255) * k) << 16);
+    }
+}
+
+// The frames sit in a grid no wider than MAX_TEXTURE_W, each the effect's own
+// canvas (meta.size) with its anchor at meta.origin; light (glow) becomes
+// colour with alpha, which reads as a glow over the dark battle backdrops.
+function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
+  const {
+    size: [w, h],
+    origin: [ax, ay],
+  } = sheet.fx.meta;
+  const { from, to, frames } = spanOf(sheet);
+  const cols = Math.min(frames, Math.max(1, Math.floor(MAX_TEXTURE_W / w)));
+  const tex = scene.textures.createCanvas(key, cols * w, Math.ceil(frames / cols) * h);
+  if (!tex) return;
+  const ctx = tex.getContext();
+  const fx = createFx(sheet.fx, sheet.opts);
+  const frame = createFrame(w, h, -ax, -ay);
+  const img = new ImageData(w, h);
+  if (from > 0) fx.update(from);
+  for (let f = 0; f < frames; f++) {
+    if (f > 0) fx.update((to - from) / frames);
+    clearFrame(frame);
+    fx.draw(frame);
+    fadeEdges(frame);
+    composite(frame, img.data, null);
+    const x = (f % cols) * w;
+    const y = Math.floor(f / cols) * h;
+    ctx.putImageData(img, x, y);
+    tex.add(f, 0, x, y, w, h);
+  }
+  tex.refresh();
+}
+
+// seeded by its key, so taking a sheet out of the table redraws no other
+const seedOf = (key: string): number => [...key].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 2147483647, 101);
+
 /** Draws every sheet once into its own texture, frames numbered 0..n-1. */
 export function bakeBattleFx(scene: Phaser.Scene): void {
-  Object.entries(SHEETS).forEach(([key, sheet], i) => {
-    if (scene.textures.exists(key)) return;
+  for (const [key, sheet] of Object.entries(SHEETS)) {
+    if (scene.textures.exists(key)) continue;
     const size = sheet.cells * FX_CELL;
     const tex = scene.textures.createCanvas(key, size * sheet.frames, size);
-    if (!tex) return;
+    if (!tex) continue;
     const ctx = tex.getContext();
     for (let f = 0; f < sheet.frames; f++) {
       const put: Cells = (x, y, colour) => {
@@ -568,21 +665,44 @@ export function bakeBattleFx(scene: Phaser.Scene): void {
         ctx.fillStyle = `#${colour.toString(16).padStart(6, "0")}`;
         ctx.fillRect(f * size + x * FX_CELL, y * FX_CELL, FX_CELL, FX_CELL);
       };
-      sheet.draw(put, f, seeded(101 + i * 31 + f * 7));
+      sheet.draw(put, f, seeded(seedOf(key) + f * 7));
       tex.add(f, 0, f * size, 0, size, size);
     }
     tex.refresh();
-  });
+  }
+  for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
+}
+
+// a sheet's sprite at (x, y) on the cell of a battler shown at `scale`; a
+// negative scaleX mirrors it round its origin (flipX turns a frame round its
+// middle, which would move an off-centre origin)
+function fxSprite(scene: Phaser.Scene, key: string, x: number, y: number, scale: number, left: boolean): Phaser.GameObjects.Sprite {
+  const { texel, origin, directional } = infoOf(key);
+  const s = (scale * ART_PX) / texel;
+  return scene.add
+    .sprite(x, y, key, 0)
+    .setOrigin(...origin)
+    .setScale(left && directional ? -s : s, s);
 }
 
 /**
  * Plays a sheet once at (x, y): its frames stepped evenly across `ms`, then
- * gone. 2x by default, the monsters' own scale. Created at depth 0, so a
- * damage number or label added after it draws on top.
+ * gone. `scale` is the battler's it plays over: 2, the monsters' own, by
+ * default. `left`: the blow goes left (onto the hero), so a directional sheet
+ * is mirrored. Created at depth 0, so a damage number or label added after it
+ * draws on top.
  */
-export function playFx(scene: Phaser.Scene, key: string, x: number, y: number, ms: number, scale = 2): Phaser.GameObjects.Sprite {
-  const frames = SHEETS[key].frames;
-  const sprite = scene.add.sprite(x, y, key, 0).setScale(scale);
+export function playFx(
+  scene: Phaser.Scene,
+  key: string,
+  x: number,
+  y: number,
+  ms: number,
+  scale = 2,
+  left = false,
+): Phaser.GameObjects.Sprite {
+  const { frames } = infoOf(key);
+  const sprite = fxSprite(scene, key, x, y, scale, left);
   scene.tweens.addCounter({
     from: 0,
     to: frames,
@@ -593,10 +713,10 @@ export function playFx(scene: Phaser.Scene, key: string, x: number, y: number, m
   return sprite;
 }
 
-/** A sheet's two-frame flicker, looping until the caller destroys it. */
+/** A sheet's frames over and over, `frameMs` each, until the caller destroys it. */
 export function loopFx(scene: Phaser.Scene, key: string, x: number, y: number, frameMs: number, scale = 2): Phaser.GameObjects.Sprite {
-  const frames = SHEETS[key].frames;
-  const sprite = scene.add.sprite(x, y, key, 0).setScale(scale);
+  const { frames } = infoOf(key);
+  const sprite = fxSprite(scene, key, x, y, scale, false);
   let f = 0;
   const timer = scene.time.addEvent({
     delay: Math.max(16, frameMs),
