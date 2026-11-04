@@ -375,7 +375,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   Z 8~10번이었다(지금 2~3번). 결산에 문구를 더하면 `victory()` 의 최악 길이 주석(4자리 수치·13글자
   이름)을 다시 잰다.
 - 전투 메뉴에 버튼을 더하면 BattleScene `layoutMenu()` 위 폭 주석을 다시 잰다. 실제 사례: D:DEFEND
-  하나로 두 줄 메뉴가 키보드 Lv18→Lv9 로 당겨졌다. 전투 규칙을 바꾸면
+  하나로 두 줄 메뉴가 키보드 Lv18→Lv9 로, X:SKILL(Lv2)로 다시 Lv5(HEAL)로 당겨졌다. 전투 규칙을 바꾸면
   `scripts/sim-battle.ts` 의 같은 자리(cast·choose 등 BattleScene 을 옮긴 곳)도 고친다(실제 사례: CHAIN,
   DEFEND). 강타 예고(`BOSS_TELLS`)를 보스 아닌 몬스터에 붙일 때는 `chance` 로 확률을 낮추고, `mult` 는 지역
   입장 레벨에서 막지 않은 강타가 최대 HP 15~25% 가 되게 잰다(밤 x1.25 ATK 가 그대로 곱해진다).
@@ -383,6 +383,20 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   묶인 동작은 탭 경로를 함께 만든다. 실제 사례: 아이템 목록을 닫는 길이 ESC 뿐이라 터치에서는
   아이템을 쓰지 않고는 나올 수 없었고, 재고가 0 이면 전투가 멈췄다 → 지금은 목록 밖을 탭하면
   메뉴로 돌아간다(`BattleScene` 의 `closeItems`).
+- 전투 SKILL 목록(X:SKILL, 첫 기술을 배우는 Lv2 부터)은 배우는 순서대로 3열 x 4행, 한 쪽 12개다(26개면 3쪽).
+  4열은 긴 이름(DAGGER FLURRY 13글자, 12글자 넷)이 커서 넷과 1320px 라 화면에 안 들어가고, 4행이 자리
+  전부다(BattleScene `SKILLS_PER_ROW` 위 주석). 그 4행이 아이템 목록의 설명 줄·키 안내 자리(y 474..598)를 써서,
+  목록이 열린 동안 커서 기술의 `이름  MP  설명`(INFO, `bodyStyle(33)` 54글자, `battleRules.ts` 의
+  `MoveBase.info`)과 키 안내는 메시지 창 안에 놓이고 전투 줄은 숨는다. 줄 끝의 H/L 이 쪽을 넘기고, 터치는 키
+  안내 오른쪽 칩 `< 1/3 >` 의 왼쪽·오른쪽 절반을 탭한다. 커서는 `lastSkill` 로 다음 전투에도 마지막에 쓴 기술에
+  남는다(저장하지 않아 새로고침하면 처음). 무기 기술의 MP 는 최대 MP 의 비율(`mpShare`, `skillCost`)이다. 실제
+  사례: 고정 MP 였을 때 DOUBLE SLASH(Lv2, 2 MP)는 피해만 ATK 를 따라 커져 Lv30 에서 MP 당 FIGHT 보다 약 9 를 더
+  줬다(주문은 약 1.5, `battleRules.ts` 의 SKILLS 위 주석). 새 스킬·기술은 `battleRules.ts` 의 이름 목록·`SKILLS`,
+  `skillFx.ts`·`techFx.ts` 의 `SKILL_HITS`/`TECH_HITS`·`PLAYS`·`*_SHEET_KEYS`(기술은 `TECH_MELEE` 도),
+  `skillSfx.ts` 의 `VOICES` 를 같이 맞춘다. 빠진 이름은 tsc 가, 대수나 무기/마법 구분이 어긋나면 dev 빌드의
+  BattleScene 이 console.error 로 잡지만 `VOICES` 의 `hits` 는 검사가 없다(모자라면 마지막 타격음을 되풀이).
+  수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7)과
+  견주고, `--skills` 를 `--greedy` 와 견줘 보스전 라운드를 본다.
 
 ## 작업 완료 후 중간 산출물 정리
 
