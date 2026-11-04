@@ -270,11 +270,28 @@ const VOICES: Record<SkillName | TechName, Voice> = {
   "SOUL DRAIN": {
     kind: "skill",
     hits: 1,
-    mix: [-0.8, 3],
-    cast: sound("an eerie moan: a triangle A3 bending down to E3 under a slow wide vibrato, a breath of noise", KEY, [
-      { at: 0, dur: 0.5, wave: "triangle", freq: hz("A3"), to: hz("E3"), vol: 0.07, attack: 0.08, vib: { rate: 6, cents: 40 } },
-      { at: 0, dur: 0.45, wave: "noise", freq: 6000, vol: 0.025, attack: 0.1, filter: { type: "bandpass", freq: 900, q: 3 } },
-    ]),
+    mix: [1, 3],
+    // its moan sits at 165-220Hz: a pulse an octave up moans with it (A4 to
+    // E4, the same wide vibrato) so it carries on small speakers
+    cast: sound(
+      "an eerie moan: a triangle A3 bending down to E3 under a slow wide vibrato, a pulse an octave up with it, a breath of noise",
+      KEY,
+      [
+        { at: 0, dur: 0.5, wave: "triangle", freq: hz("A3"), to: hz("E3"), vol: 0.07, attack: 0.08, vib: { rate: 6, cents: 40 } },
+        {
+          at: 0,
+          dur: 0.5,
+          wave: "pulse25",
+          freq: hz("A4"),
+          to: hz("E4"),
+          vol: 0.07,
+          attack: 0.08,
+          vib: { rate: 6, cents: 40 },
+          filter: { type: "lowpass", freq: 2500 },
+        },
+        { at: 0, dur: 0.45, wave: "noise", freq: 6000, vol: 0.025, attack: 0.1, filter: { type: "bandpass", freq: 900, q: 3 } },
+      ],
+    ),
     hit: () =>
       sound("a soul ripped loose: a hollow triangle wail rising A4 to A5 with vibrato over a sucking sweep of noise", KEY, [
         { at: 0, dur: 0.06, wave: "square", freq: hz("A3"), vol: 0.05 },
@@ -286,27 +303,66 @@ const VOICES: Record<SkillName | TechName, Voice> = {
   QUAKE: {
     kind: "skill",
     hits: 1,
-    mix: [-3.3, -8.2],
-    cast: sound("the ground grumbling: a dull rumble of slow noise under a low sawtooth on E2", KEY, [
-      { at: 0, dur: 0.5, wave: "noise", freq: 1200, vol: 0.07, attack: 0.15, filter: { type: "lowpass", freq: 250 } },
-      { at: 0.05, dur: 0.45, wave: "sawtooth", freq: hz("E2"), vol: 0.045, attack: 0.2, filter: { type: "lowpass", freq: 200 } },
-    ]),
-    hit: () =>
-      sound("the earth slams: a crushed low boom, a driven sawtooth falling A1 to E1 under rumbling noise", KEY, [
-        { at: 0, dur: 0.03, wave: "square", freq: hz("E3"), vol: 0.06 },
+    mix: [-1.5, -8.2],
+    // its rumble is all under 300Hz, so a pulse an octave up (E3) and a
+    // trembling square two up (E4), with a gritty band of noise, carry it on
+    // a laptop's speakers
+    cast: sound(
+      "the ground grumbling: a dull rumble of slow noise under a low sawtooth on E2, a trembling E3/E4 growl and grit over it",
+      KEY,
+      [
+        { at: 0, dur: 0.5, wave: "noise", freq: 1200, vol: 0.07, attack: 0.15, filter: { type: "lowpass", freq: 250 } },
+        { at: 0.05, dur: 0.45, wave: "sawtooth", freq: hz("E2"), vol: 0.045, attack: 0.2, filter: { type: "lowpass", freq: 200 } },
+        { at: 0.05, dur: 0.45, wave: "pulse25", freq: hz("E3"), vol: 0.07, attack: 0.2, filter: { type: "lowpass", freq: 1000 } },
         {
-          at: 0,
-          dur: 0.55,
-          wave: "sawtooth",
-          freq: hz("A1"),
-          to: hz("E1"),
-          vol: 0.13,
-          hold: 0.06,
-          drive: 0.7,
-          filter: { type: "lowpass", freq: 400 },
+          at: 0.08,
+          dur: 0.42,
+          wave: "square",
+          freq: hz("E4"),
+          vol: 0.045,
+          attack: 0.25,
+          vib: { rate: 9, cents: 25 },
+          filter: { type: "lowpass", freq: 1600 },
         },
-        { at: 0, dur: 0.5, wave: "noise", freq: 2500, to: 800, vol: 0.1, crush: 4, filter: { type: "lowpass", freq: 900, to: 250 } },
-      ]),
+        { at: 0, dur: 0.5, wave: "noise", freq: 5000, vol: 0.08, attack: 0.15, filter: { type: "bandpass", freq: 800, q: 1.5 } },
+      ],
+    ),
+    hit: () =>
+      // the boom is mostly under 150Hz: its fall doubled an octave up (A2 to
+      // E2, driven) and two up (A3 to E3), and a crunch of mid noise, so a
+      // laptop hears the slam
+      sound(
+        "the earth slams: a crushed low boom, a driven sawtooth falling A1 to E1 under rumbling noise, doubled A2/A3 and crunching",
+        KEY,
+        [
+          { at: 0, dur: 0.03, wave: "square", freq: hz("E3"), vol: 0.06 },
+          {
+            at: 0,
+            dur: 0.45,
+            wave: "pulse25",
+            freq: hz("A2"),
+            to: hz("E2"),
+            vol: 0.16,
+            hold: 0.04,
+            drive: 0.5,
+            filter: { type: "lowpass", freq: 1500 },
+          },
+          { at: 0, dur: 0.3, wave: "square", freq: hz("A3"), to: hz("E3"), vol: 0.09, filter: { type: "lowpass", freq: 2000 } },
+          { at: 0, dur: 0.3, wave: "noise", freq: 9000, to: 4000, vol: 0.14, crush: 4, filter: { type: "bandpass", freq: 1200, q: 1.2 } },
+          {
+            at: 0,
+            dur: 0.55,
+            wave: "sawtooth",
+            freq: hz("A1"),
+            to: hz("E1"),
+            vol: 0.13,
+            hold: 0.06,
+            drive: 0.7,
+            filter: { type: "lowpass", freq: 400 },
+          },
+          { at: 0, dur: 0.5, wave: "noise", freq: 2500, to: 800, vol: 0.1, crush: 4, filter: { type: "lowpass", freq: 900, to: 250 } },
+        ],
+      ),
   },
 
   EMP: {
@@ -552,8 +608,10 @@ const VOICES: Record<SkillName | TechName, Voice> = {
   "SCYTHE REAP": {
     kind: "tech",
     hits: 1,
-    mix: [-0.8, 3],
-    cast: sound("a slow eerie whoosh over a hollow sine A3, C4, E4 rising underneath", KEY, [
+    mix: [1.5, 3],
+    // the sines' chord sits at 220-330Hz: pulses an octave up (A4, C5, E5)
+    // trace it so it carries on small speakers
+    cast: sound("a slow eerie whoosh over a hollow sine A3, C4, E4 rising underneath, pulses an octave up tracing it", KEY, [
       {
         at: 0,
         dur: 0.45,
@@ -567,6 +625,9 @@ const VOICES: Record<SkillName | TechName, Voice> = {
       { at: 0, dur: 0.45, wave: "sine", freq: hz("A3"), vol: 0.035, attack: 0.1 },
       { at: 0.1, dur: 0.35, wave: "sine", freq: hz("C4"), vol: 0.03, attack: 0.08 },
       { at: 0.2, dur: 0.25, wave: "sine", freq: hz("E4"), vol: 0.025, attack: 0.06 },
+      { at: 0, dur: 0.45, wave: "pulse25", freq: hz("A4"), vol: 0.05, attack: 0.1, filter: { type: "lowpass", freq: 2500 } },
+      { at: 0.1, dur: 0.35, wave: "pulse25", freq: hz("C5"), vol: 0.045, attack: 0.08, filter: { type: "lowpass", freq: 2500 } },
+      { at: 0.2, dur: 0.25, wave: "pulse25", freq: hz("E5"), vol: 0.04, attack: 0.06, filter: { type: "lowpass", freq: 2500 } },
     ]),
     hit: () =>
       sound("a cold reaping slice: a ringing metal-noise shear and a triangle falling A4 to A3", KEY, [
