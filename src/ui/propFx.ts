@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import type { FxModule } from "pixelfx";
+import * as campfire from "pixelfx/fx/fire/campfire";
 import * as torch from "pixelfx/fx/fire/torch";
 import * as toxicPuddle from "pixelfx/fx/nature/toxic-puddle";
 import { warmSheets } from "../fx";
@@ -29,6 +30,29 @@ export const TORCH: FieldFx = {
   key: "prop-torch",
   sheet: { fx: torch, frames: 30, crop: around(torch, [-20, -46, 21, 16]) },
   ms: torch.meta.duration * 1000,
+  loop: true,
+};
+
+/**
+ * The BLACKSMITH's hearth burning (fire/campfire, its flames held to height
+ * 14): tongues licking up off the coals, sparks and embers, cut to the
+ * forge's hearth opening (art/landmarks.ts FORGE, 12 x 11 cells at the art's
+ * 4px, 24 x 22 here), so the logs' ends go in under its jambs and the tallest
+ * tips under its lintel, as in a fire inside it. The logs in the forge's
+ * own blacks and browns (FORGE_PALETTE's D, b, T, t), charred rather than the
+ * campfire's fresh wood. Its 3s loop at 15fps; light 0.5, the glow filling
+ * the opening and fading at its edges (fx.ts EDGE_FADE) without washing out
+ * the flames in it.
+ */
+export const HEARTH: FieldFx = {
+  key: "prop-hearth",
+  sheet: {
+    fx: campfire,
+    opts: { height: 14, light: 0.5, wood: ["#140c10", "#1d1424", "#2a1a14", "#4a2f1a", "#7a4f2a", "#9a6a3a"] },
+    frames: 45,
+    crop: around(campfire, [-12, -19, 12, 3]),
+  },
+  ms: campfire.meta.duration * 1000,
   loop: true,
 };
 

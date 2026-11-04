@@ -94,6 +94,7 @@ import { LuckyWheel } from "../ui/LuckyWheel";
 import { MapEditor } from "../ui/MapEditor";
 import { Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, type NightLight, NightOverlay } from "../ui/NightOverlay";
+import { addProp, HEARTH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { RankingUI } from "../ui/RankingUI";
 import { SettingsUI } from "../ui/SettingsUI";
@@ -161,7 +162,14 @@ const HOUSE_DEPTH = OBJECT_LAYER_DEPTH + 1;
 // forge's hearth with a slow flicker.
 const WORKPLACES: Record<
   (typeof WORKPLACE_LANDMARKS)[number],
-  { key: string; roof: number; lights: ReadonlyArray<{ dx: number; dy: number; radius: number; color?: number; pulseMs?: number }> }
+  {
+    key: string;
+    roof: number;
+    lights: ReadonlyArray<{ dx: number; dy: number; radius: number; color?: number; pulseMs?: number }>;
+    // a fire burning in its art (propFx.ts HEARTH), its anchor as an offset
+    // from the building's centre
+    hearth?: { dx: number; dy: number };
+  }
 > = {
   NPC_POS: {
     key: "hut-elder",
@@ -172,7 +180,14 @@ const WORKPLACES: Record<
     ],
   },
   SHOP_POS: { key: "stall-shop", roof: 20, lights: [{ dx: -46, dy: -4, radius: 32 }] },
-  BLACKSMITH_POS: { key: "forge", roof: 36, lights: [{ dx: 28, dy: 48, radius: 44, color: 0xff8a3d, pulseMs: 900 }] },
+  // the hearth fire's anchor, its logs' line, 6px over the opening's foot
+  // (x +4..+52, y +12..+56 of the art's centre), in the middle of it
+  BLACKSMITH_POS: {
+    key: "forge",
+    roof: 36,
+    lights: [{ dx: 28, dy: 48, radius: 44, color: 0xff8a3d, pulseMs: 900 }],
+    hearth: { dx: 28, dy: 50 },
+  },
   ARENA_POS: { key: "gate-arena", roof: 24, lights: [{ dx: -2, dy: -2, radius: 32 }] },
   GAMBLER_POS: { key: "tent-gambler", roof: 12, lights: [{ dx: -30, dy: 35, radius: 32 }] },
   HUNTER_POS: { key: "lodge-hunter", roof: 32, lights: [{ dx: -10, dy: 24, radius: 32 }] },
@@ -942,11 +957,13 @@ export class TownScene extends Phaser.Scene {
   // skin, its lamps lit at night.
   private addWorkplace(landmark: (typeof WORKPLACE_LANDMARKS)[number]): void {
     const pos = EDITABLE_POS[landmark];
-    const { key, lights } = WORKPLACES[landmark];
+    const { key, lights, hearth } = WORKPLACES[landmark];
     const x = pos.x + TILE / 2;
     const y = pos.y - TILE * 1.5;
     this.track(landmark, addGroundShadow(this, { x, y }, { w: 120, h: 18, yOffset: 60, depth: HOUSE_DEPTH }));
     this.track(landmark, this.add.image(x, y, seasonLook("town") === "winter" ? `${key}-winter` : key).setDepth(HOUSE_DEPTH));
+    // at the art's depth, added after it so over it, under the hero (10)
+    if (hearth) this.track(landmark, addProp(this, HEARTH, x + hearth.dx, y + hearth.dy, HOUSE_DEPTH));
     this.addBlocker(landmark, x, y, TILE * 2, TILE * 2);
     for (const l of lights) {
       const light = {
