@@ -6,6 +6,7 @@ import { GameState } from "../gameState";
 import { mealBattles } from "../home";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { PanelFx, WARM_BURST } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -87,6 +88,8 @@ export class KitchenUI {
   private msg: PixelText;
   private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
+  // the burst on a dish served
+  private fx: PanelFx;
 
   private upQueued = false;
   private downQueued = false;
@@ -95,6 +98,7 @@ export class KitchenUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, WARM_BURST);
     const fixed = <
       T extends Phaser.GameObjects.Components.Visible & Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth,
     >(
@@ -229,6 +233,11 @@ export class KitchenUI {
     Sfx.buy();
     this.showMsg(`${MEALS[key].name} IS SERVED! ${battles} BATTLES`);
     this.refresh();
+    // on the dish's icon, at the screen's own pixel as the icons are drawn
+    // (64px Scale2x art at half size): its ring 41px round, within the rows
+    // either side and the panel's left edge (the icon at x 246)
+    const icon = this.icons[this.index];
+    this.fx.play(WARM_BURST, icon.x, icon.y, 1);
   }
 
   private cancel(): void {
@@ -289,11 +298,13 @@ export class KitchenUI {
     this.active = false;
     this.confirming = false;
     this.msgTimer?.remove();
+    this.fx.clear();
     this.setShown(false);
   }
 
   destroy(): void {
     this.msgTimer?.remove();
+    this.fx.clear();
     for (const o of [this.dim, this.panel, this.title, this.pantryText, this.cursor, this.info, this.table, this.msg, this.hint])
       o.destroy();
     for (const t of [...this.names, ...this.icons, ...this.statuses, ...this.needs, ...this.needIcons]) t.destroy();
