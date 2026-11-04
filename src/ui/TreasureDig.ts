@@ -1,9 +1,11 @@
 import Phaser from "phaser";
+import * as chestOpen from "pixelfx/fx/pickups/chest-open";
+import * as poof from "pixelfx/fx/spawn/poof";
 import { Sfx } from "../audio";
 import { PIXEL } from "../config";
 import { GameState } from "../gameState";
 import { SOLID, T_LAVA_A, T_LAVA_B, T_PATH, T_SOIL, T_WATER_A, T_WATER_B, TILE } from "../levels";
-import { makeTexture, showToast } from "../pixelart";
+import { ART_PX, makeTexture, showToast } from "../pixelart";
 import {
   DIG_RADIUS,
   digUp,
@@ -14,6 +16,7 @@ import {
   type TreasureMap,
   type TreasureRegion,
 } from "../treasure";
+import { type FieldFx, fieldFxSheets, playFieldFxOnce, warmFieldFx } from "./fieldFx";
 
 const GLINT_KEY = "treasure-glint";
 // a small four-point twinkle, pale gold, drawn blocky (no Scale2x)
@@ -24,6 +27,58 @@ const GLINT_ALPHA = 0.75;
 const GLINT_BREATH_MS = 1400;
 // on the ground: over the meadow's flowers and stones (4), under shadows (5)
 const GLINT_DEPTH = 4.5;
+
+// The dig itself, played on the X (pixelfx sheets, ui/fieldFx.ts): a burst of
+// soil, out of which a chest rattles, kicks its lid open and throws its gold
+// out along the ground, gathers it back and is gone in a glitter. Only a
+// picture: the find is the toast's. One pixelfx pixel to the hero's 2px cell
+// (ART_PX), so the chest is 48px wide, three quarters of a tile.
+const CHEST: FieldFx = {
+  key: "fx-dig-chest",
+  sheet: {
+    fx: chestOpen,
+    // from the first rattle (the chest stood still before it) to the last of
+    // the glitter. The crop is everything it draws, the gold spilt widest:
+    // 12 frames a row, 2016x246.
+    span: [0.1, 4.3],
+    frames: 36,
+    crop: [2, 28, 170, 110],
+  },
+  // its 4.2s at 1.6x: open 0.4s in, the gold gathered back at 1.5s and the
+  // glitter gone by 2.6s, past the find's 1.3s toast; 14 frames a second
+  ms: 2600,
+};
+const DUST: FieldFx = {
+  key: "fx-dig-dust",
+  // a cartoon poof in soil tones: a ring of round dust balls, clods spun off,
+  // the cloud lifting away. From the end of its white pop, at half its glow:
+  // whole, it was a 40px white flash.
+  sheet: {
+    fx: poof,
+    opts: {
+      palette: ["#33281c", "#6e5a40", "#927a58", "#b89f78", "#dcc8a2", "#f4ead2"],
+      stars: ["#5c4127", "#8e6638", "#b88a52"],
+      light: 0.5,
+    },
+    span: [0.15, 1.2],
+    frames: 14,
+    crop: [14, 14, 106, 92],
+  },
+  // lifting off the chest as its lid kicks open
+  ms: 750,
+};
+// Over the hero and the NPCs (10) and the guide arrow (10.5), so a hero
+// standing on the X still sees the chest; under the name tags (11), which it
+// must not cover, and so under the hero's sword and shield too. The soil goes
+// over the chest, hiding it as it appears. Under the night (90), which darkens
+// both with the ground round them.
+const CHEST_DEPTH = 10.6;
+const DUST_DEPTH = 10.7;
+// the effects' floor, under the X's middle: the chest stands inside its tile
+const FLOOR_Y = TILE / 4;
+
+/** The dig's sheets by key, for a warm-up ahead of the field (fx.ts warmBattleFx). */
+export const DIG_SHEETS = fieldFxSheets(CHEST, DUST);
 
 /**
  * Treasure maps in one roaming scene (treasure.ts): a faint glint on the
@@ -60,6 +115,11 @@ export class TreasureDigger {
     resettleTreasureMaps(GameState.treasureMaps);
     if (!scene.textures.exists(GLINT_KEY)) makeTexture(scene, GLINT_KEY, GLINT, GLINT_PALETTE, PIXEL);
     for (let i = 0; i < MAX_MAPS; i++) this.glints.push(scene.add.image(0, 0, GLINT_KEY).setDepth(GLINT_DEPTH).setVisible(false));
+    // The dig's sheets, a slice a frame from here on, long before the hero
+    // can walk to an X; one not in by the dig is baked there. Maps come from
+    // fights only, so a scene that holds none now can't dig before it starts
+    // again.
+    if (this.here().length > 0) warmFieldFx(scene, CHEST, DUST);
     const onUpdate = (time: number): void => this.glow(time);
     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, onUpdate);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, onUpdate));
@@ -87,6 +147,10 @@ export class TreasureDigger {
     GameState.treasureMaps.splice(GameState.treasureMaps.indexOf(map), 1);
     GameState.mapsDug += 1;
     Sfx.chest();
+    const x = map.tx * TILE + TILE / 2;
+    const y = map.ty * TILE + TILE / 2 + FLOOR_Y;
+    playFieldFxOnce(this.scene, CHEST, x, y, ART_PX, CHEST_DEPTH);
+    playFieldFxOnce(this.scene, DUST, x, y, ART_PX, DUST_DEPTH);
     // before the save, so its "SAVED" waits behind the find instead of
     // holding it up
     showToast(this.scene, line, this.toastY);

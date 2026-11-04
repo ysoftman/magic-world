@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import * as ripples from "pixelfx/fx/water/ripples";
+import * as splash from "pixelfx/fx/water/splash";
 import { TOTAL_FISH } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
@@ -8,6 +10,7 @@ import { ARCTIC_FISH, type FishDef, GameState, isNight, POND_FISH } from "../gam
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { isWet, WEATHER_LABEL, weatherToday } from "../weather";
+import { type FieldFx, fieldFxSheets, fieldFxSprite, playFieldFx, warmFieldFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
@@ -64,6 +67,43 @@ const BONUS_LABEL: Record<NonNullable<FishDef["bonusItem"]>, string> = {
   hiPotion: "HI-POTION",
 };
 
+// The pond's water (pixelfx sheets, ui/fieldFx.ts): rings out from the float
+// while it waits, and a splash as a fish takes it. Drawn like the pond, the
+// float and the panel round them, at the screen's own pixel, one pixelfx pixel
+// to one: that puts them in scale with the 12px float and inside the 280x34
+// pond. At the field's 2px cell the rings ran 14px past the pond's rim and the
+// splash's spray up to the count.
+const RIPPLES: FieldFx = {
+  key: "fx-fish-ripples",
+  sheet: {
+    fx: ripples,
+    // Its still water (step 1) is the pond's own blue as it shows through the
+    // panel (0x1e40af at 0.8 over 0x0b0b2b), so it lays no second patch of
+    // water on the pond: only the rings and their light show.
+    opts: { palette: ["#0a1630", "#1a3594", "#1b5596", "#2a7fc4", "#45a9e3", "#86d3f5", "#cdf1ff", "#ffffff"] },
+    frames: 32,
+    // the rings at their widest, 60 x 16 round the float, and their light
+    crop: [4, 12, 132, 48],
+  },
+  // a ring every 0.5s, the loop's own pace
+  ms: 2000,
+  loop: true,
+};
+const SPLASH: FieldFx = {
+  key: "fx-fish-splash",
+  // a white hit, a crown tearing into droplets that arc out and plink down in
+  // rings, a jet bouncing back, foam; with no stone dropped in first, from
+  // just before the hit to the last rings
+  sheet: { fx: splash, opts: { stone: false }, span: [0.15, 1.65], frames: 15, crop: [22, 20, 152, 100] },
+  // its 1.5s at 1.4x, done inside the bite's 0.7s and the 1.4s result
+  ms: 1100,
+};
+// over the pond (152), under the float and the "!" (153)
+const WATER_FX_DEPTH = 152.5;
+
+/** The pond's sheets by key, for a warm-up ahead of the field (fx.ts warmBattleFx). */
+export const FISHING_SHEETS = fieldFxSheets(RIPPLES, SPLASH);
+
 type FishState = "cast" | "bite" | "result" | "log";
 
 export class FishingUI {
@@ -92,6 +132,9 @@ export class FishingUI {
   private pageBack?: Phaser.GameObjects.Rectangle;
   private logRows: PixelText[] = [];
   private bobTween?: Phaser.Tweens.Tween;
+  // the pond's rings and splash
+  private rings: Phaser.GameObjects.Sprite;
+  private spray: Phaser.GameObjects.Sprite;
 
   private zQueued = false;
   private escQueued = false;
@@ -132,6 +175,18 @@ export class FishingUI {
       scene.add.ellipse(0, -4, 12, 5, 0xfef3c7, 1),
     ]);
     this.bobber.setScrollFactor(0).setDepth(153).setVisible(false);
+    // The water's sheets, a slice a frame from here on, so they are in before
+    // the hero can reach the water; one that is not, the panel bakes as it
+    // plays it. Baked here and now, they held the town's first frame to
+    // 172ms.
+    warmFieldFx(scene, RIPPLES, SPLASH);
+    this.rings = fieldFxSprite(scene, RIPPLES, GAME_WIDTH / 2, WATER_Y, 1)
+      .setScrollFactor(0)
+      .setDepth(WATER_FX_DEPTH);
+    this.spray = fieldFxSprite(scene, SPLASH, GAME_WIDTH / 2, WATER_Y, 1)
+      .setScrollFactor(0)
+      .setDepth(WATER_FX_DEPTH);
+    this.spray.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.spray.setVisible(false));
     this.biteMark = scene.add
       .pixelText(GAME_WIDTH / 2 + 24, WATER_Y - 30, "!", retroStyle(10, "#ffd166"))
       .setOrigin(0.5)
@@ -290,6 +345,9 @@ export class FishingUI {
         // this drop at once; it holds still until the next cast
         this.bobTween?.pause();
         this.bobber.setY(WATER_Y + 12);
+        // the rings give way to the splash where the float went under
+        this.rings.stop().setVisible(false);
+        playFieldFx(this.spray, SPLASH);
         // a press made while casting must not carry into the window — only a
         // press inside the 700ms bite window should count as a catch
         this.zQueued = false;
@@ -330,6 +388,9 @@ export class FishingUI {
     this.status.setVisible(page === "fish");
     this.biteMark.setVisible(false);
     this.badge.setVisible(false);
+    // startCast() sets the rings going again on the fishing page
+    this.rings.stop().setVisible(false);
+    this.spray.stop().setVisible(false);
     for (const row of this.logRows) row.setVisible(page === "log");
   }
 
@@ -390,6 +451,8 @@ export class FishingUI {
     this.badge.setVisible(false);
     this.bobber.setY(WATER_Y);
     this.bobTween?.resume();
+    // the float lands: the loop from its start, a drop's plink and a first ring
+    playFieldFx(this.rings, RIPPLES);
     // the title has no room left (night and derby already swap it), so the
     // weather says itself under CASTING...; the longest, "BLIZZARD: SLOW
     // BITES", is 20 x 24 = 480px (x 400..880) inside the 700 panel
@@ -480,6 +543,8 @@ export class FishingUI {
     this.title.destroy();
     this.water.destroy();
     this.bobber.destroy();
+    this.rings.destroy();
+    this.spray.destroy();
     this.biteMark.destroy();
     this.status.destroy();
     this.badge.destroy();
