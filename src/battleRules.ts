@@ -275,6 +275,175 @@ export const SPELLS: Spell[] = [
   { name: "NOVA", cost: 24, learnLevel: 24, kind: "attack", power: 60, color: 0xf5d0fe, ultimate: true },
 ];
 
+// Skills: the battle's second book (BattleScene's X:SKILL list), learned at
+// their level gates as spells are, so nothing about them is saved either.
+// Where a spell is magic, a skill is a blow: each hit is its power plus up to
+// half again (spellRoll's spread) less the foe's DEF (rollDamage's floor),
+// and a one-hit skill crits as FIGHT does. A multi-hit one never crits, and
+// pays DEF on every hit, so it hurts soft foes most; LASER `pierce`s DEF.
+// fire/ice/bolt ones take the weakness x1.5, CHAIN the combo, finish WEAK
+// and double their effect's odds on a weakness, as attack spells do; the
+// rest reset the combo. Effects reuse the spells' and the companions' rules
+// (spellEffectCanLand): burn (BURN_PROOF), chill (CHILL_PROOF), shock (no
+// boss or giant), and THORNS' poison, VENOM STING's PSN (never on a PSN/BRN
+// already ticking). SOUL DRAIN heals half its damage, as BLOOD SIP does.
+// QUAKE can't reach a flier: the list greys it out against one.
+//
+// Sized against the attack spells with sim:battle --skill-table (mean damage
+// a cast; a spell ignores DEF, so a skill is read at DEF 3, a mid-game foe's).
+// Per MP no skill beats FIRE's 4.0 off a weakness or a spell's 5.5-6.0 on
+// one; what a skill gets for its MP is a bigger turn, another element or an
+// effect:
+//   ARCANE BEAM 12.7 (3.2 / MP) beside FIRE's 12 (4.0), 14.8 on a soft foe;
+//   MISSILES 22.5 at DEF 1, ICE's turn two levels early, 16.5 at DEF 3;
+//   FLAME PILLAR 31 on a fire weakness (FIRE 17.8) with a 20% burn, 20.9 off
+//   one; CHAIN BOLT 27 (39.6 weak) before BOLT; ICE SPIKES 31.9 (47.6 weak,
+//   5.3 / MP against ICE's 5.5); LASER 28 through any DEF for 8 MP, under
+//   BOLT's 37 for 10; SOUL DRAIN 31.9 and half of it back; QUAKE 47.3
+//   (3.9 / MP), paid for by missing fliers; SMITE 51.1 (3.7); METEOR 67.7,
+//   under NOVA's 74.5 off a weakness for 2 MP less, 101 on one; STAR FALL 70
+//   (80 on a soft foe, 45 through the FLAME DRAKE's DEF 8); VOID 86.9, the
+//   biggest blow in the game, at NOVA's 3.1 / MP. THORNS and EMP hit lightly
+//   for their poison and stun.
+// FLAME PILLAR was 22 power for 8 MP: four casts on a fire weakness were the
+// MOSS GOLEM's 140 HP in one Lv12 MP bar, and sim:battle --skills took a lone
+// Lv12 hero's fight there from 11.3 rounds (--greedy, spells alone) to 5.4.
+// At 18 for 9 MP it is 8.1 (4.9 beside a WOLF, 5.9 without the list). The
+// other bosses at their intended levels move a round or less beside the
+// WOLF (GLACIER GOLEM 6.2 -> 5.6), their first level at a 90% win one or two
+// lower at most.
+// The level gates fill the gaps between spells (3, 4, 7, 10, 12, 13 ...),
+// so a level up mostly brings one new thing. Names are the effects'
+// (skillFx.ts SkillName, which must match) and the hit counts its SKILL_HITS.
+export type SkillEffect = SpellEffect | "poison";
+export const SKILL_NAMES = [
+  "ARCANE BEAM",
+  "THORNS",
+  "MISSILES",
+  "FLAME PILLAR",
+  "CHAIN BOLT",
+  "ICE SPIKES",
+  "LASER",
+  "SOUL DRAIN",
+  "QUAKE",
+  "EMP",
+  "SMITE",
+  "METEOR",
+  "STAR FALL",
+  "VOID",
+] as const;
+export type SkillName = (typeof SKILL_NAMES)[number];
+
+export interface Skill {
+  name: SkillName;
+  cost: number;
+  learnLevel: number;
+  power: number; // each hit's
+  hits: number;
+  color: number; // the foe's flash as a hit lands
+  element?: Element;
+  effect?: { kind: SkillEffect; chance: number }; // x SPELL_EFFECT_WEAK_MULT on a weakness
+  drain?: number; // the share of its damage back as HP
+  pierce?: boolean; // rolled against DEF 0
+  grounded?: boolean; // misses a flier, so it can't be picked against one
+  // the list's INFO line after "<NAME>  <MP> MP  ": <= 33 glyphs, so the
+  // longest (FLAME PILLAR, 12) fills a message row's 54 at most
+  info: string;
+}
+
+export const SKILLS: Skill[] = [
+  { name: "ARCANE BEAM", cost: 4, learnLevel: 3, power: 12, hits: 1, color: 0xc4b5fd, info: "A beam of raw magic, no element." },
+  {
+    name: "THORNS",
+    cost: 4,
+    learnLevel: 4,
+    power: 6,
+    hits: 1,
+    color: 0x84cc16,
+    effect: { kind: "poison", chance: 0.5 },
+    info: "A light hit. Poisons 50% (PSN).",
+  },
+  { name: "MISSILES", cost: 6, learnLevel: 7, power: 7, hits: 3, color: 0xa5b4fc, info: "Three magic darts, no element." },
+  {
+    name: "FLAME PILLAR",
+    cost: 9,
+    learnLevel: 10,
+    power: 18,
+    hits: 1,
+    color: 0xfb923c,
+    element: "fire",
+    effect: { kind: "burn", chance: 0.2 },
+    info: "Fire. Burns 20% (BRN).",
+  },
+  {
+    name: "CHAIN BOLT",
+    cost: 9,
+    learnLevel: 12,
+    power: 10,
+    hits: 3,
+    color: 0xfde047,
+    element: "bolt",
+    effect: { kind: "shock", chance: 0.08 },
+    info: "Bolt, three hits. Stuns 8%.",
+  },
+  {
+    name: "ICE SPIKES",
+    cost: 9,
+    learnLevel: 13,
+    power: 26,
+    hits: 1,
+    color: 0x67e8f9,
+    element: "ice",
+    effect: { kind: "chill", chance: 0.1 },
+    info: "Ice. Chills 10% (ATK DN).",
+  },
+  { name: "LASER", cost: 8, learnLevel: 15, power: 6, hits: 4, color: 0xff5577, pierce: true, info: "Four hits that ignore DEF." },
+  { name: "SOUL DRAIN", cost: 10, learnLevel: 16, power: 26, hits: 1, color: 0xc084fc, drain: 0.5, info: "Heals you half the damage." },
+  { name: "QUAKE", cost: 12, learnLevel: 18, power: 37, hits: 1, color: 0xd6a76c, grounded: true, info: "A huge blow. Fliers dodge it." },
+  {
+    name: "EMP",
+    cost: 8,
+    learnLevel: 20,
+    power: 10,
+    hits: 1,
+    color: 0x7dd3fc,
+    effect: { kind: "shock", chance: 1 },
+    info: "A light hit. Stuns, not bosses.",
+  },
+  { name: "SMITE", cost: 14, learnLevel: 21, power: 40, hits: 1, color: 0xfff3b0, info: "A heavy blow, no element." },
+  {
+    name: "METEOR",
+    cost: 22,
+    learnLevel: 23,
+    power: 52,
+    hits: 1,
+    color: 0xf97316,
+    element: "fire",
+    effect: { kind: "burn", chance: 0.2 },
+    info: "Fire, a huge blow. Burns 20%.",
+  },
+  { name: "STAR FALL", cost: 22, learnLevel: 26, power: 14, hits: 5, color: 0xfef08a, info: "Five falling stars." },
+  { name: "VOID", cost: 28, learnLevel: 28, power: 66, hits: 1, color: 0x8b5cf6, info: "The strongest blow, no element." },
+];
+
+/**
+ * One hit of a skill: its power plus up to half again, less DEF (0 for a
+ * pierce) with rollDamage's floor, doubled on a crit (one-hit skills only,
+ * `rand` called for it first as rollDamage does), x1.5 on the weakness.
+ */
+export function skillHit(
+  skill: Skill,
+  def: number,
+  weakness: Element | undefined,
+  rand: () => number = Math.random,
+): { dmg: number; crit: boolean; weak: boolean } {
+  const crit = skill.hits === 1 && rand() < CRIT_CHANCE;
+  const roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
+  const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - (skill.pierce ? 0 : def));
+  const weak = skill.element !== undefined && weakness === skill.element;
+  return { dmg: Math.floor((crit ? hit * CRIT_MULT : hit) * (weak ? WEAKNESS_MULT : 1)), crit, weak };
+}
+
 // ...and a foe's HP stays three digits: BattleScene's enemy window has room
 // for no more (see its ENEMY_STATUS_MIN_X note)
 export const ENEMY_HP_MAX = 999;

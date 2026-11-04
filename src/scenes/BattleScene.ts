@@ -26,6 +26,9 @@ import {
   poisonTickDamage,
   regenAmount,
   rollDamage,
+  SKILLS,
+  type Skill,
+  type SkillEffect,
   SPELL_EFFECT_WEAK_MULT,
   SPELLS,
   type Spell,
@@ -35,6 +38,7 @@ import {
   STREAK_CAP,
   STREAK_MIN,
   scaleEnemy,
+  skillHit,
   spellRoll,
   WARD_COLOR,
   WARD_TURNS,
@@ -62,6 +66,7 @@ import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
+import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
@@ -249,6 +254,7 @@ const MENU_ROWS_Y = [GAME_HEIGHT - 208, GAME_HEIGHT - 172];
 type MenuAction =
   | "fight"
   | "magic"
+  | "skill"
   | "defend"
   | "run"
   | "steal"
@@ -260,10 +266,11 @@ type MenuAction =
   | "elixir"
   | "bomb";
 // one flat action row, spells included at the same level as everything else;
-// a spell button carries its Spell and resolves as a "magic" action
+// a spell button carries its Spell and resolves as a "magic" action; "item"
+// and "skills" open their lists
 interface MenuButton {
   label: string;
-  action: MenuAction | "item";
+  action: MenuAction | "item" | "skills";
   spell?: Spell;
   enabled?: () => boolean;
 }
@@ -296,6 +303,40 @@ const ITEM_COL_X = [24, 319, 637, 908];
 // there: a tap picks an item, a second tap on it uses it (onPointerDown),
 // and a tap off the list goes back. 43 glyphs at 16px = 688px, x 296..984.
 const TOUCH_ITEM_HINT = "TAP:SELECT  TAP AGAIN:USE  TAP OUTSIDE:BACK";
+
+// The SKILL list (X) works as the item list does, on the backdrop under the
+// fighters, but the 14 skills take up to four rows of four, in the order
+// they are learned: rows 32px apart from y 488, so y 474..598, where the
+// item list's info line and hint were. Those two go into the message box (y
+// 604..716) while the list is up, over the battle's last line, hidden till
+// it closes. Each column as wide as its longest name at 24px glyphs plus the
+// 4px outline, with the cursor's ITEM_TEXT_OFFSET in front: ARCANE BEAM
+// 32 + 268, ICE SPIKES 32 + 244, MISSILES 32 + 196, FLAME PILLAR 32 + 292 =
+// 1128px over x 24..1254, 34px between columns.
+const SKILLS_PER_ROW = 4;
+const SKILL_COL_X = [24, 358, 668, 930];
+const SKILL_ROW_Y = [488, 520, 552, 584];
+// In the message box: the cursor's skill on the battle line's own row
+// ("FLAME PILLAR  9 MP  Fire. Burns 20% (BRN)." in bodyStyle(33), 54 glyphs
+// at most: battleRules Skill.info), the key hint under it, 16px glyphs at y
+// 682..698. Its touch line, TOUCH_ITEM_HINT, is 688px, x 296..984.
+const SKILL_INFO_Y = GAME_HEIGHT - 104;
+const SKILL_HINT_Y = GAME_HEIGHT - 30;
+// how long a skill's effects may run before its hits land regardless
+// (playSkill not settling would hold the battle there for good)
+const SKILL_FX_TIMEOUT_MS = 8000;
+// a multi-hit skill's damage numbers, each this far right of the last, the
+// row centred on the foe, so five stars' numbers don't pile on one spot
+const SKILL_POP_STEP = 40;
+
+// skillFx.ts plays as many blows as it lists; the rules deal as many as
+// battleRules lists. They must agree (castSkill would land the rest at the
+// end of the effects, or leave a blow without damage).
+if (process.env.NODE_ENV !== "production") {
+  for (const s of SKILLS) {
+    if (SKILL_HITS[s.name] !== s.hits) console.error(`${s.name}: ${s.hits} hits in battleRules.ts, ${SKILL_HITS[s.name]} in skillFx.ts`);
+  }
+}
 
 // A fighter's feet on its texture, read off the pixels once per texture: how
 // far under the centre its lowest opaque row ends, and the middle and width
@@ -391,6 +432,15 @@ export class BattleScene extends Phaser.Scene {
   private itemTexts: PixelText[] = [];
   private itemCursor!: PixelText;
   private itemInfoText!: PixelText;
+
+  // the SKILL list (X), one text per skill known this battle
+  private inSkills = false;
+  private skillIndex = 0;
+  private skillTexts: PixelText[] = [];
+  private skillCursor!: PixelText;
+  private skillInfoText!: PixelText;
+  private skillHintText!: PixelText;
+  private pendingSkill!: Skill;
 
   private pendingSpell!: Spell;
   private companionSprite?: Phaser.GameObjects.Sprite;
@@ -584,6 +634,9 @@ export class BattleScene extends Phaser.Scene {
     this.itemTexts = [];
     this.inItems = false;
     this.itemIndex = 0;
+    this.skillTexts = [];
+    this.inSkills = false;
+    this.skillIndex = 0;
     this.waitingAction = null;
     this.typing = undefined;
 
@@ -780,6 +833,11 @@ export class BattleScene extends Phaser.Scene {
       ...this.knownSpells().map(
         (s): MenuButton => ({ label: `${s.name[0]}:${s.name}`, action: "magic", spell: s, enabled: () => this.canCast(s) }),
       ),
+      // once the first skill is learned (Lv3); greyed out, as ITEM is, when
+      // nothing on the list can be used now (MP, a QUAKE on a flier)
+      ...(this.knownSkills().length > 0
+        ? [{ label: "X:SKILL", action: "skills", enabled: () => this.canUseAnySkill() } satisfies MenuButton]
+        : []),
       // greyed out with nothing in the bag, as a spent STEAL is: an empty list
       // has nothing to pick
       { label: "E:ITEM", action: "item", enabled: () => this.hasItems() },
@@ -841,6 +899,32 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(30)
       .setVisible(false);
 
+    // the SKILL list, outlined as the item list is (see SKILL_COL_X)
+    this.knownSkills().forEach((skill, i) => {
+      const t = this.add
+        .pixelText(
+          SKILL_COL_X[i % SKILLS_PER_ROW] + ITEM_TEXT_OFFSET,
+          SKILL_ROW_Y[Math.floor(i / SKILLS_PER_ROW)],
+          skill.name,
+          retroStyle(6, "#ffffff"),
+        )
+        .setStroke("#0b0b2b", 4)
+        .setOrigin(0, 0.5)
+        .setVisible(false);
+      this.skillTexts.push(t);
+    });
+    this.skillCursor = this.add
+      .pixelText(0, SKILL_ROW_Y[0], ">", retroStyle(6, "#ffd166"))
+      .setStroke("#0b0b2b", 4)
+      .setOrigin(0, 0.5)
+      .setVisible(false);
+    // in the message box, a panel: no outline needed
+    this.skillInfoText = this.add.pixelText(64, SKILL_INFO_Y, "", bodyStyle(33, "#ffd166")).setVisible(false);
+    this.skillHintText = this.add
+      .pixelText(GAME_WIDTH / 2, SKILL_HINT_Y, "", retroStyle(4, "#9f9fd0"))
+      .setOrigin(0.5)
+      .setVisible(false);
+
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
     this.statusFx = new StatusFx(this);
@@ -894,6 +978,22 @@ export class BattleScene extends Phaser.Scene {
   // press whose down/up land in the same frame queue is silently dropped
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || !this.waitingAction) return;
+
+    if (this.inSkills) {
+      const next = this.skillMove(e.code);
+      if (next !== null) {
+        if (next !== this.skillIndex) Sfx.move();
+        this.skillIndex = next;
+        this.renderSkills();
+        return;
+      }
+      if (e.code === "Escape") {
+        this.closeSkills();
+        return;
+      }
+      if (e.code === "KeyZ") this.pickSkill();
+      return;
+    }
 
     if (this.inItems) {
       if (e.code === "ArrowLeft" || e.code === "KeyH") {
@@ -964,6 +1064,14 @@ export class BattleScene extends Phaser.Scene {
       this.inItems = true;
       return;
     }
+    if (e.code === "KeyX") {
+      if (!this.canUseAnySkill()) {
+        Sfx.error();
+        return;
+      }
+      this.openSkills();
+      return;
+    }
     // direct spell hotkeys — the first letter of each spell (F/H/I/B/W/N are
     // all distinct, see Spell); unlearned or unaffordable just beeps
     if (e.code.startsWith("Key") && SPELLS.some((s) => s.name[0] === e.code[3])) {
@@ -1005,6 +1113,25 @@ export class BattleScene extends Phaser.Scene {
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.waitingAction) return;
 
+    if (this.inSkills) {
+      for (let i = 0; i < this.skillTexts.length; i++) {
+        // padded 8px across, 2px down: the rows are 32px apart, the glyphs 28
+        if (!Phaser.Geom.Rectangle.Inflate(this.skillTexts[i].getBounds(), 8, 2).contains(pointer.x, pointer.y)) continue;
+        // a first tap reads, a second casts, as in the item list
+        if (i !== this.skillIndex) {
+          this.skillIndex = i;
+          Sfx.move();
+          this.renderSkills();
+          return;
+        }
+        this.pickSkill();
+        return;
+      }
+      // off the list (the message box under it too): back to the menu
+      this.closeSkills();
+      return;
+    }
+
     if (this.inItems) {
       for (let i = 0; i < this.itemTexts.length; i++) {
         const t = this.itemTexts[i];
@@ -1039,7 +1166,9 @@ export class BattleScene extends Phaser.Scene {
       const t = this.menuTexts[i];
       // padded past the glyphs so a button is a fair finger target: 8px of
       // the >= 20px gap each side, and menuHitPadY up and down (see layoutMenu())
-      if (!t.visible || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, this.menuHitPadY).contains(pointer.x, pointer.y)) continue;
+      // (an empty label, a pad's SKILL, isn't laid out: layoutMenu)
+      if (!t.visible || !t.text || !Phaser.Geom.Rectangle.Inflate(t.getBounds(), 8, this.menuHitPadY).contains(pointer.x, pointer.y))
+        continue;
       const btn = this.menuButtons[i];
       if (btn.enabled && !btn.enabled()) {
         Sfx.error();
@@ -1049,6 +1178,10 @@ export class BattleScene extends Phaser.Scene {
         this.hideMenu();
         this.renderItems();
         this.inItems = true;
+        return;
+      }
+      if (btn.action === "skills") {
+        this.openSkills();
         return;
       }
       if (btn.spell) this.pendingSpell = btn.spell;
@@ -1061,35 +1194,40 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff).setDepth(STAT_DEPTH);
   }
 
-  // Up to HEAL the 7 buttons (47 glyphs, 940px + 28) fit one row, spread
-  // evenly with 36px gaps — the layout from Lv1 to Lv8. ICE makes it 52
-  // glyphs (16px gaps, under MENU_MIN_GAP), so from Lv9 the attacks (FIGHT
-  // and the spells) take a row of their own above ITEM / DEFEND / STEAL / RUN
-  // (28 glyphs, 696px), each centered with MENU_ROW_GAP between buttons;
-  // Lv24's attack row is the widest, 42 glyphs = 840 + 7 x 4 + 6 x 40 =
-  // 1108px. (Before DEFEND the one row lasted to Lv17.) The rows (y 500..524
-  // / 536..560) clear the companion sprite (to y 488) above and the hint line
+  // Up to Lv2 the 6 buttons (41 glyphs, 820px + 24) fit one row with 68px
+  // gaps, and SKILL (Lv3) keeps it one: 48 glyphs, 988px, 32px gaps. HEAL
+  // (Lv5) makes it 54 glyphs (10px gaps, under MENU_MIN_GAP), so from Lv5 the
+  // attacks (FIGHT and the spells) take a row of their own above SKILL / ITEM
+  // / DEFEND / STEAL / RUN (35 glyphs, 700 + 5 x 4 + 4 x 40 = 880px), each
+  // centered with MENU_ROW_GAP between buttons; Lv24's attack row is the
+  // widest, 42 glyphs = 840 + 7 x 4 + 6 x 40 = 1108px. (Before SKILL the one
+  // row lasted to Lv8, before DEFEND to Lv17.) The rows (y 500..524 /
+  // 536..560) clear the companion sprite (to y 488) above and the hint line
   // (566..586) and message box (604) below. With a pad the buttons carry its
   // names (X:FIGHT ... START:DEFEND, SELECT:STEAL, B:RUN): HEAL's row is 56
   // glyphs, two rows from Lv5, the lower one 35 glyphs = 836px, and Lv24's
   // attacks are 48 = 960 + 7 x 4, their gaps closing to 32px to fit the 1184.
+  // SKILL has no pad button (AGENTS.md: no pad mappings for new keys), so
+  // with a pad its label is empty and the layout leaves it out.
   private layoutMenu(): void {
     this.menuButtons.forEach((b, i) => {
       this.menuTexts[i].setText(keyHint(b.label, b.label, { table: "battle" }));
     });
+    const shown = (t: PixelText): boolean => t.width > 0;
+    const texts = this.menuTexts.filter(shown);
     const room = GAME_WIDTH - MENU_MARGIN * 2;
-    const total = this.menuTexts.reduce((n, t) => n + t.width, 0);
-    const oneRowGap = (room - total) / (this.menuTexts.length - 1);
+    const total = texts.reduce((n, t) => n + t.width, 0);
+    const oneRowGap = (room - total) / (texts.length - 1);
     if (oneRowGap >= MENU_MIN_GAP) {
       let x = MENU_MARGIN;
-      for (const t of this.menuTexts) {
+      for (const t of texts) {
         t.setPosition(x, MENU_Y);
         x += t.width + oneRowGap;
       }
       this.menuHitPadY = 14;
     } else {
       const isAttack = (i: number) => this.menuButtons[i].action === "fight" || this.menuButtons[i].action === "magic";
-      const rows = [this.menuTexts.filter((_, i) => isAttack(i)), this.menuTexts.filter((_, i) => !isAttack(i))];
+      const rows = [this.menuTexts.filter((t, i) => shown(t) && isAttack(i)), this.menuTexts.filter((t, i) => shown(t) && !isAttack(i))];
       rows.forEach((row, r) => {
         const width = row.reduce((n, t) => n + t.width, 0);
         // a spell list longer than today's would close the gaps before overflowing
@@ -1160,6 +1298,89 @@ export class BattleScene extends Phaser.Scene {
     return SPELLS.filter((s) => GameState.player.level >= s.learnLevel);
   }
 
+  // learned at their level as spells are, in the list's order
+  private knownSkills(): Skill[] {
+    return SKILLS.filter((s) => GameState.player.level >= s.learnLevel);
+  }
+
+  // the MP for it, and a foe it can reach (QUAKE never reaches a flier)
+  private canUseSkill(skill: Skill): boolean {
+    return GameState.player.mp >= skill.cost && !(skill.grounded && this.enemy.flying);
+  }
+
+  private canUseAnySkill(): boolean {
+    return this.knownSkills().some((s) => this.canUseSkill(s));
+  }
+
+  // The SKILL list's cursor after a vim key or an arrow: across a row,
+  // wrapping round the whole list as the item list does; up and down within
+  // its column, wrapping from the bottom row to the top (a partial last row
+  // has no cell under some columns, and a mod over the list's length would
+  // slide the cursor sideways there). null for any other key.
+  private skillMove(code: string): number | null {
+    const n = this.skillTexts.length;
+    const i = this.skillIndex;
+    if (code === "ArrowLeft" || code === "KeyH") return (i + n - 1) % n;
+    if (code === "ArrowRight" || code === "KeyL") return (i + 1) % n;
+    const col = i % SKILLS_PER_ROW;
+    const lastInCol = col + Math.floor((n - 1 - col) / SKILLS_PER_ROW) * SKILLS_PER_ROW;
+    if (code === "ArrowDown" || code === "KeyJ") return i + SKILLS_PER_ROW < n ? i + SKILLS_PER_ROW : col;
+    if (code === "ArrowUp" || code === "KeyK") return i - SKILLS_PER_ROW >= 0 ? i - SKILLS_PER_ROW : lastInCol;
+    return null;
+  }
+
+  private openSkills(): void {
+    this.hideMenu();
+    this.inSkills = true;
+    this.renderSkills();
+  }
+
+  // Each skill white when it can be used now, else dim; the cursor's in the
+  // message box with its cost and what it does, the battle's line hidden
+  // behind it (SKILL_INFO_Y)
+  private renderSkills(): void {
+    const skills = this.knownSkills();
+    skills.forEach((s, i) => {
+      this.skillTexts[i].setVisible(true).setColor(this.canUseSkill(s) ? "#ffffff" : DIM_TEXT);
+    });
+    const target = this.skillTexts[this.skillIndex];
+    this.skillCursor.setPosition(target.x - ITEM_TEXT_OFFSET, target.y).setVisible(true);
+    const skill = skills[this.skillIndex];
+    this.msgText.setVisible(false);
+    this.skillInfoText.setText(`${skill.name}  ${skill.cost} MP  ${skill.info}`).setVisible(true);
+    this.skillHintText.setVisible(true);
+    bindKeyHint(this.skillHintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
+  }
+
+  private hideSkills(): void {
+    for (const t of this.skillTexts) t.setVisible(false);
+    this.skillCursor.setVisible(false);
+    this.skillInfoText.setVisible(false);
+    this.skillHintText.setVisible(false);
+    this.msgText.setVisible(true);
+  }
+
+  // back from the SKILL list to the menu, no turn spent
+  private closeSkills(): void {
+    this.inSkills = false;
+    this.hideSkills();
+    this.renderMenu();
+  }
+
+  // Z or a second tap on the cursor's skill: cast it, or beep if it can't be
+  // (not the MP, a flier out of QUAKE's reach), the list staying up
+  private pickSkill(): void {
+    const skill = this.knownSkills()[this.skillIndex];
+    if (!this.canUseSkill(skill)) {
+      Sfx.error();
+      return;
+    }
+    this.inSkills = false;
+    this.hideSkills();
+    this.pendingSkill = skill;
+    this.resolveAction("skill");
+  }
+
   private async runBattle(): Promise<void> {
     if (this.enemy.boss || this.enemy.giant) Sfx.boss();
     // The opening line types out under the menu instead of waiting for a Z:
@@ -1200,6 +1421,9 @@ export class BattleScene extends Phaser.Scene {
           break;
         case "magic":
           await this.castSpell(this.pendingSpell);
+          break;
+        case "skill":
+          await this.castSkill(this.pendingSkill);
           break;
         case "potion":
           await this.usePotion();
@@ -1357,11 +1581,109 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyHp();
   }
 
+  // A skill (battleRules SKILLS): its effects (skillFx.ts) call each blow as
+  // it lands, and the blow's damage, number and flash go in then; a blow the
+  // foe is already down for falls on nothing. The side effect is rolled up
+  // front from what could take now and lands after the last blow if the foe
+  // still stands, as castSpell's does; CHAIN and WEAK FINISH as there. Lines,
+  // at most two message rows: "CRITICAL! WEAKNESS! FLAME PILLAR! 999 damage!
+  // BURN! CHAIN x99!" is 64 glyphs, "WEAKNESS! CHAIN BOLT! 99+99+99 damage!
+  // STUN! CHAIN x99!" 55.
+  private async castSkill(skill: Skill): Promise<void> {
+    // the three biggest take NOVA's sound
+    if (skill.cost >= 20) Sfx.nova();
+    else Sfx.magic();
+    GameState.player.mp -= skill.cost;
+    this.updatePlayerStats();
+    const weak = skill.element !== undefined && this.enemy.weakness === skill.element;
+    const fx = skill.effect;
+    const effect =
+      fx && this.spellEffectCanLand(fx.kind) && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
+    const dealt: number[] = [];
+    let crit = false;
+    let healed = 0;
+    let blows = 0;
+    let over = false;
+    let unflash: Phaser.Time.TimerEvent | undefined;
+    // the blows' numbers in a row across the foe, centred on it
+    const popX = (i: number): number => this.enemySprite.x + (i - (skill.hits - 1) / 2) * SKILL_POP_STEP;
+    const land = (): void => {
+      if (over || blows >= skill.hits) return;
+      const i = blows++;
+      if (this.enemy.curHp <= 0) return;
+      const hit = skillHit(skill, this.enemy.def, this.enemy.weakness);
+      this.enemy.curHp = Math.max(0, this.enemy.curHp - hit.dmg);
+      dealt.push(hit.dmg);
+      crit ||= hit.crit;
+      Sfx.strike();
+      if (hit.crit) Sfx.critical();
+      // the first blow on a weakness rings and shakes as a weakness spell does
+      if (hit.weak && i === 0) {
+        Sfx.critical();
+        shake(this.cameras.main, 120, 0.01);
+      }
+      unflash?.remove();
+      this.enemySprite.setTint(skill.color).setTintMode(Phaser.TintModes.FILL);
+      unflash = this.time.delayedCall(this.anim(140), () => this.restoreEnemyTint());
+      this.flashDamage(popX(i), this.enemySprite.y, hit.dmg, hit.crit);
+      this.updateEnemyHp();
+      if (skill.drain) {
+        const back = Math.min(GameState.effMaxHp() - GameState.player.hp, Math.ceil(hit.dmg * skill.drain));
+        GameState.player.hp += back;
+        healed += back;
+        if (back > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, back);
+        this.updatePlayerStats();
+      }
+    };
+    const stage: SkillStage = {
+      hero: this.playerSprite,
+      foe: this.enemySprite,
+      foeScale: this.enemyBaseScale,
+      groundY: GROUND_Y,
+      foeFeetY: GROUND_Y - (this.enemy.flying ? FLY_LIFT : 0),
+      anim: (ms) => this.anim(ms),
+    };
+    await Promise.race([playSkill(this, skill.name, stage, land), this.wait(this.anim(SKILL_FX_TIMEOUT_MS))]);
+    // whatever the effects didn't land, so the damage is always dealt
+    while (blows < skill.hits) land();
+    over = true;
+    unflash?.remove();
+    this.restoreEnemyTint();
+    const down = this.enemy.curHp <= 0;
+    if (weak) this.addCombo();
+    else this.resetCombo();
+    this.weakFinish = weak && down;
+    const tail = effect && !down ? this.landSkillEffect(effect) : "";
+    const chain = weak && !down && this.combo >= 2 ? ` CHAIN x${this.combo}!` : "";
+    const finish = this.weakFinish ? " WEAK FINISH!" : "";
+    const drained = healed > 0 ? ` +${healed} HP` : "";
+    const head = `${crit ? "CRITICAL! " : ""}${weak ? "WEAKNESS! " : ""}${skill.name}!`;
+    await this.say(`${head} ${dealt.join("+")} damage!${drained}${tail}${chain}${finish}`);
+    this.restoreEnemyTint();
+    this.updateEnemyHp();
+  }
+
+  // a skill's side effect landed: THORNS' poison here (VENOM STING's dot, in
+  // the purple its ticks fill the foe with, enemyDotTick), the rest as a
+  // spell's
+  private landSkillEffect(kind: SkillEffect): string {
+    if (kind !== "poison") return this.landSpellEffect(kind);
+    this.enemyDot = { label: "PSN", turns: COMPANION_DOT_TURNS };
+    this.updateEnemyStatus();
+    Sfx.poison();
+    this.enemySprite.setTint(PSN_TINT).setTintMode(Phaser.TintModes.FILL);
+    this.statusOn(this.enemySprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.flashStatus("PSN", DOT_COLOR.PSN, this.enemySprite.x - 200, this.enemySprite.y);
+    return " POISON!";
+  }
+
   // the companion skills' own "would it do anything" rules (see
-  // companionSkillUseful), plus BURN_PROOF / CHILL_PROOF
-  private spellEffectCanLand(kind: SpellEffect): boolean {
+  // companionSkillUseful), plus BURN_PROOF / CHILL_PROOF; THORNS' poison is
+  // VENOM STING's
+  private spellEffectCanLand(kind: SkillEffect): boolean {
     const name = this.enemy.name;
     if (kind === "burn") return this.enemyDot === null && !BURN_PROOF.includes(name);
+    if (kind === "poison") return this.enemyDot === null;
     if (kind === "chill") return !this.chilled && !CHILL_PROOF.includes(name);
     return !this.stuck && !this.enemy.boss && !this.enemy.giant;
   }
@@ -2526,8 +2848,10 @@ export class BattleScene extends Phaser.Scene {
     const { name, special } = this.enemy;
     const big = this.enemy.boss || this.enemy.giant;
     const spells = this.knownSpells();
-    // a spell side effect, where spellEffectCanLand could ever let it
-    const casts = (kind: SpellEffect): boolean => spells.some((s) => s.effect?.kind === kind);
+    const skills = this.knownSkills();
+    // a spell's or skill's side effect, where spellEffectCanLand could ever let it
+    const casts = (kind: SkillEffect): boolean =>
+      spells.some((s) => s.effect?.kind === kind) || skills.some((s) => s.effect?.kind === kind);
     const pal = COMPANION_SKILLS[GameState.companion ?? ""];
     const warm = (target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode?: Phaser.TintModes): void =>
       this.statusFx.warm(target, kind, tint, mode);
@@ -2537,7 +2861,9 @@ export class BattleScene extends Phaser.Scene {
     if (!big && (casts("shock") || pal?.kind === "snare")) warm(foe, "stun");
     if ((casts("burn") && !BURN_PROOF.includes(name)) || pal?.dot === "BRN") warm(foe, "burn");
     if ((casts("chill") && !CHILL_PROOF.includes(name)) || pal?.kind === "chill") warm(foe, "chill");
-    if (pal?.dot === "PSN") warm(foe, "poison", PSN_TINT, Phaser.TintModes.FILL);
+    // VENOM STING's or THORNS' poison, landing (landSkillEffect) and ticking
+    // in the same purple
+    if (pal?.dot === "PSN" || casts("poison")) warm(foe, "poison", PSN_TINT, Phaser.TintModes.FILL);
     if (spells.some((s) => s.kind === "heal")) warm(hero, "heal");
     if (spells.some((s) => s.kind === "ward")) warm(hero, "ward");
     // a resist accessory stops the status outright; a MOON TEA only sometimes
@@ -2547,6 +2873,9 @@ export class BattleScene extends Phaser.Scene {
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
+    // the hero's skills' sheets (skillFx.ts), wanted from the first turn
+    const skillSheets = new Set(skills.flatMap((s) => SKILL_SHEET_KEYS[s.name]));
+    if (skillSheets.size > 0) warmFx(this, [...skillSheets]);
     // the companion's skill sheets (fx.ts COMPANION_SHEETS): its first skill
     // comes after the hero's first turn at the soonest
     const skillFx = pal && SKILL_FX[pal.name];
@@ -2820,6 +3149,7 @@ export class BattleScene extends Phaser.Scene {
       await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`);
       let leveled = false;
       let newRank = 0;
+      const fromLevel = GameState.player.level;
       while (GameState.player.level < MAX_LEVEL && GameState.player.exp >= expToNext(GameState.player.level)) {
         GameState.player.exp -= expToNext(GameState.player.level);
         GameState.player.level += 1;
@@ -2843,7 +3173,7 @@ export class BattleScene extends Phaser.Scene {
         // the stat window takes the new HP/MP with the burst and the line, not
         // only once the hero is back in the field
         this.updatePlayerStats();
-        await this.say(`LEVEL UP! LV ${GameState.player.level}${newRank > 0 ? `  RANK #${newRank}!` : ""}`);
+        await this.say(`LEVEL UP! LV ${GameState.player.level}${newRank > 0 ? `  RANK #${newRank}!` : ""}${this.learnedLine(fromLevel)}`);
       }
       // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
       // pay model has no room for it; its own line, news the payout's page
@@ -2877,6 +3207,23 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     this.end();
+  }
+
+  // The level up's second row, what it taught: nothing announced a spell, and
+  // the SKILL button turning up at Lv3 would go unexplained. "New spell: WARD
+  // New skill: QUAKE" (Lv18, the one level with both) is 32 glyphs; a jump
+  // over many gates at once, past a row's 54, only says there are some.
+  private learnedLine(from: number): string {
+    const level = GameState.player.level;
+    const learned = (list: ReadonlyArray<{ name: string; learnLevel: number }>): string[] =>
+      list.filter((s) => s.learnLevel > from && s.learnLevel <= level).map((s) => s.name);
+    const spells = learned(SPELLS);
+    const skills = learned(SKILLS);
+    const line = [spells.length > 0 && `New spell: ${spells.join(", ")}`, skills.length > 0 && `New skill: ${skills.join(", ")}`]
+      .filter(Boolean)
+      .join("  ");
+    if (!line) return "";
+    return `\n${line.length <= 54 ? line : "New spells and skills!"}`;
   }
 
   // Losing used to wipe the save outright, so a death at level 30 meant

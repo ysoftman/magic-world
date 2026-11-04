@@ -19,8 +19,21 @@
 // --talisman, --meal; see --help) dress that hero for NEW GAME+ and the
 // ABYSS's GUARDIANs, as the BLACKSMITH's REFINE was sized with (drops.ts).
 // Left out, the run is the one above.
+//
+// --skills lets the hero use the SKILL list too, greedily: each turn it has
+// nothing to heal or brace for, the attack spell or skill with the most
+// expected damage this turn that it can pay for, poison or burn it would
+// leave counted in, if that beats a FIGHT; a skill that can't reach the foe
+// (QUAKE on a flier) is left out. MP runs dry fast that way, which makes it
+// the most a skill-casting hero gets out of the list, not a typical one.
+// --greedy is the same hero without the list, which is the run to set it
+// against: the default hero casts its weakness spell even where a FIGHT
+// would hit harder (FIRE's 18 on the GLACIER GOLEM against a Lv18 FIGHT's
+// ~25), so beside it the list would also be credited with the better pick.
+// --skill-table prints what each attack spell and skill deals a cast instead
+// of fighting (battleRules.ts sized the skills off it).
 
-import type { Spell } from "../src/battleRules";
+import type { Skill, Spell } from "../src/battleRules";
 import type { EquipmentKey } from "../src/gameState";
 
 // gameState.ts reads localStorage inside its save/load helpers; nothing here
@@ -44,13 +57,18 @@ const {
   BOSS_TELL_COOLDOWN,
   BURN_PROOF,
   CHILL_PROOF,
+  CRIT_CHANCE,
+  CRIT_MULT,
   ENRAGE_ATK_MULT,
   ENRAGE_HP_SHARE,
   FREEZE_GRACE_TURNS,
+  MIN_DAMAGE_SHARE,
   POISON_TURNS,
+  SKILLS,
   SPELLS,
   SPELL_EFFECT_WEAK_MULT,
   WARD_TURNS,
+  WEAKNESS_MULT,
   bossStrikeDamage,
   comboBonus,
   companionAtk,
@@ -60,6 +78,7 @@ const {
   regenAmount,
   rollDamage,
   scaleEnemy,
+  skillHit,
   spellRoll,
 } = await import("../src/battleRules");
 const { COMPANION_CHILL_MULT, COMPANION_DOT_PCT, COMPANION_DOT_TURNS, COMPANION_DOUBLE_MULT, COMPANION_SKILLS, companionSkillChance } =
@@ -114,12 +133,16 @@ const HP_LOW_SHARE = 0.35;
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`bun run sim:battle [--boss KING|TROLL|MOSS|GLACIER|DRAKE] [--level 8 | --level 6,12,18] [--n 2000] [--potions 3] [--bond N]
-                    [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
+                    [--skills | --greedy] [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
+       bun run sim:battle --skill-table
   --boss       one boss instead of all five
   --level      one level or a comma list instead of 1..${MAX_LEVEL}
   --n          fights per cell (default 2000)
   --potions    POTIONs the hero carries in (default 3)
   --bond       the WOLF's bond bonus 0..5 (default min(5, floor(level / 4)))
+  --skills     the hero casts SKILLs too, greedily (the header comment)
+  --greedy     that greedy pick from the spells alone, to set --skills against
+  --skill-table  each attack spell's and skill's damage a cast, and per MP, then exits
   late-game kits (none changes the default run):
   --refine     the GEAR columns' weapon and armor at BLACKSMITH REFINE +N
   --forged     the GEAR columns in DRAKE BLADE + GLACIER MAIL, not the intended gear
@@ -145,6 +168,8 @@ const TALISMAN = args.includes("--talisman");
 const MEAL = opt("meal");
 const MEAL_ATK = MEAL === "atk" ? 0.1 : 0;
 const MEAL_DEF = MEAL === "def" ? 0.15 : 0;
+const SKILLS_ON = args.includes("--skills");
+const GREEDY = SKILLS_ON || args.includes("--greedy");
 const FORGED: BossCase["gear"] = { weapon: "drakeBlade", armor: "glacierMail" };
 GameState.reset();
 GameState.ngPlus = NG;
@@ -176,6 +201,7 @@ interface Hero {
   atk: number;
   def: number;
   spells: Spell[];
+  skills: Skill[]; // only with --skills
   resists: { poison: boolean; freeze: boolean };
 }
 
@@ -203,8 +229,49 @@ function makeHero(level: number, gear: BossCase["gear"] | null): Hero {
     atk: Math.round(GameState.effAtk() * (1 + MEAL_ATK)),
     def: Math.round(GameState.effDef() * (1 + MEAL_DEF)),
     spells: SPELLS.filter((s) => level >= s.learnLevel),
+    skills: SKILLS_ON ? SKILLS.filter((s) => level >= s.learnLevel) : [],
     resists: { poison: GameState.resists("poison"), freeze: GameState.resists("freeze") },
   };
+}
+
+// --- what a cast deals, on average (the --skills hero's pick, --skill-table) --
+
+// an attack spell's damage (spellRoll), every roll of its spread
+function spellMean(spell: Spell, weak: boolean): number {
+  const spread = Math.ceil(spell.power / 2);
+  let sum = 0;
+  for (let r = 0; r < spread; r++) sum += Math.floor((spell.power + r) * (weak ? WEAKNESS_MULT : 1));
+  return sum / spread;
+}
+
+// a skill's damage over all its hits (skillHit), every roll of its spread
+// and the crit a one-hit skill may roll
+function skillMean(skill: Skill, def: number, weak: boolean): number {
+  const spread = Math.ceil(skill.power / 2);
+  const crit = skill.hits === 1 ? CRIT_CHANCE : 0;
+  const w = weak ? WEAKNESS_MULT : 1;
+  let sum = 0;
+  for (let r = 0; r < spread; r++) {
+    const roll = skill.power + r;
+    const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - (skill.pierce ? 0 : def));
+    sum += (1 - crit) * Math.floor(hit * w) + crit * Math.floor(hit * CRIT_MULT * w);
+  }
+  return (sum / spread) * skill.hits;
+}
+
+// a FIGHT's damage, crits counted, before the combo (rollDamage), sampled
+// once an ATK and DEF
+const fightMeans = new Map<string, number>();
+function fightMean(atk: number, def: number): number {
+  const key = `${atk}:${def}`;
+  let mean = fightMeans.get(key);
+  if (mean === undefined) {
+    let sum = 0;
+    for (let i = 0; i < 20000; i++) sum += rollDamage(atk, def).dmg;
+    mean = sum / 20000;
+    fightMeans.set(key, mean);
+  }
+  return mean;
 }
 
 // --- one fight ---------------------------------------------------------------
@@ -215,7 +282,13 @@ interface Outcome {
   taken: number; // damage the hero took, poison ticks included
 }
 
-type Action = { kind: "fight" } | { kind: "potion" } | { kind: "hiPotion" } | { kind: "defend" } | { kind: "magic"; spell: Spell };
+type Action =
+  | { kind: "fight" }
+  | { kind: "potion" }
+  | { kind: "hiPotion" }
+  | { kind: "defend" }
+  | { kind: "magic"; spell: Spell }
+  | { kind: "skill"; skill: Skill };
 
 function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome {
   const foe: Foe = scaleEnemy(ENEMIES[boss.key], {
@@ -263,9 +336,36 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     const ward = hero.spells.find((s) => s.kind === "ward");
     if (charging && ward && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
     if (charging && wardTurns === 0) return { kind: "defend" };
+    if (GREEDY) return greedy();
     const weak = hero.spells.find((s) => s.kind === "attack" && s.element !== undefined && s.element === foe.weakness);
     if (weak && mp >= weak.cost) return { kind: "magic", spell: weak };
     return { kind: "fight" };
+  };
+
+  // --skills: the most damage this turn (a poison or burn it would leave
+  // counted whole, at its odds), else FIGHT
+  const dotValue = (effect: Skill["effect"] | Spell["effect"], weak: boolean): number => {
+    if (!effect || enemyDot !== null || (effect.kind !== "burn" && effect.kind !== "poison")) return 0;
+    if (effect.kind === "burn" && BURN_PROOF.includes(foe.name)) return 0;
+    const odds = Math.min(1, effect.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1));
+    return odds * COMPANION_DOT_TURNS * Math.max(1, Math.round(foe.hp * COMPANION_DOT_PCT));
+  };
+  const greedy = (): Action => {
+    let best: Action = { kind: "fight" };
+    let most = fightMean(hero.atk, foe.def) * (1 + comboBonus(combo + 1));
+    for (const spell of hero.spells) {
+      if (spell.kind !== "attack" || mp < spell.cost) continue;
+      const weak = spell.element !== undefined && spell.element === foe.weakness;
+      const value = spellMean(spell, weak) + dotValue(spell.effect, weak);
+      if (value > most) [best, most] = [{ kind: "magic", spell }, value];
+    }
+    for (const skill of hero.skills) {
+      if (mp < skill.cost || (skill.grounded && foe.flying)) continue;
+      const weak = skill.element !== undefined && skill.element === foe.weakness;
+      const value = skillMean(skill, foe.def, weak) + dotValue(skill.effect, weak);
+      if (value > most) [best, most] = [{ kind: "skill", skill }, value];
+    }
+    return best;
   };
 
   // BattleScene playerAttack()
@@ -304,6 +404,40 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     foe.curHp = Math.max(0, foe.curHp - dmg);
     if (!effect || foe.curHp <= 0) return;
     if (effect === "burn") enemyDot = COMPANION_DOT_TURNS;
+    else if (effect === "chill") {
+      chilled = true;
+      foe.atk = Math.max(1, Math.round(foe.atk * COMPANION_CHILL_MULT));
+    } else stuck = true;
+  };
+
+  // BattleScene castSkill() + spellEffectCanLand() + landSkillEffect(): the
+  // effect rolled before the hits, landed if the foe outlives them; a hit
+  // the foe is already down for isn't thrown
+  const useSkill = (skill: Skill): void => {
+    mp -= skill.cost;
+    const weak = skill.element !== undefined && skill.element === foe.weakness;
+    const fx = skill.effect;
+    const canLand =
+      fx &&
+      (fx.kind === "burn"
+        ? enemyDot === null && !BURN_PROOF.includes(foe.name)
+        : fx.kind === "poison"
+          ? enemyDot === null
+          : fx.kind === "chill"
+            ? !chilled && !CHILL_PROOF.includes(foe.name)
+            : !stuck && !foe.boss && !foe.giant);
+    const effect = fx && canLand && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
+    let total = 0;
+    for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
+      const { dmg } = skillHit(skill, foe.def, foe.weakness);
+      foe.curHp = Math.max(0, foe.curHp - dmg);
+      total += dmg;
+    }
+    // CHAIN, as an attack spell
+    combo = weak ? combo + 1 : 0;
+    if (skill.drain) hp += Math.min(hero.maxHp - hp, Math.ceil(total * skill.drain));
+    if (!effect || foe.curHp <= 0) return;
+    if (effect === "burn" || effect === "poison") enemyDot = COMPANION_DOT_TURNS;
     else if (effect === "chill") {
       chilled = true;
       foe.atk = Math.max(1, Math.round(foe.atk * COMPANION_CHILL_MULT));
@@ -394,6 +528,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       const action = choose();
       if (action.kind === "fight") playerAttack();
       else if (action.kind === "magic") cast(action.spell);
+      else if (action.kind === "skill") useSkill(action.skill);
       else if (action.kind === "defend") {
         combo = 0;
         defending = true;
@@ -452,6 +587,59 @@ const COLS = [
 const pct = (x: number): string => `${Math.round(x * 100)}%`.padStart(4);
 const fmt = (c: Cell): string => `${pct(c.win)} ${c.rounds.toFixed(1).padStart(5)} ${pct(c.lost)}`;
 
+// --skill-table: each attack spell and skill a cast, at the DEF it can meet
+// (a spell's ignores DEF), on a weakness at DEF 3, and per MP at DEF 3,
+// beside a FIGHT at its level in the gear of the boss before it, against
+// DEF 3 (no combo). What it leaves (poison, burn, chill, stun, HP) isn't in
+// the damage.
+if (args.includes("--skill-table")) {
+  type Row = { name: string; lv: number; mp: number; hits: number; at: (def: number, weak: boolean) => number; note: string };
+  const effectNote = (e: Skill["effect"]): string => (e ? `${e.kind} ${Math.round(e.chance * 100)}%` : "");
+  const rows: Row[] = [
+    ...SPELLS.filter((s) => s.kind === "attack").map(
+      (s): Row => ({
+        name: s.name,
+        lv: s.learnLevel,
+        mp: s.cost,
+        hits: 1,
+        at: (_def, weak) => spellMean(s, weak && s.element !== undefined),
+        note: `spell${s.element ? ` ${s.element}` : ""} ${effectNote(s.effect)}`.trim(),
+      }),
+    ),
+    ...SKILLS.map(
+      (s): Row => ({
+        name: s.name,
+        lv: s.learnLevel,
+        mp: s.cost,
+        hits: s.hits,
+        at: (def, weak) => skillMean(s, def, weak && s.element !== undefined),
+        note: [
+          s.element,
+          effectNote(s.effect),
+          s.pierce && "ignores DEF",
+          s.drain && `drain ${s.drain * 100}%`,
+          s.grounded && "misses fliers",
+        ]
+          .filter(Boolean)
+          .join(", "),
+      }),
+    ),
+  ].sort((a, b) => a.lv - b.lv);
+  const f = (x: number): string => x.toFixed(1).padStart(6);
+  console.log("ATTACK SPELLS AND SKILLS: mean damage a cast (all hits)");
+  console.log(`${"NAME".padEnd(13)} LV  MP  HITS   DEF1   DEF3   DEF5   DEF8  WEAK3  /MP@3  FIGHT  NOTE`);
+  for (const r of rows) {
+    const gear = [...BOSSES].reverse().find((b) => b.level <= r.lv)?.gear ?? BOSSES[0].gear;
+    const fightAt = fightMean(makeHero(r.lv, gear).atk, 3);
+    console.log(
+      `${r.name.padEnd(13)} ${String(r.lv).padStart(2)}  ${String(r.mp).padStart(2)}  ${String(r.hits).padStart(4)} ` +
+        `${f(r.at(1, false))} ${f(r.at(3, false))} ${f(r.at(5, false))} ${f(r.at(8, false))} ${f(r.at(3, true))} ` +
+        `${f(r.at(3, false) / r.mp)} ${f(fightAt)}  ${r.note}`,
+    );
+  }
+  process.exit(0);
+}
+
 const started = Date.now();
 const kit = [
   REFINE > 0 && `REFINE +${REFINE}`,
@@ -460,6 +648,7 @@ const kit = [
   HIPOTIONS > 0 && `${HIPOTIONS} HI-POTION(s)`,
   TALISMAN && "TALISMAN",
   MEAL && `meal ${MEAL}`,
+  GREEDY && (SKILLS_ON ? "greedy, SKILLs" : "greedy, spells only"),
 ].filter(Boolean);
 console.log(
   `BATTLE SIM  ${N} fights a cell, day, NG+${NG}, ${MEAL ? "" : "no meal, "}not rested, ${TALISMAN ? "" : "no accessory, "}no bestiary bonus, ` +
