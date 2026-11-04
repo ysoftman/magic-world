@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { clearFrame, createFrame, createFx } from "pixelfx";
+import * as godRays from "pixelfx/fx/weather/god-rays";
 import { type AmbienceCue, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { GameState, nightFactor } from "../gameState";
@@ -255,6 +257,7 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
     const fireflies = addFireflies(scene);
     const rain = addRain(scene, mix, "forest");
     const snow = addSnowfall(scene, mix);
+    const rays = addSunRays(scene);
     // birds by day, an owl and insects by night; the rain hushes them all,
     // and winter keeps only a few birds and the owl
     everyFew(scene, 2000, 6000, () => cue("warble", season.birds * (1 - nightFactor()) * (1 - 0.8 * mix.rain)));
@@ -266,6 +269,9 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
         // fewer leaves come down in the rain, and fewer fireflies come out
         show(leaves, season.leaves * (1 - night) * (1 - 0.6 * mix.rain), 1 - night);
         show(fireflies, season.insects * night * (1 - 0.75 * mix.rain), night);
+        // through the leaves: none in the bare winter wood, where over the
+        // snow they only washed the ground out
+        rays(season.leaves * (1 - night) * (1 - mix.rain) * (1 - mix.snow));
         rain.tick();
         snow.tick();
       },
@@ -579,6 +585,100 @@ function addFireflies(scene: Phaser.Scene): Layer {
   // fireflies are lights, not motes: ADD makes them glow over the dark ground
   layer.emitter.setBlendMode(Phaser.BlendModes.ADD).setDepth(GLOW_DEPTH);
   return layer;
+}
+
+// The forest's shafts of sunlight on a dry day: pixelfx's god rays (MIT; its
+// notice is the /*! line in fx.ts) drawn live over the whole view, one of its
+// pixels to a 4px cell, as the battle's weather is (PixelWeather.ts): a 10s
+// loop baked at 15fps would be 150 frames of 230KB. Only its light, added
+// over the ground, and its opaque dust motes: the dark air it hangs over its
+// whole canvas and the translucent body of each beam are drawn for a night
+// backdrop, and left out. Its floor sits on the screen's bottom edge, so the
+// pool of light it lays there falls off the texture; its canvas stops 10 rows
+// short of the top (40px, under the HUD's 88), and the light fades in over the
+// RAYS_FADE rows under that, so with the HUD hidden (S) the shafts do not
+// start on a hard line. Over the hero, the guide arrow and a dug chest
+// (10..10.7), under the name tags and the hero's gear (11), so a tag keeps the
+// contrast it was measured at; under the night shade (90), which darkens it at
+// dusk on top of the fade. Redrawn RAYS_STEP_MS apart (~1.9ms to draw,
+// headless, then the upload on the next frame), and not at all while it is out
+// (a rainy day, the night, winter).
+const RAYS_KEY = "field-rays";
+const RAYS_DEPTH = 10.8;
+const RAYS_PEAK = 0.6;
+const RAYS_FADE = 20;
+const RAYS_STEP_MS = 1000 / 15;
+function addSunRays(scene: Phaser.Scene): (level: number) => void {
+  const [w, h] = [GAME_WIDTH / PIXEL, GAME_HEIGHT / PIXEL];
+  if (scene.textures.exists(RAYS_KEY)) scene.textures.remove(RAYS_KEY);
+  const texture = scene.textures.createCanvas(RAYS_KEY, w, h);
+  const image = scene.add
+    .image(0, 0, RAYS_KEY)
+    .setOrigin(0)
+    .setScale(PIXEL)
+    .setScrollFactor(0)
+    .setDepth(RAYS_DEPTH)
+    .setBlendMode(Phaser.BlendModes.ADD)
+    .setVisible(false);
+  const ctx = texture?.getContext();
+  const img = ctx?.createImageData(w, h);
+  const out = img && new Uint32Array(img.data.buffer);
+  // the effect's anchor (its floor's middle) on the bottom edge's middle
+  const frame = createFrame(w, h, -w / 2, -h);
+  const fx = createFx(godRays);
+  // where in its loop it starts: anywhere, so no two visits open alike
+  fx.update(Math.random() * godRays.meta.duration);
+  const top = h - godRays.meta.origin[1];
+  let wait = RAYS_STEP_MS;
+  let drawn = false;
+  const step = (_time: number, delta: number): void => {
+    if (!image.visible || !ctx || !img || !out || !texture) return;
+    if (drawn) {
+      drawn = false;
+      for (let y = 0; y < h; y++) {
+        const fade = Phaser.Math.Clamp((y - top) / RAYS_FADE, 0, 1);
+        for (let i = y * w; i < (y + 1) * w; i++) {
+          const c = frame.color[i];
+          const l = frame.light[i] & 0xffffff;
+          // a mote, opaque; or the light, as its colour over its brightest
+          // channel (added, that is the light itself)
+          const mote = c >>> 24 === 255;
+          const a = mote ? 255 : Math.max(l & 255, (l >>> 8) & 255, l >>> 16);
+          out[i] = a ? (Math.round(a * fade) << 24) | (mote ? c & 0xffffff : divide(l, a)) : 0;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      texture.refresh();
+      return;
+    }
+    wait += delta;
+    if (wait < RAYS_STEP_MS) return;
+    fx.update(Math.min(wait, 250) / 1000);
+    wait = 0;
+    clearFrame(frame);
+    fx.draw(frame);
+    drawn = true;
+  };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    scene.events.off(Phaser.Scenes.Events.UPDATE, step);
+    image.destroy();
+    scene.textures.remove(RAYS_KEY);
+  });
+  return (level) => {
+    image.setAlpha(RAYS_PEAK * level);
+    image.setVisible(level > 0.01);
+  };
+}
+
+// a light's colour scaled up to full alpha `a` (its brightest channel), as ABGR
+function divide(l: number, a: number): number {
+  const k = 255 / a;
+  return (
+    (Math.min(255, Math.round(((l >>> 16) & 255) * k)) << 16) |
+    (Math.min(255, Math.round(((l >>> 8) & 255) * k)) << 8) |
+    Math.min(255, Math.round((l & 255) * k))
+  );
 }
 
 // What the season (season.ts) puts in the town's and the forest's air, as
