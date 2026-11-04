@@ -30,6 +30,7 @@ import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { ART_PX } from "./pixelart";
+import { SKILL_SHEETS } from "./skillSheets";
 
 // Camera shake and full-screen flash behind the SCREEN SHAKE / FLASHES
 // settings. Call these instead of camera.shake()/camera.flash() so a player
@@ -406,7 +407,7 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
 };
 
 // every sheet by key, for playing one
-const SHEETS: Record<string, PixelSheet> = { ...PIXEL_SHEETS, ...COMPANION_SHEETS };
+const SHEETS: Record<string, PixelSheet> = { ...PIXEL_SHEETS, ...COMPANION_SHEETS, ...SKILL_SHEETS };
 
 // a sheet's frames, the texture point put on (x, y) as a fraction of a frame,
 // whether it turns to face the blow and whether it keeps the normal cell over
