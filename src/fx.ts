@@ -1,3 +1,4 @@
+/*! pixelfx (github.com/patch-gg/pixelfx) | MIT License | Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez */
 import Phaser from "phaser";
 import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
