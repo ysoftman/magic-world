@@ -2505,8 +2505,9 @@ export class BattleScene extends Phaser.Scene {
       Sfx.victory();
       this.settleEnemyScale();
       this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
-      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-      this.coinBurst.explode(10);
+      // it goes up in a poof and drops its gold, on the ground under it (fx.ts)
+      playFx(this, "fx-poof", this.enemySprite.x, GROUND_Y, this.anim(1200), this.enemyBaseScale);
+      playFx(this, "fx-coins", this.enemySprite.x, GROUND_Y, this.anim(2800), this.enemyBaseScale);
       if (streakBonus > 0) {
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(10);
@@ -2631,6 +2632,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.victory();
     this.settleEnemyScale();
     this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
+    playFx(this, "fx-poof", this.enemySprite.x, GROUND_Y, this.anim(1200), this.enemyBaseScale);
     await this.say(`${this.enemy.name} is defeated!`);
     // This bout's share is paid, the record moved up and the game saved right
     // here, so a run cut off from now on (the tab closed, a reload) keeps

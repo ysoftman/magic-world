@@ -8,6 +8,8 @@ import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
 import * as swordSlash from "pixelfx/fx/melee/sword-slash";
+import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
+import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { ART_PX } from "./pixelart";
@@ -504,6 +506,14 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // flakes spin out (from just before the flash; their drift down after
   // 0.85s left off). The flakes' middle, 52 cells over its ground, on the foe's.
   "fx-ice": { fx: snowflakeBurst, span: [0.15, 0.85], frames: 10, focus: [-2, -52], sameOnBoss: true, crop: [28, 8, 116, 112] },
+  // a foe going down (victory, arenaVictory): a white pop, a ring of smoke
+  // balls, little stars, the cloud lifting away. Its anchor is the floor, so
+  // BattleScene plays it on the ground under the foe (GROUND_Y), a flier's
+  // too; at 4px on a boss, whose 6px stars reached up into the stat window.
+  "fx-poof": { fx: poof, span: [0, 1.2], frames: 18, sameOnBoss: true },
+  // the foe's gold, with fx-poof: coins spin out of a small puff (lost in the
+  // poof's cloud), bounce along the ground, twinkle and wink out
+  "fx-coins": { fx: coinDrop, span: [0, 2.8], frames: 42, sameOnBoss: true },
 };
 
 // a sheet's frames, how many texels to an art cell, the texture point put on
