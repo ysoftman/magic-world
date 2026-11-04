@@ -6,8 +6,8 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
 // (BootScene) as 1280x720 textures: "battle-bg-<region>", and for the town and
 // the forest one per look the season gives their maps ("-autumn", "-winter";
 // art/tilesets.ts battleBgKey picks). Each is drawn in three depths on 4px
-// cells, a step coarser than the fighters' 2px art, so it reads as further
-// away:
+// cells, the fighters' own cell on this screen (their 2px art at scale 2);
+// what sets it back is its lower chroma and contrast:
 //
 // - far: mountains, a tree wall or a cave wall, close to the sky's colour
 // - mid: hills, trees, rocks or pillars, darker and still muted
