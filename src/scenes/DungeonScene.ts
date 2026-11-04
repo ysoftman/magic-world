@@ -48,6 +48,7 @@ import {
 } from "../sceneCommon";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
+import { addAbyssRift, STAIR_RIFT } from "../ui/abyssRift";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { CompanionSprite } from "../ui/CompanionSprite";
 import { DialogueBox } from "../ui/DialogueBox";
@@ -394,6 +395,9 @@ export class DungeonScene extends Phaser.Scene {
     const { x, y } = ABYSS_STAIRS_POS;
     bakeAbyssStairs(this);
     this.add.image(x, y, STAIRS_DOWN_KEY).setDepth(3);
+    // the rift turning flat in its pit (abyssRift.ts), the pit's middle 16px
+    // under the stair's: over the steps, under the hero who steps on it (10)
+    addAbyssRift(this, STAIR_RIFT, x, y + 16, 3.5);
     // at the map tags' 11, over the guide arrow (10.5), unlike the TOWN
     // marker's 9: from the top of the stair's row the arrow, pointing the way
     // out, sat on the tag's SS

@@ -74,6 +74,7 @@ import {
 import { type Season, seasonLook, seasonNews, seasonToday } from "../season";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
+import { addAbyssRift, GATE_RIFT } from "../ui/abyssRift";
 import { BestiaryUI } from "../ui/BestiaryUI";
 import { BlacksmithUI } from "../ui/Blacksmith";
 import { CompanionSprite } from "../ui/CompanionSprite";
@@ -982,6 +983,9 @@ export class TownScene extends Phaser.Scene {
     this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate").setDepth(9));
     const glow = this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate-glow").setDepth(9));
     this.tweens.add({ targets: glow, alpha: 0.2, duration: 1400, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    // the rift turning in the ring (abyssRift.ts), its middle on the vortex's:
+    // over the drawn gate (9), under the hero who passes in front of it (10)
+    this.track("ABYSS_GATE_POS", addAbyssRift(this, GATE_RIFT, pos.x, pos.y - 3, 9.5));
     this.addBlocker("ABYSS_GATE_POS", pos.x, pos.y, 48, TILE);
     // the cave stair's tag, in the signs' place
     const tag = this.track(
