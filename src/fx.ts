@@ -216,8 +216,18 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // the foe's gold, with fx-poof: coins spin out of a small puff (lost in the
   // poof's cloud), bounce along the ground, twinkle and wink out. Cropped to
   // what it draws (13, 16, 146, 87) grown just enough that every pixel bakes
-  // as before: 146 wide fits 14 frames a row, 2044x234 for 1920x352.
-  "fx-coins": { fx: coinDrop, span: [0, 2.8], frames: 42, sameOnBoss: true, crop: [7, 10, 153, 88] },
+  // as before: 146 wide fits 14 frames a row, 2044x234 for 1920x352. After a
+  // death of the foe's own (statusFx.ts, from its break-up) the puff shows:
+  // pale mist, which reads as frost, steam or light, where the lilac-grey
+  // default read as a lump of rock among the ice shards.
+  "fx-coins": {
+    fx: coinDrop,
+    opts: { smoke: ["#9aa6c4", "#c4cee6", "#e6edf8", "#ffffff"] },
+    span: [0, 2.8],
+    frames: 42,
+    sameOnBoss: true,
+    crop: [7, 10, 153, 88],
+  },
   // a level up, and a TREASURE MAP found: a gold flash and cross, a ring
   // snapping out, twinkles thrown wide; its burst, 30 over its anchor, on the
   // hero's middle. Gold is ui/level-up's ramp.

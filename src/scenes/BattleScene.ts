@@ -59,10 +59,10 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
-import { StatusFx, type StatusKind } from "../statusFx";
+import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
@@ -150,6 +150,12 @@ const SPELL_FX: Record<string, readonly [string, string]> = {
 const HIT_FX_MS = 300;
 // a status sheet as long as its label's pop (flashStatus), floor and all
 const STATUS_FX_MS = 900;
+// a death of the foe's own (deathOf): its sheet's 2.4-2.45s squeezed in, the
+// break-up some 1s in, the debris settled as the victory line has typed
+const DEATH_FX_MS = 1800;
+// the deaths' kinds: the snow field's and the volcano's rosters
+const SHATTER_KIN = [ENEMIES.frostMoth, ENEMIES.auroraMoth, ENEMIES.yeti, ENEMIES.iceGolem].map((e) => e.name);
+const BURNAWAY_KIN = [ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
 
 // status labels sit right-aligned on the HP rows, 20px inside each window
 const PLAYER_STATUS_RIGHT = 476;
@@ -778,6 +784,8 @@ export class BattleScene extends Phaser.Scene {
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
     this.statusFx = new StatusFx(this);
+    // a flier's death lands its debris on the ground, FLY_LIFT under it
+    if (this.enemy.flying) this.statusFx.hover(this.enemySprite, Math.round(FLY_LIFT / (ART_PX * this.enemyBaseScale)));
     this.warmStatuses();
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
@@ -2384,6 +2392,37 @@ export class BattleScene extends Phaser.Scene {
       warm(hero, "poison", PSN_TINT);
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
+    // last, as it is needed last
+    const death = this.deathOf();
+    if (death) warm(foe, death);
+  }
+
+  // How the foe dies, if not in fx-poof: its own kind's way (a creature of
+  // ice shatters, one of fire burns away, an ARENA bout's too), else unmade
+  // into motes in the ABYSS
+  private deathOf(): StatusKind | null {
+    const { name } = this.enemy;
+    if (SHATTER_KIN.includes(name)) return "shatter";
+    if (BURNAWAY_KIN.includes(name)) return "dissolve";
+    return this.abyss ? "disintegrate" : null;
+  }
+
+  // The foe going down. A death of its own (deathOf, statusFx.ts) takes its
+  // body over and hides the sprite when it breaks up, its shadow with it; in
+  // its own colours, so an enraged boss's red goes out of it as it dies.
+  // Else a poof on the ground under it (a flier's too), the sprite swelling
+  // as it fades. Returns the ms till its body is gone (breakOf).
+  private fell(): number {
+    this.settleEnemyScale();
+    const death = this.deathOf();
+    if (death) {
+      this.enemySprite.clearTint();
+      this.statusOn(this.enemySprite, death, DEATH_FX_MS);
+      return Math.round(this.anim(DEATH_FX_MS) * breakOf(death));
+    }
+    this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
+    playFx(this, "fx-poof", this.enemySprite.x, GROUND_Y, this.anim(1200), this.enemyBaseScale);
+    return 0;
   }
 
   // a status or recovery effect on a battler for ms (at BATTLE SPEED), at the
@@ -2584,11 +2623,12 @@ export class BattleScene extends Phaser.Scene {
       const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0)));
       GameState.player.exp += exp;
       Sfx.victory();
-      this.settleEnemyScale();
-      this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
-      // it goes up in a poof and drops its gold, on the ground under it (fx.ts)
-      playFx(this, "fx-poof", this.enemySprite.x, GROUND_Y, this.anim(1200), this.enemyBaseScale);
-      playFx(this, "fx-coins", this.enemySprite.x, GROUND_Y, this.anim(2800), this.enemyBaseScale);
+      // its gold drops on the ground under it (fx.ts) as it goes: out of a
+      // death of its own, the coins' flash and puff over a body still whole
+      // hid it
+      this.time.delayedCall(this.fell(), () =>
+        playFx(this, "fx-coins", this.enemySprite.x, GROUND_Y, this.anim(2800), this.enemyBaseScale),
+      );
       if (streakBonus > 0) {
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(10);
@@ -2711,9 +2751,7 @@ export class BattleScene extends Phaser.Scene {
   // Messages stay within one line: "Next: GLACIER GOLEM! +999 HP +999 MP" (36).
   private async arenaVictory(run: ArenaRun): Promise<void> {
     Sfx.victory();
-    this.settleEnemyScale();
-    this.tweenPromise(this.enemySprite, { scale: this.enemyBaseScale * 1.15, alpha: 0 }, this.anim(350));
-    playFx(this, "fx-poof", this.enemySprite.x, GROUND_Y, this.anim(1200), this.enemyBaseScale);
+    this.fell();
     await this.say(`${this.enemy.name} is defeated!`);
     // This bout's share is paid, the record moved up and the game saved right
     // here, so a run cut off from now on (the tab closed, a reload) keeps

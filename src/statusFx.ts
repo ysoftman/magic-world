@@ -4,6 +4,9 @@ import * as divineShield from "pixelfx/fx/holy/divine-shield";
 import * as heal from "pixelfx/fx/holy/heal";
 import * as freeze from "pixelfx/fx/ice/freeze";
 import * as electrified from "pixelfx/fx/lightning/electrified";
+import * as disintegrate from "pixelfx/fx/spawn/disintegrate";
+import * as dissolveBurn from "pixelfx/fx/spawn/dissolve-burn";
+import * as shatterDeath from "pixelfx/fx/spawn/shatter-death";
 import * as burning from "pixelfx/fx/status/burning";
 import * as frozen from "pixelfx/fx/status/frozen";
 import * as poisoned from "pixelfx/fx/status/poisoned";
@@ -23,9 +26,22 @@ import { ART_PX } from "./pixelart";
 // for poison and rage, the tint the battler shows: the effect repaints the
 // body, and the purple it is flashed (the red an enraged boss keeps) has to
 // stay under it. Most play once (play()); the stars of a stuck foe hold for
-// as long as it is stuck (loop()).
+// as long as it is stuck (loop()). A foe's death (shatter, dissolve,
+// disintegrate) takes its body over and leaves nothing.
 
-export type StatusKind = "heal" | "ward" | "burn" | "chill" | "shock" | "poison" | "freeze" | "stun" | "rage";
+export type StatusKind =
+  | "heal"
+  | "ward"
+  | "burn"
+  | "chill"
+  | "shock"
+  | "poison"
+  | "freeze"
+  | "stun"
+  | "rage"
+  | "shatter"
+  | "dissolve"
+  | "disintegrate";
 
 // a fx.ts pixel sheet over the whole canvas, its span and frames set. body:
 // the battler's colours as handed to the effect, "tinted" with its tint at
@@ -54,12 +70,26 @@ interface StatusSheet extends PixelSheet {
   /** seeded by the battler: rage keeps its floor cracks by seed alone, and a second boss stood on the first one's */
   ownSeed?: boolean;
   /**
-   * effect pixels over its anchor (the feet) where it is gone, faded out over
-   * the CEILING_FADE under that: what it throws up off a boss's head at 6px
-   * would reach into the foe's window
+   * screen px over its anchor (the feet) where it is gone, faded out over the
+   * CEILING_FADE effect pixels under that: what it throws up off a boss's
+   * head at 6px would reach into the foe's window. In screen px, so a
+   * battler's cell (4px, 6px on a boss) makes it the same line on screen.
    */
   ceiling?: number;
+  /**
+   * a death: the battler's own sprite shown as long as the effect's
+   * actorAlpha has it (the effect draws over it, then breaks it up), and its
+   * floor the ground under a hovering battler (StatusFx.hover), where what
+   * falls off it lands
+   */
+  fells?: boolean;
+  /** a death's moment its body is gone, in the effect's seconds: where the foe's gold drops from (breakOf) */
+  breaks?: number;
 }
+
+// rage's ceiling and the deaths': over the feet at GROUND_Y (456), y 222,
+// under the foe's window (to y 200) with the fade's 48px at 6px
+const WINDOW_CEILING = 234;
 
 // how many effect pixels a sheet's ceiling fades out over
 const CEILING_FADE = 8;
@@ -79,6 +109,8 @@ const WARD_RAMP = ["#0b1838", "#15306b", "#1e4fa0", "#3b82f6", "#60a5fa", "#93c5
 const BURN_RAMP = ["#3a0d0a", "#7a1610", "#b91c1c", "#dc2626", "#f2561d", "#ff8a2a", "#ffc23d", "#ffe26b", "#fff3a6"];
 const ICE_RAMP = ["#0b2a3a", "#0e4a63", "#0e7490", "#22a6c4", "#67e8f9", "#a5f3fc", "#cffafe", "#ffffff"];
 const PSN_RAMP = ["#1a0533", "#3b0764", "#581c87", "#7e22ce", "#a855f7", "#c084fc", "#e9d5ff", "#f5d0fe"];
+// the ABYSS's violet (its floor label's #c084fc), the accent a step bluer
+const ABYSS_RAMP = ["#12062a", "#2a0f55", "#4c1d95", "#6d28d9", "#8b5cf6", "#c084fc", "#e9d5ff", "#ffffff"];
 
 const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // petals at the feet, a hoop of light climbing the body as it washes pale
@@ -116,8 +148,8 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // beat lights a disc some 300px across: a faint one with FLASHES off.
   // The steam and the lines off the tallest, the FLAME DRAKE (its head 30
   // cells up, at y 276), rose to y 180, into the window (to 200): gone 39
-  // cells over the feet, y 222, and at the 1.15x throb's peak (feet at 470,
-  // 6.9px cells) y 201.
+  // cells (234px) over the feet, y 222, and at the 1.15x throb's peak (feet
+  // at 470, 6.9px cells) y 201.
   rage: {
     fx: rage,
     span: [0, 0.75],
@@ -128,7 +160,52 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
     fade: 0.3,
     soft: 0.35,
     ownSeed: true,
-    ceiling: 39,
+    ceiling: WINDOW_CEILING,
+  },
+  // The deaths (BattleScene victory), in place of fx-poof for a foe of ice,
+  // of fire or met in the ABYSS. Each takes the body over: the sprite goes
+  // as the effect's actorAlpha says, and nothing is left at the end. Their
+  // glow, a white flash or a fire's, is soft with FLASHES off.
+  // Frost seals the body in faceted ice, cracks spread, it bursts into its
+  // facets at 1.4s (its BURST), which tumble, bounce and melt (the last of
+  // the melt left off)
+  shatter: {
+    fx: shatterDeath,
+    opts: { palette: ICE_RAMP },
+    span: [0.05, 2.5],
+    frames: 30,
+    fade: 0.2,
+    soft: 0.35,
+    fells: true,
+    breaks: 1.4,
+    ceiling: WINDOW_CEILING,
+  },
+  // it catches from the feet up, burns to char and crumbles into embers and
+  // smoke rising off, the body all but gone by 1.6s (the smoke's last wisps
+  // left off)
+  dissolve: {
+    fx: dissolveBurn,
+    opts: { palette: BURN_RAMP },
+    span: [0.1, 2.6],
+    frames: 30,
+    fade: 0.2,
+    soft: 0.35,
+    fells: true,
+    breaks: 1.6,
+    ceiling: WINDOW_CEILING,
+  },
+  // a white flash, a ring on the floor, then the body peels into motes the
+  // wind carries off right, away from the hero; gone by 1.2s (its PEEL)
+  disintegrate: {
+    fx: disintegrate,
+    opts: { palette: ABYSS_RAMP, accent: ["#86198f", "#e879f9", "#fae8ff"] },
+    span: [0.2, 2.6],
+    frames: 30,
+    fade: 0.2,
+    soft: 0.35,
+    fells: true,
+    breaks: 1.2,
+    ceiling: WINDOW_CEILING,
   },
 };
 
@@ -189,12 +266,14 @@ function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
 // texels is, in that texel's colour. `feet` is the texels from the frame's top
 // to the line under its lowest cell, where the effect's anchor goes. `trim`
 // crops the frame to the cells that are on (the mask, a.x/a.y/a.w/a.h and the
-// head with it), the anchor staying where the frame's would be.
+// head with it), the anchor staying where the frame's would be. `lift`: the
+// cells the body hovers over the anchor (a flier over the ground).
 function actorOf(
   sprite: Phaser.GameObjects.Sprite,
   { data, tw, th }: FramePixels,
   recolor: ((c: Rgb) => Rgb) | null,
   trim = false,
+  lift = 0,
 ): { actor: Actor; feet: number } {
   const w = Math.ceil(tw / ART_PX);
   const h = Math.ceil(th / ART_PX);
@@ -220,9 +299,9 @@ function actorOf(
         [left, right, top, bottom] = [Math.min(left, mx), Math.max(right, mx), Math.min(top, cy), Math.max(bottom, cy)];
         break;
       }
-  const feet = (bottom + 1) * ART_PX;
+  const feet = (bottom + 1 + lift) * ART_PX;
   const x = -Math.floor(w / 2);
-  const y = -(bottom + 1);
+  const y = -(bottom + 1 + lift);
   const actor = (m: Uint8Array, px: Uint32Array, ax: number, ay: number, aw: number, ah: number): Actor => ({
     mask: { w: aw, h: ah, data: m },
     pixels: px,
@@ -243,14 +322,16 @@ function actorOf(
       cropped[cy * cw + cx] = mask[(top + cy) * w + left + cx];
       croppedPixels[cy * cw + cx] = pixels[(top + cy) * w + left + cx];
     }
-  return { actor: actor(cropped, croppedPixels, x + left, -ch, cw, ch), feet };
+  return { actor: actor(cropped, croppedPixels, x + left, -ch - lift, cw, ch), feet };
 }
 
-// a pixelfx effect's draw and drawBack, which env.d.ts leaves out of FxModule
+// a pixelfx effect's draw and drawBack, and how much of its body a death
+// leaves the host to draw (actorAlpha), which env.d.ts leaves out of FxModule
 type Draw = (p: unknown, t: number, o: Record<string, unknown>) => void;
 interface Layers extends FxModule {
   draw: Draw;
   drawBack?: Draw;
+  actorAlpha?: (t: number, o: Record<string, unknown>) => number;
 }
 
 // One layer of a pure effect as an effect of its own: bakePixelSheet draws
@@ -263,12 +344,13 @@ function layerOf(fx: FxModule, back: boolean): FxModule {
 
 // Erases what a baked sheet draws over its ceiling, frame by frame, and fades
 // the CEILING_FADE rows under it: a status sheet's frames are the effect's
-// whole canvas (no crop), its anchor on row origin[1] of each.
-function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet): void {
+// whole canvas (no crop), its anchor on row origin[1] of each. `cell`: the
+// screen px an effect pixel is shown at on its battler.
+function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet, cell: number): void {
   const tex = scene.textures.get(key);
   if (sheet.ceiling === undefined || !(tex instanceof Phaser.Textures.CanvasTexture)) return;
   const h = sheet.fx.meta.size[1];
-  const gone = Math.max(0, sheet.fx.meta.origin[1] - sheet.ceiling);
+  const gone = Math.max(0, sheet.fx.meta.origin[1] - Math.round(sheet.ceiling / cell));
   const ctx = tex.getContext();
   ctx.save();
   ctx.globalCompositeOperation = "destination-out";
@@ -308,6 +390,14 @@ interface Plan {
   layers: string[];
   recolor: ((c: Rgb) => Rgb) | null;
   soft: boolean;
+  // the cells a death's body hovers over its floor (hover())
+  lift: number;
+}
+
+/** The share of a death's play its body is gone by: where the foe's gold drops from. */
+export function breakOf(kind: StatusKind): number {
+  const { span, breaks } = STATUS_SHEETS[kind];
+  return breaks === undefined ? 0 : (breaks - span[0]) / (span[1] - span[0]);
 }
 
 /**
@@ -324,6 +414,8 @@ export class StatusFx {
   // each battler frame read back once (framePixels): the opening's warm hands
   // the same body to six sheets, and its reads were 11ms of the battle's create
   private readonly frames = new Map<string, FramePixels | null>();
+  // the cells each hovering battler is over the ground (hover())
+  private readonly lifts = new Map<Phaser.GameObjects.Sprite, number>();
 
   constructor(private readonly scene: Phaser.Scene) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -332,7 +424,13 @@ export class StatusFx {
       this.faded.clear();
       this.frames.clear();
       this.feet.clear();
+      this.lifts.clear();
     });
+  }
+
+  /** `target` hovers `cells` art cells over the ground: where its death's debris lands (StatusSheet fells). */
+  hover(target: Phaser.GameObjects.Sprite, cells: number): void {
+    this.lifts.set(target, cells);
   }
 
   /**
@@ -345,15 +443,20 @@ export class StatusFx {
     const on = this.sprites(target, kind);
     if (!on) return;
     const fadeFrom = 1 - (sheet.fade ?? 0);
+    // a death's battler, shown while the effect leaves its body to it
+    const body = sheet.fells ? (sheet.fx as Layers).actorAlpha : undefined;
+    const [from, to] = sheet.span;
+    const at = (u: number): void => {
+      on.show(Math.min(sheet.frames - 1, Math.floor(u * sheet.frames)));
+      if (u > fadeFrom) for (const s of on.sprites) s.setAlpha((1 - u) / (1 - fadeFrom));
+      if (body) target.setAlpha(body(from + u * (to - from), sheet.opts ?? {}));
+    };
+    at(0);
     this.scene.tweens.addCounter({
       from: 0,
       to: 1,
       duration: Math.max(1, ms),
-      onUpdate: (tw) => {
-        const u = tw.getValue() ?? 0;
-        on.show(Math.min(sheet.frames - 1, Math.floor(u * sheet.frames)));
-        if (u > fadeFrom) for (const s of on.sprites) s.setAlpha((1 - u) / (1 - fadeFrom));
-      },
+      onUpdate: (tw) => at(tw.getValue() ?? 0),
       onComplete: () => on.destroy(),
     });
   }
@@ -409,7 +512,7 @@ export class StatusFx {
     if (!bake) return;
     let left = plan.layers.length;
     warmSheets(this.scene, bake.sheets, (key) => {
-      this.settle(key, kind);
+      this.settle(key, kind, target);
       left -= 1;
       if (left === 0) this.feet.set(plan.key, bake.feet);
     });
@@ -422,12 +525,14 @@ export class StatusFx {
     const sheet = STATUS_SHEETS[kind];
     const tinted = sheet.body !== "tinted" ? null : tint === undefined ? tintOf(target.tintTopLeft, target.tintMode) : tintOf(tint, mode);
     const soft = sheet.soft !== undefined && (!GameState.flashes || reducedMotion());
-    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}`;
+    const lift = sheet.fells ? (this.lifts.get(target) ?? 0) : 0;
+    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}${lift ? `:lift${lift}` : ""}`;
     return {
       key,
       layers: sheet.layered ? [`${key}:back`, `${key}:front`] : [key],
       recolor: sheet.body === "grey" ? greyOf : (tinted?.apply ?? null),
       soft,
+      lift,
     };
   }
 
@@ -443,7 +548,7 @@ export class StatusFx {
     if (!this.frames.has(at)) this.frames.set(at, framePixels(target));
     const pixels = this.frames.get(at);
     if (!pixels) return null;
-    const body = actorOf(target, pixels, plan.recolor, sheet.trim);
+    const body = actorOf(target, pixels, plan.recolor, sheet.trim, plan.lift);
     const opts = {
       ...sheet.opts,
       actor: body.actor,
@@ -458,11 +563,12 @@ export class StatusFx {
     return { sheets, feet: body.feet };
   }
 
-  // a texture just baked: its ceiling faded, once
-  private settle(key: string, kind: StatusKind): void {
+  // a texture just baked: its ceiling faded, once, on the cell of `target`
+  // at its own size (a throb's 1.15x left out)
+  private settle(key: string, kind: StatusKind, target: Phaser.GameObjects.Sprite): void {
     if (this.faded.has(key)) return;
     this.faded.add(key);
-    fadeAbove(this.scene, key, STATUS_SHEETS[kind]);
+    fadeAbove(this.scene, key, STATUS_SHEETS[kind], ART_PX * Math.round(target.scaleX));
   }
 
   // The sheet (or its two layers) for `kind` on `target`, baked here if no
@@ -477,7 +583,7 @@ export class StatusFx {
       // a layer a warm still under way has finished is skipped
       for (const [key, s] of Object.entries(bake.sheets)) {
         bakePixelSheet(this.scene, key, s);
-        this.settle(key, kind);
+        this.settle(key, kind, target);
       }
       feet = bake.feet;
       this.feet.set(plan.key, feet);

@@ -663,7 +663,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     말한 뒤와 `victory` 에서 끈다(`hideStun`). stuck 을 켜는 길을 새로 만들면 `showStun` 도 부른다.
   - 격노(rage)는 보스·거인이 격노하는 순간 한 박동(750ms)만 보이고 루프하지 않는다(결정: 박동마다 몸을 다시
     칠해 타격의 흰 번쩍임과 기 모으기 색을 덮고, 6px 보스에서 김과 선이 적 창으로 자꾸 올라간다). 그래도
-    올라가는 김과 선은 `ceiling`(발 위 39칸) 위를 지운다. 실제 사례: FLAME DRAKE 의 김이 y 180(적 창은 y 200
+    올라가는 김과 선은 `ceiling`(화면 px, 발 456 위 234 = y 222 — 4px·6px 칸이 같은 화면 줄) 위를 지운다. 실제 사례: FLAME DRAKE 의 김이 y 180(적 창은 y 200
     까지)까지 올라갔다. FLASHES 를 끄거나 reduced motion 이면 glow 를 줄여 굽는다(`soft`). pixelfx rage 는
     바닥 균열을 seed 만으로 캐시해서 전투원마다 시드를 준다(`ownSeed`). 실제 사례: 두 번째 보스가 첫 보스의
     균열 위에 섰다.
@@ -674,6 +674,12 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     장의 첫 굽기 19~66ms(헤드리스 중앙 23ms)가 같은 턴 감전의 첫 굽기와 겹쳤고, 첫 BURN·CHILL·HEAL·WARD 는 그
     턴을 12~36ms 잡았다(warm 뒤 격노 0.5ms, 오프닝 최장 16.8ms).
   - 동료의 CHILL(FROST MOTH)이 걸리는 순간에는 냉기 시트를 보인다. CHILL 은 틱이 없어 그때만 보인다.
+  - 적의 처치는 종·지역으로 가른다(BattleScene `deathOf`): 얼음 종은 spawn/shatter-death(`shatter`), 불 종은
+    spawn/dissolve-burn(`dissolve`), ABYSS 의 나머지는 spawn/disintegrate(`disintegrate`, 보라), 그 밖은 fx-poof 다.
+    셋은 `fells` 시트라 적 자신의 몸으로 굽고, 스프라이트(와 그림자)는 이펙트의 actorAlpha 대로 사라진다. 코인(fx-coins)은
+    `breaks`(몸이 다 사라지는 시각, `breakOf`)에 떨어진다. 실제 사례: 처음엔 코인을 처치와 함께 띄웠더니 코인의 금빛
+    섬광과 puff 가 아직 멀쩡한 몸을 가렸다. 나는 적은 `statusFx.hover` 로 몸을 `FLY_LIFT` 만큼 띄워 구워 파편이 땅에
+    떨어진다. 새 처치 이펙트는 `fells`·`breaks`·`ceiling` 을 같이 정하고, `warmStatuses` 끝에서 warm 한다.
 - 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
   8ms(`BAKE_BUDGET_MS`)를 나눠 쓰고, 비싼 시트는 여러 프레임에 나눠 굽는다. 한 프레임에 시트는 최대 하나만
