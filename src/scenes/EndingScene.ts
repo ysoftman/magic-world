@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { clearFrame, createFx, type Fx } from "pixelfx";
+import * as fireworkBurst from "pixelfx/fx/explosions/firework-burst";
 import { ACHIEVEMENTS, TOTAL_FISH } from "../achievements";
 import { OVERWORLD_THEME, Sfx, TITLE_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
@@ -6,6 +8,7 @@ import { dayIndex, GameState } from "../gameState";
 import { CATCHABLE } from "../monsters";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import { bindKeyHint, keyNames, usingPad } from "../ui/Gamepad";
+import { addLightCanvas } from "../ui/lightCanvas";
 import { isTouchDevice } from "../ui/TouchControls";
 
 export interface EndingData {
@@ -25,6 +28,126 @@ const ENDING_PROMPT_MS = 4200;
 const EPILOGUE_PROMPT_MS = 5000;
 // a pad's A sends Z, which leaves as ENTER does
 const pressLine = (): string => (usingPad() ? `PRESS ${keyNames("Z")}` : isTouchDevice() ? "TAP TO CONTINUE" : "PRESS ENTER");
+
+// Fireworks either side of the words: pixelfx's firework burst (MIT; its
+// notice is the /*! line in fx.ts), as the town's festival nights have it
+// (NightSky.ts), drawn live into a canvas a side (lightCanvas.ts). One screen
+// px a pixel, half the festival's ART_PX: over 60 seeds a burst's stars and
+// its light over 12/255 reach 98 px either way, 76 up and 149 down of where it
+// breaks (BURST_REACH), and the columns beside the summaries are 278 x 262 and
+// 330 x 316 (FIREWORK_BOX). At 2px a burst would be 392 x 450, wider and
+// taller than either: it would break over the summary and the lines round it.
+const BURST_REACH = { left: 98, right: 98, up: 76, down: 149 };
+// The left column's box [x0, y0, x1, y1], the right one its mirror, 10px off
+// every line of text so nothing bright goes behind a word. The ending's: under
+// the sub (to y 206), over TO BE CONTINUED (from 488), left of the summary's
+// widest row (from x 288, a 12-glyph NAME). The epilogue's: under the sub
+// (166), over the journey (502), left of its summary (340).
+const FIREWORK_BOX = { ending: [0, 216, 278, 478], epilogue: [0, 176, 330, 492] } as const;
+// the moss golem's in the forest's colours (its headline green, cyan, violet);
+// the true end's in every colour, its headline's orange first
+const FIREWORK_COLORS = { ending: [0x4ade80, 0x33c4f2, 0x9b5cf6], epilogue: [0xfb923c, 0xf53cd1, 0x33c4f2, 0x9b5cf6, 0x62d93a] };
+// the first two shells go up as the headline fades in (400..1300ms), a side
+// each, then one every so often, mostly turn about; the true end's oftener
+const FIREWORK_FIRST_MS = [250, 600];
+const FIREWORK_GAP_MS = { ending: [1400, 2800], epilogue: [900, 2000] };
+// as NightSky.ts: redrawn this often, the redraw and its upload on two frames;
+// a burst over by its life, and bursting its RISE after its launch
+const FIREWORK_STEP_MS = 1000 / 20;
+const FIREWORK_LIFE_S = 3.1;
+const FIREWORK_RISE_MS = 420;
+// its glow with FLASHES off or under prefers-reduced-motion, as the festival's
+const FIREWORK_SOFT_LIGHT = 0.35;
+
+// A shell colour's 7 steps, dark to white, as NightSky.ts's shellRamp has them
+function shellRamp(c: number): string[] {
+  const rgb = [c >> 16, (c >> 8) & 255, c & 255];
+  return [0.25, 0.45, 0.7, 1, 1.35, 1.7, 2].map(
+    (k) =>
+      `#${rgb
+        .map((v) =>
+          Math.round(k <= 1 ? v * k : v + (255 - v) * (k - 1))
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("")}`,
+  );
+}
+
+function addFireworks(scene: Phaser.Scene, epilogue: boolean): void {
+  const [x0, y0, x1, y1] = FIREWORK_BOX[epilogue ? "epilogue" : "ending"];
+  const colors = FIREWORK_COLORS[epilogue ? "epilogue" : "ending"];
+  const gap = FIREWORK_GAP_MS[epilogue ? "epilogue" : "ending"];
+  const soft = (): boolean => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !GameState.flashes;
+  // made now, hidden, so they sit under the words added after them
+  const sides = [x0, GAME_WIDTH - x1].map((left, i) => {
+    const sky = addLightCanvas(scene, `ending-fireworks-${i}`, { cols: x1 - x0, rows: y1 - y0, cell: 1, depth: 0, ox: left, oy: y0 });
+    sky.image.setPosition(left, y0);
+    return { sky, bursts: [] as Array<{ fx: Fx; age: number }>, drawn: false };
+  });
+  let wait = 0;
+  let uploading = false;
+  const step = (_time: number, delta: number): void => {
+    if (uploading) {
+      uploading = false;
+      for (const s of sides) {
+        if (s.drawn) s.sky.upload();
+        s.drawn = false;
+        s.sky.image.setVisible(s.bursts.length > 0);
+      }
+      return;
+    }
+    if (!sides.some((s) => s.bursts.length)) return;
+    wait += delta;
+    if (wait < FIREWORK_STEP_MS) return;
+    // a tab back from the background hands over seconds at once
+    const dt = Math.min(wait, 100) / 1000;
+    wait = 0;
+    for (const s of sides) {
+      if (!s.bursts.length) continue;
+      for (const b of s.bursts) {
+        b.fx.update(dt);
+        b.age += dt;
+      }
+      s.bursts = s.bursts.filter((b) => b.age < FIREWORK_LIFE_S);
+      clearFrame(s.sky.frame);
+      for (const b of s.bursts) b.fx.draw(s.sky.frame);
+      s.drawn = true;
+    }
+    uploading = true;
+  };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, step);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, step));
+
+  const launch = (side: number): void => {
+    const x = Phaser.Math.Between(x0 + BURST_REACH.left, x1 - BURST_REACH.right);
+    sides[side].bursts.push({
+      fx: createFx(fireworkBurst, {
+        x: side ? GAME_WIDTH - x : x,
+        y: Phaser.Math.Between(y0 + BURST_REACH.up, y1 - BURST_REACH.down),
+        palette: shellRamp(Phaser.Utils.Array.GetRandom(colors)),
+        seed: Phaser.Math.Between(1, 9999),
+        light: soft() ? FIREWORK_SOFT_LIGHT : 1,
+      }),
+      age: 0,
+    });
+    scene.time.delayedCall(FIREWORK_RISE_MS, () => Sfx.ambience("pop", Phaser.Math.FloatBetween(0.6, 0.9)));
+  };
+  let side = Phaser.Math.Between(0, 1);
+  scene.time.delayedCall(FIREWORK_FIRST_MS[0], () => launch(side));
+  scene.time.delayedCall(FIREWORK_FIRST_MS[1], () => {
+    side = 1 - side;
+    launch(side);
+  });
+  const schedule = (after: number): void => {
+    scene.time.delayedCall(after, () => {
+      if (Math.random() < 0.75) side = 1 - side;
+      launch(side);
+      schedule(Phaser.Math.Between(gap[0], gap[1]));
+    });
+  };
+  schedule(FIREWORK_FIRST_MS[1] + Phaser.Math.Between(gap[0], gap[1]));
+}
 
 // The MOSS GOLEM's fall closes the story's first part: congratulations, a
 // run summary, TO BE CONTINUED and a hint of the snow pass it opens, then
@@ -72,6 +195,7 @@ export class EndingScene extends Phaser.Scene {
         delay: Phaser.Math.Between(0, 1200),
       });
     }
+    addFireworks(this, epilogue);
 
     if (epilogue) this.showEpilogue();
     else this.showEnding();

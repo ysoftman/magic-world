@@ -16,3 +16,4 @@
 - 필드 실시간 pixelfx 캔버스(`src/ui/lightCanvas.ts`) 실기기(모바일) 확인: 숲 맑은 낮 빛줄기(320x180, 66ms 마다 그리기 약 1.9ms, 헤드리스)와 마을 축제 밤 불꽃(640x280 = 717KB 를 불꽃이 떠 있는 동안 50ms 마다 업로드, 약 14MB/s, 그리기 0.5ms·합성+업로드 0.4ms). 느리면 불꽃 캔버스를 1/2 로 줄이거나 15fps 로 낮춘다
 - 필드 씬 공통화 남은 것: 조우(encounterCooldown·ENTRY_GRACE·holdFights·checkEncounter)가 6개 씬에 중복. 굴리는 조건이 씬마다 달라(마을 키 큰 풀, 심연 수호자 방·밤 없음, 출구 안전 상자) 공통 부분이 쿨다운 숫자뿐이라 보류
 - 터치에서 필드 맵의 오른쪽 아래 모서리가 Z·ESC 원판 밑에 깔림(동굴 상자 (22,14) 는 Z 아래 반쯤, 그쪽을 걷는 영웅도). 동굴만 카메라를 한 타일 더 내렸다(`TOUCH_CAMERA_FOOT`) — sceneCommon `boundCameraToMap` 에 터치 여백을 일반화할지 검토
+- 엔딩 불꽃(`EndingScene` 의 `addFireworks`, 1px)이 모바일·DPR2 실기기에서 너무 가늘지 않은지, 그 화면의 프레임(헤드리스 update p95 1.7ms, 캔버스 두 장 업로드)과 pop 소리 크기 확인

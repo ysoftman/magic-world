@@ -835,3 +835,8 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   - 흰 섬광이 있는 버스트는 흰 글자 줄이 아니라 줄 사이 틈에 중심을 둔다. 실제 사례: 행운의 바퀴 결과 줄
     위에 두었더니 섬광이 글자 뒤에서 처음 몇 프레임 동안 글자를 지웠다.
   - 글자 모양을 그리는 pixelfx 효과(status/sleep 의 Z 등)는 쓰지 않는다(결정).
+- 엔딩(`EndingScene`)의 축하 불꽃도 pixelfx explosions/firework-burst 다. 마을 축제처럼 `addLightCanvas` 에 실시간으로
+  그리되, 요약 양옆 빈 칸(`FIREWORK_BOX`, 모든 글자 줄에서 10px: MOSS GOLEM 278x262, 에필로그 330x316)에 한쪽 하나씩
+  캔버스를 두고 1px 로 그린다. 60개 seed 로 잰 burst 의 범위(별과 12/255 넘는 빛)는 좌우 98·위 76·아래 149px
+  (`BURST_REACH`)라 2px(392x450)로는 칸에 들어가지 않는다. 엔딩 문구나 요약 줄의 위치·폭을 바꾸면 `FIREWORK_BOX` 를
+  다시 잰다.
