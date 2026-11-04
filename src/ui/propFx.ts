@@ -3,6 +3,7 @@ import type { FxModule } from "pixelfx";
 import * as campfire from "pixelfx/fx/fire/campfire";
 import * as torch from "pixelfx/fx/fire/torch";
 import * as toxicPuddle from "pixelfx/fx/nature/toxic-puddle";
+import * as shadowFlames from "pixelfx/fx/shadow/shadow-flames";
 import { warmSheets } from "../fx";
 import { ART_PX } from "../pixelart";
 import { type FieldFx, fieldFxSheets, fieldFxSprite, playFieldFx } from "./fieldFx";
@@ -56,11 +57,14 @@ export const HEARTH: FieldFx = {
   loop: true,
 };
 
-// nature/toxic-puddle's front layer alone: its bubbles and the vapour off
-// them, without the tar pool and the glow round it (drawBack). As statusFx.ts
-// layerOf does, the draw env.d.ts leaves out of FxModule.
+// An effect's front layer alone, without what it draws behind a character
+// (drawBack). As statusFx.ts layerOf does, the draw env.d.ts leaves out of
+// FxModule.
 type Draw = (p: unknown, t: number, o: Record<string, unknown>) => void;
-const puddleBubbles: FxModule = { meta: toxicPuddle.meta, draw: (toxicPuddle as unknown as { draw: Draw }).draw } as FxModule;
+const frontOf = (mod: FxModule): FxModule => ({ meta: mod.meta, draw: (mod as unknown as { draw: Draw }).draw }) as FxModule;
+// nature/toxic-puddle's bubbles and the vapour off them, without the tar
+// pool and the glow round it
+const puddleBubbles = frontOf(toxicPuddle);
 
 /**
  * Lava bubbling (nature/toxic-puddle's bubbles, its pool left off): domes
@@ -88,6 +92,24 @@ export const LAVA_BUBBLES: FieldFx = {
     crop: around(toxicPuddle, [-20, -34, 22, 12]),
   },
   ms: toxicPuddle.meta.duration * 1000,
+  loop: true,
+};
+
+/**
+ * Violet fire on a stone (shadow/shadow-flames' front layer: its tongues, the
+ * licks breaking off them and the embers, without the scorched floor and the
+ * smoke it lays behind them): inside-out flame, a black heart wrapped in
+ * violet with pale skin and tips, in the ABYSS's own violets (the effect's
+ * VOID ramp). Its 2.4s loop at 15fps, 36 frames; the box keeps the tongues
+ * (42 cells high, 35 across) and the licks off them, and cuts the embers 62
+ * cells up, where they have begun to flicker out. Light 0.4: the bloom bakes
+ * as colour with alpha, a haze 22 cells round that would otherwise reach the
+ * box's edges.
+ */
+export const PILLAR_FIRE: FieldFx = {
+  key: "prop-pillar-fire",
+  sheet: { fx: frontOf(shadowFlames), opts: { light: 0.4 }, frames: 36, crop: around(shadowFlames, [-22, -62, 23, 2]) },
+  ms: shadowFlames.meta.duration * 1000,
   loop: true,
 };
 

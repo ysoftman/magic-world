@@ -16,7 +16,7 @@ import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
 import { GameState } from "../gameState";
-import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
+import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_ROCK, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -53,6 +53,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NightOverlay } from "../ui/NightOverlay";
+import { addProp, PILLAR_FIRE } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -69,6 +70,18 @@ const ENCOUNTER_RATE = 0.06;
 // The gloom never lifts or deepens with the clock (no night underground):
 // between the cave's 0.35 by day and its 0.6 at night.
 const GLOOM = 0.45;
+// A GUARDIAN's hall burns while the guardian holds it: violet fire
+// (propFx.ts PILLAR_FIRE) on each of its pillars, the boulders standing
+// inside its walls (abyss.ts PILLAR_SPOTS, mirrored, each there half the
+// time), and none once it falls, the hall coming back unsealed. The fire's
+// foot this far over the boulder's middle, sunk into its crown; at the
+// rock's depth (9, as the cave's exit torches), so under the hero (10) and the
+// tags (11). A violet glow in the air over each (as the stair down's: the
+// lightmap has nothing to give back on the near-black rock), a phase apart so
+// no two breathe as one.
+const PILLAR_FIRE_DY = -14;
+const PILLAR_FIRE_DEPTH = 9;
+const PILLAR_GLOW = { radius: 96, color: 0x9d5cec, strength: 0.3, pulseMs: 1300, air: true } as const;
 // a guarded stair says so at most this often while the hero stands on it
 const SEALED_TOAST_MS = 2000;
 const DOWN_COLOR = "#c084fc";
@@ -304,6 +317,15 @@ export class AbyssScene extends Phaser.Scene {
     const down = cellCenter(floor.down);
     this.add.image(up.x, up.y, STAIRS_UP_KEY).setDepth(3);
     this.add.image(down.x, down.y, STAIRS_DOWN_KEY).setDepth(3);
+    const pillarFires =
+      floor.guardian && !r.guardianDown
+        ? level.flatMap((row, ty) =>
+            row.flatMap((tile, tx) =>
+              tile === T_ROCK && tx > 0 && ty > 0 && tx < ABYSS_W - 1 && ty < ABYSS_H - 1 ? [cellCenter({ tx, ty })] : [],
+            ),
+          )
+        : [];
+    for (const [i, c] of pillarFires.entries()) addProp(this, PILLAR_FIRE, c.x, c.y + PILLAR_FIRE_DY, PILLAR_FIRE_DEPTH, (i * 0.618) % 1);
 
     const start = back ?? cellCenter(floor.spawn);
     this.player = this.physics.add.sprite(start.x, start.y, "hero-idle-down");
@@ -418,6 +440,7 @@ export class AbyssScene extends Phaser.Scene {
         air: true,
       }),
       { x: down.x, y: down.y, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true },
+      ...pillarFires.map((c) => ({ ...PILLAR_GLOW, x: c.x, y: c.y + PILLAR_FIRE_DY - 24 })),
     ]);
 
     this.panels = new FieldPanels(this, this.fieldKeys);
