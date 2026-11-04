@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import * as geyser from "pixelfx/fx/water/geyser";
 import * as ripples from "pixelfx/fx/water/ripples";
 import * as splash from "pixelfx/fx/water/splash";
 import { TOTAL_FISH } from "../achievements";
@@ -73,14 +74,15 @@ const BONUS_LABEL: Record<NonNullable<FishDef["bonusItem"]>, string> = {
 // to one: that puts them in scale with the 12px float and inside the 280x34
 // pond. At the field's 2px cell the rings ran 14px past the pond's rim and the
 // splash's spray up to the count.
+// Its still water (step 1) is the pond's own blue as it shows through the
+// panel (0x1e40af at 0.8 over 0x0b0b2b), so an effect in it lays no second
+// patch of water on the pond: only what moves and its light show.
+const POND_RAMP = ["#0a1630", "#1a3594", "#1b5596", "#2a7fc4", "#45a9e3", "#86d3f5", "#cdf1ff", "#ffffff"];
 const RIPPLES: FieldFx = {
   key: "fx-fish-ripples",
   sheet: {
     fx: ripples,
-    // Its still water (step 1) is the pond's own blue as it shows through the
-    // panel (0x1e40af at 0.8 over 0x0b0b2b), so it lays no second patch of
-    // water on the pond: only the rings and their light show.
-    opts: { palette: ["#0a1630", "#1a3594", "#1b5596", "#2a7fc4", "#45a9e3", "#86d3f5", "#cdf1ff", "#ffffff"] },
+    opts: { palette: POND_RAMP },
     frames: 32,
     // the rings at their widest, 60 x 16 round the float, and their light
     crop: [4, 12, 132, 48],
@@ -97,6 +99,26 @@ const SPLASH: FieldFx = {
   sheet: { fx: splash, opts: { stone: false }, span: [0.15, 1.65], frames: 15, crop: [22, 20, 152, 100] },
   // its 1.5s at 1.4x, done inside the bite's 0.7s and the 1.4s result
   ms: 1100,
+};
+// A catch: the fish pulled out throws up a column of water from where the
+// float went under, a foam head on it, drops raining back into the pond
+// (water/geyser at a 44px column, from the pool's last heave to the sputter).
+// The miss ("IT GOT AWAY...") has none. Its crop stops 60 over the water, 4px
+// under the FISH CAUGHT count, and 22 under it, 12 over the status line; the
+// widest drops, landing past 60 a side, are left off: 17 frames, a row of
+// 2040x82. Its glow at 0.6, the first frame's flash otherwise a halo out to
+// the count.
+const GEYSER: FieldFx = {
+  key: "fx-fish-geyser",
+  sheet: {
+    fx: geyser,
+    opts: { palette: POND_RAMP, height: 44, light: 0.6 },
+    span: [1.05, 3.4],
+    frames: 17,
+    crop: [32, 86, 152, 168],
+  },
+  // its 2.35s at 1.75x, done inside the 1.4s result
+  ms: 1350,
 };
 // over the pond (152), under the float and the "!" (153)
 const WATER_FX_DEPTH = 152.5;
@@ -129,9 +151,10 @@ export class FishingUI {
   private pageBack?: Phaser.GameObjects.Rectangle;
   private logRows: PixelText[] = [];
   private bobTween?: Phaser.Tweens.Tween;
-  // the pond's rings and splash
+  // the pond's rings, splash and catch
   private rings: Phaser.GameObjects.Sprite;
   private spray: Phaser.GameObjects.Sprite;
+  private jet: Phaser.GameObjects.Sprite;
 
   private zQueued = false;
   private escQueued = false;
@@ -184,6 +207,10 @@ export class FishingUI {
       .setScrollFactor(0)
       .setDepth(WATER_FX_DEPTH);
     this.spray.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.spray.setVisible(false));
+    this.jet = fieldFxSprite(scene, GEYSER, GAME_WIDTH / 2, WATER_Y, 1)
+      .setScrollFactor(0)
+      .setDepth(WATER_FX_DEPTH);
+    this.jet.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.jet.setVisible(false));
     this.biteMark = scene.add
       .pixelText(GAME_WIDTH / 2 + 24, WATER_Y - 30, "!", retroStyle(10, "#ffd166"))
       .setOrigin(0.5)
@@ -301,6 +328,8 @@ export class FishingUI {
       repeat: -1,
       ease: "sine.inout",
     });
+    // the catch's sheet, needed a cast (4s and more) from now at the soonest
+    warmFieldFx(this.scene, GEYSER);
     this.showFishing();
   }
 
@@ -388,6 +417,7 @@ export class FishingUI {
     // startCast() sets the rings going again on the fishing page
     this.rings.stop().setVisible(false);
     this.spray.stop().setVisible(false);
+    this.jet.stop().setVisible(false);
     for (const row of this.logRows) row.setVisible(page === "log");
   }
 
@@ -479,6 +509,9 @@ export class FishingUI {
     this.resultUntil = this.scene.time.now + RESULT_HOLD;
     this.biteMark.setVisible(false);
     this.bobber.setY(WATER_Y);
+    // the bite's splash gives way to the catch's column, as the rings gave way to it
+    this.spray.stop().setVisible(false);
+    playFieldFx(this.jet, GEYSER);
     const biting = this.table.filter((f) => !f.night || isNight());
     let r = Math.random() * biting.reduce((sum, f) => sum + f.chance, 0);
     let fish: FishDef = biting[biting.length - 1];
@@ -542,6 +575,7 @@ export class FishingUI {
     this.bobber.destroy();
     this.rings.destroy();
     this.spray.destroy();
+    this.jet.destroy();
     this.biteMark.destroy();
     this.status.destroy();
     this.badge.destroy();

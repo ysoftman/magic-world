@@ -759,7 +759,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 
 ## 필드·패널 순간 이펙트 (`src/ui/fieldFx.ts`)
 
-보물 파기(`TreasureDig.ts`)의 흙먼지·상자, 낚시(`Fishing.ts`)의 물결·물보라, 마을 패널의 순간 연출도 pixelfx
+보물 파기(`TreasureDig.ts`)의 흙먼지·상자, 낚시(`Fishing.ts`)의 물결·물보라·낚아챔 물기둥(water/geyser), 마을 패널의 순간 연출도 pixelfx
 시트다. `FieldFx`
 (`key`·`sheet`·한 번 도는 길이 `ms`·`loop`)로 적고 `playFieldFx`·`playFieldFxOnce` 로 재생한다(Phaser anims).
 
