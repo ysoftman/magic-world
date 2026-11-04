@@ -13,9 +13,9 @@
 ## 커밋은 의미 단위로 그때그때
 
 - 기능·수정·문서 한 단위가 끝나고 검증(`bunx tsc --noEmit`, `scripts/` 를 고쳤으면 `bunx tsc -p scripts --noEmit`, 수정 파일 `biome check --write`,
-  그리드를 고쳤으면 `bun run check:art`)을 통과하면 **그 단위만 바로 커밋**한다. 한 커밋에 여러
-  기능을 섞지 않는다. 실제 사례: 한 세션의 작업이 60개 파일 커밋 하나로 들어가, 400여 조각을
-  나눠 13개 커밋으로 다시 만들어야 했다.
+  그리드를 고쳤으면 `bun run check:art`, 효과음을 고쳤으면 `bun run check:sound`)을 통과하면 **그 단위만
+  바로 커밋**한다. 한 커밋에 여러 기능을 섞지 않는다. 실제 사례: 한 세션의 작업이 60개 파일 커밋 하나로
+  들어가, 400여 조각을 나눠 13개 커밋으로 다시 만들어야 했다.
 - 이 저장소에서는 사용자가 이 방식을 미리 승인했다(2026-10-28). 그래서 커밋마다 확인을 받지
   않는다. **push 는 여전히 사용자 확인 뒤에** 한다.
 - 메시지는 `commit` 스킬 규칙대로: 영어 소문자 동사로 시작하는 70자 이내 제목, 필요하면 짧은 본문,
@@ -51,6 +51,16 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add phaserjs/phaser -a claude-code --copy -y \
     -s input-keyboard-mouse-touch scenes text-and-bitmaptext scale-and-responsive tweens \
        render-textures filters-and-postfx audio-and-sound v4-new-features v3-to-v4-migration
+  ```
+
+- 효과음을 설계하거나 고칠 때는 `designing-retro-arcade-sound-kits`(abagames/agentic-gamedev-skills, MIT)를 먼저
+  불러 그 절차(사운드 타깃 → 프로그램 → 예산·상대 음량·음계 검사)를 따른다("효과음 키트" 절). 설치는 Phaser
+  스킬과 같은 형식이고, 출처와 내용 해시가 같은 `skills-lock.json` 에 남는다. 그 저장소 안 경로는
+  `.agents/skills/` 지만 `-a claude-code` 가 `.claude/skills/` 로 복사한다.
+
+  ```bash
+  DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add abagames/agentic-gamedev-skills \
+    --skill designing-retro-arcade-sound-kits -a claude-code --copy -y
   ```
 
 - 카메라 필터(`camera.filters`)는 화면 전체가 바뀌는 전환에만 쓴다. 실제 사례: 시험으로 카메라에 건
@@ -903,3 +913,44 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   캔버스를 두고 1px 로 그린다. 60개 seed 로 잰 burst 의 범위(별과 12/255 넘는 빛)는 좌우 98·위 76·아래 149px
   (`BURST_REACH`)라 2px(392x450)로는 칸에 들어가지 않는다. 엔딩 문구나 요약 줄의 위치·폭을 바꾸면 `FIREWORK_BOX` 를
   다시 잰다. 쉘 램프(`shellRamp`)·다시 그리는 주기·수명·RISE·soft light 는 NightSky 의 export 를 같이 쓴다.
+
+## 효과음 키트 (`src/sfxKit.ts`)
+
+효과음은 전부 프로그램(데이터, 소리 단계 목록)이고 합성기 하나가 재생한다. 소리 파일은 없다
+(`designing-retro-arcade-sound-kits` 스킬의 방식). 게임 코드는 이벤트 이름으로만 소리를 낸다: 기존 효과음은
+`Sfx.attack()` 처럼 `Sfx.<이벤트>()`, 새 소리는 `Sfx.emit("tech:beam")`. 오실레이터를 직접 만드는 효과음은 새로
+쓰지 않는다. BGM·날씨 bed·환경음·천둥은 `audio.ts` 에 그대로 있다.
+
+- 효과음 프로그램을 더하거나 고치면 커밋 전에 `bun run check:sound` 를 돌린다. 대상은 `registerSfx` 로 등록하는
+  모든 표다(`sfxKit.ts` 의 키트, `skillSfx.ts` 의 기술음). 스크립트가 `src` 에서 최상위 `registerSfx(표)` 줄을
+  찾아 그 모듈을 Bun 으로 불러오므로, 표는 모듈 최상위에서 한 번 등록하고 그 모듈은 Phaser 를 값으로 import 하지
+  않는다(못 불러오면 `did not load under Bun` 으로 실패한다).
+- 검사 항목: id 가 키와 같음, 1..24 단계, SE 0.6초·징글 1.6초 이하, 한 줄 사운드 타깃(`target`), `pitch` 선언,
+  같은 키를 두 표가 등록하지 않음(뒤의 것이 앞의 소리를 말없이 바꾼다). dev 빌드에서는 `registerSfx` 가 같은
+  문제를 console.error 로도 낸다.
+- 징글은 드문 장면 전환(승리·레벨업·신기록·게임 오버·보스 등장·격노·밤)에만 쓰고, 자주 나는 피드백은 SE 다. 실제
+  사례: 보스 예고 `charge` 는 0.8초로 SE 예산을 넘어 0.6초로 줄였다. `nova` 는 0.7초 붐을 castNova 의 마지막
+  폭발에 맞춰 1.2초라, 드문 궁극기로 보고 징글 예산을 쓴다.
+- `pitch` 는 "key"(흰 건반, 타이틀·마을·숲·설원과 그 전투곡이 함께 쓰는 음계), "none"(잡음뿐), 또는
+  `{ offKey: "이유 한 줄" }` 이다. 음을 차례로 올릴 때는 같은 Hz 간격이 아니라 음계를 따라 올린다. 실제 사례:
+  옛 `run` 은 600·700·800Hz 로 올라 키를 벗어났다 → D6-E6-G6.
+- 연달아 나는 소리끼리 반음으로 부딪히지 않는지 본다. 실제 사례: 전투 결산은 `victory` 360ms 뒤에 `pickup` 을
+  낸다. 그 B5 가 `victory` 의 C6 지속음과 반음으로 부딪혀 `pickup` 을 E6→A6 로 옮겼다.
+- 재료는 정해진 것만 쓴다(square, pulse25·pulse12, triangle, sawtooth, sine, LFSR noise·metal, filter, drive,
+  crush). 모든 소리는 캐비닛(tone lowpass → soft clip, 천장 0.14)을 지나 sfxBus 로 간다. 천장은 master 2.8 과
+  리미터 -8dBFS 에 맞춘 값(0.142)이라 둘 중 하나를 바꾸면 같이 바꾼다. 리미터는 압축기라 짧은 소리를 긴 소리보다
+  많이 깎으니, 소리 하나의 봉우리는 clip 이 임계 아래에서 다듬고 압축기는 BGM 과 겹칠 때만 일하게 둔다.
+- 음량은 소리 하나만 듣지 말고 형제 소리와 견줘 정한다. 기준은 A 가중 50ms 최대(마스터 버스, 리미터 앞)이고
+  BGM 은 -24~-25 다: 궁극기·보스 -18, 전투 타격(attack·strike·hit) -20, 주문·상태 -21~-22, 보상·장면 징글
+  -20~-23(타격을 덮지 않게), 확인·틱 -23~-25. 실제 사례: 옛 키트는 A 가중으로 전투 타격(-25~-29)이
+  보상음(-17~-20)보다 작았다.
+- 가장 잦은 소리는 음량 대신 대역으로 띄운다. 실제 사례: 메뉴 커서 `move`(600Hz)는 BGM 선율(150~1050Hz)과 같은
+  대역이라 1.5kHz 위에서 BGM 보다 5dB 아래였다 → A6 12.5% 펄스(무게중심 4.5kHz)로 옮겨 그 대역에서 BGM 보다
+  약 10dB 위다.
+- 낮은 소리에는 옥타브 위 square 를 겹친다. 노트북 스피커는 150Hz 아래를 거의 못 낸다. 실제 사례: 첫 `enrage` 는
+  에너지의 85% 가 150Hz 아래라, 가중 없는 RMS 로는 키트에서 가장 컸지만 A 가중으로는 -23 이었다.
+- 같은 이벤트는 16ms 안에 2번까지만 난다(`emitSfx`). 한 프레임에 몰린 같은 소리는 겹쳐 커지기만 한다.
+- 재는 법: OfflineAudioContext 에 sfxBus → master 2.8 → 리미터 사본을 만들어 렌더한다(`/tmp/pwcheck/` 의 일회용
+  스크립트). 소리 앞에는 0.5초 무음을 둔다. 실제 사례: Chrome 압축기가 렌더 첫 순간의 짧은 소리를 12~14dB 깎아,
+  무음 없이 잰 `move` 가 실제보다 그만큼 낮게 나왔다(게임에서는 압축기가 계속 돌고 있어 해당 없음). 사람 귀로
+  들어 볼 항목은 `TODO.md` 에 있다.
