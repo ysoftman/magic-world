@@ -1,4 +1,7 @@
 import Phaser from "phaser";
+import * as divineShield from "pixelfx/fx/holy/divine-shield";
+import * as heal from "pixelfx/fx/holy/heal";
+import * as freeze from "pixelfx/fx/ice/freeze";
 import * as electrified from "pixelfx/fx/lightning/electrified";
 import * as burning from "pixelfx/fx/status/burning";
 import * as frozen from "pixelfx/fx/status/frozen";
@@ -16,7 +19,7 @@ import { ART_PX } from "./pixelart";
 // for poison, the tint the battler shows: the effect repaints the body, and
 // the purple it is flashed has to stay purple under it.
 
-export type StatusKind = "burn" | "chill" | "shock" | "poison";
+export type StatusKind = "heal" | "ward" | "burn" | "chill" | "shock" | "poison" | "freeze";
 
 // a fx.ts pixel sheet over the whole canvas, its span and frames set; tinted:
 // the battler's tint at play() baked into its colours
@@ -26,14 +29,22 @@ interface StatusSheet extends PixelSheet {
   tinted?: boolean;
 }
 
-// ramps, dark to bright: the battle's own colours for each (the burn's red
-// rim, FREEZE_TINT's cyan, PSN's purple)
+// ramps, dark to bright: the battle's own colours for each (the HEAL spell's
+// green, WARD's blue, the burn's red rim, FREEZE_TINT's cyan, PSN's purple)
+const HEAL_RAMP = ["#08201a", "#0f3f2c", "#17663e", "#24924e", "#3ec466", "#7ee88a", "#c8ffc4", "#ffffff"];
+const WARD_RAMP = ["#0b1838", "#15306b", "#1e4fa0", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#ffffff"];
 // a step darker than burning's own: its yellow tongues were lost on a foe flashed orange
 const BURN_RAMP = ["#3a0d0a", "#7a1610", "#b91c1c", "#dc2626", "#f2561d", "#ff8a2a", "#ffc23d", "#ffe26b", "#fff3a6"];
 const ICE_RAMP = ["#0b2a3a", "#0e4a63", "#0e7490", "#22a6c4", "#67e8f9", "#a5f3fc", "#cffafe", "#ffffff"];
 const PSN_RAMP = ["#1a0533", "#3b0764", "#581c87", "#7e22ce", "#a855f7", "#c084fc", "#e9d5ff", "#f5d0fe"];
 
 const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
+  // petals at the feet, a hoop of light climbing the body as it washes pale
+  // and comes back, motes rising; the tail where the last of them pop is left off
+  heal: { fx: heal, opts: { palette: HEAL_RAMP }, span: [0.05, 1.45], frames: 12 },
+  // a bubble round the hero, meridians turning, a sheen and sparkles; a loop,
+  // so a stretch of it. Radius 20 fits a 32-cell battler (29 is the stand-in's)
+  ward: { fx: divineShield, opts: { palette: WARD_RAMP, radius: 20 }, span: [0, 0.8], frames: 8 },
   // one tick of burning: the body flashes white then orange, tongues lick from
   // its outline, scorch, sparks and smoke (a second tick would flash it again)
   burn: { fx: burning, opts: { palette: BURN_RAMP }, span: [0, 0.6], frames: 10 },
@@ -44,6 +55,9 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // one tick of poisoned: purple rolling up the body, blisters popping, a ring
   // on the floor, sweat dripping
   poison: { fx: poisoned, opts: { palette: PSN_RAMP, veins: "#1a0533" }, span: [0, 0.8], frames: 10, tinted: true },
+  // frost races in and climbs the hero, a block of ice crystallizes round it
+  // and glints; it cracks and bursts later, past the span: the hero stays frozen
+  freeze: { fx: freeze, opts: { palette: ICE_RAMP }, span: [0.1, 1.5], frames: 12 },
 };
 
 // pixelfx's o.actor: the body's silhouette and colours in effect pixels, feet at (0, 0)

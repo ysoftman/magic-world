@@ -1243,7 +1243,7 @@ export class BattleScene extends Phaser.Scene {
       GameState.player.hp += healed;
       this.updatePlayerStats();
       // the sheet in place of the glow burst, as long as that burst lived
-      this.fxOn(this.playerSprite, "fx-heal", 500);
+      this.statusOn(this.playerSprite, "heal", 500);
       if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
       await this.say(`${spell.name} restores ${healed} HP!${this.curePoison()}`);
       return;
@@ -1252,7 +1252,7 @@ export class BattleScene extends Phaser.Scene {
       const refreshed = this.wardTurns > 0;
       this.wardTurns = WARD_TURNS;
       this.updateStatus();
-      this.fxOn(this.playerSprite, "fx-ward", 500);
+      this.statusOn(this.playerSprite, "ward", 500);
       this.flashStatus("WARD", "#93c5fd");
       await this.say(refreshed ? `WARD renewed for ${WARD_TURNS} turns!` : `A WARD halves damage for ${WARD_TURNS} turns!`);
       return;
@@ -1863,7 +1863,7 @@ export class BattleScene extends Phaser.Scene {
       Sfx.poison();
       this.poisonTurns = POISON_TURNS;
       this.updateStatus();
-      this.fxOn(this.playerSprite, "fx-poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashStatus("PSN", "#c084fc");
       await this.say("POISONED! HEAL or POTION cures it.");
     } else if (special === "freeze") {
@@ -1900,7 +1900,7 @@ export class BattleScene extends Phaser.Scene {
     this.setPlayerTint(FREEZE_TINT);
     // iced over, the hero stops breathing until thaw()
     this.heroIdle?.pause();
-    this.fxOn(this.playerSprite, "fx-freeze", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.statusOn(this.playerSprite, "freeze", STATUS_FX_MS, STATUS_POP_MIN_MS);
     this.flashStatus("FRZ", "#67e8f9");
     await this.say("FROZEN! You'll lose your next turn.");
   }
@@ -2022,7 +2022,7 @@ export class BattleScene extends Phaser.Scene {
       GameState.player.hp -= dmg;
       Sfx.poison();
       this.setPlayerTint(0xc084fc);
-      this.fxOn(this.playerSprite, "fx-poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg);
       this.updatePlayerStats();
       await this.say(`The poison deals ${dmg} damage!`);
