@@ -1854,11 +1854,12 @@ export class BattleScene extends Phaser.Scene {
     Sfx.hit();
     const hit = rollDamage(this.enemy.atk, this.heroDef());
     const crit = hit.crit;
-    const { dmg, note } = this.guardHit(hit.dmg);
+    const { dmg, note, braced } = this.guardHit(hit.dmg);
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
+    if (braced) this.blockOn();
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
     shake(this.cameras.main, crit ? 120 : 80, crit ? 0.012 : 0.006);
@@ -1904,14 +1905,21 @@ export class BattleScene extends Phaser.Scene {
   // WARD (while it lasts) or BULWARK (the next blow) halves a hit, never
   // below 1, else DEFEND takes its share; the three never stack, and BULWARK
   // is used up by the blow either way. Worst case "CRITICAL! CURSED GOBLIN
-  // strikes for 999! (DEFEND)", 49 glyphs
-  private guardHit(raw: number): { dmg: number; note: string } {
+  // strikes for 999! (DEFEND)", 49 glyphs. `braced`: DEFEND or BULWARK took
+  // it, which blockOn() shows (WARD has its bubble already)
+  private guardHit(raw: number): { dmg: number; note: string; braced: boolean } {
     const warded = this.wardTurns > 0;
     const guarded = !warded && this.guarded;
     this.guarded = false;
     const defended = !warded && !guarded && this.defending;
     const dmg = defended ? defendedDamage(raw) : guardedDamage(raw, warded || guarded);
-    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : defended ? " (DEFEND)" : "" };
+    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : defended ? " (DEFEND)" : "", braced: guarded || defended };
+  }
+
+  // the blow caught on a half-dome on the hero's foe side (fx.ts fx-block),
+  // standing on the floor; over the hit's sparks, which show through its glass
+  private blockOn(): void {
+    playFx(this, "fx-block", this.playerSprite.x, GROUND_Y, this.anim(900, STATUS_POP_MIN_MS));
   }
 
   private async freezeHero(): Promise<void> {
@@ -1953,10 +1961,11 @@ export class BattleScene extends Phaser.Scene {
     await this.enemyLunge();
     Sfx.hit();
     Sfx.critical();
-    const { dmg, note } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
+    const { dmg, note, braced } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
+    if (braced) this.blockOn();
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(24);
     shake(this.cameras.main, 320, 0.018);

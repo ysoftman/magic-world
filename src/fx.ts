@@ -8,6 +8,7 @@ import * as iceLance from "pixelfx/fx/ice/ice-lance";
 import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
+import * as shieldBlock from "pixelfx/fx/impacts/shield-block";
 import * as zapHit from "pixelfx/fx/lightning/zap-hit";
 import * as swordSlash from "pixelfx/fx/melee/sword-slash";
 import * as collectBurst from "pixelfx/fx/pickups/collect-burst";
@@ -226,6 +227,21 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     span: [0, 1.1],
     frames: 17,
     focus: [0, -30],
+  },
+  // a blow caught by DEFEND or BULWARK (BattleScene guardHit): a half-dome
+  // springs up on the hero's side toward the foe, its lattice flashing where
+  // the blow lands (a white dome and star for its first frame, 64ms), sparks
+  // glancing off, then it blinks out cell by cell; the last motes after 0.9s
+  // left off. Its anchor is the floor (played at GROUND_Y) and it faces right,
+  // at the foe, as drawn: not directional. Steel, DEFEND's label colour, as
+  // WARD's blue already means WARD. Cropped to what it draws (21, 26, 127,
+  // 103) grown by EDGE_FADE, so every pixel bakes as before.
+  "fx-block": {
+    fx: shieldBlock,
+    opts: { palette: ["#11151f", "#1e2533", "#334155", "#475569", "#94a3b8", "#cbd5e1", "#e2e8f0", "#ffffff"] },
+    span: [0, 0.9],
+    frames: 14,
+    crop: [13, 18, 136, 104],
   },
 };
 
