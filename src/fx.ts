@@ -287,31 +287,53 @@ function fadeEdges({ w, h, light }: FxFrame): void {
 // The frames sit in a grid no wider than MAX_TEXTURE_W, each the effect's own
 // canvas (meta.size, or its crop) with its anchor at meta.origin; light (glow) becomes
 // colour with alpha, which reads as a glow over the dark battle backdrops.
-export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
+// `step` draws the sheet's next frames for about `ms` (always at least one)
+// and says whether it is done. The canvas is drawn apart and only added under
+// `key` with its last frame in, so textures.exists() never finds a part-baked
+// sheet, and one given up on (`drop`) leaves nothing behind.
+function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step: (ms: number) => boolean; drop: () => void } {
   const [x0, y0, x1, y1] = cropOf(sheet);
   const [w, h] = [x1 - x0, y1 - y0];
   const [ax, ay] = sheet.fx.meta.origin;
   const { from, to, frames } = spanOf(sheet);
   const cols = Math.min(frames, Math.max(1, Math.floor(MAX_TEXTURE_W / w)));
-  const tex = scene.textures.createCanvas(key, cols * w, Math.ceil(frames / cols) * h);
-  if (!tex) return;
-  const ctx = tex.getContext();
+  const at = (f: number): [number, number] => [(f % cols) * w, Math.floor(f / cols) * h];
+  // as textures.createCanvas makes one, and with the context its CanvasTexture asks for
+  const pool = Phaser.Display.Canvas.CanvasPool;
+  const canvas = pool.create(scene.textures, cols * w, Math.ceil(frames / cols) * h, Phaser.CANVAS, true);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fx = createFx(sheet.fx, sheet.opts);
   const frame = createFrame(w, h, x0 - ax, y0 - ay);
   const img = new ImageData(w, h);
   if (from > 0) fx.update(from);
-  for (let f = 0; f < frames; f++) {
-    if (f > 0) fx.update((to - from) / frames);
-    clearFrame(frame);
-    fx.draw(frame);
-    fadeEdges(frame);
-    composite(frame, img.data, null);
-    const x = (f % cols) * w;
-    const y = Math.floor(f / cols) * h;
-    ctx.putImageData(img, x, y);
-    tex.add(f, 0, x, y, w, h);
-  }
-  tex.refresh();
+  let f = 0;
+  const step = (ms: number): boolean => {
+    const end = performance.now() + ms;
+    do {
+      if (f > 0) fx.update((to - from) / frames);
+      clearFrame(frame);
+      fx.draw(frame);
+      fadeEdges(frame);
+      composite(frame, img.data, null);
+      ctx?.putImageData(img, ...at(f));
+      f++;
+    } while (f < frames && performance.now() < end);
+    if (f < frames) return false;
+    // baked whole meanwhile by a scene that could not wait: keep that one
+    if (scene.textures.exists(key)) pool.remove(canvas);
+    else {
+      const tex = scene.textures.addCanvas(key, canvas);
+      for (let i = 0; i < frames; i++) tex?.add(i, 0, ...at(i), w, h);
+      tex?.refresh();
+    }
+    return true;
+  };
+  return { step, drop: () => pool.remove(canvas) };
+}
+
+/** Bakes the sheet into its own texture here and now, frames numbered 0..n-1. */
+export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
+  if (!scene.textures.exists(key)) sheetBaker(scene, key, sheet).step(Number.POSITIVE_INFINITY);
 }
 
 /** Draws every sheet not yet baked into its own texture, frames numbered 0..n-1. */
@@ -319,24 +341,87 @@ export function bakeBattleFx(scene: Phaser.Scene): void {
   for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
 }
 
+// How much of a frame warmSheets spends baking. A sheet a frame held the
+// title's frame for up to 76ms (a butterfly, Critters.ts; headless): its
+// frames are split over several now.
+const BAKE_BUDGET_MS = 8;
+
+interface Waiting {
+  key: string;
+  sheet: PixelSheet;
+  done?: (key: string) => void;
+}
+// a scene's one queue, so two callers share its budget instead of each taking one
+const queues = new WeakMap<Phaser.Scene, Waiting[]>();
+
 /**
- * Bakes the sheets ahead of the first battle, one a frame while `scene` runs
- * (the title, which every game passes through): all at once as that battle
- * started, they held its first frame for some 100-140ms. Textures are the
- * game's, so they outlast the scene; any it leaves unbaked, the battle bakes
- * (bakeBattleFx). `after`'s sheets (the field critters, ui/Critters.ts) come
- * next in the same queue: a queue of their own would bake two a frame.
+ * Bakes `sheets` not yet in, in order after anything `scene` has queued
+ * already, BAKE_BUDGET_MS of each of its frames (POST_UPDATE) at a time: a
+ * cheap sheet or a few in a frame, a costly one across several. `done` hears
+ * each key once its texture is in, at once for one that is in already. Should
+ * the scene shut down first, the rest, the sheet under way too, are left to
+ * whoever needs them next, and `done` hears nothing more: finishing that sheet
+ * on the spot put up to 70ms (a butterfly, headless) on the frame a Continue
+ * pressed on the title opened the town in, already its longest.
  */
-export function warmBattleFx(scene: Phaser.Scene, after: Record<string, PixelSheet> = {}): void {
-  const sheets = { ...PIXEL_SHEETS, ...after };
-  const left = Object.keys(sheets).filter((key) => !scene.textures.exists(key));
+export function warmSheets(scene: Phaser.Scene, sheets: Record<string, PixelSheet>, done?: (key: string) => void): void {
+  const fresh: Waiting[] = [];
+  for (const [key, sheet] of Object.entries(sheets)) {
+    if (scene.textures.exists(key)) done?.(key);
+    else fresh.push({ key, sheet, done });
+  }
+  const queued = queues.get(scene);
+  if (queued) {
+    queued.push(...fresh);
+    return;
+  }
+  if (!fresh.length) return;
+  const waiting = fresh;
+  queues.set(scene, waiting);
+  let baking: { item: Waiting; baker: ReturnType<typeof sheetBaker> } | undefined;
   const step = (): void => {
-    const key = left.shift();
-    if (key === undefined) scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
-    else if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheets[key]);
+    const end = performance.now() + BAKE_BUDGET_MS;
+    do {
+      if (!baking) {
+        const item = waiting.shift();
+        if (!item) {
+          stop();
+          return;
+        }
+        if (scene.textures.exists(item.key)) {
+          item.done?.(item.key);
+          continue;
+        }
+        baking = { item, baker: sheetBaker(scene, item.key, item.sheet) };
+      }
+      if (!baking.baker.step(end - performance.now())) return;
+      baking.item.done?.(baking.item.key);
+      baking = undefined;
+    } while (performance.now() < end);
+  };
+  const leave = (): void => {
+    baking?.baker.drop();
+    stop();
+  };
+  const stop = (): void => {
+    scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
+    scene.events.off(Phaser.Scenes.Events.SHUTDOWN, leave);
+    queues.delete(scene);
   };
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step));
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, leave);
+}
+
+/**
+ * Bakes the sheets ahead of the first battle while `scene` runs (the title,
+ * which every game passes through): all at once as that battle started, they
+ * held its first frame for some 100-140ms. Textures are the game's, so they
+ * outlast the scene; any it leaves unbaked, the battle bakes (bakeBattleFx).
+ * `after`'s sheets (the field critters, ui/Critters.ts) come next in the same
+ * queue (warmSheets).
+ */
+export function warmBattleFx(scene: Phaser.Scene, after: Record<string, PixelSheet> = {}): void {
+  warmSheets(scene, { ...PIXEL_SHEETS, ...after });
 }
 
 // the scale battlers are shown at, a boss's or giant's above it

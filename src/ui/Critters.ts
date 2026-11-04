@@ -3,7 +3,7 @@ import * as bird from "pixelfx/fx/critters/bird";
 import * as butterfly from "pixelfx/fx/critters/butterfly";
 import * as frog from "pixelfx/fx/critters/frog";
 import * as wisp from "pixelfx/fx/critters/wisp";
-import { bakePixelSheet, type PixelSheet, sheetInfo, spanOf } from "../fx";
+import { type PixelSheet, sheetInfo, spanOf, warmSheets } from "../fx";
 import { nightFactor } from "../gameState";
 import { T_GRASS, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ART_PX } from "../pixelart";
@@ -74,6 +74,8 @@ const WANDER_OFF = 160;
 const TURN = 0.8;
 // how fast a critter fades in or out, in alpha a second: about 3s
 const FADE = 0.35;
+// a frog whose sheet came in after the scene opened fades in this long
+const FROG_FADE_MS = 1000;
 // a bird every BIRD_MS, as likely as the birdsong (Ambient's cue): a third as
 // often in winter, never by night or in the rain
 const BIRD_MS: [number, number] = [4000, 14000];
@@ -85,6 +87,10 @@ interface Drifter {
   speed: number;
   // its own phase in the wander, so no two turn in step
   phase: number;
+  // put somewhere in view on its first frame; `late` (its sheet baked after
+  // the scene opened) fades in from nothing there rather than being out already
+  placed: boolean;
+  late: boolean;
 }
 
 const frameMsOf = (sheet: CritterSheet): number => {
@@ -92,12 +98,10 @@ const frameMsOf = (sheet: CritterSheet): number => {
   return sheet.frameMs ?? ((to - from) * 1000) / frames;
 };
 
-// The sheet, baked here if the title has not got to it yet (warmBattleFx),
-// and its looping animation (the game's, like the texture, so made once).
-function ready(scene: Phaser.Scene, key: CritterKey): void {
-  const sheet = SHEETS[key];
-  if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
+// A baked sheet's looping animation (the game's, like the texture, so made once).
+function animate(scene: Phaser.Scene, key: CritterKey): void {
   if (scene.anims.exists(key)) return;
+  const sheet = SHEETS[key];
   const { frames } = sheetInfo(sheet);
   scene.anims.create({
     key,
@@ -123,6 +127,9 @@ function critter(scene: Phaser.Scene, key: CritterKey, x: number, y: number, dep
  * The season is read once here, as Ambient reads it; the hour and the weather
  * every frame. The frogs keep to grass on the water's edge in `level`, clear of
  * `avoid` (talk spots, exits, treasure) and of the map's name tags `labels`.
+ * A kind whose sheet the title has not baked yet is baked here a few frames at
+ * a time (warmSheets) and comes out once it is in: a scene entered straight
+ * off the title held its first frame for some 170ms (headless) baking them all.
  */
 export function addCritters(
   scene: Phaser.Scene,
@@ -136,50 +143,75 @@ export function addCritters(
   const lowland = region !== "abyss";
   const season = lowland ? seasonal() : undefined;
   const dry = (): number => (region !== "abyss" && isWet(weatherToday(region)) ? 0 : 1);
+  // while this call runs: a sheet in already puts its kind out from the start
+  let entering = true;
 
   // butterflies on a dry spring or summer day, wisps always in the ABYSS;
   // each fades toward `show()`
   const flocks: Array<{ drifters: Drifter[]; show: () => number }> = [];
-  if (season?.butterflies) {
-    ready(scene, "critter-butterfly-a");
-    ready(scene, "critter-butterfly-b");
-    const kinds: CritterKey[] = ["critter-butterfly-a", "critter-butterfly-b"];
-    const drifters = Array.from({ length: Phaser.Math.Between(2, 3) }, (_, i) =>
-      drifter(scene, kinds[i % 2], AMBIENT_DEPTH, Phaser.Math.FloatBetween(14, 26)),
-    );
-    flocks.push({ drifters, show: () => (1 - nightFactor()) * dry() });
-  }
-  if (region === "abyss") {
-    ready(scene, "critter-wisp-abyss");
-    const drifters = Array.from({ length: Phaser.Math.Between(1, 2) }, () =>
-      drifter(scene, "critter-wisp-abyss", GLOW_DEPTH, Phaser.Math.FloatBetween(8, 16)),
-    );
-    // lights, like the fireflies: added over the gloom, not dimmed by it
-    for (const d of drifters) d.sprite.setBlendMode(Phaser.BlendModes.ADD);
-    flocks.push({ drifters, show: () => 1 });
-  }
+  const flock = (show: () => number): Drifter[] => {
+    const drifters: Drifter[] = [];
+    flocks.push({ drifters, show });
+    return drifters;
+  };
+  // each kind this visit has, and what puts it out once its sheet is in, in
+  // the order warmSheets bakes them: the cheap frog first, the costly
+  // butterflies after it
+  const kinds: Partial<Record<CritterKey, () => void>> = {};
 
+  if (lowland && level && seasonToday() !== "winter") {
+    kinds["critter-frog"] = () => {
+      // on the lower half of its tile, so it sits on the tile rather than over the one above
+      for (const [tx, ty] of frogSpots(level, avoid, labels)) {
+        const frog = critter(scene, "critter-frog", (tx + 0.5) * TILE, (ty + 0.75) * TILE, FROG_DEPTH);
+        if (!entering) scene.tweens.add({ targets: frog.setAlpha(0), alpha: 1, duration: FROG_FADE_MS });
+      }
+    };
+  }
+  if (season?.butterflies) {
+    const butterflies = flock(() => (1 - nightFactor()) * dry());
+    // two or three, the blue ones first
+    const count = Phaser.Math.Between(2, 3);
+    const out = (key: CritterKey, n: number) => () => {
+      for (let i = 0; i < n; i++) butterflies.push(drifter(scene, key, AMBIENT_DEPTH, Phaser.Math.FloatBetween(14, 26), !entering));
+    };
+    kinds["critter-butterfly-a"] = out("critter-butterfly-a", Math.ceil(count / 2));
+    kinds["critter-butterfly-b"] = out("critter-butterfly-b", Math.floor(count / 2));
+  }
   if (season) {
-    ready(scene, "critter-bird");
+    let birds = false;
+    kinds["critter-bird"] = () => {
+      birds = true;
+    };
     const next = (): void => {
       scene.time.delayedCall(Phaser.Math.Between(...BIRD_MS), () => {
-        if (Math.random() < season.birds * (1 - nightFactor()) * dry()) flyBy(scene);
+        if (birds && Math.random() < season.birds * (1 - nightFactor()) * dry()) flyBy(scene);
         next();
       });
     };
     next();
   }
-
-  if (lowland && level && seasonToday() !== "winter") {
-    ready(scene, "critter-frog");
-    // on the lower half of its tile, so it sits on the tile rather than over the one above
-    for (const [tx, ty] of frogSpots(level, avoid, labels))
-      critter(scene, "critter-frog", (tx + 0.5) * TILE, (ty + 0.75) * TILE, FROG_DEPTH);
+  if (region === "abyss") {
+    const wisps = flock(() => 1);
+    kinds["critter-wisp-abyss"] = () => {
+      for (let i = Phaser.Math.Between(1, 2); i > 0; i--) {
+        const d = drifter(scene, "critter-wisp-abyss", GLOW_DEPTH, Phaser.Math.FloatBetween(8, 16), !entering);
+        // lights, like the fireflies: added over the gloom, not dimmed by it
+        d.sprite.setBlendMode(Phaser.BlendModes.ADD);
+        wisps.push(d);
+      }
+    };
   }
+
+  const keys = Object.keys(kinds) as CritterKey[];
+  warmSheets(scene, Object.fromEntries(keys.map((k) => [k, SHEETS[k]])), (key) => {
+    animate(scene, key as CritterKey);
+    kinds[key as CritterKey]?.();
+  });
+  entering = false;
 
   if (!flocks.length) return;
   const cam = scene.cameras.main;
-  let placed = false;
   const onUpdate = (time: number, delta: number): void => {
     const view = cam.worldView;
     // the view is first set as the camera renders: until then, nowhere to put them
@@ -189,25 +221,29 @@ export function addCritters(
     for (const { drifters, show } of flocks) {
       const alpha = show();
       for (const d of drifters) {
-        // already out when the scene opens, anywhere in view
-        if (!placed) d.sprite.setPosition(view.x + view.width * Math.random(), view.y + view.height * Math.random()).setAlpha(alpha);
-        else d.sprite.setAlpha(d.sprite.alpha + Phaser.Math.Clamp(alpha - d.sprite.alpha, -FADE * dt, FADE * dt));
+        // anywhere in view: out already as the scene opens, or fading in there
+        if (!d.placed) {
+          d.sprite.setPosition(view.x + view.width * Math.random(), view.y + view.height * Math.random());
+          d.sprite.setAlpha(d.late ? 0 : alpha);
+          d.placed = true;
+        } else d.sprite.setAlpha(d.sprite.alpha + Phaser.Math.Clamp(alpha - d.sprite.alpha, -FADE * dt, FADE * dt));
         wander(d, view, time, dt);
       }
     }
-    placed = true;
   };
   scene.events.on(Phaser.Scenes.Events.UPDATE, onUpdate);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, onUpdate));
 }
 
-function drifter(scene: Phaser.Scene, key: CritterKey, depth: number, speed: number): Drifter {
+function drifter(scene: Phaser.Scene, key: CritterKey, depth: number, speed: number, late: boolean): Drifter {
   return {
     // unseen until the first frame puts it in view
     sprite: critter(scene, key, 0, 0, depth).setAlpha(0),
     heading: Math.random() * Math.PI * 2,
     speed,
     phase: Math.random() * 100,
+    placed: false,
+    late,
   };
 }
 
