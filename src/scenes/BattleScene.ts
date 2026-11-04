@@ -150,6 +150,8 @@ const SPELL_FX: Record<string, readonly [string, string]> = {
 const HIT_FX_MS = 300;
 // a status sheet as long as its label's pop (flashStatus), floor and all
 const STATUS_FX_MS = 900;
+// a restore's ring (ringOn): its 1.75s sheet at 1.5x, about the bag's 1.2s
+const RESTORE_FX_MS = 1200;
 // a death of the foe's own (deathOf): its sheet's 2.4-2.45s squeezed in, the
 // break-up some 1s in, the debris settled as the victory line has typed
 const DEATH_FX_MS = 1800;
@@ -1359,8 +1361,7 @@ export class BattleScene extends Phaser.Scene {
     const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, POTION_HP);
     GameState.player.hp += healed;
     this.updatePlayerStats();
-    this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-    this.healBurst.explode(10);
+    this.ringOn("fx-restore-hp");
     if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
     await this.say(`Potion heals ${healed} HP!${this.curePoison()}`);
   }
@@ -1377,6 +1378,7 @@ export class BattleScene extends Phaser.Scene {
     const restored = Math.min(GameState.player.maxMp - GameState.player.mp, MPOTION_MP);
     GameState.player.mp += restored;
     this.updatePlayerStats();
+    this.ringOn("fx-restore-mp");
     await this.say(`Magic restores ${restored} MP!`);
   }
 
@@ -1392,8 +1394,7 @@ export class BattleScene extends Phaser.Scene {
     const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, HI_POTION_HP);
     GameState.player.hp += healed;
     this.updatePlayerStats();
-    this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-    this.healBurst.explode(10);
+    this.ringOn("fx-restore-hp");
     if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
     await this.say(`Hi-Potion heals ${healed} HP!${this.curePoison()}`);
   }
@@ -1410,6 +1411,7 @@ export class BattleScene extends Phaser.Scene {
     const restored = Math.min(GameState.player.maxMp - GameState.player.mp, ETHER_MP);
     GameState.player.mp += restored;
     this.updatePlayerStats();
+    this.ringOn("fx-restore-mp");
     await this.say(`Ether restores ${restored} MP!`);
   }
 
@@ -1426,8 +1428,7 @@ export class BattleScene extends Phaser.Scene {
     GameState.player.hp = GameState.effMaxHp();
     GameState.player.mp = GameState.player.maxMp;
     this.updatePlayerStats();
-    this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-    this.healBurst.explode(12);
+    this.ringOn("fx-restore-all");
     const healed = GameState.effMaxHp() - hpBefore;
     if (healed > 0) this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
     await this.say(`Elixir fully restores HP and MP!${this.curePoison()}`);
@@ -1720,8 +1721,7 @@ export class BattleScene extends Phaser.Scene {
       const healed = Math.min(max - GameState.player.hp, Math.max(1, Math.round(max * COMPANION_HEAL_PCT)));
       GameState.player.hp += healed;
       Sfx.magic();
-      this.healBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-      this.healBurst.explode(12);
+      this.ringOn("fx-restore-hp");
       this.flashHeal(this.playerSprite.x, this.playerSprite.y, healed);
       this.updatePlayerStats();
       await this.say(`${head} +${healed} HP`);
@@ -2440,6 +2440,13 @@ export class BattleScene extends Phaser.Scene {
   private hideStun(): void {
     this.stunStars?.();
     this.stunStars = undefined;
+  }
+
+  // HP or MP back from the bag (or the SLIME's GOO HEAL): a ring rolls out
+  // round the hero's feet, in its colour (fx.ts fx-restore-*), as the bag
+  // shows it in the field; in place of the green glow burst, which MP had none of
+  private ringOn(key: string): void {
+    playFx(this, key, this.playerSprite.x, GROUND_Y, this.anim(RESTORE_FX_MS));
   }
 
   // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a

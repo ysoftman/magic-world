@@ -4,6 +4,7 @@ import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModu
 import * as arcaneOrb from "pixelfx/fx/arcane/arcane-orb";
 import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
 import * as fireball from "pixelfx/fx/fire/fireball";
+import * as healAoe from "pixelfx/fx/holy/heal-aoe";
 import * as iceLance from "pixelfx/fx/ice/ice-lance";
 import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
@@ -139,6 +140,24 @@ const BOLT_RAMP = ["#120a33", "#2a1b78", "#4338ca", "#6366f1", "#a5b4fc", "#fde0
 // NOVA's magenta to pale pink, from the old sheets' 0xc026d3, 0xf0abfc, 0xfae8ff
 const NOVA_RAMP = ["#1a0420", "#3b0a45", "#701a75", "#a21caf", "#c026d3", "#f0abfc", "#fae8ff", "#ffffff"];
 
+// A restore from the bag (BattleScene ringOn): a seed of light sinks at the
+// hero's feet and a ring rolls out, plus signs sprouting and floating up
+// (holy/heal-aoe), as the bag in the field shows it (ui/InventoryUI.ts HEALS,
+// its ramps): HP green, MP blue, gold for both. Its anchor is the floor
+// (played at GROUND_Y). Reach 20 of 104 keeps the ring to 57 cells, x
+// 206..434 round the hero at 320, clear of the companion (180). Cropped to
+// the ring and its plus signs: the seed's beam above 52 cells (y 248, it ran
+// up to the hero's window at y 144) is left off. From 0.45s, its glow at half:
+// the seed's flash before that, at full, lit a pale box the crop cut square
+// over the town's bright field. 16 frames of its 0.45-2.2s, a row of 1088x66.
+const restore = (palette: string[]): PixelSheet => ({
+  fx: healAoe,
+  opts: { palette, reach: 20, light: 0.5 },
+  span: [0.45, 2.2],
+  frames: 16,
+  crop: [94, 52, 162, 118],
+});
+
 const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // a blow landing: a lopsided cross flare round a white core, then a cone of
   // sparks that falls and bounces
@@ -238,6 +257,9 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     frames: 17,
     focus: [0, -30],
   },
+  "fx-restore-hp": restore(["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#4ade80", "#bbf7d0", "#ffffff"]),
+  "fx-restore-mp": restore(["#0c1a3d", "#172554", "#1e3a8a", "#1d4ed8", "#3b82f6", "#60a5fa", "#bfdbfe", "#ffffff"]),
+  "fx-restore-all": restore(["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc", "#ffffff"]),
   // a blow caught by DEFEND or BULWARK (BattleScene guardHit): a half-dome
   // springs up on the hero's side toward the foe, its lattice flashing where
   // the blow lands (a white dome and star for its first frame, 64ms), sparks
