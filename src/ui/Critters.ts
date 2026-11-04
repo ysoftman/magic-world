@@ -13,7 +13,7 @@ import { AMBIENT_DEPTH, GLOW_DEPTH, seasonal } from "./Ambient";
 import type { Rect } from "./Villagers";
 
 // The field's critters: butterflies, a passing bird, a frog by the water and
-// will-o'-the-wisps, all pixelfx critters (github:patch-gg/pixelfx, MIT) baked
+// the ABYSS's will-o'-the-wisps, all pixelfx critters (github:patch-gg/pixelfx, MIT) baked
 // into looping sheets like the battle's effects (fx.ts). Only to look at: no
 // body, no talk, no fight. One pixelfx pixel to an art cell at ART_PX, the
 // hero's own 2px cell, so a butterfly is drawn as finely as the hero it
@@ -41,8 +41,9 @@ export const CRITTER_SHEETS = {
   "critter-bird": { fx: bird, frames: fps15(bird) },
   // its anchor is its feet, on the tile it sits on
   "critter-frog": { fx: frog, frames: fps15(frog) },
-  "critter-wisp": { fx: wisp, frames: fps15(wisp) },
-  // the ABYSS's, violet like its glow
+  // the ABYSS's, violet like its glow. None in the forest: the town's NIGHT
+  // WISP (monsters.ts) is a foe out only at night, and a wisp among the trees
+  // read as one to go after; the forest's nights have the fireflies.
   "critter-wisp-abyss": {
     fx: wisp,
     opts: { palette: ["#140a24", "#2a1048", "#4a1a7a", "#7a2ab0", "#a855f7", "#d8b4fe", "#ffffff"] },
@@ -136,8 +137,8 @@ export function addCritters(
   const season = lowland ? seasonal() : undefined;
   const dry = (): number => (region !== "abyss" && isWet(weatherToday(region)) ? 0 : 1);
 
-  // butterflies on a dry spring or summer day, wisps in the forest's night
-  // and always in the ABYSS; each fades toward `show()`
+  // butterflies on a dry spring or summer day, wisps always in the ABYSS;
+  // each fades toward `show()`
   const flocks: Array<{ drifters: Drifter[]; show: () => number }> = [];
   if (season?.butterflies) {
     ready(scene, "critter-butterfly-a");
@@ -148,15 +149,14 @@ export function addCritters(
     );
     flocks.push({ drifters, show: () => (1 - nightFactor()) * dry() });
   }
-  if (region !== "town") {
-    const key: CritterKey = region === "abyss" ? "critter-wisp-abyss" : "critter-wisp";
-    ready(scene, key);
+  if (region === "abyss") {
+    ready(scene, "critter-wisp-abyss");
     const drifters = Array.from({ length: Phaser.Math.Between(1, 2) }, () =>
-      drifter(scene, key, GLOW_DEPTH, Phaser.Math.FloatBetween(8, 16)),
+      drifter(scene, "critter-wisp-abyss", GLOW_DEPTH, Phaser.Math.FloatBetween(8, 16)),
     );
-    // lights, like the fireflies: added over the night, not dimmed by it
+    // lights, like the fireflies: added over the gloom, not dimmed by it
     for (const d of drifters) d.sprite.setBlendMode(Phaser.BlendModes.ADD);
-    flocks.push({ drifters, show: region === "abyss" ? () => 1 : nightFactor });
+    flocks.push({ drifters, show: () => 1 });
   }
 
   if (season) {
