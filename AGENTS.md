@@ -631,6 +631,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - 바닥에 서는 이펙트(앵커가 발)는 `fxOn` 대신 `playFx(scene, key, sprite.x, GROUND_Y, ...)` 로 땅에 둔다.
   실제 사례: 처치 poof·금화를 적 중심에 두었더니 보스 6px 에서 별과 동전이 적 창 안(y 140~200)까지
   올라갔고, 나는 적은 동전이 공중에서 튀었다.
+- DEFEND 나 동료 ORC 의 BULWARK(GUARD)가 받아 낸 적의 일격(일반 공격과 CHG 뒤 강타)에는 영웅 발밑
+  (`GROUND_Y`)에 `fx-block`(pixelfx impacts/shield-block, 적 쪽 반구)을 띄운다(`blockOn`). `guardHit` 이 돌려주는
+  `braced` 로 가르고, WARD 가 받은 일격은 뺀다. WARD 는 제 거품이 있고, WARD 가 걸려 있으면 DEFEND·GUARD 는
+  적용되지 않는다. 색은 DEFEND 라벨의 slate 회색 램프다(결정: WARD 의 파랑은 이미 WARD 를 뜻한다).
 - `sameOnBoss` 는 6px 에서 상태창에 닿는 이펙트를 보스·거인 위에서도 4px 로 둔다. 실제 사례: crit 의
   고리(40칸)가 6px 에서 적 HP 막대를 가로질렀다.
 - `crop` 은 빈 줄이나 떨어져 나온 조각을 잘라 낸다. 잘린 가장자리 8px(`EDGE_FADE`)는 글로우가 흐려지므로,
