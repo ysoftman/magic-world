@@ -813,6 +813,58 @@ const GAME_KIT: Record<string, SfxProgram> = {
       { at: 0.2, dur: 0.42, wave: "triangle", freq: N("E4"), vol: 0.058, attack: 0.006, hold: 0.04 },
     ],
   },
+  // ---- the ABYSS's portals (ui/warpFx.ts) ----
+  // Timed to the blinks as warpFx plays them: the out pops at 0.43s, the in
+  // lands at 0.35s. SEs, as a dive takes one a floor.
+  "warp-out": {
+    id: "warp-out",
+    kind: "se",
+    target:
+      "warp out: a hum and a wobbling pulse rising an octave (A3-A4, E5-E6) over a swelling hiss, popping at 0.42s into a C7 blip, a G6 trill and metal sparkle",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.44, wave: "triangle", freq: N("A3"), to: N("A4"), vol: 0.05, attack: 0.3 },
+      { at: 0.04, dur: 0.4, wave: "pulse25", freq: N("E5"), to: N("E6"), vol: 0.03, attack: 0.3, vib: { rate: 16, cents: 35 } },
+      {
+        at: 0,
+        dur: 0.44,
+        wave: "noise",
+        freq: 3000,
+        to: 16000,
+        vol: 0.04,
+        attack: 0.36,
+        filter: { type: "bandpass", freq: 900, to: 4500, q: 1.2 },
+      },
+      { at: 0.42, dur: 0.06, wave: "square", freq: N("C7"), vol: 0.032 },
+      { at: 0.43, dur: 0.16, wave: "pulse12", freq: N("G6"), vol: 0.026, hold: 0.02, vib: { rate: 20, cents: 25 } },
+      { at: 0.42, dur: 0.17, wave: "metal", freq: 40000, vol: 0.03, filter: { type: "highpass", freq: 4000 } },
+    ],
+  },
+  "warp-in": {
+    id: "warp-in",
+    kind: "se",
+    target:
+      "warp in: a hiss and a wobbling pulse falling E6-E5 as the bits spiral in, landing at 0.34s on a soft triangle C5/G5 fifth over a C4 thump, a C7 glint on top",
+    pitch: "key",
+    steps: [
+      {
+        at: 0,
+        dur: 0.34,
+        wave: "noise",
+        freq: 16000,
+        to: 3000,
+        vol: 0.04,
+        attack: 0.15,
+        filter: { type: "bandpass", freq: 4500, to: 900, q: 1.2 },
+      },
+      { at: 0, dur: 0.34, wave: "pulse25", freq: N("E6"), to: N("E5"), vol: 0.03, attack: 0.12, vib: { rate: 16, cents: 35 } },
+      { at: 0.34, dur: 0.22, wave: "triangle", freq: N("C4"), to: N("C3"), vol: 0.05, hold: 0.03 },
+      { at: 0.34, dur: 0.24, wave: "triangle", freq: N("C5"), vol: 0.04, hold: 0.06 },
+      { at: 0.34, dur: 0.24, wave: "triangle", freq: N("G5"), vol: 0.032, hold: 0.05, vib: { rate: 6, cents: 12 } },
+      { at: 0.35, dur: 0.14, wave: "pulse12", freq: N("C7"), vol: 0.024 },
+      { at: 0.34, dur: 0.12, wave: "metal", freq: 40000, vol: 0.026, filter: { type: "highpass", freq: 4000 } },
+    ],
+  },
 };
 
 registerSfx(GAME_KIT);

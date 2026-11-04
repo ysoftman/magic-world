@@ -28,6 +28,7 @@ import { helpOpen } from "./ui/HelpPopup";
 import { placeHeroGear } from "./ui/HeroGear";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
+import { type WarpWalker, warmWarp, warping, warpOut } from "./ui/warpFx";
 import { showUnlockTip, type TipPlace } from "./unlockTips";
 import type { Weather } from "./weather";
 
@@ -481,10 +482,12 @@ export interface HeroFollowers {
  * Built in create(), where the scene's other keys are, on a hero that
  * starts facing down; its keys go at the scene's shutdown.
  */
-export class HeroWalk {
+export class HeroWalk implements WarpWalker {
   private facing: LastMove = "down";
-  private readonly hero: Phaser.Physics.Arcade.Sprite;
+  readonly hero: Phaser.Physics.Arcade.Sprite;
   private readonly followers: HeroFollowers;
+  // a warp has the hero (warpFx.ts): stood, whatever is held
+  private held = false;
   private readonly keys: Record<LastMove, Phaser.Input.Keyboard.Key[]>;
 
   constructor(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite, followers: HeroFollowers) {
@@ -505,7 +508,7 @@ export class HeroWalk {
     const held = (way: LastMove): boolean => this.keys[way].some((key) => key.isDown);
     let vx = 0;
     let vy = 0;
-    if (!still) {
+    if (!still && !this.held) {
       if (held("left")) vx = -WALK_SPEED;
       else if (held("right")) vx = WALK_SPEED;
       if (held("up")) vy = -WALK_SPEED;
@@ -537,6 +540,25 @@ export class HeroWalk {
   idle(): void {
     this.halt();
     this.hero.setTexture(`hero-idle-${this.facing}`);
+  }
+
+  /**
+   * A warp's (warpFx.ts): the hero stood and turned to the camera, the one
+   * pose its sheets are baked from, gear and all, till the walk is given back.
+   */
+  hold(on: boolean): void {
+    this.held = on;
+    if (!on) return;
+    this.facing = "down";
+    this.idle();
+    placeHeroGear(this.followers.weapon, this.followers.shield, this.hero, this.facing);
+  }
+
+  /** The hero, its shadow and gear, and its companion (as the hero unless given): as a warp shows them. */
+  setAlpha(alpha: number, companion = alpha): void {
+    const { shadow, weapon, shield } = this.followers;
+    for (const o of [this.hero, shadow, weapon, shield]) o.setAlpha(alpha);
+    this.followers.companion.setAlpha(companion);
   }
 }
 
@@ -711,13 +733,16 @@ export function walkOut(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite,
  * from B1, as ever, which leaves a portal waiting. Two lines of at most 27
  * glyphs ("A CHECKPOINT WAITS AT B996.", "A PORTAL WAITS AT B999." 23) and
  * two choices: all a touch question holds (DialogueBox). `leaving` sets the
- * scene's own flag as the walk out begins.
+ * scene's own flag as the hero blinks out (warpFx.ts's warpOut).
  */
-export function askAbyssDive(scene: Phaser.Scene, hero: Phaser.Physics.Arcade.Sprite, dialogue: DialogueBox, leaving: () => void): void {
+export function askAbyssDive(scene: Phaser.Scene, walk: HeroWalk, dialogue: DialogueBox, leaving: () => void): void {
+  // the look or gear may have changed since the scene's warm (warpFx.ts)
+  warmWarp(scene);
   const dive = (start: number): void => {
     leaving();
-    // a new dive, never a stale { fromBattle } replayed by Phaser
-    walkOut(scene, hero, () => scene.scene.start("Abyss", { start }));
+    // a new dive, never a stale { fromBattle } replayed by Phaser; blinked out
+    // of rather than walked
+    warpOut(scene, walk, () => scene.scene.start("Abyss", { start }));
   };
   const resume = abyssResume(GameState.abyssPortal, GameState.abyssCheckpoint);
   if (!resume) {
@@ -960,9 +985,12 @@ export class FieldKeys {
    * talk and look picker) are dropped meanwhile, as under a panel: a bag or
    * a question opened in a fight's 300ms fade was still up as the battle
    * took over, and a dig in it saved. The quit's wait for the title has no
-   * fade; the scenes hold it with their `quitting`.
+   * fade; the scenes hold it with their `quitting`. A portal's warp, out or
+   * in (warpFx.ts), holds it too: 820ms of blinking out before its fade, and
+   * the hero not yet there while it blinks in.
    */
   leaving(): boolean {
+    if (warping(this.scene)) return true;
     const fade = this.scene.cameras.main.fadeEffect;
     return fade.direction && (fade.isRunning || fade.isComplete);
   }

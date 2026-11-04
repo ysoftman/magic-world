@@ -74,6 +74,16 @@ export class CompanionSprite {
     if (Math.hypot(playerX - last.x, playerY - last.y) >= TRAIL_STEP) this.trail.push({ x: playerX, y: playerY });
   }
 
+  /**
+   * How much of it shows, its shadow with it: a portal's warp (ui/warpFx.ts)
+   * fades it out with the hero and back in after. Its visibility stays
+   * step()'s, and a new scene's companion starts at 1.
+   */
+  setAlpha(alpha: number): void {
+    this.sprite.setAlpha(alpha);
+    this.shadow.setAlpha(alpha);
+  }
+
   destroy(): void {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onPostUpdate);
     this.sprite.destroy();

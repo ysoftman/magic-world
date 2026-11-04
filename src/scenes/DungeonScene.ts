@@ -64,6 +64,7 @@ import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
+import { warmWarp } from "../ui/warpFx";
 import { weatherToday } from "../weather";
 import { bakeAbyssStairs, STAIRS_DOWN_KEY } from "./AbyssScene";
 import { CAVE_SKIN } from "./BootScene";
@@ -428,10 +429,12 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, stair, () => {
       if (this.exitingDungeon || this.uiBlocking()) return;
       this.player.setVelocity(0, 0);
-      askAbyssDive(this, this.player, this.dialogue, () => {
+      askAbyssDive(this, this.walk, this.dialogue, () => {
         this.exitingDungeon = true;
       });
     });
+    // the hero's blink out down it, and in on B1 (warpFx.ts)
+    warmWarp(this);
   }
 
   // A find (a chest, a treasure map's dig) gets the grace a fight's return

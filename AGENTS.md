@@ -934,6 +934,14 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     multiply 아래서도 rift 테두리는 둘레에서 가장 밝고, 계단의 보라 빛은 원래 있던 `air` 빛이 맡는다.
   - 빛(light)은 0.4 로 굽는다. 실제 사례: 이펙트 기본값 1 에서는 알파 있는 색으로 구워진 빛이 관문 돌을 분홍으로
     씻었다. 이펙트가 rift 아래 바닥에 까는 빛 줄은 crop 으로 뺐다. 관문 밑동을 가로지르고 계단 밖까지 나갔다.
+- 포탈을 쓰면(마을 관문·동굴 계단의 `askAbyssDive`, 심연의 아래 계단) 영웅이 `arcane/blink-out` 으로 흩어지고 다음 층에서
+  `blink-in` 으로 모인다(`src/ui/warpFx.ts` 의 `warpOut`·`warpIn`, 소리 `warp-out`·`warp-in`). 일반 출구와 위 계단은 `walkOut`
+  그대로다. 둘 다 몸(o.actor) 이펙트라 statusFx 처럼 영웅 그림으로 굽는다. 워프가 시작되면 영웅을 카메라 쪽으로 돌려 세우고
+  (`HeroWalk.hold`) 정면 idle 프레임과 손의 장비(HeroGear "down")를 한 몸으로 읽어, 외형·장비 해시가 키다. 연출 동안
+  `FieldKeys.leaving()` 이 참이라 Q·패널 키·Z 가 먹지 않는다. 동료는 효과가 그리지 않으니 out 의 빛이 모이는 동안 흐려지고,
+  in 이 끝난 뒤 250ms 에 들어온다(`CompanionSprite.setAlpha`, 다음 씬은 새로 만들어 1 이다). out 820ms(끝 200ms 에 카메라 페이드), in 720ms, 깊이 10.6,
+  빛 0.7(FLASHES 끄기·reduced motion 0.35). 관문·계단이 있는 씬 create 와 질문 때 `warmWarp` 로 굽고, 못 구웠으면 그 자리에서
+  굽는다(시트 하나 6~9ms, 헤드리스).
 - 패널 순간 연출은 `PanelFx` 로 재생한다: 대장간 FORGE·REFINE 과 집 BUILD 의 불똥(`SPARKS`), 행운의 바퀴
   DOUBLE·JACKPOT 의 금빛 버스트와 JACKPOT 색종이, 밭에 심을 때 피는 싹과 수확 버스트, 부엌 요리 완성 버스트,
   가방에서 회복 아이템을 쓸 때 아이콘 밑에 퍼지는 회복 고리(holy/heal-aoe, HP 초록·MP 파랑·ELIXIR 금색), 상점 구매의

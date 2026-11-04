@@ -58,6 +58,7 @@ import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
+import { WARP_IN_MS, warmWarp, warpIn, warpOut } from "../ui/warpFx";
 import { CAVE_SKIN } from "./BootScene";
 
 const ENCOUNTER_COOLDOWN = 600;
@@ -463,6 +464,16 @@ export class AbyssScene extends Phaser.Scene {
 
     saveOnShutdown(this, [this.minimap, this.panels, this.night, this.companionFollower, help, this.touch]);
 
+    // On a floor arrived at, by a portal (the gate, the cave's stair) or the
+    // stair down, the hero blinks in (warpFx.ts); the entry grace runs on past
+    // it. Then the sheets for the next stair down, should the look or gear
+    // have changed on the way.
+    if (!fromBattle) {
+      this.encounterCooldown += WARP_IN_MS;
+      warpIn(this, this.walk);
+    }
+    warmWarp(this);
+
     // News, queued under the floor's title. "NEW RECORD: B999!" is 17 glyphs
     // and "A GUARDIAN SEALS THE STAIRS!" 28 (560px) at retroStyle(5).
     if (record) {
@@ -582,7 +593,8 @@ export class AbyssScene extends Phaser.Scene {
     this.downLabel.setText(sealed ? "SEALED" : `B${(run?.floor ?? 0) + 1}`).setColor(sealed ? SEALED_COLOR : DOWN_COLOR);
   }
 
-  // fade out once, then `next` (a scene change); stairs and exits share it
+  // fade out once, then `next` (a scene change): the stair up (the stair down
+  // blinks out instead, tryDescend)
   private leave(next: () => void): void {
     if (this.leaving) return;
     this.leaving = true;
@@ -599,7 +611,9 @@ export class AbyssScene extends Phaser.Scene {
       return;
     }
     const r = run;
-    this.leave(() => {
+    // blinked out of rather than walked (warpFx.ts), as the way in was
+    this.leaving = true;
+    warpOut(this, this.walk, () => {
       r.floor += 1;
       freshFloor(r);
       this.scene.start("Abyss", { fromStairs: true });

@@ -103,6 +103,7 @@ import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHu
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { type Rect, Villagers } from "../ui/Villagers";
+import { warmWarp } from "../ui/warpFx";
 import { bakeHero, seasonSkin } from "./BootScene";
 
 // The last day whose town event (events.ts) was announced. Module scope, so
@@ -1014,6 +1015,8 @@ export class TownScene extends Phaser.Scene {
         .setDepth(11),
     );
     this.fixedLabels.push(rectOf(tag));
+    // the hero's blink out through it, and in on B1 (warpFx.ts)
+    warmWarp(this);
   }
 
   // signpost + name tag, the shape every interactive spot shares
@@ -1475,7 +1478,7 @@ export class TownScene extends Phaser.Scene {
               x: ABYSS_GATE_POS.x,
               y: ABYSS_GATE_POS.y,
               run: () =>
-                askAbyssDive(this, this.player, this.dialogue, () => {
+                askAbyssDive(this, this.walk, this.dialogue, () => {
                   this.enteringDungeon = true;
                 }),
             },
