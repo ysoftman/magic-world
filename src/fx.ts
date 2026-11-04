@@ -373,7 +373,10 @@ const queues = new WeakMap<Phaser.Scene, Waiting[]>();
 /**
  * Bakes `sheets` not yet in, in order after anything `scene` has queued
  * already, BAKE_BUDGET_MS of each of its frames (POST_UPDATE) at a time: a
- * cheap sheet or a few in a frame, a costly one across several. `done` hears
+ * cheap sheet in a frame, a costly one across several, and never two finished
+ * in one. A sheet's texture going in (addCanvas, refresh, its GL upload) comes
+ * on top of the budget: ten field and panel sheets queued in the town's create
+ * finished several to a frame and held it to 32-49ms (headless). `done` hears
  * each key once its texture is in, at once for one that is in already. Should
  * the scene shut down first, the rest, the sheet under way too, are left to
  * whoever needs them next, and `done` hears nothing more: finishing that sheet
@@ -397,23 +400,19 @@ export function warmSheets(scene: Phaser.Scene, sheets: Record<string, PixelShee
   let baking: { item: Waiting; baker: ReturnType<typeof sheetBaker> } | undefined;
   const step = (): void => {
     const end = performance.now() + BAKE_BUDGET_MS;
-    do {
-      if (!baking) {
-        const item = waiting.shift();
-        if (!item) {
-          stop();
-          return;
-        }
-        if (scene.textures.exists(item.key)) {
-          item.done?.(item.key);
-          continue;
-        }
-        baking = { item, baker: sheetBaker(scene, item.key, item.sheet) };
+    while (!baking) {
+      const item = waiting.shift();
+      if (!item) {
+        stop();
+        return;
       }
-      if (!baking.baker.step(end - performance.now())) return;
-      baking.item.done?.(baking.item.key);
-      baking = undefined;
-    } while (performance.now() < end);
+      if (scene.textures.exists(item.key)) item.done?.(item.key);
+      else baking = { item, baker: sheetBaker(scene, item.key, item.sheet) };
+    }
+    if (!baking.baker.step(end - performance.now())) return;
+    baking.item.done?.(baking.item.key);
+    // the next sheet starts next frame, its texture too
+    baking = undefined;
   };
   const leave = (): void => {
     baking?.baker.drop();
