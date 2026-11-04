@@ -59,7 +59,8 @@ export interface SfxStep {
 
 /**
  * "key": every tonal pitch (freq and to) sits on the C major / A minor white
- * keys that the title, town, forest, snow and their battle themes share.
+ * keys that the title, town, forest, snow and their battle themes share
+ * (played a whole step down over the minor cave and volcano tracks).
  * "none": unpitched, noise steps only. { offKey }: deliberately outside the
  * key, with the one-line reason.
  */
@@ -81,6 +82,8 @@ export interface SfxPlayOpts {
   when?: number;
   /** 0..1 scales every step's vol */
   vol?: number;
+  /** semitones on a "key" program's tonal steps (default: the BGM's, setSfxKeyShift) */
+  shift?: number;
 }
 
 // ---- budget and key ----
@@ -272,7 +275,16 @@ function cabinetInput(ctx: BaseAudioContext, bus: AudioNode): GainNode {
   return input;
 }
 
-function playStep(ctx: BaseAudioContext, out: AudioNode, s: SfxStep, t0: number, gain: number): void {
+// The "key" programs are written on C major's white keys. A minor-key track
+// never plays some of them (the cave's C minor has Eb where the kit has E),
+// so while one plays, audio.ts moves them onto its scale. Off-key programs,
+// noise and filters stay where they are.
+let keyShift = 0;
+export function setSfxKeyShift(semitones: number): void {
+  keyShift = semitones;
+}
+
+function playStep(ctx: BaseAudioContext, out: AudioNode, s: SfxStep, t0: number, gain: number, ratio: number): void {
   const t = t0 + s.at;
   const end = t + s.dur;
   let src: AudioScheduledSourceNode;
@@ -291,8 +303,8 @@ function playStep(ctx: BaseAudioContext, out: AudioNode, s: SfxStep, t0: number,
     const o = ctx.createOscillator();
     if (s.wave === "pulse25" || s.wave === "pulse12") o.setPeriodicWave(pulseWave(ctx, s.wave === "pulse25" ? 0.25 : 0.125));
     else o.type = s.wave;
-    o.frequency.setValueAtTime(s.freq, t);
-    if (s.to !== undefined) o.frequency.exponentialRampToValueAtTime(s.to, end);
+    o.frequency.setValueAtTime(s.freq * ratio, t);
+    if (s.to !== undefined) o.frequency.exponentialRampToValueAtTime(s.to * ratio, end);
     if (s.vib) {
       const lfo = ctx.createOscillator();
       const depth = ctx.createGain();
@@ -339,7 +351,8 @@ function playStep(ctx: BaseAudioContext, out: AudioNode, s: SfxStep, t0: number,
 export function renderProgram(ctx: BaseAudioContext, out: AudioNode, p: SfxProgram, t0: number, opts: SfxPlayOpts = {}): void {
   const gain = Math.max(0, Math.min(1, opts.vol ?? 1));
   if (gain <= 0) return;
-  for (const s of p.steps) playStep(ctx, out, s, t0, gain);
+  const ratio = p.pitch === "key" ? 2 ** ((opts.shift ?? 0) / 12) : 1;
+  for (const s of p.steps) playStep(ctx, out, s, t0, gain, ratio);
 }
 
 // ---- the bus: event name -> program, with a repeat guard ----
@@ -388,7 +401,7 @@ export function kitPrograms(): Record<string, SfxProgram> {
 export function playProgram(p: SfxProgram, opts: SfxPlayOpts = {}): void {
   const out = output?.();
   if (!out) return;
-  renderProgram(out.ctx, cabinetInput(out.ctx, out.bus), p, out.ctx.currentTime + (opts.when ?? 0), opts);
+  renderProgram(out.ctx, cabinetInput(out.ctx, out.bus), p, out.ctx.currentTime + (opts.when ?? 0), { shift: keyShift, ...opts });
 }
 
 /** The way game code makes a sound: by event name. Unknown names are a dev error, silent in production. */

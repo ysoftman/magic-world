@@ -1,5 +1,5 @@
 import { GameState } from "./gameState";
-import { bindSfxOutput, emitSfx, type SfxPlayOpts } from "./sfxKit";
+import { bindSfxOutput, emitSfx, type SfxPlayOpts, setSfxKeyShift } from "./sfxKit";
 
 interface Note {
   freq: number | null; // null = rest
@@ -540,6 +540,18 @@ export const SNOW_BATTLE_THEME = battleVariant(-2);
 // stays the darker of the two, so the FLAME DRAKE's fight still escalates.
 export const VOLCANO_BATTLE_THEME = battleVariant(1, { 11: -1, 0: 1 }, 0.5);
 
+// The effect kit's "key" programs sit on C major's white keys, and the minor
+// tracks below never play the kit's E and B (the cave) or C and B (the
+// volcano), which rubbed a semitone against their Eb, Bb and C#. While one of
+// them plays, the kit moves down a whole step: its C-E-G and A-C-E turn
+// Bb-D-F and G-Bb-D, all on the track's own scale. BOSS_THEME is E phrygian,
+// the white keys already, so it and the rest keep the kit where it is.
+const SFX_KEY_SHIFT = new Map<Note[], number>([
+  [DUNGEON_THEME, -2],
+  [VOLCANO_THEME, -2],
+  [VOLCANO_BATTLE_THEME, -2],
+]);
+
 // Every note's own `vol` stays relative; this is the single knob for how loud
 // the game is overall. Above 1 because the per-note levels were mixed very
 // conservatively — the limiter below absorbs the peaks when notes stack.
@@ -680,6 +692,7 @@ export class Sfx {
   }
 
   static playBgm(track: Note[]): void {
+    setSfxKeyShift(SFX_KEY_SHIFT.get(track) ?? 0);
     if (Sfx.bgmTrack === track) return; // already looping this one
     Sfx.bgmTrack = track;
     Sfx.restartBgmLoop();
