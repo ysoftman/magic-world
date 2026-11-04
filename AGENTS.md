@@ -399,8 +399,9 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   사례: 고정 MP 였을 때 DOUBLE SLASH(Lv2, 2 MP)는 피해만 ATK 를 따라 커져 Lv30 에서 MP 당 FIGHT 보다 약 9 를 더
   줬다(주문은 약 1.5, `battleRules.ts` 의 SKILLS 위 주석). 새 스킬·기술은 `battleRules.ts` 의 이름 목록·`SKILLS`,
   `skillFx.ts`·`techFx.ts` 의 `SKILL_HITS`/`TECH_HITS`·`PLAYS`·`*_SHEET_KEYS`(기술은 `TECH_MELEE` 도),
-  `skillSfx.ts` 의 `VOICES` 를 같이 맞춘다. 빠진 이름은 tsc 가, 대수나 무기/마법 구분이 어긋나면 dev 빌드의
-  BattleScene 이 console.error 로 잡지만 `VOICES` 의 `hits` 는 검사가 없다(모자라면 마지막 타격음을 되풀이).
+  `skillSfx.ts` 의 `VOICES` 를 같이 맞춘다. 빠진 이름은 tsc 가, 대수(`VOICES` 의 `hits` 포함, `skillSfxHits`)나
+  무기/마법 구분이 어긋나면 dev 빌드의 BattleScene 이 console.error 로 잡는다(타격음이 모자라면 마지막 것을
+  되풀이한다).
   수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7)과
   견주고, `--skills` 를 `--greedy` 와 견줘 보스전 라운드를 본다.
 
@@ -952,9 +953,18 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - 징글은 드문 장면 전환(승리·레벨업·신기록·게임 오버·보스 등장·격노·밤)에만 쓰고, 자주 나는 피드백은 SE 다. 실제
   사례: 보스 예고 `charge` 는 0.8초로 SE 예산을 넘어 0.6초로 줄였다. `nova` 는 0.7초 붐을 castNova 의 마지막
   폭발에 맞춰 1.2초라, 드문 궁극기로 보고 징글 예산을 쓴다.
-- `pitch` 는 "key"(흰 건반, 타이틀·마을·숲·설원과 그 전투곡이 함께 쓰는 음계), "none"(잡음뿐), 또는
-  `{ offKey: "이유 한 줄" }` 이다. 음을 차례로 올릴 때는 같은 Hz 간격이 아니라 음계를 따라 올린다. 실제 사례:
-  옛 `run` 은 600·700·800Hz 로 올라 키를 벗어났다 → D6-E6-G6.
+- `pitch` 는 "key"(흰 건반, 타이틀·마을·숲·설원과 그 전투곡이 함께 쓰는 음계 — 단조 곡 위에서는 아래 조옮김),
+  "none"(잡음뿐), 또는 `{ offKey: "이유 한 줄" }` 이다. 음을 차례로 올릴 때는 같은 Hz 간격이 아니라 음계를 따라
+  올린다. 실제 사례: 옛 `run` 은 600·700·800Hz 로 올라 키를 벗어났다 → D6-E6-G6.
+- "key" 프로그램은 지금 도는 BGM 의 조를 따라간다. 동굴·심연 필드(`DUNGEON_THEME`, C단조)와 화산
+  (`VOLCANO_THEME`·`VOLCANO_BATTLE_THEME`, D화성단조)이 도는 동안은 온음 아래(-2)로 재생한다(`audio.ts` 의
+  `SFX_KEY_SHIFT`, `playBgm` 이 `setSfxKeyShift` 로 넘김). 데이터는 흰 건반 그대로 쓰고 offKey·잡음·필터는 옮기지
+  않는다. 실제 사례: 동굴 필드의 `chest`·`levelup`·`pickup` 은 E·B 가 곡의 Eb·Bb 와, 화산 전투의 `victory`·
+  `levelup` 은 C 가 곡의 C# 과 반음으로 부딪혔다(곡이 치지 않는 음과의 반음이 효과음 한 번당 동굴 17→0%, 화산
+  전투 11→1%, A 가중 음량 차 -0.9~+0.6dB). 새 단조·선법 곡을 넣으면 키트의 잦은 음(C·E·G·A)이 곡이 한 번도
+  치지 않는 음에 떨어지는지 보고 표에 한 줄 넣는다. 화성단조는 흰 건반을 옮겨서는 다 맞지 않으니 후보마다 잰다
+  (화산은 +5 가 G 를 C 로 옮겨 C# 과 부딪혀서 -2 가 됐다). `BOSS_THEME`(E프리지안)은 흰 건반 그대로라 0 이다.
+  그 곡의 E/F·B/Bb 반음은 곡 자신의 음이라 옮겨도 줄지 않는다.
 - 연달아 나는 소리끼리 반음으로 부딪히지 않는지 본다. 실제 사례: 전투 결산은 `victory` 360ms 뒤에 `pickup` 을
   낸다. 그 B5 가 `victory` 의 C6 지속음과 반음으로 부딪혀 `pickup` 을 E6→A6 로 옮겼다.
 - 재료는 정해진 것만 쓴다(square, pulse25·pulse12, triangle, sawtooth, sine, LFSR noise·metal, filter, drive,
