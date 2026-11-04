@@ -69,6 +69,7 @@ import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart"
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
+import { playSkillSfx } from "../skillSfx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
@@ -1699,7 +1700,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.curHp = Math.max(0, this.enemy.curHp - hit.dmg);
       dealt.push(hit.dmg);
       crit ||= hit.crit;
-      this.moveSfx(skill, "hit", hit.crit);
+      this.moveSfx(skill, "hit", i, hit.crit);
       // the first hit on a weakness rings and shakes as a weakness spell does
       if (hit.weak && i === 0) {
         Sfx.critical();
@@ -1752,16 +1753,12 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyHp();
   }
 
-  // A move's sounds, all in this one place (a move-by-move set can take it
-  // over later): a weapon tech's swing or a spell's cast as it starts (the
-  // three biggest blows and BLACK HOLE NOVA's), a strike on each hit
-  private moveSfx(skill: Skill, at: "cast" | "hit", crit = false): void {
-    if (at === "hit") {
-      Sfx.strike();
-      if (crit) Sfx.critical();
-    } else if (skill.style === "weapon") Sfx.attack();
-    else if (skill.cost >= 20) Sfx.nova();
-    else Sfx.magic();
+  // A move's sounds, all in this one place: its own (skillSfx.ts) cast as it
+  // starts, a weapon tech's as the dash sets off, and hit i as hit i lands;
+  // a crit rings FIGHT's on top
+  private moveSfx(skill: Skill, at: "cast" | "hit", i = 0, crit = false): void {
+    playSkillSfx(skill.name, at, i);
+    if (at === "hit" && crit) Sfx.critical();
   }
 
   // where the hero stands to strike the foe: a step off its near side (x-80
