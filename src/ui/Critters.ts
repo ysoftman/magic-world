@@ -25,29 +25,76 @@ export type CritterRegion = "town" | "forest" | "abyss";
 // pace, its span over its frames
 type CritterSheet = PixelSheet & { frameMs?: number };
 
-// Half the effects' 30fps: 15 is as smooth as the battle sheets play
-// (AGENTS.md), and the textures and the title's bake half as long.
-const fps15 = (fx: PixelSheet["fx"]): number => Math.round(fx.meta.duration * 15);
+type Box = [x0: number, y0: number, x1: number, y1: number];
 
+// a box round an effect's anchor, in its pixels, as the part of its canvas a
+// sheet bakes (PixelSheet.crop)
+const around = (fx: PixelSheet["fx"], [x0, y0, x1, y1]: Box): Box => {
+  const [ax, ay] = fx.meta.origin;
+  return [ax + x0, ay + y0, ax + x1, ay + y1];
+};
+
+// What a butterfly's loop draws: it wanders 26 cells either way of its anchor,
+// the loop's middle, its wings 18 either side of its body, and its dust falls
+// to 31 under the anchor.
+const BUTTERFLY_BOX: Box = [-45, -26, 45, 32];
+// What the frog draws round its anchor, its feet: the dust it lands in, 28
+// either side, and the fly it snaps, up to 47 over it. Its sheet's crop, and
+// the box frogSpots keeps off the name tags.
+const FROG_BOX: Box = [-28, -47, 28, 4];
+
+// Each sheet is one whole loop (the default span, 0..duration, so its last
+// frame steps on to its first), cropped to what that loop draws at its frame
+// count, and the frame counts fill their texture's rows (2048 / width frames
+// a row): 4.1MB for the five, against 10.3MB baking the effects' whole
+// canvases at 15fps. The day critters bake with light 0: glow bakes as colour
+// with alpha, a haze over bright grass, and at a butterfly's light 0.3 it did
+// not show at all while the crop it needed grew from 90x58 to 112x80.
 export const CRITTER_SHEETS = {
-  // the iridescent blue one, and an amber one beside it
-  "critter-butterfly-a": { fx: butterfly, frames: fps15(butterfly) },
+  // The iridescent blue one, as pixelfx draws it. 44 frames (13.75fps): at 90
+  // wide a row holds 22, so 38 (12fps) left six of its two rows' slots empty.
+  "critter-butterfly-a": { fx: butterfly, opts: { light: 0 }, frames: 44, crop: around(butterfly, BUTTERFLY_BOX) },
+  // An orange one beside it: black-brown veins and rim, white dots on the black
+  // wing tips, a pale yellow ring round the hind wings' eyespots (the default
+  // gold, 0xffb43c, sank into the orange). Orange, not pink: the town's petals
+  // are pink. Seed 2 puts its loop 0.62 of a turn on from the blue one's.
   "critter-butterfly-b": {
     fx: butterfly,
-    opts: { palette: ["#1f0b04", "#4a1c08", "#8a3a10", "#d0701c", "#f5a83a", "#ffd88a", "#ffffff"], seed: 2 },
-    frames: fps15(butterfly),
+    opts: {
+      palette: ["#1c0d05", "#3d1a08", "#7a3510", "#c0561a", "#f28c28", "#ffc35c", "#fff6e0"],
+      spots: ["#3a1a08", "#c8641a", "#ffe08a", "#fff6e0"],
+      seed: 2,
+      light: 0,
+    },
+    frames: 44,
+    crop: around(butterfly, BUTTERFLY_BOX),
   },
-  // drawn facing right, mirrored to fly left
-  "critter-bird": { fx: bird, frames: fps15(bird) },
-  // its anchor is its feet, on the tile it sits on
-  "critter-frog": { fx: frog, frames: fps15(frog) },
-  // the ABYSS's, violet like its glow. None in the forest: the town's NIGHT
-  // WISP (monsters.ts) is a foe out only at night, and a wisp among the trees
+  // Drawn facing right, mirrored to fly left round its origin, the middle of
+  // its body. The loose feather drifting back from it stays in: cropped off, it
+  // vanished at the crop's edge. 15fps for the wingbeats, one row of 36.
+  "critter-bird": { fx: bird, opts: { light: 0 }, frames: 36, focus: [-1, -2], crop: around(bird, [-35, -18, 15, 21]) },
+  // Its anchor is its feet, on the tile it sits on. The default greens: its
+  // dark rim keeps the ring on every grass (5.2% of it lost at most, on the
+  // forest's scrub). 36 frames (13.8fps) at the dust's whole width fit one
+  // row; 39 (15fps) took two, or a crop that cut the dust off flat.
+  "critter-frog": { fx: frog, opts: { light: 0 }, frames: 36, crop: around(frog, FROG_BOX) },
+  // The ABYSS's, in its own purples (0x4c1d95, 0x7c3aed) with the top steps
+  // held off white: added over its floor, a white top made the head a white
+  // lavender and left the halo hardly purple. Its halo (radius 46) goes with
+  // the head round a figure-eight 34 cells either way, so any crop cuts it:
+  // this one, 60 either side with the light pooled on the floor under it, no
+  // harder than the effect's own canvas (alpha 12 at the sides, 15 at the
+  // floor, under the edge fade); 53 either side, the pool left off, boxed it
+  // at 25 and 33. 120 wide fits 17 a row: 34 frames (10.6fps) fill two, 38
+  // (12fps) took a third. None in the forest: the town's NIGHT WISP
+  // (monsters.ts) is a foe out only at night, and a wisp among the trees could
   // read as one to go after; the forest's nights have the fireflies.
   "critter-wisp-abyss": {
     fx: wisp,
-    opts: { palette: ["#140a24", "#2a1048", "#4a1a7a", "#7a2ab0", "#a855f7", "#d8b4fe", "#ffffff"] },
-    frames: fps15(wisp),
+    opts: { palette: ["#12062a", "#2a0f5c", "#4c1d95", "#7129d1", "#9a63f0", "#c9a6ff", "#f6eeff"], seed: 2 },
+    frames: 34,
+    focus: [0, -36],
+    crop: around(wisp, [-60, -88, 60, 8]),
   },
 } satisfies Record<string, CritterSheet>;
 
@@ -59,9 +106,6 @@ const SHEETS: Record<CritterKey, CritterSheet> = CRITTER_SHEETS;
 // (4.5); under the step puffs (6), the signs (9) and the hero (10), who walks
 // over it.
 const FROG_DEPTH = 5;
-// the frog's box round its anchor, in pixelfx pixels: the grid it draws in
-// (critters/frog), its leap and the fly it snaps included
-const FROG_BOX = { x0: -22, y0: -40, x1: 22, y1: 4 };
 // at most this many, a few tiles apart so two never sit side by side
 const FROGS = 2;
 const FROG_GAP = 3 * TILE;
@@ -170,13 +214,16 @@ export function addCritters(
   }
   if (season?.butterflies) {
     const butterflies = flock(() => (1 - nightFactor()) * dry());
-    // two or three, the blue ones first
-    const count = Phaser.Math.Between(2, 3);
+    // One or two in view at once: at ART_PX one is wider than the hero (its
+    // wings 37 cells across, 74px), and three read as a swarm. Two are one of
+    // each, one is either.
+    const count = Phaser.Math.Between(1, 2);
+    const blue = count === 2 ? 1 : Phaser.Math.Between(0, 1);
     const out = (key: CritterKey, n: number) => () => {
       for (let i = 0; i < n; i++) butterflies.push(drifter(scene, key, AMBIENT_DEPTH, Phaser.Math.FloatBetween(14, 26), !entering));
     };
-    kinds["critter-butterfly-a"] = out("critter-butterfly-a", Math.ceil(count / 2));
-    kinds["critter-butterfly-b"] = out("critter-butterfly-b", Math.floor(count / 2));
+    if (blue) kinds["critter-butterfly-a"] = out("critter-butterfly-a", blue);
+    if (count > blue) kinds["critter-butterfly-b"] = out("critter-butterfly-b", count - blue);
   }
   if (season) {
     let birds = false;
@@ -298,11 +345,12 @@ function flyBy(scene: Phaser.Scene): void {
 // KEEP_CLEAR of every `avoid` point, the frog's box over no name tag.
 function frogSpots(level: number[][], avoid: ReadonlyArray<{ x: number; y: number }>, labels: readonly Rect[]): Array<[number, number]> {
   const water = (tx: number, ty: number): boolean => level[ty]?.[tx] === T_WATER_A || level[ty]?.[tx] === T_WATER_B;
+  const [x0, y0, x1, y1] = FROG_BOX;
   const box = (tx: number, ty: number): Rect => ({
-    x: (tx + 0.5) * TILE + FROG_BOX.x0 * ART_PX,
-    y: (ty + 0.75) * TILE + FROG_BOX.y0 * ART_PX,
-    w: (FROG_BOX.x1 - FROG_BOX.x0) * ART_PX,
-    h: (FROG_BOX.y1 - FROG_BOX.y0) * ART_PX,
+    x: (tx + 0.5) * TILE + x0 * ART_PX,
+    y: (ty + 0.75) * TILE + y0 * ART_PX,
+    w: (x1 - x0) * ART_PX,
+    h: (y1 - y0) * ART_PX,
   });
   const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
   const spots: Array<[number, number]> = [];
