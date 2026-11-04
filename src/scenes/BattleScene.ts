@@ -129,6 +129,10 @@ const STAT_DEPTH = 10;
 // BURN, CHILL or STUN that repaints the body hid the burst), under the damage
 // numbers (1)
 const SPELL_BURST_DEPTH = 0.5;
+// how far right of the hero a spell's shot sets off: NOVA's orb further, so
+// its 34-cell core clears the hero (from 40 it hid half the hero at launch)
+const SHOT_START_X = 40;
+const ORB_START_X = 104;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
 const ENRAGE_TINT = 0xff7070;
@@ -2280,7 +2284,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async castProjectile(spell: Spell): Promise<void> {
     const [shot, burst] = SPELL_FX[spell.name] ?? SPELL_FX.NOVA;
-    const x = this.playerSprite.x + 40;
+    const x = this.playerSprite.x + (spell.ultimate ? ORB_START_X : SHOT_START_X);
     const y = this.playerSprite.y - 20;
     // the sheets fly rightwards, turned to aim at the foe; 8 frames of 30ms a
     // flight (fx.ts SHOT_SPAN)
@@ -2311,7 +2315,7 @@ export class BattleScene extends Phaser.Scene {
       const x = this.enemySprite.x + dx;
       const y = this.enemySprite.y + dy;
       // 2x even on a boss: the outer blasts at 3x would reach the enemy window
-      playFx(this, "fx-nova", x, y, this.anim(360));
+      playFx(this, "fx-nova", x, y, this.anim(360)).setDepth(SPELL_BURST_DEPTH);
       this.hitBurst.setPosition(x, y);
       this.hitBurst.explode(14);
       await this.wait(this.anim(110));

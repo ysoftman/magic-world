@@ -1,14 +1,18 @@
 /*! pixelfx (github.com/patch-gg/pixelfx) | MIT License | Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez */
 import Phaser from "phaser";
 import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import * as arcaneOrb from "pixelfx/fx/arcane/arcane-orb";
 import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
 import * as fireball from "pixelfx/fx/fire/fireball";
 import * as iceLance from "pixelfx/fx/ice/ice-lance";
 import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
+import * as zapHit from "pixelfx/fx/lightning/zap-hit";
 import * as swordSlash from "pixelfx/fx/melee/sword-slash";
 import * as collectBurst from "pixelfx/fx/pickups/collect-burst";
+import * as magicMissile from "pixelfx/fx/projectiles/magic-missile";
+import * as plasmaShot from "pixelfx/fx/projectiles/plasma-shot";
 import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
 import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
@@ -86,175 +90,17 @@ export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
 }
 
 // The battle's effects as pixel-art sprite sheets, drawn here in code when the
-// first battle starts (bakeBattleFx). Two kinds: pixelfx effects
-// (PIXEL_SHEETS, below) sampled into frames, and the older hand-drawn ones
-// (SHEETS), a row of square frames on a 2px cell -- 32 cells (64px) for a
-// burst, 16 (32px) for a projectile -- each drawn from a few shapes (rays,
-// rings, blobs, jagged lines) through a seeded random, so every boot draws the
-// same sheet. Either way a sheet is shown on the battlers' own 4px cell.
-// playFx() steps a sheet's frames across a given duration, so an effect fills
-// exactly the time the old circle or burst it replaced took, and the battle's
-// pace does not change.
-
-type Cells = (x: number, y: number, colour: number) => void;
-interface Sheet {
-  cells: number;
-  frames: number;
-  draw: (put: Cells, frame: number, rand: () => number) => void;
-}
-
-const FX_CELL = 2;
-
-const seeded = (seed: number): (() => number) => {
-  let s = seed;
-  return () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-};
-
-/** cells along a line, `w` cells wide, coloured by distance from its axis */
-function line(put: Cells, x0: number, y0: number, x1: number, y1: number, w: number, ramp: readonly number[]): void {
-  const len = Math.max(1, Math.hypot(x1 - x0, y1 - y0));
-  const steps = Math.ceil(len * 2);
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const cx = x0 + (x1 - x0) * t;
-    const cy = y0 + (y1 - y0) * t;
-    // whole cells only: a width under 1 is a one-cell line
-    const reach = Math.floor(w);
-    for (let dy = -reach; dy <= reach; dy++)
-      for (let dx = -reach; dx <= reach; dx++) {
-        const d = Math.hypot(dx, dy);
-        if (d > w) continue;
-        put(Math.round(cx + dx), Math.round(cy + dy), ramp[Math.min(ramp.length - 1, Math.floor((d / (w + 0.01)) * ramp.length))]);
-      }
-  }
-}
-
-/** a filled disc, its colour by distance from the centre */
-function disc(put: Cells, cx: number, cy: number, r: number, ramp: readonly number[], noise?: () => number): void {
-  for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++)
-    for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + (noise ? (noise() - 0.5) * 1.6 : 0);
-      if (d <= r) put(x, y, ramp[Math.min(ramp.length - 1, Math.max(0, Math.floor((d / r) * ramp.length)))]);
-    }
-}
-
-/** a ring `w` cells thick */
-function ring(put: Cells, cx: number, cy: number, r: number, w: number, colour: number, gaps = 0, rand?: () => number): void {
-  for (let y = Math.floor(cy - r - w); y <= cy + r + w; y++)
-    for (let x = Math.floor(cx - r - w); x <= cx + r + w; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      if (Math.abs(d - r) <= w / 2 && !(gaps && rand && rand() < gaps)) put(x, y, colour);
-    }
-}
-
-/**
- * a jagged bolt from (x0, y0) to (x1, y1): a one-cell `core` inside a border
- * of `edge`, so it still reads over a sprite flashed its own colour
- */
-function zigzag(
-  put: Cells,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  jag: number,
-  rand: () => number,
-  core: number,
-  edge: number,
-): void {
-  const n = 6;
-  const points = [[x0, y0]];
-  for (let i = 1; i < n; i++)
-    points.push([x0 + ((x1 - x0) * i) / n + (rand() - 0.5) * jag * 2, y0 + ((y1 - y0) * i) / n + (rand() - 0.5) * jag]);
-  points.push([x1, y1]);
-  for (const [w, colour] of [
-    [1, edge],
-    [0, core],
-  ])
-    for (let i = 1; i <= n; i++) line(put, points[i - 1][0], points[i - 1][1], points[i][0], points[i][1], w, [colour]);
-}
-
-/** a small four-point sparkle */
-function sparkle(put: Cells, x: number, y: number, size: number, core: number, arm: number): void {
-  put(x, y, core);
-  for (let k = 1; k <= size; k++) {
-    put(x + k, y, arm);
-    put(x - k, y, arm);
-    put(x, y + k, arm);
-    put(x, y - k, arm);
-  }
-}
-
-const C = 15.5;
-
-const SHEETS: Record<string, Sheet> = {
-  // BOLT: a jagged bolt down onto the target, a star where it lands, crackle
-  "fx-bolt": {
-    cells: 32,
-    frames: 5,
-    draw: (put, f, rand) => {
-      if (f < 4) {
-        zigzag(put, C + (rand() - 0.5) * 6, 0, C, C, 4, rand, 0xffffff, 0x4338ca);
-        if (f % 2 === 0) zigzag(put, C, C, C + (rand() - 0.5) * 22, C + 8 + rand() * 6, 3, rand, 0xfef08a, 0x4338ca);
-      }
-      const star = [3, 5, 4, 3, 2][f];
-      for (let k = 0; k < 4; k++) {
-        const a = (k * Math.PI) / 2 + Math.PI / 4;
-        line(put, C, C, C + Math.cos(a) * star * 1.6, C + Math.sin(a) * star * 1.6, 0.5, [0xffffff, 0xfde047]);
-      }
-      disc(put, C, C, star * 0.7, [0xffffff, 0xfef08a]);
-      if (f >= 3) for (let k = 0; k < 5; k++) sparkle(put, Math.round(6 + rand() * 20), Math.round(8 + rand() * 18), 1, 0xffffff, 0xfde047);
-    },
-  },
-  // NOVA: a star core, a ring of light rushing out, sparkles in its wake
-  "fx-nova": {
-    cells: 32,
-    frames: 6,
-    draw: (put, f, rand) => {
-      const r = [3, 6, 9, 12, 14, 15][f];
-      ring(put, C, C, r, f < 4 ? 2.4 : 1.4, f < 3 ? 0xfae8ff : 0xf0abfc, f >= 4 ? 0.35 : 0, rand);
-      if (r > 4) ring(put, C, C, r - 2, 1, 0xc026d3, f >= 3 ? 0.5 : 0, rand);
-      const core = [5, 6, 4, 2, 0, 0][f];
-      if (core) disc(put, C, C, core, [0xffffff, 0xfae8ff, 0xf0abfc]);
-      for (let k = 0; k < (f + 1) * 2; k++) {
-        const a = rand() * Math.PI * 2;
-        const d = rand() * r;
-        sparkle(put, Math.round(C + Math.cos(a) * d), Math.round(C + Math.sin(a) * d), 1, 0xffffff, 0xf0abfc);
-      }
-    },
-  },
-  // the projectiles, 16 cells, two frames of flicker each, flying right
-  "fx-spark": {
-    cells: 16,
-    frames: 2,
-    draw: (put, f) => {
-      disc(put, 8, 8, 3.2, [0xffffff, 0xfef08a, 0xfde047]);
-      // four sparks round the orb, turned an eighth each frame
-      for (let k = 0; k < 4; k++) {
-        const a = (k * Math.PI) / 2 + (f * Math.PI) / 4;
-        line(put, 8 + Math.cos(a) * 4, 8 + Math.sin(a) * 4, 8 + Math.cos(a) * 7, 8 + Math.sin(a) * 7, 0, [0xfde047]);
-      }
-    },
-  },
-  "fx-orb": {
-    cells: 16,
-    frames: 2,
-    draw: (put, f) => {
-      disc(put, 8, 8, 3.6, [0xffffff, 0xfae8ff, 0xf0abfc]);
-      ring(put, 8, 8, f ? 6 : 5, 1, 0xc026d3);
-      sparkle(put, 8, 8, f ? 7 : 6, 0xffffff, 0xf0abfc);
-    },
-  },
-};
+// first battle starts (bakeBattleFx): pixelfx effects (PIXEL_SHEETS, below)
+// sampled into frames, shown on the battlers' own 4px cell. playFx() steps a
+// sheet's frames across a given duration, so an effect fills exactly the time
+// the old circle or burst it replaced took, and the battle's pace does not
+// change.
 
 // The pixelfx effects (github:patch-gg/pixelfx, MIT, by Patch and Hugo
 // Duprez). A pixelfx effect is code drawing into a pixel buffer over time;
-// here it is sampled into a sheet's frames at boot like the ones above, one
-// pixelfx pixel to a texel. Its pixels are drawn for a 24x38 figure, so one is
-// one art cell: shown at ART_PX x the battler's scale, 4px (6px on a boss).
+// here it is sampled into a sheet's frames at boot, one pixelfx pixel to a
+// texel. Its pixels are drawn for a 24x38 figure, so one is one art cell:
+// shown at ART_PX x the battler's scale, 4px (6px on a boss).
 export interface PixelSheet {
   /** the effect: `import * as name from "pixelfx/fx/<category>/<name>"` */
   fx: FxModule;
@@ -283,6 +129,13 @@ const FEET = 16;
 // a projectile's sheet: its loop's first 8 frames of 1/30s, one 240ms flight
 // at castProjectile's 30ms a frame
 const SHOT_SPAN: [number, number] = [0, 8 / 30];
+// BOLT's colours as the old sheets had them: indigo edges (0x4338ca,
+// 0x6366f1) round a yellow and white core (0xfde047, 0xfef08a). The pixelfx
+// lightning blue read as ICE, and an all-yellow one sank into the foe flashed
+// BOLT's yellow.
+const BOLT_RAMP = ["#120a33", "#2a1b78", "#4338ca", "#6366f1", "#a5b4fc", "#fde047", "#fef08a", "#ffffff"];
+// NOVA's magenta to pale pink, from the old sheets' 0xc026d3, 0xf0abfc, 0xfae8ff
+const NOVA_RAMP = ["#1a0420", "#3b0a45", "#701a75", "#a21caf", "#c026d3", "#f0abfc", "#fae8ff", "#ffffff"];
 
 const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // a blow landing: a lopsided cross flare round a white core, then a cone of
@@ -321,6 +174,38 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // flakes spin out (from just before the flash; their drift down after
   // 0.85s left off). The flakes' middle, 52 cells over its ground, on the foe's.
   "fx-ice": { fx: snowflakeBurst, span: [0.15, 0.85], frames: 10, focus: [-2, -52], sameOnBoss: true, crop: [28, 8, 116, 112] },
+  // BOLT's shot: a white-hot blob, a corona crackling over it, its tail
+  // necking into droplets that tear off
+  "fx-spark": { fx: plasmaShot, opts: { palette: BOLT_RAMP }, span: SHOT_SPAN, crop: [30, 6, 130, 56] },
+  // BOLT's burst: an arc snaps in from the caster's side onto the foe's
+  // middle, which overloads into a knot of crackle and a fern of burn marks
+  "fx-bolt": {
+    fx: zapHit,
+    opts: { palette: BOLT_RAMP },
+    span: [0.03, 0.47],
+    frames: 10,
+    directional: true,
+    sameOnBoss: true,
+    crop: [2, 18, 118, 94],
+  },
+  // NOVA's shot: an orb of smoky glass, a swirl round a white heart, two
+  // tilted rings round it. Its middle hangs 51 cells over its ground, which
+  // is cropped off with the light pooled there: under a shot in flight that
+  // lit line rode along the menu row.
+  "fx-orb": { fx: arcaneOrb, opts: { palette: NOVA_RAMP }, span: SHOT_SPAN, focus: [0, -51], crop: [32, 22, 106, 78] },
+  // NOVA's blasts: a magic missile's landing, a star flare, a white disc, a
+  // ring rushing out, sparkles (the missile's flight before 0.83s and the
+  // fading sparkles after 1.45s left off; its ribbon's last cells show for a
+  // frame or two). It lands at (reach 112, height 26) from its anchor.
+  "fx-nova": {
+    fx: magicMissile,
+    opts: { palette: NOVA_RAMP },
+    span: [0.83, 1.45],
+    frames: 10,
+    focus: [112, -26],
+    sameOnBoss: true,
+    crop: [86, 36, 172, 110],
+  },
   // a foe going down (victory, arenaVictory): a white pop, a ring of smoke
   // balls, little stars, the cloud lifting away. Its anchor is the floor, so
   // BattleScene plays it on the ground under the foe (GROUND_Y), a flier's
@@ -341,12 +226,11 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   },
 };
 
-// a sheet's frames, how many texels to an art cell, the texture point put on
-// (x, y) as a fraction of a frame, whether it turns to face the blow and
-// whether it keeps the normal cell over a boss
+// a sheet's frames, the texture point put on (x, y) as a fraction of a frame,
+// whether it turns to face the blow and whether it keeps the normal cell over
+// a boss
 interface SheetInfo {
   frames: number;
-  texel: number;
   origin: [number, number];
   directional: boolean;
   sameOnBoss: boolean;
@@ -361,13 +245,11 @@ function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number }
 
 function infoOf(key: string): SheetInfo {
   const pixel = PIXEL_SHEETS[key];
-  if (!pixel) return { frames: SHEETS[key].frames, texel: FX_CELL, origin: [0.5, 0.5], directional: false, sameOnBoss: false };
   const [x0, y0, x1, y1] = cropOf(pixel);
   const [ax, ay] = pixel.fx.meta.origin;
   const [fx, fy] = pixel.focus ?? [0, 0];
   return {
     frames: spanOf(pixel).frames,
-    texel: 1,
     origin: [(ax + fx - x0) / (x1 - x0), (ay + fy - y0) / (y1 - y0)],
     directional: !!pixel.directional,
     sameOnBoss: !!pixel.sameOnBoss,
@@ -427,28 +309,8 @@ export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelShe
   tex.refresh();
 }
 
-// seeded by its key, so taking a sheet out of the table redraws no other
-const seedOf = (key: string): number => [...key].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 2147483647, 101);
-
 /** Draws every sheet once into its own texture, frames numbered 0..n-1. */
 export function bakeBattleFx(scene: Phaser.Scene): void {
-  for (const [key, sheet] of Object.entries(SHEETS)) {
-    if (scene.textures.exists(key)) continue;
-    const size = sheet.cells * FX_CELL;
-    const tex = scene.textures.createCanvas(key, size * sheet.frames, size);
-    if (!tex) continue;
-    const ctx = tex.getContext();
-    for (let f = 0; f < sheet.frames; f++) {
-      const put: Cells = (x, y, colour) => {
-        if (x < 0 || y < 0 || x >= sheet.cells || y >= sheet.cells) return;
-        ctx.fillStyle = `#${colour.toString(16).padStart(6, "0")}`;
-        ctx.fillRect(f * size + x * FX_CELL, y * FX_CELL, FX_CELL, FX_CELL);
-      };
-      sheet.draw(put, f, seeded(seedOf(key) + f * 7));
-      tex.add(f, 0, f * size, 0, size, size);
-    }
-    tex.refresh();
-  }
   for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
 }
 
@@ -459,8 +321,8 @@ const BATTLER_SCALE = 2;
 // negative scaleX mirrors it round its origin (flipX turns a frame round its
 // middle, which would move an off-centre origin)
 function fxSprite(scene: Phaser.Scene, key: string, x: number, y: number, scale: number, left: boolean): Phaser.GameObjects.Sprite {
-  const { texel, origin, directional, sameOnBoss } = infoOf(key);
-  const s = ((sameOnBoss ? Math.min(scale, BATTLER_SCALE) : scale) * ART_PX) / texel;
+  const { origin, directional, sameOnBoss } = infoOf(key);
+  const s = (sameOnBoss ? Math.min(scale, BATTLER_SCALE) : scale) * ART_PX;
   return scene.add
     .sprite(x, y, key, 0)
     .setOrigin(...origin)
