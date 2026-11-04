@@ -706,8 +706,9 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     떨어진다. 새 처치 이펙트는 `fells`·`breaks`·`ceiling` 을 같이 정하고, `warmStatuses` 끝에서 warm 한다.
   - MOSS GOLEM 의 regen 은 `regrow`(nature/leaf-storm, layered, 이끼 초록 잎, 가을 금·빨강은 바람 공격처럼 읽혀 뺌)다.
     루프 조각을 한 번 보일 때는 `rise`(앞 페이드인)·`fade`(뒤 페이드아웃)를 같이 준다. 실제 사례: rise 없이 루프를 틀면 첫
-    프레임부터 꽉 찬 나선이 튀어나왔다. leaf-storm 은 몸 크기를 따르지 않으니(반지름 15~24칸, 높이 64칸) 다른 적에 쓸 때는
-    배율에서 다시 잰다.
+    프레임부터 꽉 찬 나선이 튀어나왔다. regrow 는 leaf-storm 을 statusFx 의 `MOSS_SPIRAL` 로 옮겨 고리를 1.5배(22~36칸,
+    4px 에서 90~144px)로 넓힌 복사본이다(효과에 반지름 옵션이 없음). pixelfx 를 올려도 따라오지 않는다. 실제 사례: 원본
+    고리(15~24칸, 60~96px)는 반폭 94px 골렘의 몸 안에 몰려 잎이 몸에 붙은 것처럼 보였다.
 - 전투에서 가방 아이템(POTION·HI-POTION·MPOTION·ETHER·ELIXIR)과 GOO HEAL 의 회복은 영웅 발밑(`GROUND_Y`)의 회복 고리다
   (`fx.ts` 의 fx-restore-hp/-mp/-all, holy/heal-aoe, BattleScene `ringOn`). 색은 필드 가방(InventoryUI `HEALS`)과 같아
   같은 아이템이 필드와 전투에서 같은 연출이다. 실제 사례: 씨앗 섬광의 글로우를 light 1 로 구우면 crop 에 잘려 밝은 풀밭

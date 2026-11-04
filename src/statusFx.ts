@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import type { FxModule } from "pixelfx";
+import * as pixelfx from "pixelfx";
 import * as divineShield from "pixelfx/fx/holy/divine-shield";
 import * as heal from "pixelfx/fx/holy/heal";
 import * as freeze from "pixelfx/fx/ice/freeze";
 import * as electrified from "pixelfx/fx/lightning/electrified";
+import * as natureLib from "pixelfx/fx/nature/_lib";
 import * as leafStorm from "pixelfx/fx/nature/leaf-storm";
 import * as disintegrate from "pixelfx/fx/spawn/disintegrate";
 import * as dissolveBurn from "pixelfx/fx/spawn/dissolve-burn";
@@ -118,6 +120,169 @@ const PSN_RAMP = ["#1a0533", "#3b0764", "#581c87", "#7e22ce", "#a855f7", "#c084f
 // the ABYSS's violet (its floor label's #c084fc), the accent a step bluer
 const ABYSS_RAMP = ["#12062a", "#2a0f55", "#4c1d95", "#6d28d9", "#8b5cf6", "#c084fc", "#e9d5ff", "#ffffff"];
 
+// The MOSS GOLEM's regrow spiral: pixelfx's nature/leaf-storm (MIT, by Patch
+// and Hugo Duprez; its leaves' tumble after Sprite Fusion's falling leaves,
+// MIT) drawn round a wider body. The effect has no size of its own to turn
+// up, its rings a constant 15-24 cells out, and at the golem's 4px cell they
+// fell inside its 94px half-width: the leaves read as stuck on it, not
+// whirling round it. Its draw is copied here with the rings, the fling off
+// the top and the litter at the feet SPIRAL_SPREAD times as far out (90-144px,
+// where they were when bosses were drawn at 6px); the leaves themselves
+// (drawLeaf) and every other number are pixelfx's own. A copy, so a pixelfx
+// upgrade does not reach it.
+interface SpiralPainter {
+  px(x: number, y: number, c: number): void;
+  dot(x: number, y: number, c: number, a?: number): void;
+  blend(x: number, y: number, c: number, a: number): void;
+  glow(x: number, y: number, r: number, c: number, k?: number): void;
+  disc(x: number, y: number, r: number, c: number, a: number): void;
+}
+interface SpiralRng {
+  next(): number;
+  range(a: number, b: number): number;
+  int(a: number, b: number): number;
+}
+const { cycle, fit, rng, smooth, clamp, lerp, TAU, WHITE } = pixelfx as unknown as {
+  cycle(
+    t: number,
+    period: number,
+    count: number,
+    seed: number,
+    life: number | ((g: SpiralRng) => number),
+    fn: (age: number, life: number, r: SpiralRng) => void,
+  ): void;
+  fit(ramp: unknown[], n: number): number[];
+  rng(...ns: number[]): SpiralRng;
+  smooth(e0: number, e1: number, x: number): number;
+  clamp(x: number, a?: number, b?: number): number;
+  lerp(a: number, b: number, t: number): number;
+  TAU: number;
+  WHITE: number;
+};
+const { drawLeaf } = natureLib as unknown as {
+  drawLeaf(p: SpiralPainter, x: number, y: number, len: number, wid: number, ang: number, fl: number, pal: number[], alpha?: number): void;
+};
+const SPIRAL_SPREAD = 1.5;
+const SPIRAL_TOP = 64;
+const SPIRAL_SY = 0.3;
+const SPIRAL_D = leafStorm.meta.duration;
+const spiralR = (y: number): number => (15 + 9 * clamp(-y / SPIRAL_TOP)) * SPIRAL_SPREAD;
+
+// leaves riding the spiral: up from the floor, round two turns or so, flung out off the top
+function spiralLeaves(p: SpiralPainter, L: number[], t: number, seed: number, back: boolean): void {
+  cycle(
+    t,
+    SPIRAL_D,
+    28,
+    seed,
+    (g) => g.range(1.5, 2.3),
+    (age, life, R) => {
+      const k = age / life;
+      const turns = R.range(1.4, 2.2);
+      const th = R.range(0, TAU) + turns * TAU * k;
+      const sn = Math.sin(th);
+      if (sn > 0 === back) return;
+      const y = -lerp(1, SPIRAL_TOP, k ** 0.9) - R.range(0, 6);
+      const fling = smooth(0.75, 1, k);
+      const rr = spiralR(y) * R.range(0.85, 1.15) + fling * 22 * SPIRAL_SPREAD;
+      const x = Math.cos(th) * rr;
+      const yy = y + sn * rr * SPIRAL_SY;
+      const a = Math.min(1, k * 7) * (1 - smooth(0.85, 1, k));
+      const spin = R.range(-9, 9) * age + th;
+      const fl = age * R.range(5, 11);
+      const o = R.int(0, 2) * 4;
+      const pal = back ? [L[o], L[o], L[o + 1], L[o + 2]] : [L[o], L[o + 1], L[o + 2], L[o + 3]];
+      drawLeaf(p, x, yy, R.range(6.5, 9), R.range(2.4, 3.3), spin, fl, pal, a);
+      // a glint as it turns face on to the light
+      if (!back && Math.abs(Math.cos(fl)) > 0.97) {
+        p.px(x, yy, WHITE);
+        p.glow(x, yy, 5, L[o + 3], 0.35 * a);
+      }
+    },
+  );
+}
+
+// wind bands: 1px streaks on tilted rings round it, bright at the head, the far halves dimmer and behind
+function spiralWind(p: SpiralPainter, C: number[], t: number, seed: number, back: boolean): void {
+  for (let j = 0; j < 16; j++) {
+    const R = rng(seed, j);
+    const y0 = -R.range(4, SPIRAL_TOP - 4);
+    const r = spiralR(y0) * R.range(1.0, 1.25);
+    const K = R.int(2, 3);
+    const span = R.range(1.1, 2.4);
+    const head = R.range(0, TAU) + (TAU * K * t) / SPIRAL_D;
+    const rise = R.range(-0.18, 0.18);
+    for (let s = 0; s <= span; s += 0.45 / r) {
+      const th = head - s;
+      const sn = Math.sin(th);
+      if (sn > 0 === back) continue;
+      const k = s / span;
+      const x = Math.cos(th) * r;
+      const y = y0 + sn * r * SPIRAL_SY + (th - head) * rise * 4;
+      const c = back ? (k < 0.3 ? C[3] : C[2]) : k < 0.06 && R.next() < 2 ? WHITE : k < 0.15 ? C[5] : k < 0.4 ? C[4] : C[3];
+      if (k < 0.45) p.dot(x, y, c);
+      else p.blend(x, y, c, 1.6 * (1 - k));
+    }
+    if (!back && Math.sin(head) > 0) p.glow(Math.cos(head) * r, y0 + Math.sin(head) * r * SPIRAL_SY, 5, C[4], 0.25);
+  }
+}
+
+// at the feet: litter and dust swept round on the floor
+function spiralSwirl(p: SpiralPainter, C: number[], t: number, seed: number, back: boolean): void {
+  cycle(
+    t,
+    SPIRAL_D,
+    14,
+    seed,
+    (g) => g.range(0.6, 1.1),
+    (age, life, R) => {
+      const k = age / life;
+      const th = R.range(0, TAU) + R.range(6, 9) * age;
+      const sn = Math.sin(th);
+      if (sn > 0 === back) return;
+      const rr = (R.range(10, 22) + k * 8) * SPIRAL_SPREAD;
+      const x = Math.cos(th) * rr;
+      const y = -1 - k * R.range(2, 8) + sn * rr * 0.25;
+      const s = R.range(2, 3.5) * (0.6 + k);
+      p.disc(x, y, s, back ? C[2] : C[3], (1 - k) * Math.min(1, k * 6) * 0.3);
+    },
+  );
+  for (let j = 0; j < 6; j++) {
+    const R = rng(seed + 9, j);
+    const rr = R.range(12, 24) * SPIRAL_SPREAD;
+    const th0 = R.range(0, TAU) + (TAU * 3 * t) / SPIRAL_D;
+    const span = R.range(0.5, 1);
+    for (let s = 0; s < span; s += 0.6 / rr) {
+      const th = th0 - s;
+      if (Math.sin(th) > 0 === back) continue;
+      p.dot(Math.cos(th) * rr, 0.5 + rr * 0.2 * Math.sin(th), s < span * 0.4 ? C[3] : C[2], 1 - s / span);
+    }
+  }
+}
+
+const MOSS_SPIRAL = {
+  // wide enough for the outer rings (36 cells), the fling off the top (33) and a leaf
+  meta: { ...leafStorm.meta, size: [160, 108] as [number, number], origin: [80, 92] as [number, number] },
+  drawBack(p: SpiralPainter, t: number, o: Record<string, unknown>): void {
+    const C = fit(o.palette as unknown[], 6);
+    const L = fit(o.leaves as unknown[], 12);
+    const seed = o.seed as number;
+    p.glow(0, -30, 46, C[4], 0.12);
+    p.glow(0, -2, 26, L[2], 0.12);
+    spiralSwirl(p, C, t, seed * 3 + 1, true);
+    spiralWind(p, C, t, seed * 5 + 2, true);
+    spiralLeaves(p, L, t, seed * 7 + 3, true);
+  },
+  draw(p: SpiralPainter, t: number, o: Record<string, unknown>): void {
+    const C = fit(o.palette as unknown[], 6);
+    const L = fit(o.leaves as unknown[], 12);
+    const seed = o.seed as number;
+    spiralSwirl(p, C, t, seed * 3 + 1, false);
+    spiralWind(p, C, t, seed * 5 + 2, false);
+    spiralLeaves(p, L, t, seed * 7 + 3, false);
+  },
+} as FxModule;
+
 const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // petals at the feet, a hoop of light climbing the body as it washes pale
   // and comes back, motes rising; the tail where the last of them pop is left off
@@ -174,13 +339,12 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // drawBack under the golem), wrapped in bands of wind, litter swirling at
   // its feet. Its leaves in the golem's own moss greens (MOSS_GOLEM_PALETTE
   // n, m, M), the wind in its eyes' glow (e, #8ce99a); its autumn golds and
-  // reds left out, which read as a wind attack. Not sized to the body: at
-  // 4px its rings are 15-24 cells out, 60-96px round a golem 94px half-wide
-  // (90-144px when bosses were drawn at 6px), and it rises 64 cells (256px),
-  // cut at the ceiling (y 222), some 10 cells over the head. 18 frames of the
-  // 2.4s loop, a row a layer (2016x104).
+  // reds left out, which read as a wind attack. Its rings 22-36 cells out
+  // (MOSS_SPIRAL, above), 90-144px round a golem 94px half-wide, and it
+  // rises 64 cells (256px), cut at the ceiling (y 222), some 10 cells over
+  // the head. 18 frames of the 2.4s loop, two rows a layer (1920x216).
   regrow: {
-    fx: leafStorm,
+    fx: MOSS_SPIRAL,
     opts: {
       palette: ["#10241a", "#1e4030", "#2f6a4a", "#4fae6e", "#8ce99a", "#e8fff0"],
       leaves: [
