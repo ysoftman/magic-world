@@ -730,6 +730,9 @@ for (const [name, v] of Object.entries(VOICES) as [SkillName | TechName, Voice][
 }
 registerSfx(SKILL_SFX);
 
+/** how many blow sounds it has (BattleScene's dev check holds it to SKILL_HITS / TECH_HITS) */
+export const skillSfxHits = (name: SkillName | TechName): number | undefined => VOICES[name]?.hits;
+
 /**
  * The skill's or tech's sound: its cast as it starts, or blow i (from 0) as
  * it lands. A blow past its count plays the last one's.

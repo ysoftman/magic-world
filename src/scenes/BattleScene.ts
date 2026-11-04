@@ -69,7 +69,7 @@ import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart"
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
-import { playSkillSfx } from "../skillSfx";
+import { playSkillSfx, skillSfxHits } from "../skillSfx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
@@ -345,13 +345,17 @@ const SKILL_FX_TIMEOUT_MS = 8000;
 const SKILL_POP_STEP = 40;
 
 // skillFx.ts and techFx.ts play as many blows as they list, the rules deal
-// as many as battleRules lists, and a weapon tech is one techFx.ts plays up
-// close. They must agree (castSkill would land the rest at the end of the
-// effects, or leave a blow without damage, or dash in for a spell).
+// as many as battleRules lists, skillSfx.ts has a sound for as many, and a
+// weapon tech is one techFx.ts plays up close. They must agree (castSkill
+// would land the rest at the end of the effects, or leave a blow without
+// damage, or dash in for a spell; playSkillSfx would repeat the last blow's
+// sound).
 const fxHits = (s: Skill): number => (s.style === "blow" ? SKILL_HITS[s.name] : TECH_HITS[s.name]);
 if (process.env.NODE_ENV !== "production") {
   for (const s of SKILLS) {
     if (fxHits(s) !== s.hits) console.error(`${s.name}: ${s.hits} hits in battleRules.ts, ${fxHits(s)} in its effects`);
+    if (skillSfxHits(s.name) !== fxHits(s))
+      console.error(`${s.name}: ${skillSfxHits(s.name)} blow sounds in skillSfx.ts, ${fxHits(s)} in its effects`);
     if (s.style !== "blow" && TECH_MELEE[s.name] !== (s.style === "weapon")) console.error(`${s.name}: weapon or spell?`);
   }
 }
