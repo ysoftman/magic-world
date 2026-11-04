@@ -281,90 +281,6 @@ const SHEETS: Record<string, Sheet> = {
       if (f === 3) for (let k = 0; k < 6; k++) sparkle(put, Math.round(corner(k)[0]), Math.round(corner(k)[1]), 1, 0xffffff, 0xbfdbfe);
     },
   },
-  // a burn taking hold: flames licking up the target, flickering
-  "fx-burn": {
-    cells: 32,
-    frames: 5,
-    draw: (put, f, rand) => {
-      for (const [x, base] of [
-        [9, 28],
-        [16, 30],
-        [23, 27],
-      ] as const) {
-        const h = 6 + ((f * 3 + x) % 5) + (f === 4 ? -4 : 0);
-        if (h <= 1) continue;
-        for (let y = 0; y < h; y++) {
-          const t = y / h;
-          const w = Math.max(0, Math.round((1 - t) * 3.2 - (t > 0.8 ? 1 : 0)));
-          const sway = Math.round(Math.sin((y + f * 2) * 0.8) * 0.8);
-          // red at the rim and tip, so it shows on a foe flashed orange
-          for (let dx = -w; dx <= w; dx++)
-            put(
-              x + dx + sway,
-              base - y,
-              Math.abs(dx) < w * 0.4 && t < 0.6 ? 0xfde047 : t > 0.75 || Math.abs(dx) === w ? 0xb91c1c : 0xfb923c,
-            );
-        }
-        put(x, base - 1, 0xfffbe6);
-      }
-      if (f >= 2) for (let k = 0; k < 3; k++) put(Math.round(6 + rand() * 20), Math.round(4 + rand() * 12), 0xfde047);
-    },
-  },
-  // a chill: frost flakes settling over the target
-  "fx-chill": {
-    cells: 32,
-    frames: 5,
-    draw: (put, f) => {
-      for (const [x, y, phase] of [
-        [8, 6, 0],
-        [22, 4, 1],
-        [15, 12, 0],
-        [26, 14, 2],
-        [6, 18, 1],
-        [18, 22, 2],
-      ] as const) {
-        const age = f - phase;
-        if (age < 0) continue;
-        const yy = y + age * 2;
-        const big = age === 1 || age === 2;
-        put(x, yy, 0xffffff);
-        for (const [dx, dy] of big
-          ? [
-              [1, 0],
-              [-1, 0],
-              [0, 1],
-              [0, -1],
-              [2, 0],
-              [-2, 0],
-              [0, 2],
-              [0, -2],
-              [1, 1],
-              [-1, -1],
-              [1, -1],
-              [-1, 1],
-            ]
-          : [
-              [1, 0],
-              [-1, 0],
-              [0, 1],
-              [0, -1],
-            ])
-          put(x + dx, yy + dy, Math.abs(dx) + Math.abs(dy) > 1 ? 0x67e8f9 : 0xcffafe);
-      }
-    },
-  },
-  // a shock: arcs crackling round the target, a new set every frame
-  "fx-shock": {
-    cells: 32,
-    frames: 4,
-    draw: (put, f, rand) => {
-      for (let k = 0; k < (f === 3 ? 1 : 3); k++) {
-        const a = rand() * Math.PI * 2;
-        const b = a + 0.9 + rand();
-        zigzag(put, C + Math.cos(a) * 12, C + Math.sin(a) * 12, C + Math.cos(b) * 12, C + Math.sin(b) * 12, 4, rand, 0xfef08a, 0x4338ca);
-      }
-    },
-  },
   // poison: bubbles rising off the hero and popping
   "fx-poison": {
     cells: 32,
@@ -441,7 +357,7 @@ const SHEETS: Record<string, Sheet> = {
 // here it is sampled into a sheet's frames at boot like the ones above, one
 // pixelfx pixel to a texel. Its pixels are drawn for a 24x38 figure, so one is
 // one art cell: shown at ART_PX x the battler's scale, 4px (6px on a boss).
-interface PixelSheet {
+export interface PixelSheet {
   /** the effect: `import * as name from "pixelfx/fx/<category>/<name>"` */
   fx: FxModule;
   /** over the effect's own options (its meta.options): palette, seed, knobs */
@@ -586,7 +502,7 @@ function fadeEdges({ w, h, light }: FxFrame): void {
 // The frames sit in a grid no wider than MAX_TEXTURE_W, each the effect's own
 // canvas (meta.size, or its crop) with its anchor at meta.origin; light (glow) becomes
 // colour with alpha, which reads as a glow over the dark battle backdrops.
-function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
+export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
   const [x0, y0, x1, y1] = cropOf(sheet);
   const [w, h] = [x1 - x0, y1 - y0];
   const [ax, ay] = sheet.fx.meta.origin;

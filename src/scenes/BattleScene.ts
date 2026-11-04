@@ -62,6 +62,7 @@ import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
+import { StatusFx, type StatusKind } from "../statusFx";
 import { rollTreasureMap } from "../treasure";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
@@ -394,6 +395,8 @@ export class BattleScene extends Phaser.Scene {
   // a pale bubble around the hero for as long as WARD holds
   private wardRing!: Phaser.GameObjects.Arc;
 
+  // the status and recovery effects, baked for this battle's fighters (statusFx.ts)
+  private statusFx!: StatusFx;
   private hitBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private glowBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private healBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -763,6 +766,7 @@ export class BattleScene extends Phaser.Scene {
 
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
+    this.statusFx = new StatusFx(this);
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
       lifespan: 300,
@@ -1302,7 +1306,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemyDot = { label: "BRN", turns: COMPANION_DOT_TURNS };
       this.updateEnemyStatus();
       Sfx.spark();
-      this.fxOn(this.enemySprite, "fx-burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.statusOn(this.enemySprite, "burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashStatus("BRN", DOT_COLOR.BRN, x, y);
       return " BURN!";
     }
@@ -1311,13 +1315,13 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
       this.updateEnemyStatus();
       Sfx.freeze();
-      this.fxOn(this.enemySprite, "fx-chill", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.statusOn(this.enemySprite, "chill", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashStatus("CHL", "#67e8f9", x, y);
       return " ATK DN!";
     }
     this.stuck = "shock";
     Sfx.shock();
-    this.fxOn(this.enemySprite, "fx-shock", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.statusOn(this.enemySprite, "shock", STATUS_FX_MS, STATUS_POP_MIN_MS);
     this.flashStatus("STUN", "#fde047", x, y);
     return " STUN!";
   }
@@ -1786,7 +1790,7 @@ export class BattleScene extends Phaser.Scene {
       if (dot.label === "PSN") Sfx.poison();
       else Sfx.spark();
       this.enemySprite.setTint(dot.label === "PSN" ? 0xc084fc : 0xfb923c).setTintMode(Phaser.TintModes.FILL);
-      this.fxOn(this.enemySprite, dot.label === "PSN" ? "fx-poison" : "fx-burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
+      this.statusOn(this.enemySprite, dot.label === "PSN" ? "poison" : "burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
       this.updateEnemyHp();
       await this.say(`${this.enemy.name} takes ${dmg} ${word.toLowerCase()}!`);
@@ -2314,6 +2318,12 @@ export class BattleScene extends Phaser.Scene {
     }
     shake(this.cameras.main, 380, 0.02);
     flash(this.cameras.main, 220, 245, 208, 254);
+  }
+
+  // a status or recovery effect on a battler for ms (at BATTLE SPEED), at the
+  // battler's own scale: 3x over a boss or giant
+  private statusOn(sprite: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number, min = 0): void {
+    this.statusFx.play(sprite, kind, this.anim(ms, min), sprite === this.enemySprite ? this.enemyBaseScale : 2);
   }
 
   // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
