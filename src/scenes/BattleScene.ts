@@ -135,6 +135,9 @@ const SHOT_START_X = 40;
 const ORB_START_X = 104;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
+// a poison tick's purple, filled on the foe and multiplied on the hero, which
+// warmStatuses bakes their poison sheets in ahead
+const PSN_TINT = 0xc084fc;
 const ENRAGE_TINT = 0xff7070;
 // each attack spell's projectile and the burst where it lands (fx.ts sheets)
 const SPELL_FX: Record<string, readonly [string, string]> = {
@@ -775,12 +778,7 @@ export class BattleScene extends Phaser.Scene {
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
     this.statusFx = new StatusFx(this);
-    // what this foe may come to show, baked over the opening's frames: a boss
-    // or giant its enrage (in the tint it will have), any other foe the stars
-    // it gets stuck under, if anything here can stick it (BOLT's shock, WEB SNARE)
-    if (big) this.statusFx.warm(this.enemySprite, "rage", ENRAGE_TINT);
-    else if (this.knownSpells().some((s) => s.effect?.kind === "shock") || COMPANION_SKILLS[GameState.companion ?? ""]?.kind === "snare")
-      this.statusFx.warm(this.enemySprite, "stun");
+    this.warmStatuses();
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
       lifespan: 300,
@@ -1808,7 +1806,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.curHp -= dmg;
       if (dot.label === "PSN") Sfx.poison();
       else Sfx.spark();
-      this.enemySprite.setTint(dot.label === "PSN" ? 0xc084fc : 0xfb923c).setTintMode(Phaser.TintModes.FILL);
+      this.enemySprite.setTint(dot.label === "PSN" ? PSN_TINT : 0xfb923c).setTintMode(Phaser.TintModes.FILL);
       this.statusOn(this.enemySprite, dot.label === "PSN" ? "poison" : "burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
       this.updateEnemyHp();
@@ -2054,7 +2052,7 @@ export class BattleScene extends Phaser.Scene {
     if (dmg > 0) {
       GameState.player.hp -= dmg;
       Sfx.poison();
-      this.setPlayerTint(0xc084fc);
+      this.setPlayerTint(PSN_TINT);
       this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg);
       this.updatePlayerStats();
@@ -2351,6 +2349,41 @@ export class BattleScene extends Phaser.Scene {
     }
     shake(this.cameras.main, 380, 0.02);
     flash(this.cameras.main, 220, 245, 208, 254);
+  }
+
+  // The status sheets this fight can come to show, baked over the opening's
+  // frames (statusFx warm) rather than on the turn each first lands, and only
+  // those: a sheet nothing here can set off would be a texture and its time
+  // for nothing. Each in the tint it will be shown in: an enraged boss's
+  // ENRAGE_TINT, the purple a foe's poison tick fills it with (enemyDotTick),
+  // the hero's poison untinted where it lands and multiplied purple on its
+  // ticks (poisonTick).
+  private warmStatuses(): void {
+    const foe = this.enemySprite;
+    const hero = this.playerSprite;
+    const { name, special } = this.enemy;
+    const big = this.enemy.boss || this.enemy.giant;
+    const spells = this.knownSpells();
+    // a spell side effect, where spellEffectCanLand could ever let it
+    const casts = (kind: SpellEffect): boolean => spells.some((s) => s.effect?.kind === kind);
+    const pal = COMPANION_SKILLS[GameState.companion ?? ""];
+    const warm = (target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode?: Phaser.TintModes): void =>
+      this.statusFx.warm(target, kind, tint, mode);
+    if (big) warm(foe, "rage", ENRAGE_TINT);
+    // BOLT's shock and WEB SNARE skip bosses and giants
+    if (!big && casts("shock")) warm(foe, "shock");
+    if (!big && (casts("shock") || pal?.kind === "snare")) warm(foe, "stun");
+    if ((casts("burn") && !BURN_PROOF.includes(name)) || pal?.dot === "BRN") warm(foe, "burn");
+    if ((casts("chill") && !CHILL_PROOF.includes(name)) || pal?.kind === "chill") warm(foe, "chill");
+    if (pal?.dot === "PSN") warm(foe, "poison", PSN_TINT, Phaser.TintModes.FILL);
+    if (spells.some((s) => s.kind === "heal")) warm(hero, "heal");
+    if (spells.some((s) => s.kind === "ward")) warm(hero, "ward");
+    // a resist accessory stops the status outright; a MOON TEA only sometimes
+    if (special?.kind === "poison" && !GameState.resists("poison")) {
+      warm(hero, "poison");
+      warm(hero, "poison", PSN_TINT);
+    }
+    if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
   }
 
   // a status or recovery effect on a battler for ms (at BATTLE SPEED), at the

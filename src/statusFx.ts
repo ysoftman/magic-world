@@ -164,16 +164,14 @@ const greyOf = ([r, g, b]: Rgb): Rgb => {
   return [l, l, l];
 };
 
-// The sprite's frame read back on the art grid: a cell is on when any of its
-// texels is, in that texel's colour. `feet` is the texels from the frame's top
-// to the line under its lowest cell, where the effect's anchor goes. `trim`
-// crops the frame to the cells that are on (the mask, a.x/a.y/a.w/a.h and the
-// head with it), the anchor staying where the frame's would be.
-function actorOf(
-  sprite: Phaser.GameObjects.Sprite,
-  recolor: ((c: Rgb) => Rgb) | null,
-  trim = false,
-): { actor: Actor; feet: number } | null {
+// a battler's frame as RGBA bytes, texture size
+interface FramePixels {
+  data: Uint8ClampedArray;
+  tw: number;
+  th: number;
+}
+
+function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
   const frame = sprite.frame;
   const src = frame.source.image;
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
@@ -184,7 +182,20 @@ function actorOf(
   ctx.canvas.width = tw;
   ctx.canvas.height = th;
   ctx.drawImage(src, frame.cutX, frame.cutY, tw, th, 0, 0, tw, th);
-  const data = ctx.getImageData(0, 0, tw, th).data;
+  return { data: ctx.getImageData(0, 0, tw, th).data, tw, th };
+}
+
+// The sprite's frame read back on the art grid: a cell is on when any of its
+// texels is, in that texel's colour. `feet` is the texels from the frame's top
+// to the line under its lowest cell, where the effect's anchor goes. `trim`
+// crops the frame to the cells that are on (the mask, a.x/a.y/a.w/a.h and the
+// head with it), the anchor staying where the frame's would be.
+function actorOf(
+  sprite: Phaser.GameObjects.Sprite,
+  { data, tw, th }: FramePixels,
+  recolor: ((c: Rgb) => Rgb) | null,
+  trim = false,
+): { actor: Actor; feet: number } {
   const w = Math.ceil(tw / ART_PX);
   const h = Math.ceil(th / ART_PX);
   const mask = new Uint8Array(w * h);
@@ -310,12 +321,16 @@ export class StatusFx {
   private readonly textures = new Set<string>();
   // the textures whose ceiling is faded: a warm finishing after a bake that could not wait must not fade it twice
   private readonly faded = new Set<string>();
+  // each battler frame read back once (framePixels): the opening's warm hands
+  // the same body to six sheets, and its reads were 11ms of the battle's create
+  private readonly frames = new Map<string, FramePixels | null>();
 
   constructor(private readonly scene: Phaser.Scene) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       for (const tex of this.textures) if (scene.textures.exists(tex)) scene.textures.remove(tex);
       this.textures.clear();
       this.faded.clear();
+      this.frames.clear();
       this.feet.clear();
     });
   }
@@ -379,14 +394,16 @@ export class StatusFx {
 
   /**
    * Bakes `kind` for `target` over the next frames (fx.ts warmSheets), so the
-   * turn it lands on doesn't stall for it: both of the stun's layers took
-   * 19-66ms (23 at the middle, headless), on top of the shock's own first bake
-   * on the same turn. `tint`: the one the battler will show by then, for a
-   * "tinted" body (an enraged boss's ENRAGE_TINT). Should it be needed before
-   * it is in, play() and loop() bake what is left there and then.
+   * turn it lands on doesn't stall for it: baked there, the first BURN, CHILL,
+   * HEAL or WARD held that turn 12-36ms (headless), the stun's two layers
+   * 19-66ms on top of the shock's own 9-20. `tint` and `mode`: what the
+   * battler will show by then, for a "tinted" body (an enraged boss's
+   * ENRAGE_TINT, multiplied; a foe's poison tick fills it purple); left out,
+   * the tint it shows now. Should it be needed before it is in, play() and
+   * loop() bake what is left there and then.
    */
-  warm(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number): void {
-    const plan = this.plan(target, kind, tint);
+  warm(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode = Phaser.TintModes.MULTIPLY): void {
+    const plan = this.plan(target, kind, tint, mode);
     if (this.feet.has(plan.key)) return;
     const bake = this.bakeOf(target, kind, plan);
     if (!bake) return;
@@ -399,16 +416,11 @@ export class StatusFx {
   }
 
   // What a bake of `kind` on `target` reads, so its key: the battler's frame,
-  // its mirroring, the tint a "tinted" body shows (`tint`, multiplied, else the
+  // its mirroring, the tint a "tinted" body shows (`tint` in `mode`, else the
   // sprite's now) and, for a sheet with a soft glow, whether it is soft.
-  private plan(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number): Plan {
+  private plan(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode = Phaser.TintModes.MULTIPLY): Plan {
     const sheet = STATUS_SHEETS[kind];
-    const tinted =
-      sheet.body !== "tinted"
-        ? null
-        : tint === undefined
-          ? tintOf(target.tintTopLeft, target.tintMode)
-          : tintOf(tint, Phaser.TintModes.MULTIPLY);
+    const tinted = sheet.body !== "tinted" ? null : tint === undefined ? tintOf(target.tintTopLeft, target.tintMode) : tintOf(tint, mode);
     const soft = sheet.soft !== undefined && (!GameState.flashes || reducedMotion());
     const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}`;
     return {
@@ -427,8 +439,11 @@ export class StatusFx {
     plan: Plan,
   ): { sheets: Record<string, PixelSheet>; feet: number } | null {
     const sheet = STATUS_SHEETS[kind];
-    const body = actorOf(target, plan.recolor, sheet.trim);
-    if (!body) return null;
+    const at = `${target.texture.key}:${target.frame.name}`;
+    if (!this.frames.has(at)) this.frames.set(at, framePixels(target));
+    const pixels = this.frames.get(at);
+    if (!pixels) return null;
+    const body = actorOf(target, pixels, plan.recolor, sheet.trim);
     const opts = {
       ...sheet.opts,
       actor: body.actor,

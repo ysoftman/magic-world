@@ -668,10 +668,11 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     바닥 균열을 seed 만으로 캐시해서 전투원마다 시드를 준다(`ownSeed`). 실제 사례: 두 번째 보스가 첫 보스의
     균열 위에 섰다.
   - 그 전투에서 나올 수 있는 상태 시트는 create 에서 `statusFx.warm` 으로 미리 나눠 굽는다(`warmSheets`).
-    지금은 보스·거인의 격노(그때 보일 `ENRAGE_TINT` 로), 그 밖의 적은 묶을 수단(감전 주문을 배웠거나 동료가
-    WEB SNARE)이 있을 때의 별이다. 다 굽기 전에 쓰이면 play·loop 가 남은 것을 그 자리에서 굽는다. 실제 사례:
-    별 두 장의 첫 굽기 19~66ms(헤드리스 중앙 23ms)가 같은 턴 감전의 첫 굽기와 겹쳤다(warm 뒤 격노 0.5ms,
-    오프닝 최장 16.8ms).
+    BattleScene `warmStatuses` 가 그 판의 주문·동료·적 특수기·저항 장신구로 나올 수 있는 것만 고른다(보스·거인의
+    격노는 그때 보일 `ENRAGE_TINT` 로, 적의 독 틱은 `PSN_TINT` FILL 로). 전투원 프레임은 한 번만 읽어 시트끼리
+    나눠 쓴다(`framePixels`). 다 굽기 전에 쓰이면 play·loop 가 남은 것을 그 자리에서 굽는다. 실제 사례: 별 두
+    장의 첫 굽기 19~66ms(헤드리스 중앙 23ms)가 같은 턴 감전의 첫 굽기와 겹쳤고, 첫 BURN·CHILL·HEAL·WARD 는 그
+    턴을 12~36ms 잡았다(warm 뒤 격노 0.5ms, 오프닝 최장 16.8ms).
   - 동료의 CHILL(FROST MOTH)이 걸리는 순간에는 냉기 시트를 보인다. CHILL 은 틱이 없어 그때만 보인다.
 - 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
