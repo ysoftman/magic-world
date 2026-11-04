@@ -136,7 +136,7 @@
 
 [Bun](https://bun.sh) 필요. 글꼴 Press Start 2P(OFL)는 `@fontsource/press-start-2p` 의 라틴 subset 으로, 긴 글(대화·설명)의 Departure Mono(Helena Zhang, SIL OFL 1.1, [departuremono.com](https://departuremono.com/))는 공식 배포본을 같은 라틴 범위로 잘라 `src/assets/fonts/`(라이선스 `OFL.txt`)에 넣어 번들에 들어 있어, 폰트 CDN 에 닿지 못하는 오프라인·사내망에서도 같은 글꼴로 나온다. 글자는 부팅 때 두 글꼴을 픽셀 아틀라스로 한 번 읽어 정수배로 그리므로, 화면 배율(DPR)이나 창 크기와 상관없이 같은 픽셀로 선명하게 나온다.
 
-전투 이펙트는 모두 [pixelfx](https://github.com/patch-gg/pixelfx)(Copyright (c) 2026 Patch, Hugo Duprez, MIT. 일부 이펙트는 Hugo Duprez 의 Sprite Fusion 오픈소스 VFX 를 옮긴 것)로 그린다. 커밋에 고정한 의존성이고 그림 파일은 없다. 타격·주문·승리(처치·금화·레벨업) 이펙트는 타이틀 화면에서 프레임마다 조금씩 나눠 스프라이트 시트로 미리 굽고(`src/fx.ts`), 상태·회복 이펙트(화상·냉기·감전·독·빙결·묶인 적의 별·격노·HEAL·WARD)는 그 전투원의 그림을 받아 그 전투에서 굽는다(나올 수 있는 별·격노는 전투가 시작될 때 미리, 나머지는 처음 쓸 때, `src/statusFx.ts`). 빌드한 번들에도 pixelfx 의 MIT 고지가 남는다.
+전투 이펙트는 모두 [pixelfx](https://github.com/patch-gg/pixelfx)(Copyright (c) 2026 Patch, Hugo Duprez, MIT. 일부 이펙트는 Hugo Duprez 의 Sprite Fusion 오픈소스 VFX 를 옮긴 것)로 그린다. 커밋에 고정한 의존성이고 그림 파일은 없다. 타격·주문·승리(처치·금화·레벨업) 이펙트는 타이틀 화면에서 프레임마다 조금씩 나눠 스프라이트 시트로 미리 굽고(`src/fx.ts`), 상태·회복 이펙트(화상·냉기·감전·독·빙결·묶인 적의 별·격노·HEAL·WARD)는 그 전투원의 그림을 받아 그 전투에서 굽는다(나올 수 있는 별·격노는 전투가 시작될 때 미리, 나머지는 처음 쓸 때, `src/statusFx.ts`). 전투 화면의 비·폭풍·눈·눈보라도 pixelfx 날씨(weather/rain·storm·snow·blizzard)로, 전투 중에 초당 15번 다시 그린다(`src/ui/PixelWeather.ts`). 화산재는 예전처럼 파티클이다. 폭풍의 번개는 설정의 FLASHES 를 끄거나 OS 의 '동작 줄이기' 설정을 켜면 나오지 않는다. 빌드한 번들에도 pixelfx 의 MIT 고지가 남는다.
 
 ```bash
 bun install
