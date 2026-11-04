@@ -54,7 +54,7 @@ import {
 import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP, PIXEL } from "../config";
 import { type MealDef, takeMealCharge } from "../cooking";
 import { MATERIALS, rollDrop } from "../drops";
-import { bakeBattleFx, flash, loopFx, playFx, shake } from "../fx";
+import { bakeBattleFx, flash, loopFx, playFx, shake, warmFx } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
@@ -159,6 +159,58 @@ const BOMB_HOP = 140;
 const BOMB_FX_MS = 900;
 // a restore's ring (ringOn): its 1.75s sheet at 1.5x, about the bag's 1.2s
 const RESTORE_FX_MS = 1200;
+// A companion skill's own sheet (fx.ts COMPANION_SHEETS) as its blow lands
+// (skillFxOn), in place of the plain strike's fx-hit: its ms at 1x, on the
+// foe's feet or, `ground`, on the ground under it (a flier's too); `back`, its
+// back half, under the foe; `fade`, the share of its ms it fades out over,
+// for one whose span ends with something still up; `drops`, more than one
+// (x off the foe's, delay ms at 1x); `jolt`, a camera shake (ms, intensity).
+// FIREBALL is FIRE's own shot and burst (companionCast), PILFER coins
+// (pilferCoins).
+interface SkillFx {
+  key: string;
+  ms: number;
+  ground?: boolean;
+  back?: string;
+  fade?: number;
+  drops?: [number, number][];
+  jolt?: [number, number];
+}
+const SKILL_FX: Record<string, SkillFx> = {
+  // a bite's claw sheet at about fx-hit's 300ms, its 0.57s at 1.6x
+  "DOUBLE BITE": { key: "fx-claw", ms: 360 },
+  // its orbs streaking off toward the hero fade as they go
+  "BLOOD SIP": { key: "fx-sip", ms: 850, ground: true, fade: 0.35 },
+  // its dust still rolling at 1s
+  SMASH: { key: "fx-smash", ms: 800, ground: true, fade: 0.3, jolt: [160, 0.01] },
+  // three icicles a beat apart, either side of the foe and on it last
+  AVALANCHE: {
+    key: "fx-icicle",
+    ms: 650,
+    ground: true,
+    drops: [
+      [-44, 0],
+      [40, 90],
+      [0, 180],
+    ],
+    jolt: [260, 0.006],
+  },
+  BLAZE: { key: "fx-blaze", ms: 1300, ground: true, back: "fx-blaze-back" },
+  "VENOM STING": { key: "fx-sting", ms: 360 },
+  // its pit still smoking at 1.5s
+  MELT: { key: "fx-melt", ms: 1000, ground: true, fade: 0.2 },
+  // still holding the foe at 1.6s; the stars (showStun) stay on after it
+  "WEB SNARE": { key: "fx-web", ms: 1200, back: "fx-web-back", fade: 0.25 },
+};
+// FIREBALL's shot (companionCast): where it sets off, right of and over the
+// FIRE IMP's middle, and its flight to the foe, 780px at 1x
+const COMPANION_SHOT_X = 32;
+const COMPANION_SHOT_MS = 300;
+// PILFER's coins (pilferCoins): their flight to the goblin's place, the hop
+// of the first (each next one higher) and the beat between them
+const PILFER_COIN_MS = 520;
+const PILFER_HOP = 120;
+const PILFER_GAP_MS = 90;
 // a death of the foe's own (deathOf): its sheet's 2.4-2.45s squeezed in, the
 // break-up some 1s in, the debris settled as the victory line has typed
 const DEATH_FX_MS = 1800;
@@ -1700,11 +1752,14 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private companionHit(dmg: number, crit: boolean, tint?: number): void {
+  // `skillFx`: a skill's own sheet (skillFxOn) in place of fx-hit, a crit's
+  // starburst still over it
+  private companionHit(dmg: number, crit: boolean, tint?: number, skillFx?: () => void): void {
     Sfx.strike();
     if (crit) Sfx.critical();
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
-    this.fxOn(this.enemySprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
+    skillFx?.();
+    if (crit || !skillFx) this.fxOn(this.enemySprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
     this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.hitBurst.explode(crit ? 12 : 6);
     if (tint !== undefined) {
@@ -1713,6 +1768,73 @@ export class BattleScene extends Phaser.Scene {
     }
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg, crit);
     this.updateEnemyHp();
+  }
+
+  // A skill's own sheet on the foe (SKILL_FX), at the foe's scale (4px over
+  // a boss: fx.ts COMPANION_SHEETS); `mirrored`, raked the other way
+  private skillFxOn(fx: SkillFx, mirrored = false): void {
+    const y = fx.ground ? GROUND_Y : GROUND_Y - (this.enemy.flying ? FLY_LIFT : 0);
+    const ms = this.anim(fx.ms);
+    const drop = (dx: number): void => {
+      const x = this.enemySprite.x + dx;
+      const sprites = [playFx(this, fx.key, x, y, ms, this.enemyBaseScale, mirrored)];
+      if (fx.back) {
+        const back = playFx(this, fx.back, x, y, ms, this.enemyBaseScale, mirrored);
+        this.children.moveBelow(back, this.enemySprite);
+        sprites.push(back);
+      }
+      if (fx.fade) this.tweens.add({ targets: sprites, alpha: 0, delay: ms * (1 - fx.fade), duration: ms * fx.fade - 1 });
+    };
+    for (const [dx, delay] of fx.drops ?? [[0, 0]]) {
+      if (delay > 0) this.time.delayedCall(this.anim(delay), () => drop(dx));
+      else drop(dx);
+    }
+    if (fx.jolt) shake(this.cameras.main, ...fx.jolt);
+  }
+
+  // FIREBALL: the FIRE IMP throws one from where it stands, with a hop
+  // toward the foe, in place of a dash: FIRE's own shot at the imp's 3px
+  // cell (its 1.5x). onHit as it lands (its burst, companionSkill).
+  private async companionCast(onHit: () => void): Promise<void> {
+    const sprite = this.companionSprite;
+    if (!sprite) return;
+    const foe = this.enemySprite;
+    const [x, y] = [sprite.x + COMPANION_SHOT_X, sprite.y];
+    this.tweens.add({ targets: sprite, x: sprite.x + 16, duration: this.anim(90), yoyo: true });
+    const shot = loopFx(this, "fx-fireball", x, y, this.anim(30), 1.5).setRotation(Math.atan2(foe.y - y, foe.x - x));
+    await this.tweenPromise(shot, { x: foe.x, y: foe.y }, this.anim(COMPANION_SHOT_MS));
+    shot.destroy();
+    shake(this.cameras.main, 100, 0.006);
+    onHit();
+  }
+
+  // PILFER: three coins (fx.ts fx-coin) spin off the foe in arcs, a beat
+  // apart, to the goblin's place as it dashes back, at its 3px cell. Each
+  // next one hops higher; the highest (PILFER_HOP + 48) tops out at y 206
+  // over a flier, the windows' bottom 200.
+  private pilferCoins(): void {
+    const goblin = this.companionSprite;
+    if (!goblin) return;
+    const [fromX, fromY] = [this.enemySprite.x, this.enemySprite.y];
+    const [toX, toY] = [COMPANION_X, goblin.y];
+    for (let i = 0; i < 3; i++) {
+      const coin = loopFx(this, "fx-coin", fromX, fromY, this.anim(30), 1.5).setVisible(false);
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: this.anim(i * PILFER_GAP_MS),
+        duration: this.anim(PILFER_COIN_MS),
+        onStart: () => coin.setVisible(true),
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          coin.setPosition(
+            Phaser.Math.Linear(fromX, toX, p),
+            Phaser.Math.Linear(fromY, toY, p) - Math.sin(Math.PI * p) * (PILFER_HOP + i * 24),
+          );
+        },
+        onComplete: () => coin.destroy(),
+      });
+    }
   }
 
   // a skill that can't do anything this round isn't rolled at all, so the
@@ -1759,13 +1881,14 @@ export class BattleScene extends Phaser.Scene {
       await this.companionLunge(() => {
         const { dmg, crit } = rollDamage(atk, this.enemy.def);
         bites.push(Math.max(1, Math.floor(dmg * COMPANION_DOUBLE_MULT)));
-        this.companionHit(bites[0], crit);
+        this.companionHit(bites[0], crit, undefined, () => this.skillFxOn(SKILL_FX[skill.name]));
       });
       if (this.enemy.curHp > 0) {
         await this.companionLunge(() => {
           const { dmg, crit } = rollDamage(atk, this.enemy.def);
           bites.push(Math.max(1, Math.floor(dmg * COMPANION_DOUBLE_MULT)));
-          this.companionHit(bites[1], crit);
+          // the second raked the other way
+          this.companionHit(bites[1], crit, undefined, () => this.skillFxOn(SKILL_FX[skill.name], true));
         });
       }
       await this.say(`${head} ${bites.join("+")} dmg`);
@@ -1782,11 +1905,18 @@ export class BattleScene extends Phaser.Scene {
             ? 0xc084fc
             : 0xffffff;
     let dmg = 0;
-    await this.companionLunge(() => {
+    const cast = skill.name === "FIREBALL";
+    const skillFx = SKILL_FX[skill.name];
+    // FIREBALL lands in FIRE's own burst, over a status sheet set off with it as a spell's is
+    const hitFx = cast
+      ? () => this.fxOn(this.enemySprite, "fx-fire", 280).setDepth(SPELL_BURST_DEPTH)
+      : skillFx && (() => this.skillFxOn(skillFx));
+    const onHit = (): void => {
       const roll = rollDamage(atk, skill.pierce ? 0 : this.enemy.def);
       dmg = Math.max(1, Math.floor(roll.dmg * (skill.mult ?? 1) * (weak ? WEAKNESS_MULT : 1)));
-      this.companionHit(dmg, roll.crit, tint);
-    });
+      this.companionHit(dmg, roll.crit, tint, hitFx);
+    };
+    await (cast ? this.companionCast(onHit) : this.companionLunge(onHit));
 
     let tail = `${dmg} dmg`;
     if (skill.kind === "drain") {
@@ -1799,8 +1929,7 @@ export class BattleScene extends Phaser.Scene {
       this.pilfered = true;
       const gold = GameState.gainGold(Math.max(1, Math.round(this.enemy.gold * COMPANION_PILFER_PCT)));
       Sfx.pickup();
-      this.coinBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-      this.coinBurst.explode(8);
+      this.pilferCoins();
       tail = `${dmg} dmg +${gold}G`;
     } else if (skill.kind === "dot" && skill.dot && this.enemy.curHp > 0) {
       this.enemyDot = { label: skill.dot, turns: COMPANION_DOT_TURNS };
@@ -2418,6 +2547,11 @@ export class BattleScene extends Phaser.Scene {
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
+    // the companion's skill sheets (fx.ts COMPANION_SHEETS): its first skill
+    // comes after the hero's first turn at the soonest
+    const skillFx = pal && SKILL_FX[pal.name];
+    if (skillFx) warmFx(this, skillFx.back ? [skillFx.back, skillFx.key] : [skillFx.key]);
+    if (pal?.kind === "pilfer") warmFx(this, ["fx-coin"]);
     // last, as it is needed last
     const death = this.deathOf();
     if (death) warm(foe, death);

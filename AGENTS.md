@@ -695,7 +695,12 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - BOMB 은 `icon-bomb` 을 영웅 손에서 적 발밑으로 포물선으로 던지고(BattleScene `lobBomb`), 떨어진 자리(`GROUND_Y`)에서
   fx-bomb(explosions/grenade 의 BLOW 1.62s 이후만)이 터진다. 나는 적도 땅에서 터진다. 실제 사례: grenade 파편 줄기는
   원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224), 보스도 4px(`sameOnBoss`).
-- 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
+- 동료 스킬은 제 시트(`fx.ts` 의 `COMPANION_SHEETS`, BattleScene `SKILL_FX`·`skillFxOn`)로 fx-hit 를 대신한다(GOO HEAL·
+  BULWARK·CHILL 은 원래 연출, FIREBALL 은 fx-fireball·fx-fire 를 동료 자리에서 던지고, PILFER 는 fx-coin 이 적에서 고블린
+  자리로 튄다). 한 전투에 동료는 하나라 타이틀에서 굽지 않고 그 전투 create 가 `warmFx` 로 제 동료 것만 나눠 굽는다
+  (첫 스킬은 빨라야 영웅 첫 턴 뒤). 모두 `sameOnBoss` 이고 위는 y 208(나는 적)·224(땅), 아래는 y 488(fx-bomb 과 같음)로
+  자른다. 적이 그 안에 서는 고리·거미줄은 `layer` 로 뒤("back", 적 아래로 `moveBelow`)·앞을 따로 굽는다.
+- 그 밖의 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
   8ms(`BAKE_BUDGET_MS`)를 나눠 쓰고, 비싼 시트는 여러 프레임에 나눠 굽는다. 한 프레임에 시트는 최대 하나만
   완성한다. 텍스처 등록·GL 업로드는 8ms 예산 밖이라 싼 시트 여럿이 한 프레임에 끝나면 그 프레임이 길어진다.
