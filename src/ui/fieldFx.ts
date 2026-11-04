@@ -17,6 +17,12 @@ export interface FieldFx {
   ms: number;
   /** over and over, until stopped */
   loop?: boolean;
+  /**
+   * a piece of a loop played once (playFieldFxOnce): its alpha up from 0 over
+   * the first ms and back down over the last, so it neither pops in at full
+   * strength nor cuts off
+   */
+  fade?: [number, number];
 }
 
 /** `fx`'s sheets by key, for a warm-up queue (fx.ts warmSheets). */
@@ -78,12 +84,20 @@ export function playFieldFxOnce(
 ): Phaser.GameObjects.Sprite {
   const sprite = playFieldFx(fieldFxSprite(scene, fx, x, y, scale).setDepth(depth), fx);
   sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy());
+  // its fade's, or a caller's (a SHOP coin's rise), cut short with it
+  sprite.once(Phaser.GameObjects.Events.DESTROY, () => scene.tweens.killTweensOf(sprite));
+  if (fx.fade) {
+    const [up, down] = fx.fade;
+    sprite.setAlpha(0);
+    scene.tweens.add({ targets: sprite, alpha: 1, duration: up });
+    scene.tweens.add({ targets: sprite, alpha: 0, delay: fx.ms - down, duration: down });
+  }
   return sprite;
 }
 
-// The panels' moments (BLACKSMITH, HOME, LUCKY WHEEL, FARM, KITCHEN) play
-// between a panel's fill (151) and its words and icons (152): never over a
-// line of text, which stays whole on top of them.
+// The panels' moments (BLACKSMITH, HOME, LUCKY WHEEL, FARM, KITCHEN, ITEMS,
+// SHOP, BESTIARY) play between a panel's fill (151) and its words and icons
+// (152): never over a line of text, which stays whole on top of them.
 const PANEL_FX_DEPTH = 151.5;
 
 /**
@@ -114,11 +128,12 @@ export class PanelFx {
     warmFieldFx(this.scene, ...this.fx);
   }
 
-  /** One play of `fx` with its anchor on (x, y), at `scale` screen px a pixelfx pixel. */
-  play(fx: FieldFx, x: number, y: number, scale: number): void {
+  /** One play of `fx` with its anchor on (x, y), at `scale` screen px a pixelfx pixel; its sprite, to move. */
+  play(fx: FieldFx, x: number, y: number, scale: number): Phaser.GameObjects.Sprite {
     const sprite = playFieldFxOnce(this.scene, fx, x, y, scale, PANEL_FX_DEPTH).setScrollFactor(0);
     this.playing.add(sprite);
     sprite.once(Phaser.GameObjects.Events.DESTROY, () => this.playing.delete(sprite));
+    return sprite;
   }
 
   /** Ends every play still going: the panel is closing. */

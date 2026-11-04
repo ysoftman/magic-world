@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import * as coinSpin from "pixelfx/fx/pickups/coin-spin";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD, PIXEL } from "../config";
 import { isRefinable, REFINE_STEP } from "../drops";
@@ -8,6 +9,7 @@ import { itemInfo } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
+import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -87,6 +89,28 @@ const ICON_NONE_ALPHA = 0.35;
 // clear of the d-pad's up arrow (x<=194) and of Z (x>=1076).
 const INFO_Y = PANEL_TOP + PANEL_H - 83;
 
+// A sale's moment (ui/fieldFx.ts): a gold coin flips up out of the sold
+// piece's icon, turning once with a flash across its face and twinkles round
+// it, and fades (pickups/coin-spin, its floor shadow cropped off and its
+// hover left to a tween). One pixelfx pixel to a screen pixel, as the icons
+// are drawn (64px art at half size): a 14px coin, 18 either way with its
+// twinkles. It rises from the icon's middle into the 12px gap over the icon,
+// under the row above's. A buy bursts gold on the bought icon, as the
+// KITCHEN's dish does (GOLD_BURST). spawn/coin-drop was tried first: at this
+// pixel its coins were 8px specks and its puff stayed behind the icon.
+const COIN: FieldFx = {
+  key: "fx-shop-coin",
+  // one turn, its coin (17 over the floor) on the anchor: 24 frames of 36x32,
+  // a row of 864x32
+  sheet: { fx: coinSpin, span: [0, 1.6], frames: 24, focus: [0, -17], crop: [10, 12, 46, 44] },
+  // a turn at 2x, a flipped coin's
+  ms: 800,
+  fade: [100, 300],
+};
+// how far it rises: from the icon's middle to the gap between the icon's top
+// (16 up) and the one above's foot (28 up)
+const COIN_RISE = 22;
+
 export class ShopUI {
   private scene: Phaser.Scene;
   private active = false;
@@ -112,6 +136,8 @@ export class ShopUI {
   private msgTimer?: Phaser.Time.TimerEvent;
   // the row whose sale waits on a second Z (see sell()), -1 for none
   private pendingSell = -1;
+  // a sale's coin and a buy's burst on the row's icon
+  private fx: PanelFx;
 
   private keyUp: Phaser.Input.Keyboard.Key;
   private keyDown: Phaser.Input.Keyboard.Key;
@@ -137,6 +163,7 @@ export class ShopUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, COIN, GOLD_BURST);
 
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
@@ -307,6 +334,7 @@ export class ShopUI {
 
   open(): void {
     this.active = true;
+    this.fx.warm();
     this.index = 0;
     this.mode = "buy";
     this.pendingSell = -1;
@@ -411,6 +439,10 @@ export class ShopUI {
     GameState.save();
     this.showMsg(worn ? `${titleCase(item.name)} equipped!` : item.msg);
     this.refresh();
+    // on the icon, at the screen's own pixel: its ring 41px round, within the
+    // rows either side and the panel's left edge (the icon at x 136)
+    const icon = this.icons[this.index];
+    this.fx.play(GOLD_BURST, icon.x, icon.y, 1);
   }
 
   private sell(): void {
@@ -452,6 +484,9 @@ export class ShopUI {
     GameState.save();
     this.showMsg(`Sold for ${gold}G!`);
     this.refresh();
+    const icon = this.icons[this.index];
+    const coin = this.fx.play(COIN, icon.x, icon.y, 1);
+    this.scene.tweens.add({ targets: coin, y: icon.y - COIN_RISE, duration: COIN.ms, ease: "Sine.easeOut" });
   }
 
   private showMsg(text: string, hold = 1200): void {
@@ -528,6 +563,7 @@ export class ShopUI {
 
   private close(): void {
     this.active = false;
+    this.fx.clear();
     this.dim.setVisible(false);
     this.panel.setVisible(false);
     this.title.setVisible(false);
@@ -547,6 +583,7 @@ export class ShopUI {
   }
 
   destroy(): void {
+    this.fx.clear();
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();
