@@ -185,6 +185,12 @@ bun run build
 # 빌드 결과 미리보기 (http://localhost:4173)
 bun run preview
 
+# 픽셀 그리드 검사 (src/art 의 행 길이·팔레트·물 프레임·타일셋 폭)
+bun run check:art
+
+# 효과음 키트 검사 (registerSfx 로 등록한 모든 소리의 길이·단계 수·음계·중복 등록)
+bun run check:sound
+
 # 보스 전투 밸런스 시뮬 (보스 5종 x 레벨 1~30 승률·라운드·받은 피해, 옵션은 --help)
 # 후반 키트: --refine N, --forged, --ng N, --abyss FLOOR, --hipotions N, --talisman, --meal atk|def
 # 스킬: --skills(스킬까지 매 턴 기대 피해가 가장 큰 공격), --greedy(같은 고르기를 주문만으로), --skill-table(주문·스킬의 시전당 피해와 MP 당 피해)
@@ -210,6 +216,16 @@ DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add phaserjs/phaser -a claude-cod
 - `DISABLE_TELEMETRY=1 DO_NOT_TRACK=1`: CLI 가 기본으로 보내는 익명 사용 통계와 보안 감사 요청을 끈다
 - `-g` 를 붙이면 이 저장소 대신 `~/.claude/skills/` 에 전역 설치한다
 - 고를 수 있는 전체 목록은 설치 없이 `bunx skills add phaserjs/phaser -l` 로 본다
+
+효과음 키트(`src/sfxKit.ts`)를 설계할 때 쓴 스킬도 같은 방법으로 설치한다. 출처는 [abagames/agentic-gamedev-skills](https://github.com/abagames/agentic-gamedev-skills)(MIT)의 `designing-retro-arcade-sound-kits` 이고, 효과음을 이벤트별 프로그램(데이터)으로 짓고 길이·상대 음량·음계를 검사하는 절차를 담고 있다.
+
+```bash
+DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 bunx skills add abagames/agentic-gamedev-skills \
+  --skill designing-retro-arcade-sound-kits -a claude-code --copy -y
+```
+
+- `--skill`: `-s` 와 같다. 그 저장소의 여러 스킬 중 이것 하나만 고른다
+- 그 저장소 안의 경로는 `.agents/skills/` 지만 `-a claude-code` 가 `.claude/skills/` 로 복사한다
 
 설치하면 `.claude/skills/<스킬 이름>/` 에 생기고, 새로 연 Claude Code 세션부터 불러온다. 설치한 것 보기·업데이트 확인·업데이트·삭제는 `bunx skills list`, `bunx skills check`, `bunx skills update`, `bunx skills remove <스킬 이름>` 이다(같은 환경변수를 앞에 붙인다). `.claude` 가 개인 전역 gitignore 에 걸린 환경이면 설치한 스킬이 git 에 잡히지 않으니, 체크아웃마다 위 명령으로 다시 설치한다.
 
