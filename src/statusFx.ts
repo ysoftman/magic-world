@@ -13,6 +13,7 @@ import * as frozen from "pixelfx/fx/status/frozen";
 import * as poisoned from "pixelfx/fx/status/poisoned";
 import * as rage from "pixelfx/fx/status/rage";
 import * as stunned from "pixelfx/fx/status/stunned";
+import { battleSource } from "./battleHd";
 import { bakePixelSheet, type PixelSheet, warmSheets } from "./fx";
 import { GameState } from "./gameState";
 import { ART_PX } from "./pixelart";
@@ -278,8 +279,14 @@ interface FramePixels {
   th: number;
 }
 
+// The texture a battler's body is read from: its art as baked, not the
+// battle's copy with the outline smoothed (battleHd.ts). The body is read a
+// cell at a time, and a smoothed copy has texels of an outline colour in the
+// empty cells at its inner corners, which would read as cells of the body.
+const bodyKey = (sprite: Phaser.GameObjects.Sprite): string => battleSource(sprite.texture.key);
+
 function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
-  const frame = sprite.frame;
+  const frame = sprite.scene.textures.getFrame(bodyKey(sprite), sprite.frame.name) ?? sprite.frame;
   const src = frame.source.image;
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
   const tw = frame.cutWidth;
@@ -557,7 +564,7 @@ export class StatusFx {
     const tinted = sheet.body !== "tinted" ? null : tint === undefined ? tintOf(target.tintTopLeft, target.tintMode) : tintOf(tint, mode);
     const soft = sheet.soft !== undefined && (!GameState.flashes || reducedMotion());
     const lift = sheet.fells ? (this.lifts.get(target) ?? 0) : 0;
-    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}${lift ? `:lift${lift}` : ""}`;
+    const key = `status-${kind}:${bodyKey(target)}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}${lift ? `:lift${lift}` : ""}`;
     return {
       key,
       layers: sheet.layered ? [`${key}:back`, `${key}:front`] : [key],
@@ -575,7 +582,7 @@ export class StatusFx {
     plan: Plan,
   ): { sheets: Record<string, PixelSheet>; feet: number } | null {
     const sheet = STATUS_SHEETS[kind];
-    const at = `${target.texture.key}:${target.frame.name}`;
+    const at = `${bodyKey(target)}:${target.frame.name}`;
     if (!this.frames.has(at)) this.frames.set(at, framePixels(target));
     const pixels = this.frames.get(at);
     if (!pixels) return null;
@@ -583,7 +590,7 @@ export class StatusFx {
     const opts = {
       ...sheet.opts,
       actor: body.actor,
-      ...(sheet.ownSeed ? { seed: seedOf(target.texture.key) } : {}),
+      ...(sheet.ownSeed ? { seed: seedOf(bodyKey(target)) } : {}),
       ...(plan.soft ? { light: sheet.soft } : {}),
     };
     const sheets: Record<string, PixelSheet> = {};

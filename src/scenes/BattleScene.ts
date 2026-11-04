@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { type AbyssBout, abyssDropMult } from "../abyss";
 import { ARENA_BOSSES, ARENA_CLEAR_BONUS, ARENA_GOLD_SHARE, ARENA_RECOVER_PCT, type ArenaRun } from "../arena";
 import { BATTLE_THEME, BOSS_THEME, FOREST_BATTLE_THEME, Sfx, SNOW_BATTLE_THEME, VOLCANO_BATTLE_THEME } from "../audio";
+import { battleSource, battleTexture } from "../battleHd";
 import {
   BOSS_LOOT,
   BOSS_TELL_CHANCE,
@@ -715,14 +716,14 @@ export class BattleScene extends Phaser.Scene {
     // which a boss centred at 280 ran under, hiding the drake's horns. The
     // fliers' tops are at 256 at most.
     this.enemyBaseScale = 2;
-    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, 0, this.enemy.texture).setScale(this.enemyBaseScale);
-    this.playerSprite = this.add.sprite(320, 0, "hero-down-0").setScale(2);
+    this.enemySprite = this.add.sprite(GAME_WIDTH - 320, 0, battleTexture(this, this.enemy.texture)).setScale(this.enemyBaseScale);
+    this.playerSprite = this.add.sprite(320, 0, battleTexture(this, "hero-down-0")).setScale(2);
     this.playerSprite.setFlipX(true);
     this.enemyStance = this.stand(this.enemySprite, GROUND_Y, !!this.enemy.flying);
     this.heroStance = this.stand(this.playerSprite, GROUND_Y);
     // the gear in the hero's hands as on the field facing the camera (ui/HeroGear.ts), at the battle's 2x
-    this.weaponOverlay = this.add.sprite(0, 0, GameState.weaponTexture()).setScale(2);
-    this.shieldOverlay = this.add.sprite(0, 0, GameState.armorTexture()).setScale(2);
+    this.weaponOverlay = this.add.sprite(0, 0, battleTexture(this, GameState.weaponTexture())).setScale(2);
+    this.shieldOverlay = this.add.sprite(0, 0, battleTexture(this, GameState.armorTexture())).setScale(2);
     this.weaponOverlay.setVisible(!!GameState.equipped.weapon);
     this.shieldOverlay.setVisible(!!GameState.equipped.armor);
     this.syncGear();
@@ -730,7 +731,9 @@ export class BattleScene extends Phaser.Scene {
     const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
     // assigned either way: the scene instance outlives a battle (see init),
     // and a companion dismissed since the last one would leave its sprite here
-    this.companionSprite = companionDef ? this.add.sprite(COMPANION_X, 0, companionDef.texture).setScale(1.5) : undefined;
+    this.companionSprite = companionDef
+      ? this.add.sprite(COMPANION_X, 0, battleTexture(this, companionDef.texture)).setScale(1.5)
+      : undefined;
     this.companionStance = this.companionSprite && this.stand(this.companionSprite, COMPANION_GROUND_Y, !!companionDef?.flying);
 
     this.heroIdle = this.idleBob(this.playerSprite, 1400, 0);
@@ -1928,8 +1931,9 @@ export class BattleScene extends Phaser.Scene {
     this.catchBurst.explode(16, COMPANION_X, toY);
     // an old companion's breathing ran over its own texture's footing
     this.companionIdle?.stop();
-    if (this.companionSprite) this.companionSprite.setTexture(this.enemy.texture);
-    else this.companionSprite = this.add.sprite(COMPANION_X, toY, this.enemy.texture);
+    const caught = battleTexture(this, this.enemy.texture);
+    if (this.companionSprite) this.companionSprite.setTexture(caught);
+    else this.companionSprite = this.add.sprite(COMPANION_X, toY, caught);
     this.companionSprite.setScale(1.5);
     this.companionStance = this.stand(this.companionSprite, COMPANION_GROUND_Y, flying, this.companionStance);
     this.companionIdle = this.idleBob(this.companionSprite, 1200, 0, flying);
@@ -2693,8 +2697,11 @@ export class BattleScene extends Phaser.Scene {
   private stand(sprite: Phaser.GameObjects.Sprite, groundY: number, flying = false, old?: Stance): Stance {
     old?.shadow.destroy();
     const scale = sprite.scaleX;
-    const f = footingOf(this, sprite.texture.key);
-    const restY = this.restY(sprite.texture.key, scale, groundY, flying);
+    // read off the art the battle copy (battleHd.ts) was made from: the copy
+    // fills concave corners, which could widen the feet, and the shadow, a cell
+    const art = battleSource(sprite.texture.key);
+    const f = footingOf(this, art);
+    const restY = this.restY(art, scale, groundY, flying);
     sprite.setY(restY);
     const w = flying ? f.bodyW * scale * FLY_SHADOW_W : f.footW * scale + PIXEL * 4;
     const half = Math.max(PIXEL * 2, Math.round(w / 2 / PIXEL) * PIXEL);
