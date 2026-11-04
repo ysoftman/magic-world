@@ -4,6 +4,7 @@ import * as divineShield from "pixelfx/fx/holy/divine-shield";
 import * as heal from "pixelfx/fx/holy/heal";
 import * as freeze from "pixelfx/fx/ice/freeze";
 import * as electrified from "pixelfx/fx/lightning/electrified";
+import * as leafStorm from "pixelfx/fx/nature/leaf-storm";
 import * as disintegrate from "pixelfx/fx/spawn/disintegrate";
 import * as dissolveBurn from "pixelfx/fx/spawn/dissolve-burn";
 import * as shatterDeath from "pixelfx/fx/spawn/shatter-death";
@@ -39,6 +40,7 @@ export type StatusKind =
   | "freeze"
   | "stun"
   | "rage"
+  | "regrow"
   | "shatter"
   | "dissolve"
   | "disintegrate";
@@ -65,6 +67,8 @@ interface StatusSheet extends PixelSheet {
   trim?: boolean;
   /** the last share of play()'s ms it fades out over: a loop's stretch played once has no end of its own */
   fade?: number;
+  /** the first share it fades in over, as a loop's stretch has no start of its own either */
+  rise?: number;
   /** its glow (pixelfx's light) with FLASHES off or the OS's reduced motion, as fx.ts softens a flash */
   soft?: number;
   /** seeded by the battler: rage keeps its floor cracks by seed alone, and a second boss stood on the first one's */
@@ -160,6 +164,32 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
     fade: 0.3,
     soft: 0.35,
     ownSeed: true,
+    ceiling: WINDOW_CEILING,
+  },
+  // The MOSS GOLEM regrowing its moss (BattleScene regenerate): one turn of
+  // leaves tumbling up a spiral round it, behind and in front of it (its
+  // drawBack under the golem), wrapped in bands of wind, litter swirling at
+  // its feet. Its leaves in the golem's own moss greens (MOSS_GOLEM_PALETTE
+  // n, m, M), the wind in its eyes' glow (e, #8ce99a); its autumn golds and
+  // reds left out, which read as a wind attack. Not sized to the body: at the
+  // boss's 6px its rings are 15-24 cells out, 90-144px round a golem 96px
+  // half-wide, and it rises 64 cells, cut at the ceiling (y 222), a few cells
+  // over the head. 18 frames of the 2.4s loop, a row a layer (2016x104).
+  regrow: {
+    fx: leafStorm,
+    opts: {
+      palette: ["#10241a", "#1e4030", "#2f6a4a", "#4fae6e", "#8ce99a", "#e8fff0"],
+      leaves: [
+        ...["#1c3314", "#2a4a1f", "#4d7a35", "#7fb04a"],
+        ...["#123818", "#2f7a2a", "#6cb83a", "#c8f070"],
+        ...["#24401c", "#4d7a35", "#7fb04a", "#b6dc78"],
+      ],
+    },
+    span: [0, 2.4],
+    frames: 18,
+    layered: true,
+    rise: 0.15,
+    fade: 0.25,
     ceiling: WINDOW_CEILING,
   },
   // The deaths (BattleScene victory), in place of fx-poof for a foe of ice,
@@ -448,7 +478,8 @@ export class StatusFx {
     const [from, to] = sheet.span;
     const at = (u: number): void => {
       on.show(Math.min(sheet.frames - 1, Math.floor(u * sheet.frames)));
-      if (u > fadeFrom) for (const s of on.sprites) s.setAlpha((1 - u) / (1 - fadeFrom));
+      const rising = sheet.rise ? Math.min(1, u / sheet.rise) : 1;
+      if (sheet.rise || u > fadeFrom) for (const s of on.sprites) s.setAlpha(rising * (u > fadeFrom ? (1 - u) / (1 - fadeFrom) : 1));
       if (body) target.setAlpha(body(from + u * (to - from), sheet.opts ?? {}));
     };
     at(0);

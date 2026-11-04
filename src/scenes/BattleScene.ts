@@ -150,6 +150,8 @@ const SPELL_FX: Record<string, readonly [string, string]> = {
 const HIT_FX_MS = 300;
 // a status sheet as long as its label's pop (flashStatus), floor and all
 const STATUS_FX_MS = 900;
+// the MOSS GOLEM's regrowth (regenerate): its 2.4s turn of leaves at 1.6x
+const REGROW_FX_MS = 1500;
 // a BOMB's toss (lobBomb): its flight and how high it arcs over the line, and
 // its blast's 1.07s sheet a little faster
 const BOMB_LOB_MS = 380;
@@ -421,7 +423,6 @@ export class BattleScene extends Phaser.Scene {
   private statusFx!: StatusFx;
   private hitBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private glowBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private healBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private coinBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private catchBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -806,14 +807,6 @@ export class BattleScene extends Phaser.Scene {
       lifespan: 400,
       scale: { start: 1, end: 0 },
       alpha: { start: 1, end: 0 },
-      emitting: false,
-    });
-    this.healBurst = this.add.particles(0, 0, "glow", {
-      speed: { min: 40, max: 100 },
-      lifespan: 500,
-      scale: { start: 1, end: 0 },
-      alpha: { start: 1, end: 0 },
-      tint: 0x4ade80,
       emitting: false,
     });
     this.coinBurst = this.add.particles(0, 0, "coin", {
@@ -2078,8 +2071,8 @@ export class BattleScene extends Phaser.Scene {
     const healed = regenAmount(this.enemy.hp, this.enemy.curHp);
     this.enemy.curHp += healed;
     Sfx.magic();
-    this.healBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-    this.healBurst.explode(12);
+    // its moss whirling up round it (statusFx.ts regrow)
+    this.statusOn(this.enemySprite, "regrow", REGROW_FX_MS, STATUS_POP_MIN_MS);
     this.flashHeal(this.enemySprite.x, this.enemySprite.y, healed);
     this.updateEnemyHp();
     await this.say(`${this.enemy.name} regrows its moss! +${healed} HP`);
@@ -2424,6 +2417,7 @@ export class BattleScene extends Phaser.Scene {
       warm(hero, "poison", PSN_TINT);
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
+    if (special?.kind === "regen") warm(foe, "regrow");
     // last, as it is needed last
     const death = this.deathOf();
     if (death) warm(foe, death);

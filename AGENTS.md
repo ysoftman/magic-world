@@ -680,6 +680,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     `breaks`(몸이 다 사라지는 시각, `breakOf`)에 떨어진다. 실제 사례: 처음엔 코인을 처치와 함께 띄웠더니 코인의 금빛
     섬광과 puff 가 아직 멀쩡한 몸을 가렸다. 나는 적은 `statusFx.hover` 로 몸을 `FLY_LIFT` 만큼 띄워 구워 파편이 땅에
     떨어진다. 새 처치 이펙트는 `fells`·`breaks`·`ceiling` 을 같이 정하고, `warmStatuses` 끝에서 warm 한다.
+  - MOSS GOLEM 의 regen 은 `regrow`(nature/leaf-storm, layered, 이끼 초록 잎, 가을 금·빨강은 바람 공격처럼 읽혀 뺌)다.
+    루프 조각을 한 번 보일 때는 `rise`(앞 페이드인)·`fade`(뒤 페이드아웃)를 같이 준다. 실제 사례: rise 없이 루프를 틀면 첫
+    프레임부터 꽉 찬 나선이 튀어나왔다. leaf-storm 은 몸 크기를 따르지 않으니(반지름 15~24칸, 높이 64칸) 다른 적에 쓸 때는
+    배율에서 다시 잰다.
 - 전투에서 가방 아이템(POTION·HI-POTION·MPOTION·ETHER·ELIXIR)과 GOO HEAL 의 회복은 영웅 발밑(`GROUND_Y`)의 회복 고리다
   (`fx.ts` 의 fx-restore-hp/-mp/-all, holy/heal-aoe, BattleScene `ringOn`). 색은 필드 가방(InventoryUI `HEALS`)과 같아
   같은 아이템이 필드와 전투에서 같은 연출이다. 실제 사례: 씨앗 섬광의 글로우를 light 1 로 구우면 crop 에 잘려 밝은 풀밭
