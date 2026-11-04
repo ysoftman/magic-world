@@ -118,6 +118,12 @@ const POPUP_MIN_MS = 500;
 const POPUP_TOP = 216;
 const POPUP_MIN_RISE = 48;
 const STATUS_POP_MIN_MS = 600;
+// The stat windows and everything in them draw over the effect sheets (depth
+// 0) and the damage numbers (1): a spell's sparks over a high flier, or any
+// effect over a boss, reached up into the foe's window across its HP and WEAK
+// lines. Under the hint (30); STREAK/COMBO and the NIGHT/ARENA/ABYSS note in
+// the gap are at 120 already.
+const STAT_DEPTH = 10;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
 const ENRAGE_TINT = 0xff7070;
@@ -596,21 +602,30 @@ export class BattleScene extends Phaser.Scene {
     this.window(32, 24, 464, 176);
     this.window(GAME_WIDTH - 496, 24, 464, 176);
 
-    this.add.pixelText(64, 40, GameState.player.name, retroStyle(7, "#ffd166")).setOrigin(0, 0);
+    this.add.pixelText(64, 40, GameState.player.name, retroStyle(7, "#ffd166")).setOrigin(0, 0).setDepth(STAT_DEPTH);
     this.playerHpText = this.add
       .pixelText(64, 88, "HP " + GameState.player.hp + "/" + GameState.effMaxHp(), retroStyle(6, "#ffffff"))
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(STAT_DEPTH);
     this.playerMpText = this.add
       .pixelText(64, 136, "MP " + GameState.player.mp + "/" + GameState.player.maxMp, retroStyle(6, "#8ecbff"))
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(STAT_DEPTH);
 
-    this.playerHpBar = this.add.rectangle(64, 124, 176, 16, 0x22c55e).setOrigin(0, 0.5);
+    this.playerHpBar = this.add.rectangle(64, 124, 176, 16, 0x22c55e).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
 
-    this.add.pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555")).setOrigin(0, 0);
+    this.add
+      .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555"))
+      .setOrigin(0, 0)
+      .setDepth(STAT_DEPTH);
     this.enemyHpText = this.add
       .pixelText(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
-      .setOrigin(0, 0);
-    this.enemyHpBar = this.add.rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444).setOrigin(0, 0.5);
+      .setOrigin(0, 0)
+      .setDepth(STAT_DEPTH);
+    this.enemyHpBar = this.add
+      .rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444)
+      .setOrigin(0, 0.5)
+      .setDepth(STAT_DEPTH);
     // The foe's weakness worded and coloured as the bestiary has it
     // (BestiaryUI's "WEAK:FIRE"), once an earlier fight has put the species
     // there; "WEAK:?" the first time, the book having nothing either, and
@@ -625,27 +640,45 @@ export class BattleScene extends Phaser.Scene {
         !this.weakKnown ? "WEAK:?" : weak ? `WEAK:${weak.toUpperCase()}` : "WEAK:-",
         retroStyle(5, this.weakKnown && weak ? "#fdba74" : DIM_TEXT),
       )
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(STAT_DEPTH);
 
     // one size smaller than the HP rows so "HP 999/999" (ends x=304) keeps a
     // gap to "PSN FRZ" (x=336..476) when both statuses are up
-    this.poisonText = this.add.pixelText(0, 90, "PSN", retroStyle(5, "#c084fc")).setOrigin(1, 0);
-    this.frozenText = this.add.pixelText(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0);
-    this.wardText = this.add.pixelText(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0);
+    this.poisonText = this.add.pixelText(0, 90, "PSN", retroStyle(5, "#c084fc")).setOrigin(1, 0).setDepth(STAT_DEPTH);
+    this.frozenText = this.add.pixelText(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setDepth(STAT_DEPTH);
+    this.wardText = this.add.pixelText(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0).setDepth(STAT_DEPTH);
     // the meal's tag and battles left, this one counted, on the MP row
     // right-aligned in the window: "MP 999/999" ends at x=304, the longest
     // tag "GRILL 5" (140px) starts at 336
-    if (this.meal) this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0);
+    if (this.meal)
+      this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0).setDepth(STAT_DEPTH);
     this.wardRing = this.add
       .circle(this.playerSprite.x, this.playerSprite.y, 64, WARD_COLOR, 0.12)
       .setStrokeStyle(3, WARD_COLOR, 0.8)
       .setVisible(false);
     this.tweens.add({ targets: this.wardRing, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
-    this.rageText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555")).setOrigin(1, 0).setVisible(false);
-    this.dotText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "PSN", retroStyle(5, DOT_COLOR.PSN)).setOrigin(1, 0).setVisible(false);
-    this.chillText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "CHL", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setVisible(false);
+    this.rageText = this.add
+      .pixelText(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555"))
+      .setOrigin(1, 0)
+      .setDepth(STAT_DEPTH)
+      .setVisible(false);
+    this.dotText = this.add
+      .pixelText(ENEMY_STATUS_RIGHT, 90, "PSN", retroStyle(5, DOT_COLOR.PSN))
+      .setOrigin(1, 0)
+      .setDepth(STAT_DEPTH)
+      .setVisible(false);
+    this.chillText = this.add
+      .pixelText(ENEMY_STATUS_RIGHT, 90, "CHL", retroStyle(5, "#67e8f9"))
+      .setOrigin(1, 0)
+      .setDepth(STAT_DEPTH)
+      .setVisible(false);
     // pulses while a boss winds up, so the warning outlives its message
-    this.chargeText = this.add.pixelText(ENEMY_STATUS_RIGHT, 90, "CHG", retroStyle(5, "#f97316")).setOrigin(1, 0).setVisible(false);
+    this.chargeText = this.add
+      .pixelText(ENEMY_STATUS_RIGHT, 90, "CHG", retroStyle(5, "#f97316"))
+      .setOrigin(1, 0)
+      .setDepth(STAT_DEPTH)
+      .setVisible(false);
     this.tweens.add({ targets: this.chargeText, alpha: 0.35, duration: 320, yoyo: true, repeat: -1 });
     this.updateEnemyStatus();
     this.updateStatus();
@@ -953,7 +986,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private window(x: number, y: number, w: number, h: number): void {
-    this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff);
+    this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff).setDepth(STAT_DEPTH);
   }
 
   // Up to HEAL the 7 buttons (47 glyphs, 940px + 28) fit one row, spread
