@@ -378,6 +378,8 @@ export class BattleScene extends Phaser.Scene {
   // web or a BOLT's shock costing its next turn, CHILL/PILFER spent
   private enemyDot: { label: "PSN" | "BRN"; turns: number } | null = null;
   private stuck: "web" | "shock" | null = null;
+  // the stars round a stuck foe's head (statusFx's stun loop): what fades them out
+  private stunStars?: () => void;
   private chilled = false;
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
@@ -439,6 +441,8 @@ export class BattleScene extends Phaser.Scene {
     if (this.rested) this.wardTurns = RESTED_WARD_TURNS;
     this.enemyDot = null;
     this.stuck = null;
+    // the last battle's, gone with its scene
+    this.stunStars = undefined;
     this.chilled = false;
     this.pilfered = false;
     this.guarded = false;
@@ -771,6 +775,12 @@ export class BattleScene extends Phaser.Scene {
     // drawn once, by the first battle; later ones reuse the textures
     bakeBattleFx(this);
     this.statusFx = new StatusFx(this);
+    // what this foe may come to show, baked over the opening's frames: a boss
+    // or giant its enrage (in the tint it will have), any other foe the stars
+    // it gets stuck under, if anything here can stick it (BOLT's shock, WEB SNARE)
+    if (big) this.statusFx.warm(this.enemySprite, "rage", ENRAGE_TINT);
+    else if (this.knownSpells().some((s) => s.effect?.kind === "shock") || COMPANION_SKILLS[GameState.companion ?? ""]?.kind === "snare")
+      this.statusFx.warm(this.enemySprite, "stun");
     this.hitBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 40, max: 120 },
       lifespan: 300,
@@ -1326,6 +1336,7 @@ export class BattleScene extends Phaser.Scene {
     this.stuck = "shock";
     Sfx.shock();
     this.statusOn(this.enemySprite, "shock", STATUS_FX_MS, STATUS_POP_MIN_MS);
+    this.showStun();
     this.flashStatus("STUN", "#fde047", x, y);
     return " STUN!";
   }
@@ -1766,6 +1777,7 @@ export class BattleScene extends Phaser.Scene {
       tail = `${dmg} dmg, ${skill.dot}`;
     } else if (skill.kind === "snare" && this.enemy.curHp > 0) {
       this.stuck = "web";
+      this.showStun();
       tail = `${dmg}, foe stuck`;
     } else if (skill.kind === "guard") {
       this.guarded = true;
@@ -1820,6 +1832,8 @@ export class BattleScene extends Phaser.Scene {
       const line = this.stuck === "web" ? "is stuck in the web!" : "is shocked stiff!";
       this.stuck = null;
       await this.say(`${this.enemy.name} ${line}`);
+      // the stars stay round its head for the line that spends the turn
+      this.hideStun();
       return;
     }
     // a wound-up strike lands before anything else this turn could; a fresh
@@ -1977,6 +1991,9 @@ export class BattleScene extends Phaser.Scene {
     shake(this.cameras.main, 400, 0.015);
     flash(this.cameras.main, 200, 255, 60, 60);
     this.pulseEnemy(1.15, 120);
+    // one heartbeat of rage as it snaps, about the throb's 720ms, its body in
+    // the ENRAGE_TINT just put on; the tint and the RAGE tag carry it on
+    this.statusOn(this.enemySprite, "rage", 750, STATUS_POP_MIN_MS);
     await this.say(`${this.enemy.name} is ENRAGED! ATK UP!`);
   }
 
@@ -2327,7 +2344,18 @@ export class BattleScene extends Phaser.Scene {
   // a status or recovery effect on a battler for ms (at BATTLE SPEED), at the
   // battler's own scale: 3x over a boss or giant
   private statusOn(sprite: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number, min = 0): void {
-    this.statusFx.play(sprite, kind, this.anim(ms, min), sprite === this.enemySprite ? this.enemyBaseScale : 2);
+    this.statusFx.play(sprite, kind, this.anim(ms, min));
+  }
+
+  // Stars round the foe's head from the moment `stuck` is set (BOLT's shock,
+  // WEB SNARE) until the turn it costs has been said, or the foe falls first
+  private showStun(): void {
+    this.stunStars ??= this.statusFx.loop(this.enemySprite, "stun");
+  }
+
+  private hideStun(): void {
+    this.stunStars?.();
+    this.stunStars = undefined;
   }
 
   // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
@@ -2448,6 +2476,8 @@ export class BattleScene extends Phaser.Scene {
   private async victory(caught = false): Promise<void> {
     this.running = false;
     this.enemyIdle?.stop();
+    // felled the round it was stunned (the companion's blow after BOLT's)
+    this.hideStun();
     this.victoryHop();
     // before anything below: no quest flag, counter, loot, EXP or ending
     if (this.arena) return this.arenaVictory(this.arena);

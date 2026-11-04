@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { FxModule } from "pixelfx";
 import * as divineShield from "pixelfx/fx/holy/divine-shield";
 import * as heal from "pixelfx/fx/holy/heal";
 import * as freeze from "pixelfx/fx/ice/freeze";
@@ -6,7 +7,10 @@ import * as electrified from "pixelfx/fx/lightning/electrified";
 import * as burning from "pixelfx/fx/status/burning";
 import * as frozen from "pixelfx/fx/status/frozen";
 import * as poisoned from "pixelfx/fx/status/poisoned";
-import { bakePixelSheet, type PixelSheet } from "./fx";
+import * as rage from "pixelfx/fx/status/rage";
+import * as stunned from "pixelfx/fx/status/stunned";
+import { bakePixelSheet, type PixelSheet, warmSheets } from "./fx";
+import { GameState } from "./gameState";
 import { ART_PX } from "./pixelart";
 
 // The battle's status and recovery effects: pixelfx effects that act on a
@@ -16,19 +20,56 @@ import { ART_PX } from "./pixelart";
 // whole body), so each sheet is baked for one battler: its texture read back
 // one art cell (ART_PX texels) to a pixelfx pixel, mirrored as the sprite is.
 // Baked on first use and kept for the battle, one per battler, effect and,
-// for poison, the tint the battler shows: the effect repaints the body, and
-// the purple it is flashed has to stay purple under it.
+// for poison and rage, the tint the battler shows: the effect repaints the
+// body, and the purple it is flashed (the red an enraged boss keeps) has to
+// stay under it. Most play once (play()); the stars of a stuck foe hold for
+// as long as it is stuck (loop()).
 
-export type StatusKind = "heal" | "ward" | "burn" | "chill" | "shock" | "poison" | "freeze";
+export type StatusKind = "heal" | "ward" | "burn" | "chill" | "shock" | "poison" | "freeze" | "stun" | "rage";
 
 // a fx.ts pixel sheet over the whole canvas, its span and frames set. body:
 // the battler's colours as handed to the effect, "tinted" with its tint at
-// play(), or "grey" (their brightness only)
+// play() (or the one warm() is told it will have), or "grey" (their
+// brightness only)
 interface StatusSheet extends PixelSheet {
   span: [number, number];
   frames: number;
   body?: "tinted" | "grey";
+  /**
+   * baked as two sheets, the effect's drawBack under the battler's sprite and
+   * its draw over it: a ring round the head passes behind it (a pure effect
+   * only, one with no create)
+   */
+  layered?: boolean;
+  /**
+   * the body handed over trimmed to its opaque cells: an effect placed by the
+   * head (a.y, a.w) otherwise goes by the frame's top and width, over the
+   * empty rows above a short foe
+   */
+  trim?: boolean;
+  /** the last share of play()'s ms it fades out over: a loop's stretch played once has no end of its own */
+  fade?: number;
+  /** its glow (pixelfx's light) with FLASHES off or the OS's reduced motion, as fx.ts softens a flash */
+  soft?: number;
+  /** seeded by the battler: rage keeps its floor cracks by seed alone, and a second boss stood on the first one's */
+  ownSeed?: boolean;
+  /**
+   * effect pixels over its anchor (the feet) where it is gone, faded out over
+   * the CEILING_FADE under that: what it throws up off a boss's head at 6px
+   * would reach into the foe's window
+   */
+  ceiling?: number;
 }
+
+// how many effect pixels a sheet's ceiling fades out over
+const CEILING_FADE = 8;
+
+// The OS's reduced-motion setting, as fx.ts reads it: it counts as FLASHES
+// off, and holds a looping status on one frame as the fighters stop breathing
+const reducedMotion = (): boolean => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+// a looping status going away (StatusFx.loop's stop) fades out this long
+const LOOP_FADE_MS = 250;
 
 // ramps, dark to bright: the battle's own colours for each (the HEAL spell's
 // green, WARD's blue, the burn's red rim, FREEZE_TINT's cyan, PSN's purple)
@@ -61,6 +102,34 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
   // frost races in and climbs the hero, a block of ice crystallizes round it
   // and glints; it cracks and bursts later, past the span: the hero stays frozen
   freeze: { fx: freeze, opts: { palette: ICE_RAMP }, span: [0.1, 1.5], frames: 12 },
+  // a stuck foe (StatusFx.loop): three gold stars (the STUN label's yellow)
+  // and two birds round its head on a tilted ring, the far half behind it; the
+  // whole 2s loop, the ring going round twice, at 15fps
+  stun: { fx: stunned, span: [0, 2], frames: 30, layered: true, trim: true },
+  // A boss or giant snapping (enrage): one heartbeat of the loop, lub and
+  // dub. The body judders on each in ENRAGE_TINT's red, an anger mark throbs
+  // at its brow, stress lines and steam burst off its head, the floor cracks
+  // hot and spits embers; the calm after it fades out. Once, not looped for
+  // the rest of the fight: every beat repaints the body, over a hit's white
+  // flash and a wind-up's colour, and the steam and lines rising off a boss
+  // at 6px would keep reaching for the foe's window. Its red glow on the
+  // beat lights a disc some 300px across: a faint one with FLASHES off.
+  // The steam and the lines off the tallest, the FLAME DRAKE (its head 30
+  // cells up, at y 276), rose to y 180, into the window (to 200): gone 39
+  // cells over the feet, y 222, and at the 1.15x throb's peak (feet at 470,
+  // 6.9px cells) y 201.
+  rage: {
+    fx: rage,
+    span: [0, 0.75],
+    frames: 15,
+    body: "tinted",
+    layered: true,
+    trim: true,
+    fade: 0.3,
+    soft: 0.35,
+    ownSeed: true,
+    ceiling: 39,
+  },
 };
 
 // pixelfx's o.actor: the body's silhouette and colours in effect pixels, feet at (0, 0)
@@ -78,15 +147,14 @@ interface Actor {
 
 type Rgb = [number, number, number];
 
-// what the battler's tint does to a colour, for the colours an effect repaints
-function tintOf(sprite: Phaser.GameObjects.Sprite): { id: string; apply: (c: Rgb) => Rgb } | null {
-  const t = sprite.tintTopLeft;
+// what a battler's tint (its colour and mode) does to a colour, for the colours an effect repaints
+function tintOf(t: number, mode: Phaser.TintModes): { id: string; apply: (c: Rgb) => Rgb } | null {
   const tr = (t >> 16) & 255;
   const tg = (t >> 8) & 255;
   const tb = t & 255;
   const id = t.toString(16).padStart(6, "0");
-  if (sprite.tintMode === Phaser.TintModes.FILL) return { id: `fill-${id}`, apply: () => [tr, tg, tb] };
-  if (sprite.tintMode === Phaser.TintModes.MULTIPLY && t !== 0xffffff)
+  if (mode === Phaser.TintModes.FILL) return { id: `fill-${id}`, apply: () => [tr, tg, tb] };
+  if (mode === Phaser.TintModes.MULTIPLY && t !== 0xffffff)
     return { id: `mul-${id}`, apply: ([r, g, b]) => [Math.round((r * tr) / 255), Math.round((g * tg) / 255), Math.round((b * tb) / 255)] };
   return null;
 }
@@ -98,8 +166,14 @@ const greyOf = ([r, g, b]: Rgb): Rgb => {
 
 // The sprite's frame read back on the art grid: a cell is on when any of its
 // texels is, in that texel's colour. `feet` is the texels from the frame's top
-// to the line under its lowest cell, where the effect's anchor goes.
-function actorOf(sprite: Phaser.GameObjects.Sprite, recolor: ((c: Rgb) => Rgb) | null): { actor: Actor; feet: number } | null {
+// to the line under its lowest cell, where the effect's anchor goes. `trim`
+// crops the frame to the cells that are on (the mask, a.x/a.y/a.w/a.h and the
+// head with it), the anchor staying where the frame's would be.
+function actorOf(
+  sprite: Phaser.GameObjects.Sprite,
+  recolor: ((c: Rgb) => Rgb) | null,
+  trim = false,
+): { actor: Actor; feet: number } | null {
   const frame = sprite.frame;
   const src = frame.source.image;
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
@@ -115,7 +189,8 @@ function actorOf(sprite: Phaser.GameObjects.Sprite, recolor: ((c: Rgb) => Rgb) |
   const h = Math.ceil(th / ART_PX);
   const mask = new Uint8Array(w * h);
   const pixels = new Uint32Array(w * h);
-  let bottom = 0;
+  // the cells that are on: columns left..right, rows top..bottom (mirrored columns)
+  let [left, right, top, bottom] = [w, -1, h, 0];
   for (let cy = 0; cy < h; cy++)
     for (let cx = 0; cx < w; cx++)
       for (let k = 0; k < ART_PX * ART_PX; k++) {
@@ -126,19 +201,102 @@ function actorOf(sprite: Phaser.GameObjects.Sprite, recolor: ((c: Rgb) => Rgb) |
         if (data[i + 3] === 0) continue;
         const [r, g, b] = recolor ? recolor([data[i], data[i + 1], data[i + 2]]) : [data[i], data[i + 1], data[i + 2]];
         // mirrored as the sprite is drawn
-        const at = cy * w + (sprite.flipX ? w - 1 - cx : cx);
+        const mx = sprite.flipX ? w - 1 - cx : cx;
+        const at = cy * w + mx;
         mask[at] = 1;
         // pixelfx colours are ImageData bytes read as one number: R in the low byte
         pixels[at] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
-        bottom = Math.max(bottom, cy);
+        [left, right, top, bottom] = [Math.min(left, mx), Math.max(right, mx), Math.min(top, cy), Math.max(bottom, cy)];
         break;
       }
+  const feet = (bottom + 1) * ART_PX;
   const x = -Math.floor(w / 2);
   const y = -(bottom + 1);
-  return {
-    actor: { mask: { w, h, data: mask }, pixels, x, y, w, h, k: 2, head: [0, y], chest: [0, Math.round(y * 0.6)] },
-    feet: (bottom + 1) * ART_PX,
-  };
+  const actor = (m: Uint8Array, px: Uint32Array, ax: number, ay: number, aw: number, ah: number): Actor => ({
+    mask: { w: aw, h: ah, data: m },
+    pixels: px,
+    x: ax,
+    y: ay,
+    w: aw,
+    h: ah,
+    k: 2,
+    head: [0, ay],
+    chest: [0, Math.round(ay * 0.6)],
+  });
+  if (!trim || right < left) return { actor: actor(mask, pixels, x, y, w, h), feet };
+  const [cw, ch] = [right - left + 1, bottom - top + 1];
+  const cropped = new Uint8Array(cw * ch);
+  const croppedPixels = new Uint32Array(cw * ch);
+  for (let cy = 0; cy < ch; cy++)
+    for (let cx = 0; cx < cw; cx++) {
+      cropped[cy * cw + cx] = mask[(top + cy) * w + left + cx];
+      croppedPixels[cy * cw + cx] = pixels[(top + cy) * w + left + cx];
+    }
+  return { actor: actor(cropped, croppedPixels, x + left, -ch, cw, ch), feet };
+}
+
+// a pixelfx effect's draw and drawBack, which env.d.ts leaves out of FxModule
+type Draw = (p: unknown, t: number, o: Record<string, unknown>) => void;
+interface Layers extends FxModule {
+  draw: Draw;
+  drawBack?: Draw;
+}
+
+// One layer of a pure effect as an effect of its own: bakePixelSheet draws
+// both of them into one frame, the back over the battler with the rest.
+function layerOf(fx: FxModule, back: boolean): FxModule {
+  const { meta, draw, drawBack } = fx as Layers;
+  const layer: Layers = { meta, draw: (back ? drawBack : draw) ?? (() => {}) };
+  return layer;
+}
+
+// Erases what a baked sheet draws over its ceiling, frame by frame, and fades
+// the CEILING_FADE rows under it: a status sheet's frames are the effect's
+// whole canvas (no crop), its anchor on row origin[1] of each.
+function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet): void {
+  const tex = scene.textures.get(key);
+  if (sheet.ceiling === undefined || !(tex instanceof Phaser.Textures.CanvasTexture)) return;
+  const h = sheet.fx.meta.size[1];
+  const gone = Math.max(0, sheet.fx.meta.origin[1] - sheet.ceiling);
+  const ctx = tex.getContext();
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  for (let y = 0; y < tex.height; y += h) {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, y, tex.width, gone);
+    const fade = ctx.createLinearGradient(0, y + gone, 0, y + gone + CEILING_FADE);
+    fade.addColorStop(0, "rgba(0, 0, 0, 1)");
+    fade.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, y + gone, tex.width, CEILING_FADE);
+  }
+  ctx.restore();
+  tex.refresh();
+}
+
+// a battler's own seed for an effect, the same every battle
+function seedOf(key: string): number {
+  let h = 7;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 9973;
+  return h + 1;
+}
+
+// a status's sprites on one battler: one sheet, or a layered one's back (under
+// the battler) and front
+interface Layered {
+  sprites: Phaser.GameObjects.Sprite[];
+  // shows frame f where the battler is now, at its size now (a throb scales it)
+  show: (f: number) => void;
+  destroy: () => void;
+}
+
+// what a bake of a status on a battler goes under and reads (StatusFx.plan)
+interface Plan {
+  key: string;
+  // its textures: the key, or a layered sheet's back and front
+  layers: string[];
+  recolor: ((c: Rgb) => Rgb) | null;
+  soft: boolean;
 }
 
 /**
@@ -146,52 +304,191 @@ function actorOf(sprite: Phaser.GameObjects.Sprite, recolor: ((c: Rgb) => Rgb) |
  * the stat windows draw over them. The sheets go with the battle.
  */
 export class StatusFx {
-  // each baked sheet's key, and the texels from its battler's top to its feet
+  // each sheet ready to show (baked, its ceiling faded), and the texels from its battler's top to its feet
   private readonly feet = new Map<string, number>();
+  // every texture baked or queued for this battle, removed at its end (a warm cut off halfway leaves some)
+  private readonly textures = new Set<string>();
+  // the textures whose ceiling is faded: a warm finishing after a bake that could not wait must not fade it twice
+  private readonly faded = new Set<string>();
 
   constructor(private readonly scene: Phaser.Scene) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      for (const key of this.feet.keys()) scene.textures.remove(key);
+      for (const tex of this.textures) if (scene.textures.exists(tex)) scene.textures.remove(tex);
+      this.textures.clear();
+      this.faded.clear();
       this.feet.clear();
     });
   }
 
   /**
-   * Plays `kind` on `target` (shown at `scale`, its own: 2, 3 on a boss) for
-   * `ms`, its anchor on the battler's feet. It follows the battler, which
-   * breathes under it, so a repainted body stays on the sprite.
+   * Plays `kind` on `target` for `ms`, its anchor on the battler's feet at the
+   * battler's own scale (3 on a boss). It follows the battler, which breathes
+   * and throbs under it, so a repainted body stays on the sprite.
    */
-  play(target: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number, scale: number): void {
+  play(target: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number): void {
     const sheet = STATUS_SHEETS[kind];
-    const tint = sheet.body === "tinted" ? tintOf(target) : null;
-    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tint ? `:${tint.id}` : ""}`;
-    let feet = this.feet.get(key);
+    const on = this.sprites(target, kind);
+    if (!on) return;
+    const fadeFrom = 1 - (sheet.fade ?? 0);
+    this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: Math.max(1, ms),
+      onUpdate: (tw) => {
+        const u = tw.getValue() ?? 0;
+        on.show(Math.min(sheet.frames - 1, Math.floor(u * sheet.frames)));
+        if (u > fadeFrom) for (const s of on.sprites) s.setAlpha((1 - u) / (1 - fadeFrom));
+      },
+      onComplete: () => on.destroy(),
+    });
+  }
+
+  /**
+   * Loops `kind` on `target` as play() does until the function it returns is
+   * called, which fades it out. In real time, as the fighters breathe: BATTLE
+   * SPEED hurries the fight, not a status that holds. Held on its first frame
+   * under the OS's reduced motion, which keeps the fighters still too.
+   */
+  loop(target: Phaser.GameObjects.Sprite, kind: StatusKind): () => void {
+    const sheet = STATUS_SHEETS[kind];
+    const on = this.sprites(target, kind);
+    if (!on) return () => {};
+    const still = reducedMotion();
+    const turn = this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: (sheet.span[1] - sheet.span[0]) * 1000,
+      repeat: -1,
+      onUpdate: (tw) => on.show(still ? 0 : Math.min(sheet.frames - 1, Math.floor((tw.getValue() ?? 0) * sheet.frames))),
+    });
+    let stopped = false;
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      this.scene.tweens.add({
+        targets: on.sprites,
+        alpha: 0,
+        duration: LOOP_FADE_MS,
+        onComplete: () => {
+          turn.remove();
+          on.destroy();
+        },
+      });
+    };
+  }
+
+  /**
+   * Bakes `kind` for `target` over the next frames (fx.ts warmSheets), so the
+   * turn it lands on doesn't stall for it: both of the stun's layers took
+   * 19-66ms (23 at the middle, headless), on top of the shock's own first bake
+   * on the same turn. `tint`: the one the battler will show by then, for a
+   * "tinted" body (an enraged boss's ENRAGE_TINT). Should it be needed before
+   * it is in, play() and loop() bake what is left there and then.
+   */
+  warm(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number): void {
+    const plan = this.plan(target, kind, tint);
+    if (this.feet.has(plan.key)) return;
+    const bake = this.bakeOf(target, kind, plan);
+    if (!bake) return;
+    let left = plan.layers.length;
+    warmSheets(this.scene, bake.sheets, (key) => {
+      this.settle(key, kind);
+      left -= 1;
+      if (left === 0) this.feet.set(plan.key, bake.feet);
+    });
+  }
+
+  // What a bake of `kind` on `target` reads, so its key: the battler's frame,
+  // its mirroring, the tint a "tinted" body shows (`tint`, multiplied, else the
+  // sprite's now) and, for a sheet with a soft glow, whether it is soft.
+  private plan(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number): Plan {
+    const sheet = STATUS_SHEETS[kind];
+    const tinted =
+      sheet.body !== "tinted"
+        ? null
+        : tint === undefined
+          ? tintOf(target.tintTopLeft, target.tintMode)
+          : tintOf(tint, Phaser.TintModes.MULTIPLY);
+    const soft = sheet.soft !== undefined && (!GameState.flashes || reducedMotion());
+    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}`;
+    return {
+      key,
+      layers: sheet.layered ? [`${key}:back`, `${key}:front`] : [key],
+      recolor: sheet.body === "grey" ? greyOf : (tinted?.apply ?? null),
+      soft,
+    };
+  }
+
+  // each of the plan's textures as bakePixelSheet and warmSheets take it, the
+  // battler's body handed over, and the battler's feet
+  private bakeOf(
+    target: Phaser.GameObjects.Sprite,
+    kind: StatusKind,
+    plan: Plan,
+  ): { sheets: Record<string, PixelSheet>; feet: number } | null {
+    const sheet = STATUS_SHEETS[kind];
+    const body = actorOf(target, plan.recolor, sheet.trim);
+    if (!body) return null;
+    const opts = {
+      ...sheet.opts,
+      actor: body.actor,
+      ...(sheet.ownSeed ? { seed: seedOf(target.texture.key) } : {}),
+      ...(plan.soft ? { light: sheet.soft } : {}),
+    };
+    const sheets: Record<string, PixelSheet> = {};
+    plan.layers.forEach((key, i) => {
+      sheets[key] = { ...sheet, fx: sheet.layered ? layerOf(sheet.fx, i === 0) : sheet.fx, opts };
+      this.textures.add(key);
+    });
+    return { sheets, feet: body.feet };
+  }
+
+  // a texture just baked: its ceiling faded, once
+  private settle(key: string, kind: StatusKind): void {
+    if (this.faded.has(key)) return;
+    this.faded.add(key);
+    fadeAbove(this.scene, key, STATUS_SHEETS[kind]);
+  }
+
+  // The sheet (or its two layers) for `kind` on `target`, baked here if no
+  // warm has put it in yet, on its first frame where the battler stands
+  private sprites(target: Phaser.GameObjects.Sprite, kind: StatusKind): Layered | null {
+    const sheet = STATUS_SHEETS[kind];
+    const plan = this.plan(target, kind);
+    let feet = this.feet.get(plan.key);
     if (feet === undefined) {
-      const body = actorOf(target, sheet.body === "grey" ? greyOf : (tint?.apply ?? null));
-      if (!body) return;
-      bakePixelSheet(this.scene, key, { ...sheet, opts: { ...sheet.opts, actor: body.actor } });
-      feet = body.feet;
-      this.feet.set(key, feet);
+      const bake = this.bakeOf(target, kind, plan);
+      if (!bake) return null;
+      // a layer a warm still under way has finished is skipped
+      for (const [key, s] of Object.entries(bake.sheets)) {
+        bakePixelSheet(this.scene, key, s);
+        this.settle(key, kind);
+      }
+      feet = bake.feet;
+      this.feet.set(plan.key, feet);
     }
     const {
       size: [w, h],
       origin: [ax, ay],
     } = sheet.fx.meta;
-    // from the battler's middle (its origin) down to its feet
-    const drop = (feet - target.frame.cutHeight / 2) * scale;
-    const sprite = this.scene.add
-      .sprite(target.x, target.y + drop, key, 0)
-      .setOrigin(ax / w, ay / h)
-      .setScale(scale * ART_PX);
-    this.scene.tweens.addCounter({
-      from: 0,
-      to: sheet.frames,
-      duration: Math.max(1, ms),
-      onUpdate: (tw) => {
-        sprite.setFrame(Math.min(sheet.frames - 1, Math.floor(tw.getValue() ?? 0)));
-        sprite.setPosition(target.x, target.y + drop);
+    const sprites = plan.layers.map((k) => this.scene.add.sprite(target.x, target.y, k, 0).setOrigin(ax / w, ay / h));
+    // under the battler, its shadow under that (BattleScene stand())
+    if (sheet.layered) this.scene.children.moveBelow(sprites[0], target);
+    // from the battler's middle (its origin) down to its feet, at its size now
+    const texels = feet - target.frame.cutHeight / 2;
+    const show = (f: number): void => {
+      for (const s of sprites)
+        s.setFrame(f)
+          .setPosition(target.x, target.y + texels * target.scaleY)
+          .setScale(target.scaleX * ART_PX);
+    };
+    show(0);
+    return {
+      sprites,
+      show,
+      destroy: () => {
+        for (const s of sprites) s.destroy();
       },
-      onComplete: () => sprite.destroy(),
-    });
+    };
   }
 }
