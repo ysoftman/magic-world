@@ -16,7 +16,11 @@ export function addLightCanvas(
   scene: Phaser.Scene,
   key: string,
   { cols, rows, cell, depth, ox = 0, oy = 0 }: { cols: number; rows: number; cell: number; depth: number; ox?: number; oy?: number },
-): { frame: FxFrame; image: Phaser.GameObjects.Image; upload: (rowAlpha?: (y: number) => number) => void } {
+): {
+  frame: FxFrame;
+  image: Phaser.GameObjects.Image;
+  upload: (rowAlpha?: (y: number) => number, colAlpha?: Float32Array) => void;
+} {
   if (scene.textures.exists(key)) scene.textures.remove(key);
   const texture = scene.textures.createCanvas(key, cols, rows);
   const image = scene.add
@@ -35,19 +39,20 @@ export function addLightCanvas(
     image.destroy();
     scene.textures.remove(key);
   });
-  // `rowAlpha` scales a row's alpha, 0..1 (a fade in from an edge)
-  const upload = (rowAlpha?: (y: number) => number): void => {
+  // `rowAlpha` scales a row's alpha, 0..1 (a fade in from an edge), and
+  // `colAlpha` a column's, one entry a column
+  const upload = (rowAlpha?: (y: number) => number, colAlpha?: Float32Array): void => {
     if (!ctx || !img || !out || !texture) return;
     for (let y = 0; y < rows; y++) {
       const fade = rowAlpha?.(y) ?? 1;
-      for (let i = y * cols; i < (y + 1) * cols; i++) {
+      for (let x = 0, i = y * cols; x < cols; x++, i++) {
         const c = frame.color[i];
         const l = frame.light[i] & 0xffffff;
         // an opaque pixel as it is; or the light, as its colour over its
         // brightest channel (added, that is the light itself)
         const solid = c >>> 24 === 255;
         const a = solid ? 255 : Math.max(l & 255, (l >>> 8) & 255, l >>> 16);
-        out[i] = a ? (Math.round(a * fade) << 24) | (solid ? c & 0xffffff : divide(l, a)) : 0;
+        out[i] = a ? (Math.round(a * fade * (colAlpha ? colAlpha[x] : 1)) << 24) | (solid ? c & 0xffffff : divide(l, a)) : 0;
       }
     }
     ctx.putImageData(img, 0, 0);

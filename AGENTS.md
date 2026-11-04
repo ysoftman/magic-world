@@ -772,6 +772,20 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   20fps 로 다시 그린다. 숲 빛줄기와 같이 `lightCanvas.ts` 의 `addLightCanvas`(빛과 불투명 픽셀만 ADD, 반투명 색은 뺌)를
   쓴다. 터질 때 효과가 제 하늘을 밝혀 화면 전체 번쩍임은 없앴고, FLASHES 끄기·reduced motion 이면 light 0.35 다. 별이
   536px 까지 처져 veil 을 y 448 까지 늘렸다. 실제 사례: 겨울 눈 마을에서 흰 팝이 눈에 묻혔다.
+- 맑은 밤의 별똥별(마을·숲·설원)은 pixelfx weather/shooting-stars 의 meteor() 하나를 옮긴 것이다(NightSky 의
+  `drawMeteor`, 효과의 7가지 모양 `METEORS` 와 팔레트 그대로). 그 효과는 별밭·은하수와 10초에 별똥별 7개를 한 draw 로만
+  그려서 별을 끌 수도, 하나만 뗄 수도 없다(필드에서는 별이 땅 위의 점으로 찍힌다). 2px 칸 320x240 캔버스를 떨어질
+  때마다 하늘 어딘가에 둔다. 큰 별의 섬광은 FLASHES 꺼짐이나 reduced motion 이면 불꽃과 같은 light 0.35 다. 옮긴
+  코드라 pixelfx 를 올려도 따라오지 않는다.
+- 설원 오로라는 pixelfx weather/aurora 를 그대로 그리되, 320x180 하늘 중 행 -150..-80 의 띠만 2px 칸으로 쓴다. 왼쪽
+  절반은 그대로, 오른쪽 절반은 거울로 5.3초 뒤 시각을 그리고, 가운데 28칸에서 함께 흐려진다(`upload` 의 `colAlpha`).
+  실제 사례: 4px 한 장은 커튼 단이 화면 230~330px(영웅 자리)까지 내려왔고, 위 160px 만 자르면 보라 안개뿐이었다. 같은
+  시각을 거울로 붙이면 밝은 광선이 465·815px 처럼 짝지어 보였다. 별밭은 `starless` 페인터가 뺀다. 이 페인터는 효과가
+  별을 먼저 그리고 그 뒤에야 색 버퍼를 읽는 순서에 기대고, field 인자(seed x5+1, 옥타브 8·16·32)도 aurora.js 내부
+  값이라 pixelfx 를 올리면 별이 다시 나오지 않는지 본다. 반쪽을 번갈아 그려 각 10fps 이고, 켜져 있는 동안 프레임당
+  +0.6~0.7ms(헤드리스)다. 노이즈 field(23ms)는 밤이면서 맑을 때, 게임 스텝 시작(game PRE_STEP)부터 3ms 이하로 일한
+  프레임에 한 번 굽는다. 실제 사례: 씬 PRE_UPDATE 기준이면 씬이 만든 프레임에 바로 스텝해 create 프레임에 겹쳐 31ms 가
+  됐다.
 - 동굴·심연의 물방울은 pixelfx water/drip 의 front 층만(종유석 `source: false`, back 층의 웅덩이 타원은 뺌) 구운 시트다
   (Ambient 의 `CAVE_DRIP`, 880x66 232KB). 동굴 create 에서 `warmFieldFx` 로 굽고 `playFieldFxOnce` 로 `ART_PX`·
   `AMBIENT_DEPTH` 에 튼다. 씬이 `addAmbient` 에 `{ level }` 을 넘기면 바닥·물웅덩이 칸에만 떨어지고, 물결 양 끝(±18칸)·
