@@ -104,20 +104,37 @@ const FIELDS: ReadonlyArray<readonly [number, number[]?]> = [
 ];
 const { field } = weatherLib as unknown as { field: (seed: number, w: number, h: number, cells?: number[]) => unknown };
 
+// A field is 15-38ms and can't be split, so warmBattleWeather gives each a
+// frame nothing else heavy has used: one that has done more than this by the
+// time it runs (POST_UPDATE, after warmSheets' 8ms slice of sheets) is left
+// alone, so the fields wait out the title's sheets.
+const BUSY_MS = 3;
+
 /**
  * Bakes the weather's noise fields ahead of the first battle in rain, a storm
- * or a blizzard, one a frame while `scene` runs (the title, as warmBattleFx
- * does the effect sheets). Any it leaves, the battle bakes as it opens.
+ * or a blizzard, one a frame while `scene` runs and `idle()` holds (the
+ * title, until a game starts). Any it leaves, the battle bakes as it opens.
  */
-export function warmBattleWeather(scene: Phaser.Scene): void {
+export function warmBattleWeather(scene: Phaser.Scene, idle: () => boolean = () => true): void {
   const left = [...FIELDS];
-  const step = (): void => {
-    const next = left.shift();
-    if (!next) scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
-    else field(next[0], 256, 128, next[1]);
+  let frameStart = 0;
+  const mark = (): void => {
+    frameStart = performance.now();
   };
+  const step = (): void => {
+    if (!idle() || performance.now() - frameStart > BUSY_MS) return;
+    const next = left.shift();
+    if (next) field(next[0], 256, 128, next[1]);
+    if (!left.length) stop();
+  };
+  const stop = (): void => {
+    scene.events.off(Phaser.Scenes.Events.PRE_UPDATE, mark);
+    scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
+    scene.events.off(Phaser.Scenes.Events.SHUTDOWN, stop);
+  };
+  scene.events.on(Phaser.Scenes.Events.PRE_UPDATE, mark);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step));
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
 }
 
 /**

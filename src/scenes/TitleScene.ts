@@ -14,6 +14,7 @@ import {
 } from "../gameState";
 import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { warmBattleWeather } from "../ui/BattleWeather";
 import { CRITTER_SHEETS } from "../ui/Critters";
 import { bindKeyHint, keyHint, keyNames, onInputChange, usingPad } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
@@ -124,9 +125,11 @@ export class TitleScene extends Phaser.Scene {
     Sfx.playBgm(TITLE_THEME);
     // every game passes through here before its first encounter: the
     // mosaic's shader and the battle's sheets are made ready here, then the
-    // field critters'
+    // field critters', then the battle weather's noise fields (each in a
+    // frame of its own once the sheets are in, and none once a game starts)
     warmEncounterOut(this.cameras.main);
     warmBattleFx(this, CRITTER_SHEETS);
+    warmBattleWeather(this, () => !this.started);
 
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "title-bg");
 
