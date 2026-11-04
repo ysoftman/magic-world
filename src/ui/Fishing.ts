@@ -10,7 +10,7 @@ import { ARCTIC_FISH, type FishDef, GameState, isNight, POND_FISH } from "../gam
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { isWet, WEATHER_LABEL, weatherToday } from "../weather";
-import { type FieldFx, fieldFxSheets, fieldFxSprite, playFieldFx, warmFieldFx } from "./fieldFx";
+import { type FieldFx, fieldFxSprite, playFieldFx, warmFieldFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
@@ -100,9 +100,6 @@ const SPLASH: FieldFx = {
 };
 // over the pond (152), under the float and the "!" (153)
 const WATER_FX_DEPTH = 152.5;
-
-/** The pond's sheets by key, for a warm-up ahead of the field (fx.ts warmBattleFx). */
-export const FISHING_SHEETS = fieldFxSheets(RIPPLES, SPLASH);
 
 type FishState = "cast" | "bite" | "result" | "log";
 

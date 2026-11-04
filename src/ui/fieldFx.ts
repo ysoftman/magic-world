@@ -19,7 +19,7 @@ export interface FieldFx {
   loop?: boolean;
 }
 
-/** `fx`'s sheets by key, for a warm-up queue (fx.ts warmSheets, warmBattleFx). */
+/** `fx`'s sheets by key, for a warm-up queue (fx.ts warmSheets). */
 export function fieldFxSheets(...fx: FieldFx[]): Record<string, PixelSheet> {
   const sheets: Record<string, PixelSheet> = {};
   for (const f of fx) sheets[f.key] = f.sheet;

@@ -16,7 +16,7 @@ import {
   type TreasureMap,
   type TreasureRegion,
 } from "../treasure";
-import { type FieldFx, fieldFxSheets, playFieldFxOnce, warmFieldFx } from "./fieldFx";
+import { type FieldFx, playFieldFxOnce, warmFieldFx } from "./fieldFx";
 
 const GLINT_KEY = "treasure-glint";
 // a small four-point twinkle, pale gold, drawn blocky (no Scale2x)
@@ -76,9 +76,6 @@ const CHEST_DEPTH = 10.6;
 const DUST_DEPTH = 10.7;
 // the effects' floor, under the X's middle: the chest stands inside its tile
 const FLOOR_Y = TILE / 4;
-
-/** The dig's sheets by key, for a warm-up ahead of the field (fx.ts warmBattleFx). */
-export const DIG_SHEETS = fieldFxSheets(CHEST, DUST);
 
 /**
  * Treasure maps in one roaming scene (treasure.ts): a faint glint on the
