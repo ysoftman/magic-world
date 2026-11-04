@@ -65,7 +65,7 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
@@ -382,12 +382,10 @@ function footingOf(scene: Phaser.Scene, key: string): Footing {
   const src = scene.textures.get(key).getSourceImage();
   const { width: w, height: h } = src;
   let footing: Footing = { feet: h / 2, footX: 0, footW: w, bodyX: 0, bodyW: w };
-  const ctx = document.createElement("canvas").getContext("2d");
-  if (ctx && (src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) {
-    ctx.canvas.width = w;
-    ctx.canvas.height = h;
-    ctx.drawImage(src, 0, 0);
-    const data = ctx.getImageData(0, 0, w, h).data;
+  // off the art's own canvas (texelsOf): copied into a new canvas first, the
+  // read waited on the GPU for both, up to 17ms of the first battle's create
+  const data = src instanceof HTMLCanvasElement || src instanceof HTMLImageElement ? texelsOf(src, 0, 0, w, h) : null;
+  if (data) {
     const span = (y0: number, y1: number): [number, number] => {
       let l = w;
       let r = -1;
@@ -3005,17 +3003,33 @@ export class BattleScene extends Phaser.Scene {
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
-    // the hero's moves' sheets (skillFx.ts, techFx.ts), wanted from the first turn
-    const skillSheets = new Set(skills.flatMap((s) => (s.style === "blow" ? SKILL_SHEET_KEYS[s.name] : TECH_SHEET_KEYS[s.name])));
-    if (skillSheets.size > 0) warmFx(this, [...skillSheets]);
-    // the companion's skill sheets (fx.ts COMPANION_SHEETS): its first skill
-    // comes after the hero's first turn at the soonest
+    // How the foe dies, ahead of the move sheets below: a first-turn blow can
+    // fell it, played some 0.7s in after a quick FIGHT and Z, and behind a Lv30
+    // hero's 34 move sheets (1.2s of the warm) a shatter was baked on the spot
+    // there (25ms, headless).
+    const death = this.deathOf();
+    if (death) warm(foe, death);
+    // The hero's moves' sheets (skillFx.ts, techFx.ts), wanted from the first
+    // turn: the last move used, then the companion's (fx.ts COMPANION_SHEETS:
+    // its first skill comes after the hero's first turn at the soonest), then
+    // the rest the strongest first, as a high-level hero reaches for the late
+    // moves. In the order learned, VOID and BLACK HOLE came 1.1-1.2s in, and
+    // one cast on the first turn baked its sheet on the spot (26-46ms).
+    // lastSkill is the page's own, so a session's first battle, the one whose
+    // warm bakes them all for the rest of it, goes by level alone.
+    const sheetsOf = (s: Skill): string[] => (s.style === "blow" ? SKILL_SHEET_KEYS[s.name] : TECH_SHEET_KEYS[s.name]);
+    const last = skills.find((s) => s.name === lastSkill);
+    if (last) warmFx(this, sheetsOf(last));
     const skillFx = pal && SKILL_FX[pal.name];
     if (skillFx) warmFx(this, skillFx.back ? [skillFx.back, skillFx.key] : [skillFx.key]);
     if (pal?.kind === "pilfer") warmFx(this, ["fx-coin"]);
-    // last, as it is needed last
-    const death = this.deathOf();
-    if (death) warm(foe, death);
+    const rest = new Set(
+      skills
+        .filter((s) => s !== last)
+        .sort((a, b) => b.learnLevel - a.learnLevel)
+        .flatMap(sheetsOf),
+    );
+    if (rest.size > 0) warmFx(this, [...rest]);
   }
 
   // How the foe dies, if not in fx-poof: its own kind's way (a creature of

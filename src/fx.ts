@@ -29,7 +29,7 @@ import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
 import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
-import { ART_PX } from "./pixelart";
+import { ART_PX, readableCanvas } from "./pixelart";
 import { SKILL_SHEETS } from "./skillSheets";
 import { TECH_SHEETS } from "./techSheets";
 
@@ -467,10 +467,20 @@ function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step
   const { from, to, frames } = spanOf(sheet);
   const cols = Math.min(frames, Math.max(1, Math.floor(MAX_TEXTURE_W / w)));
   const at = (f: number): [number, number] => [(f % cols) * w, Math.floor(f / cols) * h];
-  // as textures.createCanvas makes one, and with the context its CanvasTexture asks for
-  const pool = Phaser.Display.Canvas.CanvasPool;
-  const canvas = pool.create(scene.textures, cols * w, Math.ceil(frames / cols) * h, Phaser.CANVAS, true);
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  // A read-frequently canvas of its own (readableCanvas, pixelart.ts), not one
+  // from Phaser's CanvasPool, which opens it willReadFrequently: false first
+  // and so makes a GPU canvas. Put in as a texture (addCanvas), one of those
+  // waited on the GPU for however much work was queued there: a 2040x132 sheet
+  // took 24-48ms against 1.3-1.6ms, and once the art was off the GPU too
+  // (makeTexture) a Lv30 battle's 41 sheets took 232-335ms instead of
+  // 140-197ms (headless Chrome; now 24ms). The texture drawn is the same.
+  const canvas = readableCanvas(cols * w, Math.ceil(frames / cols) * h);
+  const ctx = canvas.getContext("2d");
+  // a canvas given up on: its pixels let go now rather than at a collection
+  const release = (): void => {
+    canvas.width = 0;
+    canvas.height = 0;
+  };
   const fx = createFx(sheet.fx, sheet.opts);
   const frame = createFrame(w, h, x0 - ax, y0 - ay);
   const img = new ImageData(w, h);
@@ -489,7 +499,7 @@ function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step
     } while (f < frames && performance.now() < end);
     if (f < frames) return false;
     // baked whole meanwhile by a scene that could not wait: keep that one
-    if (scene.textures.exists(key)) pool.remove(canvas);
+    if (scene.textures.exists(key)) release();
     else {
       const tex = scene.textures.addCanvas(key, canvas);
       for (let i = 0; i < frames; i++) tex?.add(i, 0, ...at(i), w, h);
@@ -497,7 +507,7 @@ function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step
     }
     return true;
   };
-  return { step, drop: () => pool.remove(canvas) };
+  return { step, drop: release };
 }
 
 /** Bakes the sheet into its own texture here and now, frames numbered 0..n-1. */

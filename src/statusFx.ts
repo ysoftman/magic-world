@@ -18,7 +18,7 @@ import * as stunned from "pixelfx/fx/status/stunned";
 import { battleSource } from "./battleHd";
 import { bakePixelSheet, type PixelSheet, warmSheets } from "./fx";
 import { GameState } from "./gameState";
-import { ART_PX } from "./pixelart";
+import { ART_PX, texelsOf } from "./pixelart";
 
 // The battle's status and recovery effects: pixelfx effects that act on a
 // body (o.actor), handed the battler's own picture instead of pixelfx's 24x38
@@ -458,12 +458,10 @@ function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
   const tw = frame.cutWidth;
   const th = frame.cutHeight;
-  const ctx = document.createElement("canvas").getContext("2d");
-  if (!ctx) return null;
-  ctx.canvas.width = tw;
-  ctx.canvas.height = th;
-  ctx.drawImage(src, frame.cutX, frame.cutY, tw, th, 0, 0, tw, th);
-  return { data: ctx.getImageData(0, 0, tw, th).data, tw, th };
+  // off the art's own canvas (texelsOf): drawn into a new canvas first, the
+  // read waited on the GPU for both, most of a later battle's create (8-43ms)
+  const data = texelsOf(src, frame.cutX, frame.cutY, tw, th);
+  return data && { data, tw, th };
 }
 
 // The sprite's frame read back on the art grid: a cell is on when any of its

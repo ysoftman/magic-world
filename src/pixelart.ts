@@ -317,16 +317,68 @@ export function drawRows(
   });
 }
 
+// The art's canvases are read-frequently ones, kept in memory rather than on
+// the GPU. Phaser's CanvasPool opens every canvas it hands out with
+// willReadFrequently: false (pixelArt switches its smoothing off), and a
+// canvas's first getContext fixes what it is, so generateTexture asking for a
+// read-frequently one came too late: the art was a GPU canvas, and each read of
+// it (battleHd's copy, a fighter's footing, statusFx's body) waited on the GPU,
+// 3-30ms a read (headless Chrome): 36-73ms of the first battle's create, up to
+// 43ms of a later one's. Read back from one of these (texelsOf) it is about
+// 0.5ms. fx.ts bakes its sheets on them too.
+export function readableCanvas(w: number, h: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (ctx) ctx.imageSmoothingEnabled = false;
+  return canvas;
+}
+
 // `px` marks a grid drawn at that cell size as it stands (a 32-cell grid at
 // ART_PX); without it the grid is a 16-density one and bakes through Scale2x
 export function makeTexture(scene: Phaser.Scene, key: string, rows: readonly string[], palette: PixelMap, px?: number): void {
-  const w = Math.max(...rows.map((r) => r.length));
-  const h = rows.length;
-  const cell = px ?? PIXEL;
+  const w = Math.max(...rows.map((r) => r.length)) * (px ?? PIXEL);
+  const h = rows.length * (px ?? PIXEL);
   const g = scene.add.graphics();
   drawRows(g, rows, palette, 0, 0, { px });
-  g.generateTexture(key, w * cell, h * cell);
+  // onto the key's own canvas where it has one (bakeHero's redraw in place),
+  // else onto a new read-frequently one
+  if (scene.textures.exists(key)) g.generateTexture(key, w, h);
+  else {
+    const canvas = readableCanvas(w, h);
+    g.generateTexture(canvas, w, h);
+    scene.textures.addCanvas(key, canvas);
+  }
   g.destroy();
+}
+
+// a canvas to copy an image's texels through, for a source that is not a canvas
+let scratch: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * The texels of `source` in (x, y, w, h), RGBA, read off its own context
+ * where it is a canvas (makeTexture's art, read-frequently) rather than drawn
+ * into another canvas first: a copy reads its source back as well, and a
+ * plain new canvas is a GPU one, read back in turn. Else (an image) copied
+ * through a read-frequently scratch canvas.
+ */
+export function texelsOf(
+  source: HTMLCanvasElement | HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Uint8ClampedArray | null {
+  const own = source instanceof HTMLCanvasElement ? source.getContext("2d") : null;
+  if (own) return own.getImageData(x, y, w, h).data;
+  scratch ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  if (!scratch) return null;
+  // resizing clears it
+  scratch.canvas.width = w;
+  scratch.canvas.height = h;
+  scratch.drawImage(source, x, y, w, h, 0, 0, w, h);
+  return scratch.getImageData(0, 0, w, h).data;
 }
 
 // Bakes one horizontal strip of `tileSize` tiles under `key`.

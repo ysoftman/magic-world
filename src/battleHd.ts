@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ART_PX, scale2x } from "./pixelart";
+import { ART_PX, scale2x, texelsOf } from "./pixelart";
 
 // The battle draws its fighters at 2x (a boss or giant at 3x), so an art cell
 // of theirs is 4px (6px) on screen and every step of their outline a 4px
@@ -59,29 +59,11 @@ function redrawsOf(tex: Phaser.Textures.Texture): number | undefined {
   return n;
 }
 
-// a canvas a size to copy an image's pixels through, for a texture that is
-// not a canvas of its own
-const scratch = new Map<number, CanvasRenderingContext2D | null>();
-
-// The texels, read off the canvas itself where the texture is one (the art's
-// are: generateTexture draws onto a CanvasTexture, read-frequently), else
-// copied through a scratch canvas.
+// The texels as one number each (texelsOf, pixelart.ts: off the art's own
+// read-frequently canvas)
 function pixelsOf(source: HTMLCanvasElement | HTMLImageElement, w: number, h: number): Uint32Array | null {
-  let ctx = source instanceof HTMLCanvasElement ? source.getContext("2d") : null;
-  if (!ctx) {
-    const size = w * 4096 + h;
-    if (!scratch.has(size)) {
-      const c = document.createElement("canvas");
-      c.width = w;
-      c.height = h;
-      scratch.set(size, c.getContext("2d", { willReadFrequently: true }));
-    }
-    ctx = scratch.get(size) ?? null;
-    if (!ctx) return null;
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(source, 0, 0);
-  }
-  return new Uint32Array(ctx.getImageData(0, 0, w, h).data.buffer);
+  const data = texelsOf(source, 0, 0, w, h);
+  return data && new Uint32Array(data.buffer, data.byteOffset, w * h);
 }
 
 // FNV-1a over the texels: a redraw that drew the same picture (bakeHero back

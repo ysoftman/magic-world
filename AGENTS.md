@@ -455,6 +455,19 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   에는 안 보임). `src/renderTextureLeakFix.ts` 를 main.ts 에서 게임 생성 전에 불러 init 이 만든
   텍스처를 바로 지운다. Phaser 를 올리면 이 보정 없이 마을을 몇 번 restart 해 `renderer.glTextureWrappers`
   의 1280x720 개수가 그대로인지 본다.
+- Phaser 4.2.1 CanvasPool 은 `pixelArt`(smoothing 끄기)에서 내주는 캔버스마다 `getContext('2d', {
+  willReadFrequently: false })` 를 먼저 연다(`node_modules/phaser/src/display/canvas/CanvasPool.js` 의 `create`).
+  캔버스의 종류는 첫 getContext 가 정해서, 뒤에서 `generateTexture`·`CanvasTexture` 가 read-frequently 를 달라고
+  해도 GPU 캔버스로 남는다. GPU 캔버스는 읽기(getImageData, 다른 캔버스로의 drawImage)와 텍스처 등록(addCanvas)이
+  그때 GPU 에 밀린 일만큼 기다린다. 실제 사례: battleHd·`footingOf`·statusFx `framePixels` 가 전투원 그림을 한 번
+  읽는 데 3~30ms 씩 기다려 첫 전투 create 가 36~73ms, 이후 전투도 8~43ms 였다(지금 10~15ms·1~3ms, 헤드리스).
+  그래서 그림(`makeTexture`)과 pixelfx 시트(fx.ts `sheetBaker`)는 `readableCanvas`(pixelart.ts)로 제 캔버스를
+  만들고, 그림은 `texelsOf` 로 그 캔버스에서 바로 읽는다(새 캔버스에 drawImage 하면 그 캔버스가 GPU 캔버스라
+  다시 기다린다). 그림만 옮겼을 때는 시트 등록이 오히려 느려져(Lv30 전투 warm 41장 합 140~197→232~335ms,
+  2040x132 한 장이 GPU 캔버스 24~48ms, read-frequently 1.3~1.6ms) 시트도 같이 옮겼다(지금 합 24ms). 그려지는
+  GL 텍스처는 같다(텍스처를 FBO 로 읽어 비교: 시트 24장 중 23장 같고 shatter 134텍셀 ±1). 새 캔버스 텍스처도
+  `textures.createCanvas` 대신 `readableCanvas` + `addCanvas` 로 만든다. Phaser 를 올리면 CanvasPool.create 가
+  아직 false 로 여는지 보고, 전투 create 를 CDP 프로파일러로 떠 getImageData 가 다시 보이는지 본다.
 - playwright 에서 드롭·포획을 강제하려고 `Math.random` 을 상수 함수(`() => 0.01`)로 덮으면,
   Phaser 가 텍스처 키 UUID 를 `Math.random` 으로 만들어서 모두
   `00000000-0000-4000-8000-000000000000` 이 된다. 그 결과 "Texture key already in use" 콘솔
@@ -724,7 +737,9 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     셋은 `fells` 시트라 적 자신의 몸으로 굽고, 스프라이트(와 그림자)는 이펙트의 actorAlpha 대로 사라진다. 코인(fx-coins)은
     `breaks`(몸이 다 사라지는 시각, `breakOf`)에 떨어진다. 실제 사례: 처음엔 코인을 처치와 함께 띄웠더니 코인의 금빛
     섬광과 puff 가 아직 멀쩡한 몸을 가렸다. 나는 적은 `statusFx.hover` 로 몸을 `FLY_LIFT` 만큼 띄워 구워 파편이 땅에
-    떨어진다. 새 처치 이펙트는 `fells`·`breaks`·`ceiling` 을 같이 정하고, `warmStatuses` 끝에서 warm 한다.
+    떨어진다. 새 처치 이펙트는 `fells`·`breaks`·`ceiling` 을 같이 정하고, `warmStatuses` 에서 기술 시트보다 먼저
+    warm 한다. 실제 사례: 끝에 두었더니 Lv30 은 기술 시트 34장(warm 1.2초) 뒤로 밀려, 첫 턴에 쓰러뜨린 YETI 의
+    shatter(0.7초에 재생)를 그 자리에서 25ms 구웠다(지금 0.21초에 준비).
   - MOSS GOLEM 의 regen 은 `regrow`(nature/leaf-storm, layered, 이끼 초록 잎, 가을 금·빨강은 바람 공격처럼 읽혀 뺌)다.
     루프 조각을 한 번 보일 때는 `rise`(앞 페이드인)·`fade`(뒤 페이드아웃)를 같이 준다. 실제 사례: rise 없이 루프를 틀면 첫
     프레임부터 꽉 찬 나선이 튀어나왔다. regrow 는 leaf-storm 을 statusFx 의 `MOSS_SPIRAL` 로 옮겨 고리를 1.5배(22~36칸,
@@ -749,6 +764,13 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   `soften`(crop 가장자리 8칸의 솔리드 픽셀을 Bayer 디더로 녹임. 실제 사례: 연기·불꽃 머리가 y 224 에서 직선으로
   잘렸다), `half`(몸보다 훨씬 큰 효과를 반 크기로). 래퍼는 pixelfx painter 의 `frame` 필드와 createFx 안의 createFx 에
   기대므로, pixelfx 를 올리면 시트를 전·후 픽셀 비교로 다시 본다.
+- 배운 기술의 시트는 그 세션 첫 전투 create 가 `warmStatuses` 에서 `warmFx` 로 굽고(Lv30 은 41장, 헤드리스 1.2초, 프레임
+  최대 약 11ms) 세션 내내 남는다(기술 34장 23.4MB). 순서는 상태 시트 → 처치 시트 → 마지막에 쓴 기술(`lastSkill`) →
+  동료 시트 → 나머지 기술을 learnLevel 높은 것부터다. 실제 사례: 배운 순서로 구웠더니 VOID·BLACK HOLE 이 1.1~1.2초에야
+  들어와, 첫 턴에 바로 쓰면 그 자리에서 26~46ms 를 구웠다(지금 0.18~0.28초에 준비). `lastSkill` 은 페이지마다 비어서
+  세션 첫 전투는 레벨 순서만 탄다. 대가로 낮은 레벨 기술(ARCANE BEAM 등)이 맨 뒤라 첫 턴에 쓰면 약 22ms 를 굽는다.
+  이 멈춤은 `pickSkill` 의 promise 체인(게임 스텝 밖)에서 나서 스텝 시간(prestep~postrender)에는 안 잡히고 rAF
+  간격으로만 잡힌다.
 - 그 밖의 시트는 타이틀에서 미리 굽는다. `warmBattleFx(scene, after)` 가 `PIXEL_SHEETS` 와 `after`(필드 생물의
   `CRITTER_SHEETS`)를 `warmSheets` 큐에 넣는다. 큐는 씬마다 하나라 여러 파일이 넣어도 그 씬 프레임마다
   8ms(`BAKE_BUDGET_MS`)를 나눠 쓰고, 비싼 시트는 여러 프레임에 나눠 굽는다. 한 프레임에 시트는 최대 하나만
@@ -758,15 +780,17 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   프레임까지 들어간 뒤에만 텍스처로 등록하므로 `textures.exists` 가 덜 구운 시트를 보는 일은 없다. 다
   굽기 전에 씬이 SHUTDOWN 되면 굽던 시트도 버리고, 다음에 필요한 쪽이 다시 굽는다. 다 굽기 전에 전투가
   시작되면 남은 전투 시트는 전투 create 가 한꺼번에 굽는다(`bakeBattleFx`). 실제 사례: 첫 전투 시작에서
-  한꺼번에 구울 때 첫 프레임이 100~140ms 멈췄다(지금 약 15ms). 시트 하나를 한 프레임에 통째로 굽던 때는 나비
-  시트 하나가 타이틀 프레임을 76ms 잡았다(지금 가장 긴 프레임 약 12ms, 헤드리스). SHUTDOWN 에서 굽던
+  한꺼번에 구울 때 첫 프레임이 100~140ms 멈췄다(지금 18~27ms: game `prestep`~`postrender` 의 CPU 시간으로, create
+  10~15ms 에 warm 의 첫 조각 약 8ms 가 같은 프레임에 붙는다). 시트 하나를 한 프레임에 통째로 굽던 때는 나비
+  시트 하나가 타이틀 프레임을 76ms 잡았다(지금 시트 조각 프레임 최대 약 10.5ms, 헤드리스). SHUTDOWN 에서 굽던
   시트를 끝까지 굽게 했을 때는 나비를 굽던 중에 누른 Continue 가 마을 첫 프레임을 146~158ms 로 만들었다
   (버리게 한 뒤 62~78ms, 시트가 다 있을 때 마을 첫 create 는 79~113ms).
   - 그 뒤 타이틀은 `warmBattleWeather(scene, idle)`(`src/ui/BattleWeather.ts`)로 전투 날씨의 노이즈 field 9장을
     굽는다. 한 장이 15~38ms 이고 쪼갤 수 없어서, 그 씬 프레임에서 POST_UPDATE 까지 이미 3ms(`BUSY_MS`) 넘게 일한
     프레임은 건너뛰고 한 프레임에 한 장만 굽는다. 큐가 끝났는지를 보는 게 아니라 그 프레임에 일한 시간을 본다.
     `warmSheets` 의 POST_UPDATE 가 먼저 돌아 8ms 조각을 쓰는 동안은 굽지 않으니 대개 시트 큐 뒤에 시작하지만,
-    큐의 싼 시트 하나가 3ms 안에 끝난 프레임에는 같이 구울 수 있다. 게임이 시작되면(Continue 등, 타이틀의 `started`) `idle()` 이 거짓이 되어 멈춘다. 실제
+    큐의 싼 시트 하나가 3ms 안에 끝난 프레임에는 같이 구울 수 있다(시트 등록이 싸진 뒤로는 9장 중 4장쯤이 시트 큐
+    도중에 그렇게 들어가 그 프레임이 타이틀에서 가장 길다, 헤드리스 15~24ms). 게임이 시작되면(Continue 등, 타이틀의 `started`) `idle()` 이 거짓이 되어 멈춘다. 실제
     사례: 굽지 않으면 첫 비·폭풍·눈보라 전투의 create 가 57~105ms 였다(지금 24~39ms).
 - 새 시트는 create 에서 `bakePixelSheet` 로 한꺼번에 굽지 않는다. `warmSheets(scene, 시트 표, done)` 에
   넣고 `done(key)` 뒤에 그 시트를 쓴다(이미 구운 키면 그 자리에서 불린다). 동기 `bakePixelSheet` 는 그
