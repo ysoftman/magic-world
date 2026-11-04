@@ -575,3 +575,42 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   y 204 까지 하늘을 다시 칠하고 그 밑에 가장자리를 디더링한 안개 띠).
 - 밤·날씨는 그리지 않는다. BattleScene 이 하늘 오버레이를, BattleWeather 가
   비·눈·재를 덮는다.
+
+## 전투 이펙트 (`src/fx.ts`, `src/statusFx.ts`)
+
+전투 이펙트는 전부 pixelfx(커밋 고정 의존성, MIT) 이펙트를 코드로 구운 스프라이트 시트다. PNG 시트나
+손그림 격자를 새로 넣지 않는다. 후보는 pixelfx 사본에서 `node tools/render.mjs <id>` 의 contact sheet 로
+먼저 본다.
+
+- 새 이펙트는 `fx.ts` 의 `PIXEL_SHEETS` 에 한 줄로 넣는다: 모듈(`import * as x from
+  "pixelfx/fx/<범주>/<이름>"`), `opts`(팔레트·시드·이펙트 옵션), `span`, `frames`, `focus`(전투원 중심에
+  놓일 이펙트 좌표, 앵커 기준), `directional`, `sameOnBoss`, `crop`. `playFx`·`loopFx`·`fxOn` 이 그대로
+  쓴다. pixelfx 1px 이 아트 한 칸(전투 4px, 보스·거인 6px)이다.
+- `playFx` 는 시트를 주어진 ms 에 펼치므로 전투 속도는 그대로고 긴 이펙트는 빨라진다. 꼬리는 `span` 으로
+  자르고, 프레임은 15fps 안팎이면 끊겨 보이지 않는다. 실제 사례: crit-hit 0.9초를 300ms 에 넣으려고
+  0~0.6초만 샘플했고(뒤는 바닥에 누운 파편뿐), 처치·레벨업 시트를 30→15fps 로 낮춰 결산 시트 텍스처가
+  5.9→4.3MB 가 됐다.
+- `directional` 은 오른쪽을 향해 그려진 이펙트를 영웅 위에서 음수 scaleX 로 뒤집는다. `flipX` 는 프레임
+  가운데를 축으로 돌아 중심에서 벗어난 원점이 움직인다.
+- 바닥에 서는 이펙트(앵커가 발)는 `fxOn` 대신 `playFx(scene, key, sprite.x, GROUND_Y, ...)` 로 땅에 둔다.
+  실제 사례: 처치 poof·금화를 적 중심에 두었더니 보스 6px 에서 별과 동전이 적 창 안(y 140~200)까지
+  올라갔고, 나는 적은 동전이 공중에서 튀었다.
+- `sameOnBoss` 는 6px 에서 상태창에 닿는 이펙트를 보스·거인 위에서도 4px 로 둔다. 실제 사례: crit 의
+  고리(40칸)가 6px 에서 적 HP 막대를 가로질렀다.
+- `crop` 은 빈 줄이나 떨어져 나온 조각을 잘라 낸다. 잘린 가장자리 8px(`EDGE_FADE`)는 글로우가 흐려지므로,
+  그림이 같아야 하면 그만큼 여유를 두고 픽셀 비교로 확인한다. 실제 사례: NOVA 구슬은 앵커 바닥에 고인
+  빛을 잘라 냈고(날아가는 동안 그 빛 줄이 메뉴 줄을 따라 지나갔다), fx-coins 는 1920x352 →
+  2044x234(픽셀 동일)가 됐다.
+- depth 층: 이펙트 시트 0(`playFx`·`StatusFx`), 주문 폭발 0.5(`SPELL_BURST_DEPTH`), 데미지 숫자 1,
+  상태창 10(`STAT_DEPTH`), 힌트 30, STREAK/COMBO·NIGHT/ARENA/ABYSS 안내 120. 실제 사례: 몸을 다시
+  칠하는 상태 시트가 같이 터진 주문 폭발을 가렸고, 높이 나는 적·보스 위의 불꽃이 적 창의 HP·WEAK 줄로
+  올라갔다.
+- 몸을 다시 그리는 actor 이펙트(화상·냉기·감전·독·빙결·HEAL·WARD)는 `fx.ts` 가 아니라 `statusFx.ts` 의
+  `STATUS_SHEETS` 에 둔다. 전투원 텍스처를 pixelfx 의 `o.actor` 로 넘겨 그 전투에서 처음 쓸 때 전투원·
+  이펙트별로 굽고, 전투가 끝나면 지운다. 실제 사례: pixelfx 의 24x38 대역 인형으로 구우면 그 인형이
+  몬스터 위에 그려졌다(불꽃이 인형 머리 높이에 떴다).
+- `PIXEL_SHEETS` 는 타이틀에서 한 프레임에 하나씩 굽고(`warmBattleFx`), 다 굽기 전에 전투가 시작되면
+  남은 것을 전투가 굽는다. 실제 사례: 첫 전투 시작에서 한꺼번에 구울 때 첫 프레임이 100~140ms 멈췄다
+  (지금 약 15ms). 시트 하나가 한 프레임 20ms 를 넘기면 `span`·`frames` 를 줄인다.
+- `fx.ts` 맨 위 `/*! pixelfx ... MIT License ... */` 줄은 지우지 않는다. Bun 은 minify 할 때 `/*!` 주석만
+  남겨서, 배포 번들의 pixelfx 고지는 이 줄 하나다.
