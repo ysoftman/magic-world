@@ -7,6 +7,7 @@ import { econDay, GameState, isNight } from "../gameState";
 import { BEDS_LEVEL, GARDEN_LEVEL, GARDEN_YIELD, gardenPick, HOUSE_STAGES, type HouseStage } from "../home";
 import { DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { PanelFx, SPARKS } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -70,6 +71,8 @@ export class HomeUI {
   private msg: PixelText;
   private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
+  // the clang on an extension built
+  private fx: PanelFx;
 
   private upQueued = false;
   private downQueued = false;
@@ -79,6 +82,7 @@ export class HomeUI {
   constructor(scene: Phaser.Scene, actions: HomeActions) {
     this.scene = scene;
     this.actions = actions;
+    this.fx = new PanelFx(scene, SPARKS);
     const fixed = <
       T extends Phaser.GameObjects.Components.Visible & Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth,
     >(
@@ -243,6 +247,11 @@ export class HomeUI {
     this.showMsg(`${next.name} BUILT!`);
     this.actions.built(GameState.houseLevel);
     this.refresh();
+    // the hammer's clang just past the new name at the end of the BUILT line,
+    // at the screen's own pixel like the BLACKSMITH's; its sparks fly 80px a
+    // side, so it stays that far inside the panel's right edge
+    const t = this.builtText;
+    this.fx.play(SPARKS, Math.min(t.x + t.width / 2 + 24, GAME_WIDTH / 2 + PANEL_W / 2 - 90), t.y, 1);
   }
 
   private cancel(): void {
@@ -318,11 +327,13 @@ export class HomeUI {
     this.active = false;
     this.confirming = false;
     this.msgTimer?.remove();
+    this.fx.clear();
     this.setShown(false);
   }
 
   destroy(): void {
     this.msgTimer?.remove();
+    this.fx.clear();
     for (const o of [this.dim, this.panel, this.title, this.goldText, this.builtText, this.cursor, this.info, this.msg, this.hint])
       o.destroy();
     for (const t of [...this.names, ...this.statuses, ...this.lines]) t.destroy();

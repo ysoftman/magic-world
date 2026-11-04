@@ -17,6 +17,7 @@ import { itemInfo } from "../itemInfo";
 import { ART_PX, bodyStyle, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
+import { PanelFx, SPARKS } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
@@ -226,6 +227,8 @@ export class BlacksmithUI {
   private msg: PixelText;
   private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
+  // the clang on a piece forged or refined
+  private fx: PanelFx;
 
   private upQueued = false;
   private downQueued = false;
@@ -237,6 +240,7 @@ export class BlacksmithUI {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     bakeCraftedGear(scene);
+    this.fx = new PanelFx(scene, SPARKS);
 
     const fixed = <
       T extends Phaser.GameObjects.Components.Visible & Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth,
@@ -405,6 +409,7 @@ export class BlacksmithUI {
     GameState.inventory[r.key] += 1;
     GameState.save();
     Sfx.levelup();
+    this.clang();
     this.showMsg(`${r.name} forged!`);
     this.refresh();
   }
@@ -452,8 +457,18 @@ export class BlacksmithUI {
     GameState.refine[key] = level + 1;
     GameState.save();
     Sfx.levelup();
+    this.clang();
     this.showMsg(`${GEAR_NAME[key]}+${level + 1} refined!`);
     this.refresh();
+  }
+
+  // The hammer comes down on the piece: the sparks' star on the picked row's
+  // icon, one pixelfx pixel to a screen pixel as the icons are drawn (64px
+  // Scale2x art at half size), the ring and sparks under the rows round it.
+  // At 2px the sparks flew 160px a side, out past the panel's left edge.
+  private clang(): void {
+    const icon = this.icons[this.index];
+    this.fx.play(SPARKS, icon.x, icon.y, 1);
   }
 
   private cancel(): void {
@@ -564,11 +579,13 @@ export class BlacksmithUI {
     this.active = false;
     this.confirming = false;
     this.msgTimer?.remove();
+    this.fx.clear();
     this.setShown(false);
   }
 
   destroy(): void {
     this.msgTimer?.remove();
+    this.fx.clear();
     for (const o of [this.dim, this.panel, this.title, this.goldText, this.cursor, this.info, this.fee, this.msg, this.hint, ...this.tabs])
       o.destroy();
     for (const t of [...this.names, ...this.icons, ...this.statuses, ...this.needs, ...this.needIcons]) t.destroy();
