@@ -89,9 +89,10 @@ export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
   camera.scene.events.once(Phaser.Scenes.Events.RENDER, () => camera.filters.external.remove(warm));
 }
 
-// The battle's effects as pixel-art sprite sheets, drawn here in code when the
-// first battle starts (bakeBattleFx): pixelfx effects (PIXEL_SHEETS, below)
-// sampled into frames, shown on the battlers' own 4px cell. playFx() steps a
+// The battle's effects as pixel-art sprite sheets, drawn here in code on the
+// title, a sheet a frame (warmBattleFx), or by a battle that comes first
+// (bakeBattleFx): pixelfx effects (PIXEL_SHEETS, below) sampled into frames,
+// shown on the battlers' own 4px cell. playFx() steps a
 // sheet's frames across a given duration, so an effect fills exactly the time
 // the old circle or burst it replaced took, and the battle's pace does not
 // change.
@@ -212,8 +213,10 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // too; at 4px on a boss, whose 6px stars reached up into the stat window.
   "fx-poof": { fx: poof, span: [0, 1.2], frames: 18, sameOnBoss: true },
   // the foe's gold, with fx-poof: coins spin out of a small puff (lost in the
-  // poof's cloud), bounce along the ground, twinkle and wink out
-  "fx-coins": { fx: coinDrop, span: [0, 2.8], frames: 42, sameOnBoss: true },
+  // poof's cloud), bounce along the ground, twinkle and wink out. Cropped to
+  // what it draws (13, 16, 146, 87) grown just enough that every pixel bakes
+  // as before: 146 wide fits 14 frames a row, 2044x234 for 1920x352.
+  "fx-coins": { fx: coinDrop, span: [0, 2.8], frames: 42, sameOnBoss: true, crop: [7, 10, 153, 88] },
   // a level up, and a TREASURE MAP found: a gold flash and cross, a ring
   // snapping out, twinkles thrown wide; its burst, 30 over its anchor, on the
   // hero's middle. Gold is ui/level-up's ramp.
@@ -309,9 +312,27 @@ export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelShe
   tex.refresh();
 }
 
-/** Draws every sheet once into its own texture, frames numbered 0..n-1. */
+/** Draws every sheet not yet baked into its own texture, frames numbered 0..n-1. */
 export function bakeBattleFx(scene: Phaser.Scene): void {
   for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
+}
+
+/**
+ * Bakes the sheets ahead of the first battle, one a frame while `scene` runs
+ * (the title, which every game passes through): all at once as that battle
+ * started, they held its first frame for some 100-140ms. Textures are the
+ * game's, so they outlast the scene; any it leaves unbaked, the battle bakes
+ * (bakeBattleFx).
+ */
+export function warmBattleFx(scene: Phaser.Scene): void {
+  const left = Object.keys(PIXEL_SHEETS).filter((key) => !scene.textures.exists(key));
+  const step = (): void => {
+    const key = left.shift();
+    if (key === undefined) scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step);
+    else if (!scene.textures.exists(key)) bakePixelSheet(scene, key, PIXEL_SHEETS[key]);
+  };
+  scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, step));
 }
 
 // the scale battlers are shown at, a boss's or giant's above it

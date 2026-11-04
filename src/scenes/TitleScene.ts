@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Sfx, TITLE_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
-import { warmEncounterOut } from "../fx";
+import { warmBattleFx, warmEncounterOut } from "../fx";
 import {
   damagedCopyKeys,
   deleteDamagedCopies,
@@ -121,8 +121,10 @@ export class TitleScene extends Phaser.Scene {
     this.started = false;
     this.buttons = [];
     Sfx.playBgm(TITLE_THEME);
-    // every game passes through here before its first encounter
+    // every game passes through here before its first encounter: the
+    // mosaic's shader and the battle's sheets are made ready here
     warmEncounterOut(this.cameras.main);
+    warmBattleFx(this);
 
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "title-bg");
 
