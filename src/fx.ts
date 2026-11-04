@@ -2,6 +2,7 @@
 import Phaser from "phaser";
 import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
 import * as arcaneOrb from "pixelfx/fx/arcane/arcane-orb";
+import * as grenade from "pixelfx/fx/explosions/grenade";
 import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
 import * as fireball from "pixelfx/fx/fire/fireball";
 import * as healAoe from "pixelfx/fx/holy/heal-aoe";
@@ -257,6 +258,15 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     frames: 17,
     focus: [0, -30],
   },
+  // a BOMB going off where it landed (BattleScene lobBomb): a white flash
+  // and dome, shrapnel streaks flying wide, sparks that fall and bounce, a
+  // small fireball cooling to smoke, a scorch; only its blast (from its BLOW,
+  // 1.62s: the lob, bounce and fizzing roll before it are the hero's toss
+  // here) to 2.7s, the smoke thinning after left off. The blast is 40 cells
+  // right of its anchor, the floor: on the foe's x at GROUND_Y. Cropped 90
+  // cells either side and 58 up (y 224 at 4px, kept at 4px on a boss: the
+  // streaks ran up to y 36, through the foe's window) and 8 under the floor.
+  "fx-bomb": { fx: grenade, span: [1.63, 2.7], frames: 15, focus: [40, 0], sameOnBoss: true, crop: [110, 112, 290, 178] },
   "fx-restore-hp": restore(["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#4ade80", "#bbf7d0", "#ffffff"]),
   "fx-restore-mp": restore(["#0c1a3d", "#172554", "#1e3a8a", "#1d4ed8", "#3b82f6", "#60a5fa", "#bfdbfe", "#ffffff"]),
   "fx-restore-all": restore(["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc", "#ffffff"]),

@@ -150,6 +150,11 @@ const SPELL_FX: Record<string, readonly [string, string]> = {
 const HIT_FX_MS = 300;
 // a status sheet as long as its label's pop (flashStatus), floor and all
 const STATUS_FX_MS = 900;
+// a BOMB's toss (lobBomb): its flight and how high it arcs over the line, and
+// its blast's 1.07s sheet a little faster
+const BOMB_LOB_MS = 380;
+const BOMB_HOP = 140;
+const BOMB_FX_MS = 900;
 // a restore's ring (ringOn): its 1.75s sheet at 1.5x, about the bag's 1.2s
 const RESTORE_FX_MS = 1200;
 // a death of the foe's own (deathOf): its sheet's 2.4-2.45s squeezed in, the
@@ -1436,8 +1441,11 @@ export class BattleScene extends Phaser.Scene {
 
   private async throwBomb(): Promise<void> {
     this.resetCombo();
-    Sfx.hit();
     GameState.inventory.bomb -= 1;
+    await this.lobBomb();
+    Sfx.hit();
+    playFx(this, "fx-bomb", this.enemySprite.x, GROUND_Y, this.anim(BOMB_FX_MS));
+    shake(this.cameras.main, 220, 0.014);
     const dmg = BOMB_DAMAGE;
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.enemySprite.setTint(0xffa500).setTintMode(Phaser.TintModes.FILL);
@@ -1445,6 +1453,30 @@ export class BattleScene extends Phaser.Scene {
     await this.say(`BOOM! ${dmg} damage!`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
+  }
+
+  // The BOMB, its own icon, lobbed from the hero's hand in an arc to the
+  // foe's feet, turning over once; it blows where it lands (fx.ts fx-bomb).
+  // Its bottom row on the ground line: 14 of the icon's 16 cells, 24px under
+  // its middle.
+  private async lobBomb(): Promise<void> {
+    const [fromX, fromY] = [this.playerSprite.x + SHOT_START_X, this.playerSprite.y - 20];
+    const [toX, toY] = [this.enemySprite.x, GROUND_Y - 24];
+    const bomb = this.add.image(fromX, fromY, "icon-bomb");
+    await new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: this.anim(BOMB_LOB_MS),
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          const y = Phaser.Math.Linear(fromY, toY, p) - Math.sin(Math.PI * p) * BOMB_HOP;
+          bomb.setPosition(Phaser.Math.Linear(fromX, toX, p), y).setRotation(p * Math.PI * 2);
+        },
+        onComplete: () => resolve(),
+      });
+    });
+    bomb.destroy();
   }
 
   private async throwCandy(): Promise<void> {
