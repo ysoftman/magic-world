@@ -110,8 +110,10 @@ const REAP: PixelSheet = {
 const CLAP: PixelSheet = {
   fx: soften(thunderclap),
   opts: { light: LIGHT, reach: 40, actor: NO_BODY },
-  span: [0.06, 1.0],
-  frames: 14,
+  // from its first frame: the sparks rushing in before the clap (0.12s) give
+  // it a beat of warning; from 0.06 it went off 74ms into the cast
+  span: [0, 1.0],
+  frames: 15,
   crop: around(thunderclap, [0, 0], 70, GROUND_UP, 70, DOWN),
 };
 

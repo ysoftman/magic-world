@@ -265,9 +265,10 @@ const PLAYS: Record<TechName, Play> = {
     await done;
   },
 
-  // THUNDERCLAP: a white flash at the foe, forked bolts burst out of it and
-  // stab the floor round it, a shock ring tears across the ground raising
-  // dust, sparks streak away. Its blow, the clap (0.12s).
+  // THUNDERCLAP: sparks rush in to the foe's middle, then a white flash
+  // there, forked bolts burst out of it and stab the floor round it, a shock
+  // ring tears across the ground raising dust, sparks streak away. Its blow,
+  // the clap (0.12s).
   THUNDERCLAP: async (scene, stage, onHit) => {
     const { anim, foe, groundY } = stage;
     await sheet(
