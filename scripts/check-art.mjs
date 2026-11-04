@@ -95,14 +95,14 @@ const expand = (expr) => {
   return names.flatMap((n) => ALIAS[n] ?? [n]);
 };
 // (an optional last argument is the cell size of a grid drawn as it stands;
-// ART_PX marks a 32-cell grid, checked for its size further down)
-const art32 = [];
+// ART_PX marks a 32- or 48-cell grid, checked for its size further down)
+const artPx = [];
 for (const m of src.matchAll(
   /makeTexture\(\s*this,\s*[`"]([^`"]*)[`"],\s*(\[[\s\S]*?\]|[A-Za-z_][\w.]*),\s*([A-Z0-9_]+)\s*(?:,\s*([\w.]+)\s*)?\)/g,
 )) {
   if (m[2].trim().startsWith("[") && m[2].includes('"') && !m[2].includes("...")) continue; // inline literal, e.g. ["dd","dd"]
   for (const g of expand(m[2])) use(g, m[3]);
-  if (m[4] === "ART_PX") art32.push([m[1], m[2]]);
+  if (m[4] === "ART_PX") artPx.push([m[1], m[2]]);
 }
 for (const m of src.matchAll(/\{\s*rows:\s*([A-Z0-9_]+),\s*palette:\s*([A-Z0-9_]+)\s*\}/g)) use(m[1], m[2]);
 
@@ -492,17 +492,26 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
 }
 console.log("baked terrain stays within its calm limits");
 
-// ---- 32-cell grids: drawn at ART_PX as they stand, 32 wide, stacking to 32 ----
-// (a texture of 32 cells x 2px is the 64px every other sprite bakes to)
-for (const [key, expr] of art32) {
+// ---- grids drawn at ART_PX as they stand: square, 32 cells or 48 ----
+// (32 cells x 2px is the 64px every other sprite bakes to; the bosses and
+// the giant are 48 cells, a 96px texture, src/art/monsters.ts)
+const ART_PX_SIZES = [32, 48];
+const bySize = new Map(ART_PX_SIZES.map((n) => [n, 0]));
+for (const [key, expr] of artPx) {
   const parts = [...expr.matchAll(/\.\.\.(?:flipRows\()?([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => ALIAS[m[1]]?.[0] ?? m[1]);
   if (!parts.length) parts.push(expr.trim().replace(/^flipRows\(|\)$/g, ""));
-  const narrow = parts.filter((n) => grids.get(n)?.[0]?.length !== 32);
-  if (narrow.length) fail(`${key} is drawn at ART_PX but ${narrow.join(", ")} is not 32 cells wide`);
+  const size = grids.get(parts[0])?.[0]?.length;
+  if (!ART_PX_SIZES.includes(size)) {
+    fail(`${key} is drawn at ART_PX but ${parts[0]} is ${size} cells wide, not ${ART_PX_SIZES.join(" or ")}`);
+    continue;
+  }
+  const odd = parts.filter((n) => grids.get(n)?.[0]?.length !== size);
+  if (odd.length) fail(`${key} stacks grids of different widths: ${odd.join(", ")} is not ${size} cells wide like ${parts[0]}`);
   const tall = parts.reduce((n, name) => n + (grids.get(name)?.length ?? 0), 0);
-  if (tall !== 32) fail(`${key} stacks its 32-cell grid to ${tall} rows, not 32`);
+  if (tall !== size) fail(`${key} stacks its ${size}-cell grid to ${tall} rows, not ${size}`);
+  bySize.set(size, bySize.get(size) + 1);
 }
-console.log(`${art32.length} textures drawn from 32-cell grids at ART_PX, each 32x32`);
+console.log(`textures drawn at ART_PX: ${ART_PX_SIZES.map((n) => `${bySize.get(n)} at ${n}x${n}`).join(", ")}`);
 
 // BLUE's light and shade in HERO_PALETTE must be what heroShades() derives
 // from BLUE's own colours, or picking BLUE again would redraw it differently

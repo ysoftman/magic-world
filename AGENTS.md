@@ -533,17 +533,25 @@ BootScene 은 순서대로 부르기만 한다. 씬이 쓰는 이름은 BootScen
 지형 경계만 다듬을 전환 타일은 `smoothBoundaryOnly(계열, ...)` 를 쓴다. 등록은 그 격자가 있는 파일
 최상위, 격자 정의 뒤에 둔다. 모듈을 불러올 때 등록되어 굽기보다 먼저 실행되고, 정의 앞에 두면
 TDZ 로 부팅이 죽는다.
-32칸으로 다시 그린 그리드는 `makeTexture(..., ART_PX)` 로 Scale2x 없이
-굽고, check:art 가 32x32 인지 본다.
+32칸(보스·거인은 48칸)으로 다시 그린 그리드는 `makeTexture(..., ART_PX)` 로 Scale2x 없이
+굽고, check:art 가 32x32 또는 48x48 정사각인지 본다.
 
-영웅·NPC·몬스터는 전부 32칸 그리드다. 몬스터 그리드 두 개는 여러 텍스처가
-나눠 쓴다: `SLIME_32` (slime / goldSlime / king / magmaSlime), `GOBLIN_32`
+영웅·NPC·몬스터는 32칸 그리드이고, 보스·거인 5종(KING SLIME·TROLL KING·MOSS GOLEM·
+GLACIER GOLEM·FLAME DRAKE)만 48칸이다. 몬스터 그리드 두 개는 여러 텍스처가
+나눠 쓴다: `SLIME_32` (slime / goldSlime / magmaSlime), `GOBLIN_32`
 (goblin / cursedGoblin). 그래서 그리드에 문자를 하나 더하면 그 그리드를 쓰는
 팔레트 전부에 키가 있어야 한다 (check:art 가 잡는다). 희귀 변종도 tint 를
 쓰지 않고 전용 팔레트·텍스처로 굽는다. 곱하기 tint 는 녹색 슬라임을 금색이
 아니라 올리브색으로 만들었다. 반대로 보스·거인은 작은 몬스터 그리드를
 키워 쓰지 않는다. TROLL KING·MOSS GOLEM 이 고블린 그리드를 키운 것이었을 때는
-'큰 고블린'으로 읽혀서 전용 그리드로 바꿨다.
+'큰 고블린'으로 읽혀서 전용 그리드로 바꿨다. KING SLIME 도 `SLIME_32` 를 빨갛게 칠한 것에서
+왕관을 쓴 전용 48칸 격자로 바꿨다.
+
+보스·거인의 48칸 격자는 96px 텍스처가 되고, 필드에서 1배(2px 칸, 보스 로머와 마을 TROLL KING),
+전투에서 2배(4px 칸, 192px)로 그린다. 실제 사례: 예전에는 32칸(64px)을 필드 1.5배(TROLL KING 1.6배)·
+전투 3배로 키워 칸이 3px·6px 이었고, 둘레의 2px·4px 그림과 그 위 4px 이펙트보다 뭉툭했다. 그래서
+보스를 크게 그릴 때는 배율이 아니라 칸 수를 늘린다. 64px 텍스처를 가정하던 곳(`addRoamer` 의 히트박스,
+`BestiaryUI` 의 아이콘 배율)은 텍스처 폭에 맞춘다.
 
 아이템 아이콘은 `icon-<키>` 텍스처다(인벤토리·소재·요리 재료·요리 키, 보물 지도는
 `icon-map`). 16칸 그리드를 기본 Scale2x 로 구워 64px 이 되고, 패널은 그 절반인
@@ -581,7 +589,8 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     y 256..466, 그림자 포함) 제외, 표준편차는 모집단. 구운 텍스처를 `textures.getBase64` 로 받아
     원본 픽셀로 잰다. 캐릭터는 `hero-down-0` 과 `ENEMIES` 의 텍스처 20종(불투명
     픽셀)이고, 이 정의로 평균 chroma 0.366·최소 명도 std 42.1(`king`, KING SLIME)이
-    나와 위의 0.37·42 와 맞는다.
+    나와 위의 0.37·42 와 맞는다. 42.1 은 옛 32칸 KING SLIME 으로 잰 값이고, 48칸 KING SLIME 은 47.8 로
+    여전히 최소다. 기준 42 는 더 엄격한 쪽이라 그대로 둔다.
 - 상태창 두 개(x 32..496, 784..1248 × y 24..200, 채움 0.85 라 배경 15% 가 비침)와 그
   사이 NIGHT/ARENA/ABYSS 안내(x 520..760 × y 40..116) 뒤에도 밝은 것을 두지 않는다.
   실제 사례: 마을 전투 배경의 해 후광이 영웅 창 MP 글자 뒤로 비쳤고, 큰 구름이 ARENA
@@ -628,7 +637,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - 새 이펙트는 `fx.ts` 의 `PIXEL_SHEETS` 에 한 줄로 넣는다: 모듈(`import * as x from
   "pixelfx/fx/<범주>/<이름>"`), `opts`(팔레트·시드·이펙트 옵션), `span`, `frames`, `focus`(전투원 중심에
   놓일 이펙트 좌표, 앵커 기준), `directional`, `sameOnBoss`, `crop`. `playFx`·`loopFx`·`fxOn` 이 그대로
-  쓴다. pixelfx 1px 이 아트 한 칸(전투 4px, 보스·거인 6px)이다.
+  쓴다. pixelfx 1px 이 아트 한 칸(전투 4px, 48칸을 2배로 그리는 보스·거인도 4px)이다.
 - `playFx` 는 시트를 주어진 ms 에 펼치므로 전투 속도는 그대로고 긴 이펙트는 빨라진다. 꼬리는 `span` 으로
   자르고, 프레임은 15fps 안팎이면 끊겨 보이지 않는다. 실제 사례: crit-hit 0.9초를 300ms 에 넣으려고
   0~0.6초만 샘플했고(뒤는 바닥에 누운 파편뿐), 처치·레벨업 시트를 30→15fps 로 낮춰 결산 시트 텍스처가
@@ -636,14 +645,15 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - `directional` 은 오른쪽을 향해 그려진 이펙트를 영웅 위에서 음수 scaleX 로 뒤집는다. `flipX` 는 프레임
   가운데를 축으로 돌아 중심에서 벗어난 원점이 움직인다.
 - 바닥에 서는 이펙트(앵커가 발)는 `fxOn` 대신 `playFx(scene, key, sprite.x, GROUND_Y, ...)` 로 땅에 둔다.
-  실제 사례: 처치 poof·금화를 적 중심에 두었더니 보스 6px 에서 별과 동전이 적 창 안(y 140~200)까지
+  실제 사례: 처치 poof·금화를 적 중심에 두었더니 보스가 6px 칸(3배)이던 때 별과 동전이 적 창 안(y 140~200)까지
   올라갔고, 나는 적은 동전이 공중에서 튀었다.
 - DEFEND 나 동료 ORC 의 BULWARK(GUARD)가 받아 낸 적의 일격(일반 공격과 CHG 뒤 강타)에는 영웅 발밑
   (`GROUND_Y`)에 `fx-block`(pixelfx impacts/shield-block, 적 쪽 반구)을 띄운다(`blockOn`). `guardHit` 이 돌려주는
   `braced` 로 가르고, WARD 가 받은 일격은 뺀다. WARD 는 제 거품이 있고, WARD 가 걸려 있으면 DEFEND·GUARD 는
   적용되지 않는다. 색은 DEFEND 라벨의 slate 회색 램프다(결정: WARD 의 파랑은 이미 WARD 를 뜻한다).
-- `sameOnBoss` 는 6px 에서 상태창에 닿는 이펙트를 보스·거인 위에서도 4px 로 둔다. 실제 사례: crit 의
-  고리(40칸)가 6px 에서 적 HP 막대를 가로질렀다.
+- `sameOnBoss` 는 보스·거인이 6px 칸(3배)이던 때 상태창에 닿는 이펙트를 그 위에서도 4px 로 두던 표시다.
+  실제 사례: crit 의 고리(40칸)가 6px 에서 적 HP 막대를 가로질렀다. 보스가 2배(4px)가 되어 지금은 효과가
+  없고, 정리할 예정이다.
 - `crop` 은 빈 줄이나 떨어져 나온 조각을 잘라 낸다. 잘린 가장자리 8px(`EDGE_FADE`)는 글로우가 흐려지므로,
   그림이 같아야 하면 그만큼 여유를 두고 픽셀 비교로 확인한다. 실제 사례: NOVA 구슬은 앵커 바닥에 고인
   빛을 잘라 냈고(날아가는 동안 그 빛 줄이 메뉴 줄을 따라 지나갔다), fx-coins 는 1920x352 →
@@ -666,11 +676,11 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     멈춘다. 묶인 적(`stuck`)의 별은 BOLT 의 감전과 동료의 WEB SNARE 가 켜고(`showStun`), 적 턴의 stuck 줄을
     말한 뒤와 `victory` 에서 끈다(`hideStun`). stuck 을 켜는 길을 새로 만들면 `showStun` 도 부른다.
   - 격노(rage)는 보스·거인이 격노하는 순간 한 박동(750ms)만 보이고 루프하지 않는다(결정: 박동마다 몸을 다시
-    칠해 타격의 흰 번쩍임과 기 모으기 색을 덮고, 6px 보스에서 김과 선이 적 창으로 자꾸 올라간다). 그래도
-    올라가는 김과 선은 `ceiling`(화면 px, 발 456 위 234 = y 222 — 4px·6px 칸이 같은 화면 줄) 위를 지운다. 실제 사례: FLAME DRAKE 의 김이 y 180(적 창은 y 200
-    까지)까지 올라갔다. FLASHES 를 끄거나 reduced motion 이면 glow 를 줄여 굽는다(`soft`). pixelfx rage 는
-    바닥 균열을 seed 만으로 캐시해서 전투원마다 시드를 준다(`ownSeed`). 실제 사례: 두 번째 보스가 첫 보스의
-    균열 위에 섰다.
+    칠해 타격의 흰 번쩍임과 기 모으기 색을 덮고, 6px 칸이던 보스에서 김과 선이 적 창으로 자꾸 올라갔다). 그래도
+    올라가는 김과 선은 `ceiling`(칸이 아니라 화면 px, 발 456 위 234 = y 222) 위를 지운다. 실제 사례: 6px 칸이던
+    FLAME DRAKE 의 김이 y 180(적 창은 y 200 까지)까지 올라갔다. FLASHES 를 끄거나 reduced motion 이면 glow 를
+    줄여 굽는다(`soft`). pixelfx rage 는 바닥 균열을 seed 만으로 캐시해서 전투원마다 시드를 준다(`ownSeed`).
+    실제 사례: 두 번째 보스가 첫 보스의 균열 위에 섰다.
   - 그 전투에서 나올 수 있는 상태 시트는 create 에서 `statusFx.warm` 으로 미리 나눠 굽는다(`warmSheets`).
     BattleScene `warmStatuses` 가 그 판의 주문·동료·적 특수기·저항 장신구로 나올 수 있는 것만 고른다(보스·거인의
     격노는 그때 보일 `ENRAGE_TINT` 로, 적의 독 틱은 `PSN_TINT` FILL 로). 전투원 프레임은 한 번만 읽어 시트끼리
@@ -694,7 +704,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   위에 네모 판이 보였다(0.45s 부터, light 0.5).
 - BOMB 은 `icon-bomb` 을 영웅 손에서 적 발밑으로 포물선으로 던지고(BattleScene `lobBomb`), 떨어진 자리(`GROUND_Y`)에서
   fx-bomb(explosions/grenade 의 BLOW 1.62s 이후만)이 터진다. 나는 적도 땅에서 터진다. 실제 사례: grenade 파편 줄기는
-  원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224), 보스도 4px(`sameOnBoss`).
+  원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224), 보스도 4px.
 - 동료 스킬은 제 시트(`fx.ts` 의 `COMPANION_SHEETS`, BattleScene `SKILL_FX`·`skillFxOn`)로 fx-hit 를 대신한다(GOO HEAL·
   BULWARK·CHILL 은 원래 연출, FIREBALL 은 fx-fireball·fx-fire 를 동료 자리에서 던지고, PILFER 는 fx-coin 이 적에서 고블린
   자리로 튄다). 한 전투에 동료는 하나라 타이틀에서 굽지 않고 그 전투 create 가 `warmFx` 로 제 동료 것만 나눠 굽는다

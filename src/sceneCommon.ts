@@ -819,8 +819,11 @@ export interface Roamer<K extends string = string> {
 /**
  * A roamer of `kind`, drawn as `texture`, somewhere in the middle 60% of
  * `zone`, in `group` (the hero's overlap with it is the scene's) and
- * squashing as it goes; a `boss` is half as big again and slower. The scene
- * keeps it in its roamers, for wanderRoamers and for the fight it starts.
+ * squashing as it goes; a `boss` is slower. A boss is half as big again by
+ * its texture (48 cells, 96px, src/art/monsters.ts), drawn at 1x in the
+ * field's 2px cells as every roamer is: it was 64px art at 1.5x, 3px cells.
+ * The scene keeps it in its roamers, for wanderRoamers and for the fight it
+ * starts.
  */
 export function addRoamer<K extends string>(
   scene: Phaser.Scene,
@@ -834,8 +837,10 @@ export function addRoamer<K extends string>(
   const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
   const sprite = group.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
   sprite.setDepth(10);
-  sprite.body?.setSize(40, 24).setOffset(12, 32);
-  if (boss) sprite.setScale(1.5);
+  // the hit box low in the middle of the art, in proportion to the texture:
+  // a boss's 96px gets the 60 x 36 it had as 64px art at 1.5x
+  const k = sprite.width / 64;
+  sprite.body?.setSize(40 * k, 24 * k).setOffset(12 * k, 32 * k);
   const roamer: Roamer<K> = {
     sprite,
     minX: zone.cx - zone.w / 2 + 8,
@@ -850,8 +855,8 @@ export function addRoamer<K extends string>(
   };
   scene.tweens.add({
     targets: sprite,
-    scaleX: boss ? 1.68 : 1.12,
-    scaleY: boss ? 1.32 : 0.88,
+    scaleX: 1.12,
+    scaleY: 0.88,
     duration: 280,
     yoyo: true,
     repeat: -1,

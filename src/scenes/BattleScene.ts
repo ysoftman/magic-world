@@ -448,8 +448,9 @@ export class BattleScene extends Phaser.Scene {
   // paused while the hero is frozen or the companion dashes
   private heroIdle?: Phaser.Tweens.Tween;
   private enemyIdle?: Phaser.Tweens.Tween;
-  // the foe's size as made (3 for a boss or giant, else 2), which every throb
-  // grows from and returns to; the throb running now, if any
+  // the foe's size as made (2, a boss's or giant's too: their 48-cell art is
+  // the size), which every throb grows from and returns to; the throb running
+  // now, if any
   private enemyBaseScale = 2;
   private enemyPulse?: Phaser.Tweens.Tween;
   private companionIdle?: Phaser.Tweens.Tween;
@@ -707,12 +708,13 @@ export class BattleScene extends Phaser.Scene {
         .setDepth(120);
     }
 
-    // Bosses and giants draw at 3x (192px). On the ground the tallest, the
-    // FLAME DRAKE, tops out at y 276, 262 through the 1.15x charge pulse:
-    // clear of the enemy window (to y 200), which a boss centred at 280 ran
-    // under, hiding the drake's horns. The fliers' tops are at 256 at most.
-    const big = this.enemy.boss || this.enemy.giant;
-    this.enemyBaseScale = big ? 3 : 2;
+    // Bosses and giants draw at 2x as every battler does, their 48-cell art
+    // (96px) making them 192px. On the ground their tops are at y 264 (KING
+    // SLIME, TROLL KING) and 268 (the golems, the FLAME DRAKE), about 235-240
+    // through the 1.15x charge pulse: clear of the enemy window (to y 200),
+    // which a boss centred at 280 ran under, hiding the drake's horns. The
+    // fliers' tops are at 256 at most.
+    this.enemyBaseScale = 2;
     this.enemySprite = this.add.sprite(GAME_WIDTH - 320, 0, this.enemy.texture).setScale(this.enemyBaseScale);
     this.playerSprite = this.add.sprite(320, 0, "hero-down-0").setScale(2);
     this.playerSprite.setFlipX(true);
@@ -2825,7 +2827,8 @@ export class BattleScene extends Phaser.Scene {
     ]) {
       const x = this.enemySprite.x + dx;
       const y = this.enemySprite.y + dy;
-      // 2x even on a boss: the outer blasts at 3x would reach the enemy window
+      // 2x, every battler's scale: at a boss's old 3x the outer blasts
+      // reached the enemy window
       playFx(this, "fx-nova", x, y, this.anim(360)).setDepth(SPELL_BURST_DEPTH);
       this.hitBurst.setPosition(x, y);
       this.hitBurst.explode(14);
@@ -2915,7 +2918,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // a status or recovery effect on a battler for ms (at BATTLE SPEED), at the
-  // battler's own scale: 3x over a boss or giant
+  // battler's own scale (2x, a boss's or giant's too)
   private statusOn(sprite: Phaser.GameObjects.Sprite, kind: StatusKind, ms: number, min = 0): void {
     this.statusFx.play(sprite, kind, this.anim(ms, min));
   }
@@ -2938,12 +2941,11 @@ export class BattleScene extends Phaser.Scene {
     playFx(this, key, this.playerSprite.x, GROUND_Y, this.anim(RESTORE_FX_MS));
   }
 
-  // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
-  // boss or giant as the sprite itself is; on the hero it turns to face left,
-  // the way the foe's blows go
+  // a sheet played over a battler for ms (at BATTLE SPEED), at the foe's
+  // scale as the sprite itself is (2x, a boss's or giant's too); on the hero
+  // it turns to face left, the way the foe's blows go
   private fxOn(sprite: Phaser.GameObjects.Sprite, key: string, ms: number, min = 0): Phaser.GameObjects.Sprite {
-    const big = sprite === this.enemySprite && (this.enemy.boss || this.enemy.giant);
-    return playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2, sprite === this.playerSprite);
+    return playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), this.enemyBaseScale, sprite === this.playerSprite);
   }
 
   // an animation's duration at the player's BATTLE SPEED, never below min

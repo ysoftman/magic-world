@@ -529,7 +529,12 @@ export class BestiaryUI {
       const rowSeen = GameState.seenMonsters.includes(def.name);
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
-      icon.setTexture(def.texture).setVisible(rowSeen);
+      // ICON_SCALE is for 64px art: a boss's 96px (48 cells) comes to the
+      // same 40px as everyone else
+      icon
+        .setTexture(def.texture)
+        .setScale((ICON_SCALE * 64) / icon.width)
+        .setVisible(rowSeen);
       const { weak, can } = rowSeen ? speciesNotes(def) : { weak: "", can: "" };
       const partner = rowCaught > 0 && GameState.isPartner(def.name);
       // a row without a note (unseen, or a plain SLIME) keeps its name

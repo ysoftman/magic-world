@@ -2114,9 +2114,11 @@ export class TownScene extends Phaser.Scene {
       const zone = MONSTER_ZONES[Math.floor(Math.random() * MONSTER_ZONES.length)];
       const x = zone.cx + (Math.random() - 0.5) * zone.w * 0.6;
       const y = zone.cy + (Math.random() - 0.5) * zone.h * 0.6;
+      // 96px art (48 cells) at 1x, in the field's 2px cells: it was 64px art
+      // at 1.6x (3.2px cells, 102px), a little bigger and much coarser
       const sprite = this.roamerGroup.create(x, y, "troll") as Phaser.Physics.Arcade.Sprite;
-      sprite.setDepth(10).setScale(1.6);
-      sprite.body?.setSize(40, 24).setOffset(12, 32);
+      sprite.setDepth(10);
+      sprite.body?.setSize(60, 36).setOffset(18, 48);
       this.roamers.push({
         sprite,
         minX: zone.cx - zone.w / 2 + 8,
@@ -2131,8 +2133,8 @@ export class TownScene extends Phaser.Scene {
       });
       this.tweens.add({
         targets: sprite,
-        scaleX: 1.72,
-        scaleY: 1.48,
+        scaleX: 1.075,
+        scaleY: 0.925,
         duration: 280,
         yoyo: true,
         repeat: -1,
