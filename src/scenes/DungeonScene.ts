@@ -204,7 +204,7 @@ export class DungeonScene extends Phaser.Scene {
     addGuideArrow(this, this.player, "dungeon", () => this.quitting || this.uiBlocking());
 
     // floating dust motes and the odd drip from the ceiling
-    addAmbient(this, "dungeon");
+    addAmbient(this, "dungeon", { level });
 
     this.spawnMonsters();
 

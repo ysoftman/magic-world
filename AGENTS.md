@@ -768,6 +768,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   20fps 로 다시 그린다. 숲 빛줄기와 같이 `lightCanvas.ts` 의 `addLightCanvas`(빛과 불투명 픽셀만 ADD, 반투명 색은 뺌)를
   쓴다. 터질 때 효과가 제 하늘을 밝혀 화면 전체 번쩍임은 없앴고, FLASHES 끄기·reduced motion 이면 light 0.35 다. 별이
   536px 까지 처져 veil 을 y 448 까지 늘렸다. 실제 사례: 겨울 눈 마을에서 흰 팝이 눈에 묻혔다.
+- 동굴·심연의 물방울은 pixelfx water/drip 의 front 층만(종유석 `source: false`, back 층의 웅덩이 타원은 뺌) 구운 시트다
+  (Ambient 의 `CAVE_DRIP`, 880x66 232KB). 동굴 create 에서 `warmFieldFx` 로 굽고 `playFieldFxOnce` 로 `ART_PX`·
+  `AMBIENT_DEPTH` 에 튼다. 씬이 `addAmbient` 에 `{ level }` 을 넘기면 바닥·물웅덩이 칸에만 떨어지고, 물결 양 끝(±18칸)·
+  아래(+5칸)도 바위가 아닌 자리만 고른다(`DRIP_RING`, 12번 안에 못 찾으면 그 차례는 건너뜀).
 
 ## 필드 소품 (`src/ui/propFx.ts`)
 

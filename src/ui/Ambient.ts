@@ -1,12 +1,15 @@
 import Phaser from "phaser";
-import { clearFrame, createFx } from "pixelfx";
+import { clearFrame, createFx, type FxModule } from "pixelfx";
+import * as drip from "pixelfx/fx/water/drip";
 import * as godRays from "pixelfx/fx/weather/god-rays";
 import { type AmbienceCue, Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { GameState, nightFactor } from "../gameState";
-import { drawRows, type PixelMap, retroStyle, scale2x } from "../pixelart";
+import { SOLID, T_WATER_A, T_WATER_B, TILE } from "../levels";
+import { ART_PX, drawRows, type PixelMap, retroStyle, scale2x } from "../pixelart";
 import { seasonLook, seasonToday } from "../season";
 import { type Region, WEATHER_LABEL, type Weather, weatherToday } from "../weather";
+import { type FieldFx, playFieldFxOnce, warmFieldFx } from "./fieldFx";
 import { addLightCanvas } from "./lightCanvas";
 import { addNightSky } from "./NightSky";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
@@ -77,8 +80,6 @@ const SPRITES: Record<string, { rows: string[]; palette: PixelMap }> = {
   // light enough to show through the cave's permanent gloom
   "mote-a": { rows: ["m"], palette: { m: 0xfff3d6 } },
   "mote-b": { rows: ["m"], palette: { m: 0xd8c8a8 } },
-  drop: { rows: ["l", "b"], palette: { l: 0xd6f1ff, b: 0x7cc3ee } },
-  splash: { rows: ["s"], palette: { s: 0xbfe6ff } },
   "petal-a": { rows: ["pq"], palette: PETAL_PALETTE },
   "petal-b": { rows: ["q", "p"], palette: PETAL_PALETTE },
   "petal-c": { rows: ["wv"], palette: { w: 0xffffff, v: 0xf3e8ff } },
@@ -172,7 +173,8 @@ interface Effect {
  * entry and whenever the day turns while the player is here. On entry only if
  * it isn't still `since`, the weather the player last saw here: a scene built
  * again round a hero who never left (a season's turn) says it only if the sky
- * changed with it.
+ * changed with it. `level` is the map's grid: the cave's drips land only on
+ * its floor and its pools, not on a rock (anywhere in view without it).
  *
  * The emitters are screen-space (scrollFactor 0) so the effect always covers
  * the view, but every particle is shifted against the camera's own movement
@@ -182,13 +184,13 @@ interface Effect {
 export function addAmbient(
   scene: Phaser.Scene,
   kind: AmbientKind,
-  { caption = false, since }: { caption?: boolean; since?: Weather } = {},
+  { caption = false, since, level }: { caption?: boolean; since?: Weather; level?: readonly (readonly number[])[] } = {},
 ): void {
   bakeSheet(scene);
   let weather = weatherToday(kind);
   // today's weather starts in full; only a change while here eases in
   const mix: Mix = { ...WEATHER_MIX[weather] };
-  const effect = BUILDERS[kind](scene, mix);
+  const effect = BUILDERS[kind](scene, mix, level);
   effect.tick?.(nightFactor());
   // fastForward() emits even when `emitting` is off, so only warm up the
   // layers that are actually on right now (no daytime fireflies).
@@ -239,7 +241,7 @@ export function addAmbient(
   });
 }
 
-const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> = {
+const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix, level?: readonly (readonly number[])[]) => Effect> = {
   forest(scene, mix) {
     const season = seasonal();
     // autumn brings down twice the leaves, turned; the bare winter wood none
@@ -324,7 +326,7 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
     };
   },
 
-  dungeon(scene) {
+  dungeon(scene, _mix, level) {
     const motes = addLayer(scene, {
       frame: ["mote-a", "mote-a", "mote-b"],
       ...ANYWHERE_ON_SCREEN,
@@ -336,44 +338,23 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
       frequency: 200,
       maxAliveParticles: 36,
     });
-    const drops = addLayer(
-      scene,
-      { frame: "drop", lifespan: { min: 380, max: 520 }, gravityY: 1100, alpha: 0.85, emitting: false },
-      { wrap: false },
-    );
-    // y grows downward, so 200..340 degrees is an upward fan
-    const splash = addLayer(
-      scene,
-      {
-        frame: "splash",
-        lifespan: { min: 220, max: 360 },
-        speed: { min: 40, max: 90 },
-        angle: { min: 200, max: 340 },
-        gravityY: 520,
-        alpha: { start: 0.8, end: 0 },
-        emitting: false,
-      },
-      { wrap: false },
-    );
-    drops.emitter.onParticleDeath((p: Particle) => {
-      splash.emitter.emitParticleAt(p.x, p.y, 3);
-      // heard as it lands, in time with the splash
-      Sfx.ambience("drip", Phaser.Math.FloatBetween(0.7, 1));
-    });
 
+    // a drip from the unseen ceiling every few seconds, heard as it lands
+    warmFieldFx(scene, CAVE_DRIP);
     const scheduleDrip = (): void => {
       scene.time.delayedCall(Phaser.Math.Between(1400, 4200), () => {
-        // high enough on screen that the fall and the splash both stay in view
-        const x = Phaser.Math.Between(40, GAME_WIDTH - 40);
-        const y = Phaser.Math.Between(STATUS_HUD_HEIGHT + 40, GAME_HEIGHT * 0.6);
-        drops.emitter.emitParticleAt(x, y, 1);
+        const spot = dripSpot(scene, level);
+        if (spot) {
+          playFieldFxOnce(scene, CAVE_DRIP, spot.x, spot.y, ART_PX, AMBIENT_DEPTH);
+          scene.time.delayedCall(DRIP_LAND_MS, () => Sfx.ambience("drip", Phaser.Math.FloatBetween(0.7, 1)));
+        }
         scheduleDrip();
       });
     };
     scheduleDrip();
 
     // the cave's own low resonance under it all
-    return { layers: [motes, drops, splash], drone: { level: () => 1, freq: 120 } };
+    return { layers: [motes], drone: { level: () => 1, freq: 120 } };
   },
 
   volcano(scene, mix) {
@@ -484,6 +465,62 @@ const BUILDERS: Record<AmbientKind, (scene: Phaser.Scene, mix: Mix) => Effect> =
     };
   },
 };
+
+// The cave's drips: pixelfx's water/drip (MIT; its notice is the /*! line in
+// fx.ts), from the bead letting go of the ceiling to its rings fading, one of
+// its pixels to the critters' art cell (ART_PX). Its front layer alone and no
+// dripstone (`source`): the back lays a puddle under it from the first frame,
+// a dark ellipse waiting on the floor wherever the drop was to land. So it
+// lands in a flash, a crown of flecks and the near half of its rings. The span
+// starts with the drop 8 cells into its fall, under the glow its unseen tip
+// leaves in the air; the crop (44x66 cells from 54 over the landing to 12 under
+// it) holds the drop, the rings and the crown, 20 frames (30fps) in one row of
+// 880x66, 232KB.
+const DRIP_FROM = 0.94;
+const DRIP_FALL = 54;
+const dripFront = { meta: drip.meta, draw: (drip as unknown as { draw: unknown }).draw } as FxModule;
+const CAVE_DRIP: FieldFx = {
+  key: "fx-cave-drip",
+  sheet: {
+    fx: dripFront,
+    opts: { source: false },
+    span: [DRIP_FROM, drip.meta.duration],
+    frames: 20,
+    crop: [drip.meta.origin[0] - 22, drip.meta.origin[1] - DRIP_FALL, drip.meta.origin[0] + 22, drip.meta.origin[1] + 12],
+  },
+  ms: (drip.meta.duration - DRIP_FROM) * 1000,
+};
+// when it lands, from the sheet's start: the effect's own let-go (0.78s) and a
+// fall of its `height` (62) at its pull (760 cells/s²)
+const DRIP_LAND_MS = (0.78 + Math.sqrt((2 * 62) / 760) - DRIP_FROM) * 1000;
+
+// Where a drip lands, in the world: in the band the old drips fell to (their
+// fall now drawn above the spot), on the cave's floor or in a pool on `level`,
+// its rings too (DRIP_RING), so none spreads onto a rock beside it (a few tries
+// for one; reading the landing alone, 5 of 46 had a rock within 44px of it);
+// anywhere there without it; none before the camera has a view.
+// The near half of its rings reaches 17 cells either side and 4 under the
+// landing (its opaque pixels over the sheet).
+const DRIP_RING: ReadonlyArray<[number, number]> = [
+  [0, 0],
+  [-18, 0],
+  [18, 0],
+  [0, 5],
+];
+function dripSpot(scene: Phaser.Scene, level?: readonly (readonly number[])[]): { x: number; y: number } | undefined {
+  const view = scene.cameras.main.worldView;
+  if (view.width === 0) return undefined;
+  const open = (x: number, y: number): boolean => {
+    const tile = level?.[Math.floor(y / TILE)]?.[Math.floor(x / TILE)];
+    return tile !== undefined && (!SOLID.has(tile) || tile === T_WATER_A || tile === T_WATER_B);
+  };
+  for (let tries = 0; tries < 12; tries++) {
+    const x = view.x + Phaser.Math.Between(40, GAME_WIDTH - 40);
+    const y = view.y + Phaser.Math.Between(STATUS_HUD_HEIGHT + 40, GAME_HEIGHT * 0.6) + DRIP_FALL * ART_PX;
+    if (!level || DRIP_RING.every(([dx, dy]) => open(x + dx * ART_PX, y + dy * ART_PX))) return { x, y };
+  }
+  return undefined;
+}
 
 // Fires `play` every `minMs`..`maxMs`, each gap drawn fresh, for as long as the
 // scene runs: its clock is cleared on shutdown, and stops with a hidden tab.
@@ -830,21 +867,7 @@ function wrapOnScreen(p: Particle): void {
 // prints and puffs keep the full 4px — they lie on the ground at the hero's
 // own scale.
 const FINE_PX = PIXEL / 2;
-const POINTS = new Set([
-  "flake-s",
-  "flake-m",
-  "streak",
-  "mote-a",
-  "mote-b",
-  "drop",
-  "splash",
-  "ember-a",
-  "ember-b",
-  "ember-c",
-  "ash-a",
-  "ash-b",
-  "ash-c",
-]);
+const POINTS = new Set(["flake-s", "flake-m", "streak", "mote-a", "mote-b", "ember-a", "ember-b", "ember-c", "ash-a", "ash-b", "ash-c"]);
 
 // the grid each sprite is drawn from, and its cell size (pixelart's scale2x,
 // off the grid transparent, so a sprite never grows past its outline)

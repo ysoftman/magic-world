@@ -328,7 +328,7 @@ export class AbyssScene extends Phaser.Scene {
     addFootsteps(this, this.player, level, "dungeon");
     // The cave's dust and drips. No guide arrow: the quest's goals all lie
     // above, and objective.ts would point at the cave's own exit coordinates.
-    addAmbient(this, "dungeon");
+    addAmbient(this, "dungeon", { level });
     // and the wisps the cave above has none of
     addCritters(this, "abyss");
 
