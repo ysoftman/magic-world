@@ -397,7 +397,6 @@ export class BattleScene extends Phaser.Scene {
   private hitBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private glowBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private healBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private levelBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private coinBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
   private catchBurst!: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -784,13 +783,6 @@ export class BattleScene extends Phaser.Scene {
       scale: { start: 1, end: 0 },
       alpha: { start: 1, end: 0 },
       tint: 0x4ade80,
-      emitting: false,
-    });
-    this.levelBurst = this.add.particles(0, 0, "spark", {
-      speed: 200,
-      lifespan: 500,
-      scale: { start: 1, end: 0 },
-      alpha: { start: 1, end: 0 },
       emitting: false,
     });
     this.coinBurst = this.add.particles(0, 0, "coin", {
@@ -2548,8 +2540,7 @@ export class BattleScene extends Phaser.Scene {
       // a level up keeps a line of its own, the burst and the fanfare with it
       if (leveled) {
         Sfx.levelup();
-        this.levelBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
-        this.levelBurst.explode(24);
+        this.fxOn(this.playerSprite, "fx-levelup", 1100);
         this.coinBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
         this.coinBurst.explode(12);
         shake(this.cameras.main, 200, 0.01);
@@ -2565,6 +2556,7 @@ export class BattleScene extends Phaser.Scene {
       // too). 29 glyphs, inside the 54 a row holds
       if (!this.abyss && rollTreasureMap(GameState.treasureMaps, GameState.quest)) {
         Sfx.pickup();
+        this.fxOn(this.playerSprite, "fx-levelup", 1100);
         await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.");
       }
       if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`);

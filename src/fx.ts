@@ -8,6 +8,7 @@ import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
 import * as swordSlash from "pixelfx/fx/melee/sword-slash";
+import * as collectBurst from "pixelfx/fx/pickups/collect-burst";
 import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
 import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
@@ -514,6 +515,16 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // the foe's gold, with fx-poof: coins spin out of a small puff (lost in the
   // poof's cloud), bounce along the ground, twinkle and wink out
   "fx-coins": { fx: coinDrop, span: [0, 2.8], frames: 42, sameOnBoss: true },
+  // a level up, and a TREASURE MAP found: a gold flash and cross, a ring
+  // snapping out, twinkles thrown wide; its burst, 30 over its anchor, on the
+  // hero's middle. Gold is ui/level-up's ramp.
+  "fx-levelup": {
+    fx: collectBurst,
+    opts: { palette: ["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc", "#ffffff"] },
+    span: [0, 1.1],
+    frames: 17,
+    focus: [0, -30],
+  },
 };
 
 // a sheet's frames, how many texels to an art cell, the texture point put on
