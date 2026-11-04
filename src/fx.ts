@@ -1,6 +1,10 @@
 /*! pixelfx (github.com/patch-gg/pixelfx) | MIT License | Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez */
 import Phaser from "phaser";
 import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
+import * as fireball from "pixelfx/fx/fire/fireball";
+import * as iceLance from "pixelfx/fx/ice/ice-lance";
+import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
 import * as critHit from "pixelfx/fx/impacts/crit-hit";
 import * as hitSpark from "pixelfx/fx/impacts/hit-spark";
 import * as swordSlash from "pixelfx/fx/melee/sword-slash";
@@ -184,47 +188,6 @@ function sparkle(put: Cells, x: number, y: number, size: number, core: number, a
 const C = 15.5;
 
 const SHEETS: Record<string, Sheet> = {
-  // FIRE: a ball of flame that blooms, then breaks into embers and smoke
-  "fx-fire": {
-    cells: 32,
-    frames: 6,
-    draw: (put, f, rand) => {
-      const r = [5, 9, 12, 13, 12, 9][f];
-      const ramp = f < 3 ? [0xfffbe6, 0xfde047, 0xfb923c, 0xfb923c, 0xdc2626] : [0xfde047, 0xfb923c, 0xdc2626, 0x7f1d1d];
-      disc(put, C, C + (f >= 3 ? -1 : 0), r, ramp, rand);
-      if (f >= 3) {
-        // the middle burns out first: holes of smoke where the core was
-        for (let k = 0; k < (f - 2) * 7; k++)
-          disc(put, C + (rand() - 0.5) * r * 1.4, C + (rand() - 0.6) * r * 1.4, 1.6, [0x4b3a3a, 0x2a2020]);
-        for (let k = 0; k < 8; k++) put(Math.round(C + (rand() - 0.5) * 30), Math.round(C + (rand() - 0.5) * 30), 0xfde047);
-      }
-    },
-  },
-  // ICE: six spikes of ice grow out from the middle, then shatter into shards
-  "fx-ice": {
-    cells: 32,
-    frames: 6,
-    draw: (put, f, rand) => {
-      const ramp = [0xffffff, 0xcffafe, 0x67e8f9, 0x0e7490];
-      if (f < 4) {
-        const len = [5, 10, 13, 14][f];
-        for (let k = 0; k < 6; k++) {
-          const a = (k * Math.PI) / 3 - Math.PI / 2;
-          line(put, C, C, C + Math.cos(a) * len, C + Math.sin(a) * len, f < 2 ? 1.5 : 2, ramp);
-        }
-        disc(put, C, C, 3, [0xffffff, 0xcffafe]);
-        return;
-      }
-      // shards fly out along the spikes and fall
-      for (let k = 0; k < 12; k++) {
-        const a = (k * Math.PI) / 6 + rand() * 0.4;
-        const d = (f === 4 ? 9 : 13) + rand() * 3;
-        const x = C + Math.cos(a) * d;
-        const y = C + Math.sin(a) * d + (f - 4) * 2;
-        line(put, x - 1, y - 1, x + 1, y + 1, 0.6, [0xffffff, 0x67e8f9]);
-      }
-    },
-  },
   // BOLT: a jagged bolt down onto the target, a star where it lands, crackle
   "fx-bolt": {
     cells: 32,
@@ -447,26 +410,6 @@ const SHEETS: Record<string, Sheet> = {
     },
   },
   // the projectiles, 16 cells, two frames of flicker each, flying right
-  "fx-fireball": {
-    cells: 16,
-    frames: 2,
-    draw: (put, f) => {
-      for (let k = 0; k < 6; k++) disc(put, 9 - k * 1.4, 7.5 + (k % 2 ? (f ? 0.5 : -0.5) : 0), 3.4 - k * 0.45, [0xfb923c, 0xdc2626]);
-      disc(put, 10, 7.5, 3.6, [0xfffbe6, 0xfde047, 0xfb923c]);
-    },
-  },
-  "fx-iceshard": {
-    cells: 16,
-    frames: 2,
-    draw: (put, f) => {
-      for (let x = 0; x < 12; x++) {
-        const h = Math.round(x < 8 ? x * 0.45 : (12 - x) * 0.9);
-        for (let dy = -h; dy <= h; dy++) put(2 + x, 7 + dy, dy < 0 ? 0xcffafe : dy > 0 ? 0x0e7490 : 0xffffff);
-      }
-      put(f ? 4 : 6, 3, 0xffffff);
-      put(f ? 7 : 3, 12, 0xcffafe);
-    },
-  },
   "fx-spark": {
     cells: 16,
     frames: 2,
@@ -513,11 +456,16 @@ interface PixelSheet {
   directional?: boolean;
   /** kept at the 4px cell over a boss or giant too, for one that would reach the stat windows at 6px */
   sameOnBoss?: boolean;
+  /** the part of the effect's canvas (meta.size) baked, [x0, y0, x1, y1]: a smaller texture, or a stray part left off */
+  crop?: [number, number, number, number];
 }
 
 // a 32-cell battler's middle to its feet, in art cells: an impact this high
 // (its `height`) has its sparks bounce on the ground the battler stands on
 const FEET = 16;
+// a projectile's sheet: its loop's first 8 frames of 1/30s, one 240ms flight
+// at castProjectile's 30ms a frame
+const SHOT_SPAN: [number, number] = [0, 8 / 30];
 
 const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // a blow landing: a lopsided cross flare round a white core, then a cone of
@@ -532,6 +480,30 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
   // (6, -26) sits 12 cells left of and 6 under the foe's middle, so the
   // crescent cuts across the body, not round it. From 1/30s, when it shows.
   "fx-slash": { fx: swordSlash, opts: { radius: 30 }, span: [1 / 30, 0.5], focus: [18, -32], directional: true },
+  // FIRE's shot: a white-hot head in a corona of flame, a torn tail of flame
+  // puffs cooling to smoke. Speed 60 keeps the tail to 44 cells: the default's
+  // 92 ran back past the hero at launch.
+  "fx-fireball": { fx: fireball, opts: { speed: 60 }, span: SHOT_SPAN, crop: [52, 4, 132, 52] },
+  // FIRE's burst: a white flash, a fireball in a shock ring, breaking into
+  // burning puffs and smoke; the smoke column and the debris landing after
+  // 0.4s are left off. Its ground 12 cells under the foe's middle: the ball
+  // covers the body and the debris band keeps to the feet.
+  "fx-fire": {
+    fx: smallExplosion,
+    opts: { size: 0.6 },
+    span: [0, 0.4],
+    frames: 10,
+    focus: [0, -12],
+    sameOnBoss: true,
+    crop: [98, 122, 206, 224],
+  },
+  // ICE's shot: a faceted spear, a pulse down its core, rings of cold air
+  // shearing off its tip. Length 28 of 40, a little over a foe's width.
+  "fx-iceshard": { fx: iceLance, opts: { length: 28 }, span: SHOT_SPAN, crop: [40, 16, 156, 48] },
+  // ICE's burst: frost gathers and flashes white in a ring, then six-armed
+  // flakes spin out (from just before the flash; their drift down after
+  // 0.85s left off). The flakes' middle, 52 cells over its ground, on the foe's.
+  "fx-ice": { fx: snowflakeBurst, span: [0.15, 0.85], frames: 10, focus: [-2, -52], sameOnBoss: true, crop: [28, 8, 116, 112] },
 };
 
 // a sheet's frames, how many texels to an art cell, the texture point put on
@@ -545,6 +517,8 @@ interface SheetInfo {
   sameOnBoss: boolean;
 }
 
+const cropOf = (sheet: PixelSheet): [number, number, number, number] => sheet.crop ?? [0, 0, ...sheet.fx.meta.size];
+
 function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number } {
   const [from, to] = sheet.span ?? [0, sheet.fx.meta.duration];
   return { from, to, frames: sheet.frames ?? Math.max(1, Math.round((to - from) * sheet.fx.meta.fps)) };
@@ -553,15 +527,13 @@ function spanOf(sheet: PixelSheet): { from: number; to: number; frames: number }
 function infoOf(key: string): SheetInfo {
   const pixel = PIXEL_SHEETS[key];
   if (!pixel) return { frames: SHEETS[key].frames, texel: FX_CELL, origin: [0.5, 0.5], directional: false, sameOnBoss: false };
-  const {
-    size: [w, h],
-    origin: [ax, ay],
-  } = pixel.fx.meta;
+  const [x0, y0, x1, y1] = cropOf(pixel);
+  const [ax, ay] = pixel.fx.meta.origin;
   const [fx, fy] = pixel.focus ?? [0, 0];
   return {
     frames: spanOf(pixel).frames,
     texel: 1,
-    origin: [(ax + fx) / w, (ay + fy) / h],
+    origin: [(ax + fx - x0) / (x1 - x0), (ay + fy - y0) / (y1 - y0)],
     directional: !!pixel.directional,
     sameOnBoss: !!pixel.sameOnBoss,
   };
@@ -591,20 +563,19 @@ function fadeEdges({ w, h, light }: FxFrame): void {
 }
 
 // The frames sit in a grid no wider than MAX_TEXTURE_W, each the effect's own
-// canvas (meta.size) with its anchor at meta.origin; light (glow) becomes
+// canvas (meta.size, or its crop) with its anchor at meta.origin; light (glow) becomes
 // colour with alpha, which reads as a glow over the dark battle backdrops.
 function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelSheet): void {
-  const {
-    size: [w, h],
-    origin: [ax, ay],
-  } = sheet.fx.meta;
+  const [x0, y0, x1, y1] = cropOf(sheet);
+  const [w, h] = [x1 - x0, y1 - y0];
+  const [ax, ay] = sheet.fx.meta.origin;
   const { from, to, frames } = spanOf(sheet);
   const cols = Math.min(frames, Math.max(1, Math.floor(MAX_TEXTURE_W / w)));
   const tex = scene.textures.createCanvas(key, cols * w, Math.ceil(frames / cols) * h);
   if (!tex) return;
   const ctx = tex.getContext();
   const fx = createFx(sheet.fx, sheet.opts);
-  const frame = createFrame(w, h, -ax, -ay);
+  const frame = createFrame(w, h, x0 - ax, y0 - ay);
   const img = new ImageData(w, h);
   if (from > 0) fx.update(from);
   for (let f = 0; f < frames; f++) {

@@ -124,6 +124,10 @@ const STATUS_POP_MIN_MS = 600;
 // lines. Under the hint (30); STREAK/COMBO and the NIGHT/ARENA/ABYSS note in
 // the gap are at 120 already.
 const STAT_DEPTH = 10;
+// a spell's burst over the foe draws over a status sheet started with it (a
+// BURN, CHILL or STUN that repaints the body hid the burst), under the damage
+// numbers (1)
+const SPELL_BURST_DEPTH = 0.5;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
 const ENRAGE_TINT = 0xff7070;
@@ -2282,11 +2286,12 @@ export class BattleScene extends Phaser.Scene {
     const [shot, burst] = SPELL_FX[spell.name] ?? SPELL_FX.NOVA;
     const x = this.playerSprite.x + 40;
     const y = this.playerSprite.y - 20;
-    // the sheets fly rightwards; turned to aim at the foe
-    const fb = loopFx(this, shot, x, y, this.anim(90)).setRotation(Math.atan2(this.enemySprite.y - y, this.enemySprite.x - x));
+    // the sheets fly rightwards, turned to aim at the foe; 8 frames of 30ms a
+    // flight (fx.ts SHOT_SPAN)
+    const fb = loopFx(this, shot, x, y, this.anim(30)).setRotation(Math.atan2(this.enemySprite.y - y, this.enemySprite.x - x));
     await this.tweenPromise(fb, { x: this.enemySprite.x, y: this.enemySprite.y }, this.anim(240));
     fb.destroy();
-    this.fxOn(this.enemySprite, burst, 280);
+    this.fxOn(this.enemySprite, burst, 280).setDepth(SPELL_BURST_DEPTH);
     this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.glowBurst.explode(12);
     shake(this.cameras.main, 100, 0.008);
@@ -2322,9 +2327,9 @@ export class BattleScene extends Phaser.Scene {
   // a sheet played over a battler for ms (at BATTLE SPEED), at 3x over a
   // boss or giant as the sprite itself is; on the hero it turns to face left,
   // the way the foe's blows go
-  private fxOn(sprite: Phaser.GameObjects.Sprite, key: string, ms: number, min = 0): void {
+  private fxOn(sprite: Phaser.GameObjects.Sprite, key: string, ms: number, min = 0): Phaser.GameObjects.Sprite {
     const big = sprite === this.enemySprite && (this.enemy.boss || this.enemy.giant);
-    playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2, sprite === this.playerSprite);
+    return playFx(this, key, sprite.x, sprite.y, this.anim(ms, min), big ? 3 : 2, sprite === this.playerSprite);
   }
 
   // an animation's duration at the player's BATTLE SPEED, never below min
