@@ -8,6 +8,7 @@
     "build": "tsc && bun scripts/build.ts",
     "preview": "bun scripts/preview.ts",
     "check:art": "bun scripts/check-art.mjs",
+    "check:sound": "bun scripts/check-sound.ts",
     "sim:battle": "bun scripts/sim-battle.ts"
   },
   "dependencies": {

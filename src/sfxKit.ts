@@ -351,12 +351,29 @@ const REPEAT_CAP = 2;
 const FRAME_MS = 16;
 const recent = new Map<string, { at: number; n: number }>();
 
-/** Adds programs to the kit (a teammate's tech sounds, say). Dev builds report any budget/key problem. */
+// a key registered twice: the later table silently replaced the earlier sound
+const clashes: string[] = [];
+
+/**
+ * Adds a table of programs to the kit, once, at its module's top level (so
+ * scripts/check-sound.ts finds it). Dev builds report any budget/key problem.
+ */
 export function registerSfx(programs: Record<string, SfxProgram>): void {
-  if (process.env.NODE_ENV !== "production") {
-    for (const line of validateKit(programs)) console.error(`[sfxKit] ${line}`);
+  const found: string[] = [];
+  for (const [key, p] of Object.entries(programs)) {
+    const had = KIT.get(key);
+    if (had && had !== p) found.push(`${key}: registered twice, the later program replaced the earlier`);
+    KIT.set(key, p);
   }
-  for (const [key, p] of Object.entries(programs)) KIT.set(key, p);
+  clashes.push(...found);
+  if (process.env.NODE_ENV !== "production") {
+    for (const line of [...validateKit(programs), ...found]) console.error(`[sfxKit] ${line}`);
+  }
+}
+
+/** Keys that more than one registerSfx table claimed (check:sound fails on any). */
+export function registryClashes(): string[] {
+  return [...clashes];
 }
 
 export function sfxProgram(name: string): SfxProgram | undefined {
