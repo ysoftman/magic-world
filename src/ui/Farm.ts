@@ -1,12 +1,14 @@
 import Phaser from "phaser";
+import * as healingBloom from "pixelfx/fx/nature/healing-bloom";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { addIngredient, INGREDIENTS } from "../cooking";
 import { HARVEST_MULT, isEventToday } from "../events";
 import { CROPS, type CropDef, type CropKey, cropClock, cropLeft, cropReadyAt, FARM_PLOTS, type FarmPlot, GameState } from "../gameState";
-import { DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { isWet, weatherToday } from "../weather";
+import { type FieldFx, GOLD_BURST, GREEN_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
 // Sized off the widest lines, Press Start 2P at retroStyle(n) = n*4 px a
@@ -34,6 +36,24 @@ const RAIN_FED_MULT = 1.2;
 const dayPayMult = (): number => (isEventToday("harvest") ? HARVEST_MULT : 1) * (isWet(weatherToday("town")) ? RAIN_FED_MULT : 1);
 
 const CROP_KEYS = Object.keys(CROPS) as CropKey[];
+
+// A plot's moments (ui/fieldFx.ts), just past the end of its row, one
+// pixelfx pixel to a screen pixel: the panel draws no plants, and at 2px a
+// sprung flower stood two rows and the seed line tall. A seed sown: a sprout
+// pushes up, unfurls and flowers in a flare, its petals lifting away as motes
+// (nature/healing-bloom, 90px tall over the row's foot). A crop in: a burst
+// in the FARM's greens; a GOLDEN one, gold at 2px.
+const BLOOM: FieldFx = {
+  key: "fx-farm-bloom",
+  // the plant and its flare, its widest motes left off: 26 frames, a row of
+  // 1976x98
+  sheet: { fx: healingBloom, span: [0.05, 3.3], frames: 26, crop: [24, 16, 100, 114] },
+  ms: 2000,
+};
+// past the row's last glyph, and no nearer the panel's right edge than a
+// 1px play's widest reach (the bloom's 38px, a burst's 41)
+const FX_GAP = 40;
+const FX_RIGHT = GAME_WIDTH / 2 + PANEL_W / 2 - 50;
 
 // Remaining growth as H/M, the same unit the in-game clock shows, and as D/H
 // from 100 hours, which only FAST / VERY FAST reach (crops keep NORMAL's
@@ -122,6 +142,7 @@ export class FarmUI {
   private msg: PixelText;
   private hint: PixelText;
   private msgTimer?: Phaser.Time.TimerEvent;
+  private fx: PanelFx;
 
   private upQueued = false;
   private downQueued = false;
@@ -131,6 +152,7 @@ export class FarmUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.fx = new PanelFx(scene, BLOOM, GREEN_BURST, GOLD_BURST);
     // once per game, like StatusHud's sun/moon: TownScene can restart (map
     // editor), and baking an existing key again draws over the old texture
     if (!scene.textures.exists("crop-pumpkin")) makeTexture(scene, "crop-pumpkin", PUMPKIN_TILE, PUMPKIN_PALETTE);
@@ -320,6 +342,7 @@ export class FarmUI {
       this.dirty = true;
       Sfx.buy();
       this.showMsg(`${def.name} planted!`);
+      this.atRow(BLOOM, 12, 1);
       return;
     }
     const def: CropDef = CROPS[plot.crop];
@@ -353,14 +376,25 @@ export class FarmUI {
       // rarest payout on this panel
       Sfx.levelup();
       this.showMsg(`GOLDEN ${def.name}! x${GOLDEN_MULT}  +${gold}G\n${cookLine}`, true);
+      this.atRow(GOLD_BURST, 0, ART_PX);
     } else {
       Sfx.pickup();
       this.showMsg(`Harvested ${def.name}!  +${gold}G\n${cookLine}`);
+      this.atRow(GREEN_BURST, 0, 1);
     }
     // written out now, like the LUCKY WHEEL's spin, not on close(): a plain
     // harvest reloaded with the panel still open left the crop ripe in the
     // save, to be rolled again for the 5% GOLDEN (up to 1296G)
     GameState.save();
+  }
+
+  // `fx` past the end of the picked plot's row as it reads now (a harvested
+  // one's "PLOT 1  EMPTY" ends at x 490; a GOLDEN burst's 82px reach still
+  // clears the right edge from there), `dy` under the row's middle
+  private atRow(fx: FieldFx, dy: number, scale: number): void {
+    this.refresh();
+    const row = this.rows[this.index];
+    this.fx.play(fx, Math.min(row.x + row.width + FX_GAP, FX_RIGHT), row.y + dy, scale);
   }
 
   private showMsg(text: string, golden = false): void {
@@ -444,6 +478,7 @@ export class FarmUI {
     this.setShown(false);
     this.msg.setText("");
     this.msgTimer?.remove();
+    this.fx.clear();
     if (this.dirty) GameState.save();
   }
 
@@ -460,6 +495,7 @@ export class FarmUI {
     this.cursor.destroy();
     for (const r of this.rows) r.destroy();
     this.msgTimer?.remove();
+    this.fx.clear();
     // keys are shared kb.addKey instances; scene shutdown tears them down
   }
 }
