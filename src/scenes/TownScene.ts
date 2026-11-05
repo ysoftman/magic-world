@@ -48,6 +48,7 @@ import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { objectiveLine } from "../objective";
 import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { practiceEnemy, startPracticeRun } from "../practice";
 import {
   addExitArrow,
   addRoamer,
@@ -1514,7 +1515,21 @@ export class TownScene extends Phaser.Scene {
   // its own on touch, where it keeps to one row over the choices.
   private startArenaDialogue(): void {
     if (!arenaOpen()) {
-      this.dialogue.start(["The ARENA is shut.", "Beat the KING SLIME,", "then come back!"], "ARENA");
+      this.dialogue.ask(
+        [
+          "The ARENA is shut.",
+          "Beat the KING SLIME,",
+          "then come back!",
+          "The TRAINING YARD is open:",
+          "endless foes, infinite HP/MP.",
+          "TRAIN?",
+        ],
+        "ARENA",
+        ["TRAIN", "LEAVE"],
+        (i) => {
+          if (i === 0) this.startPractice();
+        },
+      );
       return;
     }
     const lineup = arenaLineup();
@@ -1525,13 +1540,18 @@ export class TownScene extends Phaser.Scene {
         "Items are allowed, and you",
         `heal ${Math.round(ARENA_RECOVER_PCT * 100)}% between bouts.`,
         `Your best run: ${GameState.arenaBest} won.`,
-        "ENTER THE ARENA?",
+        "The TRAINING YARD: endless foes,",
+        "infinite HP/MP, no loot.",
+        "ARENA OR TRAINING?",
       ],
       "ARENA",
-      ["FIGHT", "LEAVE"],
+      ["ARENA", "TRAIN"],
       (i) => {
         if (i === 0) this.startArena();
+        else if (i === 1) this.startPractice();
       },
+      // ESC leaves: the picks are 0 and 1
+      2,
     );
   }
 
@@ -1547,6 +1567,18 @@ export class TownScene extends Phaser.Scene {
     Sfx.boss();
     encounterOut(this.cameras.main, 300, () => {
       this.scene.start("Battle", { enemy: run.lineup[0], from: "Town", arena: run });
+    });
+  }
+
+  // the keeper's TRAIN: foes without end, picked by the player's EXIT alone
+  // (practice.ts); the same fade as the arena's
+  private startPractice(): void {
+    this.player.setVelocity(0, 0);
+    this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    Sfx.boss();
+    const run = startPracticeRun();
+    encounterOut(this.cameras.main, 300, () => {
+      this.scene.start("Battle", { enemy: practiceEnemy(0), from: "Town", practice: run });
     });
   }
 

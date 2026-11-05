@@ -67,6 +67,7 @@ import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP }
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { endPracticeRun, type PracticeRun, practiceEnemy } from "../practice";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
@@ -533,6 +534,8 @@ export class BattleScene extends Phaser.Scene {
   private origin: "Town" | "Dungeon" | "Forest" | "Snow" | "Volcano" | "Abyss" = "Town";
   // set for an ARENA bout (see arena.ts); null for every ordinary battle
   private arena: ArenaRun | null = null;
+  // set for a TRAINING YARD bout (see practice.ts); null for every other battle
+  private practice: PracticeRun | null = null;
   // set for a fight down in the ABYSS (see abyss.ts): its floor, and whether
   // the foe is that floor's GUARDIAN
   private abyss: AbyssBout | null = null;
@@ -599,14 +602,16 @@ export class BattleScene extends Phaser.Scene {
     from?: "Town" | "Dungeon" | "Forest" | "Snow" | "Volcano" | "Abyss";
     arena?: ArenaRun;
     abyss?: AbyssBout;
+    practice?: PracticeRun;
   }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
     this.arena = data?.arena ?? null;
     this.abyss = data?.abyss ?? null;
+    this.practice = data?.practice ?? null;
     // a meal lasts so many battles: this one takes its charge now, won, lost
     // or fled, each ARENA bout included, and keeps the meal to its end
-    this.meal = takeMealCharge(GameState);
+    this.meal = this.practice ? null : takeMealCharge(GameState);
     this.combo = 0;
     this.stolen = false;
     this.poisonTurns = 0;
@@ -617,8 +622,8 @@ export class BattleScene extends Phaser.Scene {
     this.tellCooldown = 0;
     this.wardTurns = 0;
     // spent by this battle, whatever it is
-    this.rested = GameState.rested;
-    GameState.rested = false;
+    this.rested = !this.practice && GameState.rested;
+    if (!this.practice) GameState.rested = false;
     if (this.rested) this.wardTurns = RESTED_WARD_TURNS;
     this.enemyDot = null;
     this.stuck = null;
@@ -738,7 +743,7 @@ export class BattleScene extends Phaser.Scene {
     // "TOUGHER FOES" is 12 x 20 = 240px, x 520..760, 24px clear of each
     // window. It says only what the night changes here (see init): the
     // payout for a boss, nothing in the ARENA, whose label takes the gap.
-    if (this.night && !this.arena) {
+    if (this.night && !this.arena && !this.practice) {
       this.add
         .pixelText(
           GAME_WIDTH / 2,
@@ -757,6 +762,13 @@ export class BattleScene extends Phaser.Scene {
     if (this.arena) {
       this.add
         .pixelText(GAME_WIDTH / 2, 64, `ARENA ${this.arena.round + 1}/${this.arena.lineup.length}`, retroStyle(6, "#fbbf24"))
+        .setOrigin(0.5, 0)
+        .setDepth(120);
+    }
+    // ...and the yard's, "PRACTICE" being 8 x 24 = 192px
+    if (this.practice) {
+      this.add
+        .pixelText(GAME_WIDTH / 2, 64, "PRACTICE", retroStyle(6, "#4ade80"))
         .setOrigin(0.5, 0)
         .setDepth(120);
     }
@@ -908,7 +920,7 @@ export class BattleScene extends Phaser.Scene {
       { label: "E:ITEM", action: "item", enabled: () => this.hasItems() },
       { label: "D:DEFEND", action: "defend" },
       { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
-      { label: "ESC:RUN", action: "run", enabled: () => !this.arena },
+      { label: this.practice ? "ESC:EXIT" : "ESC:RUN", action: "run", enabled: () => !this.arena },
     ];
     // Always size 5 (20px a glyph), within 48px margins (1184px of room), and
     // outlined, as text straight on the backdrop is (AGENTS.md): a greyed-out
@@ -1175,7 +1187,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private stealAvailable(): boolean {
-    return !this.enemy.boss && !this.stolen && !this.arena;
+    return !this.enemy.boss && !this.stolen && !this.arena && !this.practice;
   }
 
   private resolveAction(action: MenuAction): void {
@@ -1523,6 +1535,7 @@ export class BattleScene extends Phaser.Scene {
 
       switch (action) {
         case "run": {
+          if (this.practice) return this.exitPractice(this.practice);
           this.resetCombo();
           if (Math.random() < 0.5) {
             Sfx.run();
@@ -2128,6 +2141,11 @@ export class BattleScene extends Phaser.Scene {
       await this.say(`The ${this.enemy.name} is too strong!`);
       return;
     }
+    if (this.practice) {
+      Sfx.error();
+      await this.say("No catching in the yard!");
+      return;
+    }
     // the TROLL KING is a giant, catchable in the wild but not mid-gauntlet
     if (this.arena) {
       Sfx.error();
@@ -2443,7 +2461,7 @@ export class BattleScene extends Phaser.Scene {
         return GameState.player.hp < GameState.effMaxHp();
       case "pilfer":
         // no gold out of a repeatable gauntlet but the prize (see arena.ts)
-        return !this.pilfered && !this.arena;
+        return !this.pilfered && !this.arena && !this.practice;
       case "dot":
         return this.enemyDot === null;
       case "snare":
@@ -2951,6 +2969,17 @@ export class BattleScene extends Phaser.Scene {
     await this.poseRest(startX);
   }
 
+  // The yard's infinite HP and MP: topped up every frame, so a blow's damage
+  // shows for no more than a frame and nothing can run dry or kill the hero
+  private refillHero(): void {
+    const p = GameState.player;
+    const [maxHp, maxMp] = [GameState.effMaxHp(), p.maxMp];
+    if (p.hp >= maxHp && p.mp >= maxMp) return;
+    p.hp = maxHp;
+    p.mp = maxMp;
+    this.updatePlayerStats();
+  }
+
   // The weapon and the shield at the hero's hands (ui/HeroGear.ts's layout
   // facing the camera, at the battle's 2x) wherever the lunge or the
   // breathing has carried it; every frame, from update(), after the tweens
@@ -2962,6 +2991,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (this.practice) this.refillHero();
     this.syncGear();
     this.syncShadow(this.heroStance);
     this.syncShadow(this.enemyStance);
@@ -3372,6 +3402,7 @@ export class BattleScene extends Phaser.Scene {
     this.victoryHop();
     // before anything below: no quest flag, counter, loot, EXP or ending
     if (this.arena) return this.arenaVictory(this.arena);
+    if (this.practice) return this.practiceVictory(this.practice);
     // the TROLL KING's flag (arena.ts: what puts it in the ARENA lineup) for
     // beating it or catching it, which takes beating it down first; never
     // from the ABYSS, where nothing sets a flag
@@ -3544,6 +3575,7 @@ export class BattleScene extends Phaser.Scene {
     this.running = false;
     this.heroIdle?.stop();
     if (this.arena) return this.arenaDefeat(this.arena);
+    if (this.practice) return this.exitPractice(this.practice);
     Sfx.gameover();
     this.soulRise();
     await this.say("You have fallen...");
@@ -3633,6 +3665,27 @@ export class BattleScene extends Phaser.Scene {
     const total = run.lineup.length;
     await this.say(cleared ? `ARENA CLEARED! ${won}/${total} bouts won!` : `ARENA OVER: ${won}/${total} bouts won.`);
     await this.say(record ? `Prize: +${prize}G  NEW RECORD!` : `Prize: +${prize}G  (best ${GameState.arenaBest})`);
+    this.end();
+  }
+
+  // A yard foe down: nothing is won, and the next foe comes in behind a short
+  // fade, for as long as the player stays
+  private async practiceVictory(run: PracticeRun): Promise<void> {
+    Sfx.victory();
+    this.fell();
+    await this.say(`${this.enemy.name} is down! Next foe...`);
+    this.cameras.main.fadeOut(this.anim(300), 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.restart({ enemy: practiceEnemy(run.round + 1), from: this.origin, practice: { ...run, round: run.round + 1 } });
+    });
+  }
+
+  // the player's EXIT: what the yard lent is put back, and nothing is saved
+  // of it
+  private exitPractice(run: PracticeRun): void {
+    endPracticeRun(run);
+    // the yard is over, so update() stops topping the hero up past what was put back
+    this.practice = null;
     this.end();
   }
 
