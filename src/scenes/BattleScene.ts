@@ -67,7 +67,7 @@ import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP }
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
-import { endPracticeRun, type PracticeRun, practiceEnemy } from "../practice";
+import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
@@ -683,12 +683,17 @@ export class BattleScene extends Phaser.Scene {
       ng: GameState.enemyScale(),
       rematch: this.rematch,
     });
+    if (this.practice) {
+      this.enemy.hp = practiceHp(this.enemy.hp, GameState.effAtk());
+      this.enemy.curHp = this.enemy.hp;
+    }
     const from = data?.from;
     this.origin = from === "Dungeon" || from === "Forest" || from === "Snow" || from === "Volcano" || from === "Abyss" ? from : "Town";
     // read before this fight puts the species in the bestiary, below: the
     // enemy window shows its weakness only once an earlier fight has
-    this.weakKnown = GameState.seenMonsters.includes(def.name);
-    if (!GameState.seenMonsters.includes(def.name)) {
+    this.weakKnown = this.practice !== null || GameState.seenMonsters.includes(def.name);
+    // the yard's foes aren't met for the bestiary, a weakness shown from the start
+    if (!this.practice && !GameState.seenMonsters.includes(def.name)) {
       GameState.seenMonsters.push(def.name);
       // persist immediately: a battle ended by RUN never reaches the
       // victory-path save, which would lose the bestiary entry on reload
@@ -3676,16 +3681,16 @@ export class BattleScene extends Phaser.Scene {
     this.end();
   }
 
-  // A yard foe down: nothing is won, and the same foe comes in again behind
-  // a short fade, for as long as the player stays (C:FOE picks another)
+  // A yard foe down: nothing is won, and another comes in behind a short
+  // fade, for as long as the player stays
   private async practiceVictory(run: PracticeRun): Promise<void> {
     Sfx.victory();
     this.fell();
-    await this.say(`${this.enemy.name} is down! Again...`);
-    this.practiceFoe(run, 0);
+    await this.say(`${this.enemy.name} is down! Next foe...`);
+    this.practiceFoe(run, randomStep());
   }
 
-  // the yard's next bout, `step` foes along the roster (0 for the same one)
+  // the yard's next bout, `step` foes along the roster
   private practiceFoe(run: PracticeRun, step: number): void {
     this.running = false;
     this.cameras.main.fadeOut(this.anim(300), 0, 0, 0);
