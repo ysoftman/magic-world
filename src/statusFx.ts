@@ -12,6 +12,7 @@ import * as dissolveBurn from "pixelfx/fx/spawn/dissolve-burn";
 import * as shatterDeath from "pixelfx/fx/spawn/shatter-death";
 import * as burning from "pixelfx/fx/status/burning";
 import * as frozen from "pixelfx/fx/status/frozen";
+import * as petrified from "pixelfx/fx/status/petrified";
 import * as poisoned from "pixelfx/fx/status/poisoned";
 import * as rage from "pixelfx/fx/status/rage";
 import * as stunned from "pixelfx/fx/status/stunned";
@@ -44,6 +45,7 @@ export type StatusKind =
   | "stun"
   | "rage"
   | "regrow"
+  | "petrify"
   | "shatter"
   | "dissolve"
   | "disintegrate";
@@ -390,6 +392,22 @@ const STATUS_SHEETS: Record<StatusKind, StatusSheet> = {
     soft: 0.35,
     fells: true,
     breaks: 1.6,
+    ceiling: WINDOW_CEILING,
+  },
+  // Stone creeps up from the feet behind a crackling edge that spits grit,
+  // the statue (the body's own shading walked down a grey ramp) holds while
+  // cracks run through it, and it bursts into tumbling chunks and dust at
+  // 2.2s (its SHATTER), the body gone with it. Its first 0.25s (the creep's
+  // start) and the dust's last wisps left off; the creep and the hold are
+  // what make it long, so it plays about 1.5x faster than its own time.
+  petrify: {
+    fx: petrified,
+    span: [0.25, 2.9],
+    frames: 30,
+    fade: 0.15,
+    soft: 0.35,
+    fells: true,
+    breaks: 2.2,
     ceiling: WINDOW_CEILING,
   },
   // a white flash, a ring on the floor, then the body peels into motes the

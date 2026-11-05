@@ -237,6 +237,8 @@ const DEATH_FX_MS = 1800;
 // the deaths' kinds: the snow field's and the volcano's rosters
 const SHATTER_KIN = [ENEMIES.frostMoth, ENEMIES.auroraMoth, ENEMIES.yeti, ENEMIES.iceGolem].map((e) => e.name);
 const BURNAWAY_KIN = [ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
+// stone and the troll that turns to it: the forest's boss and golem
+const PETRIFY_KIN = [ENEMIES.troll, ENEMIES.mossGolem].map((e) => e.name);
 
 // status labels sit right-aligned on the HP rows, 20px inside each window
 const PLAYER_STATUS_RIGHT = 476;
@@ -3059,12 +3061,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // How the foe dies, if not in fx-poof: its own kind's way (a creature of
-  // ice shatters, one of fire burns away, an ARENA bout's too), else unmade
+  // ice shatters, one of fire burns away, stone turns to a statue and bursts,
+  // an ARENA bout's too), else unmade
   // into motes in the ABYSS
   private deathOf(): StatusKind | null {
     const { name } = this.enemy;
     if (SHATTER_KIN.includes(name)) return "shatter";
     if (BURNAWAY_KIN.includes(name)) return "dissolve";
+    if (PETRIFY_KIN.includes(name)) return "petrify";
     return this.abyss ? "disintegrate" : null;
   }
 
