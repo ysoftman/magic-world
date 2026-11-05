@@ -314,7 +314,18 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   봤다. 지금은 대화창이 `uiBlocking()` 이라 영웅·패널 키가 멈추고 이름표도 숨으며, 저장 뒤
   타이틀로 가기까지의 700ms 는 `quitting` 하나로 막는다. 새 필드 씬도 DialogueBox 와 이 두
   줄(`takeQuitKey`, `quitting` 가드)을 넣는다.
-- 필드 공통 키(S·CTRL+S·M·T·I·B·A·U·O·Q)는 `sceneCommon` 의 `FieldKeys` 가 등록하고 큐에 담는다. 새 필드
+- W 는 필드(숲·설원·동굴·심연·화산)에서 마을 HOME 문 앞으로 워프한다. `new FieldKeys(this, { warp: true })`
+  로만 등록하고(마을은 HOME 이 마을 안이라 등록하지 않는다), update() 의 `takeQuitKey` 바로 뒤에서
+  `takeWarpKey(() => this.uiBlocking() || 나가는 중 플래그, () => this.warpHome())` 로 받는다. `warpHome()` 은
+  `askWarpHome(this, this.walk, this.dialogue, 플래그 세우기, done?)`(`WARP HOME?` YES/NO, ESC 는 NO)이고 YES 면
+  `warpOut` 으로 사라진 뒤 `scene.start("Town", { fromWarp: true })` 다(데이터를 늘 새로 줘 지난 data 재사용이
+  없다). 나가는 중 플래그(`exitingForest` 등)가 조우·출구·계절 전환을 막고 연출 동안은 `FieldKeys.leaving()` 이라
+  다른 키가 안 먹는다. 마을은 `homeDoor()`(HOUSE_POS 에서 읽는 집 문 아래 칸)에 놓고 `WARP_IN_MS` 를 조우
+  쿨다운에 얹은 채 `warpIn` 한다. 심연은 위 계단의 LEAVE 와 같이 `portalOnLeave` 로 포털을 남기고(`leaving` 콜백),
+  `run = null`(`done`)로 런을 끝낸다. 터치 `MENU` 는 필드에서 W 까지 8개가 되어 원판을 r21·피치 46 으로 줄이고
+  열을 474 에서 끝낸다(7개까지는 r24·피치 50, 대화창 480 위). 새 필드 씬은 같은 세 곳(키 등록·takeWarpKey·
+  warpHome)과 도움말 줄 `["W", "WARP HOME"]` 을 넣는다.
+- 필드 공통 키(S·CTRL+S·M·T·I·B·A·U·O·Q, 필드의 W)는 `sceneCommon` 의 `FieldKeys` 가 등록하고 큐에 담는다. 새 필드
   씬은 create() 에서 TouchControls 보다 먼저 `new FieldKeys(this)` 를 만들고(마을은 `{ toastY:
   STATUS_HUD_TOAST_Y }`), update() 에서 `takeSystemKeys(hud)` → `takeMapKey` → quitting
   가드 → `takeQuitKey` 순으로 부른다(마을은 T 를 가드 뒤, Q 다음에 읽는다). 이 키들의 `*Queued`
