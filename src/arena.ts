@@ -9,6 +9,11 @@ import type { ENEMIES } from "./monsters";
 // - No running, no stealing, no catching: a fight you can leave or farm
 //   isn't a gauntlet, and the TROLL KING (a giant, so normally catchable)
 //   must not become a free catch.
+// - The run can be left, though (ESC:QUIT, asked once and then confirmed,
+//   BattleScene.quitArena): a quit is a stop, not an escape from the fight, as
+//   the bouts won have paid already and only the clear's bonus is lost. The
+//   next run starts over at the first bout either way, so quitting gains
+//   nothing back.
 // - Items work, and between bouts the hero gets back ARENA_RECOVER_PCT of
 //   max HP and MP. Five bosses with nothing back would only reward hoarding
 //   potions; a full refill would make it five separate fights.

@@ -535,6 +535,8 @@ export class BattleScene extends Phaser.Scene {
   private origin: "Town" | "Dungeon" | "Forest" | "Snow" | "Volcano" | "Abyss" = "Town";
   // set for an ARENA bout (see arena.ts); null for every ordinary battle
   private arena: ArenaRun | null = null;
+  // the ARENA's first ESC:QUIT asked, the next one leaves
+  private leaveArmed = false;
   // set for a TRAINING YARD bout (see practice.ts); null for every other battle
   private practice: PracticeRun | null = null;
   // set for a fight down in the ABYSS (see abyss.ts): its floor, and whether
@@ -927,7 +929,7 @@ export class BattleScene extends Phaser.Scene {
       { label: "D:DEFEND", action: "defend" },
       // the yard has nothing to steal; its C changes the foe (practice.ts)
       this.practice ? { label: "C:FOE", action: "foe" } : { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
-      { label: this.practice ? "ESC:EXIT" : "ESC:RUN", action: "run", enabled: () => !this.arena },
+      { label: this.practice ? "ESC:EXIT" : this.arena ? "ESC:QUIT" : "ESC:RUN", action: "run" },
     ];
     // Always size 5 (20px a glyph), within 48px margins (1184px of room), and
     // outlined, as text straight on the backdrop is (AGENTS.md): a greyed-out
@@ -1135,11 +1137,6 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (e.code === "Escape") {
-      // no way out of an ARENA bout but through it (see arena.ts)
-      if (this.arena) {
-        Sfx.error();
-        return;
-      }
       this.resolveAction("run");
       return;
     }
@@ -1535,13 +1532,23 @@ export class BattleScene extends Phaser.Scene {
     const intro = this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`;
     this.type(this.rested ? `${intro}\nWell rested: your WARD is up!` : intro);
 
+    this.leaveArmed = false;
     while (this.running) {
       if (GameState.player.hp <= 0) return this.defeat();
 
       if (this.poisonTurns > 0) await this.poisonTick();
       // a frozen hero forfeits this action (null matches no case below); the
       // companion and the enemy still take their turns
-      const action = this.frozen ? null : await this.playerTurn();
+      let action = this.frozen ? null : await this.playerTurn();
+      // the ARENA can be left, not fled: the first ESC:QUIT only asks, back to
+      // the menu with no turn spent; the second ends the run with what it has
+      // won (arena.ts)
+      while (action === "run" && this.arena && !this.leaveArmed) {
+        this.leaveArmed = true;
+        await this.say("Leave the ARENA? Prize so far is kept. ESC again.");
+        action = await this.playerTurn();
+      }
+      if (action !== "run") this.leaveArmed = false;
       if (!action) await this.thaw();
 
       switch (action) {
@@ -1549,6 +1556,8 @@ export class BattleScene extends Phaser.Scene {
           return this.practiceFoe(this.practice!, 1);
         case "run": {
           if (this.practice) return this.exitPractice(this.practice);
+          // the second ESC:QUIT, once the first has asked (above)
+          if (this.arena) return this.quitArena(this.arena);
           this.resetCombo();
           if (Math.random() < 0.5) {
             Sfx.run();
@@ -3659,6 +3668,15 @@ export class BattleScene extends Phaser.Scene {
   // Falling in the ARENA ends the run in place of the usual defeat: no gold
   // lost, no streak reset, carried back out at 1 HP to where the hero stood
   // by the keeper (GameState.pos, kept from when the Town handed over).
+  // The player leaving mid-run: what the bouts won so far paid stays (it was
+  // paid bout by bout), the clear's bonus is lost, and the hero walks out as
+  // is, no 1 HP as after a fall.
+  private async quitArena(run: ArenaRun): Promise<void> {
+    this.resetCombo();
+    await this.say("You leave the ARENA.");
+    return this.endArena(run, run.round, run.purse, false);
+  }
+
   private async arenaDefeat(run: ArenaRun): Promise<void> {
     Sfx.gameover();
     this.soulRise();
