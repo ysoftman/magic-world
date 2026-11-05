@@ -88,7 +88,18 @@ const LUNGE_BACK_MS = 110;
 // a strike's anticipation (the hero draws back and raises the weapon), the
 // freeze on contact, and the foe's knock-back (a crit's farther)
 const WINDUP_MS = 100;
-const WINDUP_PX = 14;
+const WINDUP_PX = 22;
+// the body's pose: leaning back / forward (degrees, + is forward as the hero
+// faces right), and a crouch before and a stretch through the dash, kept
+// small as the feet stand off the ground by half the lost height
+const HERO_SCALE = 2;
+const LEAN_BACK = -9;
+const LEAN_FWD = 8;
+const CROUCH: [number, number] = [1.05, 0.93];
+const STRETCH: [number, number] = [1.14, 0.95];
+// the weapon's raised, down-stroke and per-hit swing angles
+const WEAPON_UP = -80;
+const WEAPON_DOWN = 100;
 const HIT_STOP_MS = 50;
 const CRIT_STOP_MS = 90;
 const RECOIL_PX = 10;
@@ -463,6 +474,7 @@ export class BattleScene extends Phaser.Scene {
   private enemySprite!: Phaser.GameObjects.Sprite;
   private playerSprite!: Phaser.GameObjects.Sprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
+  private readonly nudging = new Map<Phaser.GameObjects.Sprite, { home: number; tween: Phaser.Tweens.Tween }>();
   private shieldOverlay!: Phaser.GameObjects.Sprite;
   private msgText!: TypedText;
   // the line typing out now (type()), cut off by the next one
@@ -1622,10 +1634,30 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // a struck fighter's knock-back along the ground (dir 1 pushes it right)
-  // and back; x only, so the breathing and a boss's pulse keep their own
+  // and back
   private recoil(sprite: Phaser.GameObjects.Sprite, dir: 1 | -1, crit: boolean): void {
-    const px = (crit ? CRIT_RECOIL_PX : RECOIL_PX) * dir;
-    this.tweens.add({ targets: sprite, x: `+=${px}`, duration: this.anim(RECOIL_MS), yoyo: true, ease: "Quad.easeOut" });
+    this.nudge(sprite, (crit ? CRIT_RECOIL_PX : RECOIL_PX) * dir, RECOIL_MS);
+  }
+
+  // `dx` along x and back in `ms`. x only, so the breathing and a boss's pulse
+  // keep their own. A second nudge before the first is home restarts from the
+  // same home, so quick hits (a double slash) never leave the sprite displaced.
+  private nudge(sprite: Phaser.GameObjects.Sprite, dx: number, ms: number): void {
+    const held = this.nudging.get(sprite);
+    held?.tween.remove();
+    const home = held?.home ?? sprite.x;
+    const tween = this.tweens.add({
+      targets: sprite,
+      x: home + dx,
+      duration: this.anim(ms),
+      yoyo: true,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        sprite.x = home;
+        this.nudging.delete(sprite);
+      },
+    });
+    this.nudging.set(sprite, { home, tween });
   }
 
   private canCast(spell: Spell): boolean {
@@ -1742,6 +1774,7 @@ export class BattleScene extends Phaser.Scene {
       dealt.push(hit.dmg);
       crit ||= hit.crit;
       this.moveSfx(skill, "hit", i, hit.crit);
+      if (skill.style === "weapon") this.meleeHit(hit.crit);
       // the first hit on a weakness rings and shakes as a weakness spell does
       if (hit.weak && i === 0) {
         Sfx.critical();
@@ -1762,7 +1795,8 @@ export class BattleScene extends Phaser.Scene {
     };
     const melee = skill.style === "weapon";
     const home = this.playerSprite.x;
-    if (melee) await this.dashIn();
+    if (melee) await this.strikeIn();
+    else await this.castPose();
     const stage: SkillStage = {
       hero: this.playerSprite,
       foe: this.enemySprite,
@@ -1776,7 +1810,7 @@ export class BattleScene extends Phaser.Scene {
     // whatever the effects didn't land, so the damage is always dealt
     while (blows < skill.hits) land();
     over = true;
-    if (melee) await this.dashBack(home);
+    await this.poseRest(home);
     unflash?.remove();
     this.restoreEnemyTint();
     const down = this.enemy.curHp <= 0;
@@ -1809,22 +1843,99 @@ export class BattleScene extends Phaser.Scene {
     return this.enemySprite.x - this.enemySprite.displayWidth / 2 - 16;
   }
 
-  // A weapon tech's dash, FIGHT's lunge in two halves with the tech's
-  // effects between: out with the afterimages and the weapon swung down,
-  // then (dashBack) home with the weapon back up
-  private async dashIn(): Promise<void> {
-    if (GameState.equipped.weapon) {
-      this.weaponOverlay.setAngle(-20);
-      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
+  // A weapon tech's dash is FIGHT's lunge in two halves with the tech's
+  // effects between: strikeIn out, poseRest home.
+  // draw back into a crouch and raise the weapon, then dash out to the foe
+  // stretched and leaning in, the weapon swung down with afterimages, and
+  // `onContact` (if given) as it connects
+  private async strikeIn(onContact?: () => void): Promise<void> {
+    const hero = this.playerSprite;
+    const hasWeapon = !!GameState.equipped.weapon;
+    const trail = this.ghostTrail(hero);
+    const weaponTrail = this.ghostTrail(this.weaponOverlay, 0.5);
+    const startX = hero.x;
+    if (hasWeapon) {
+      this.weaponOverlay.setAngle(0);
+      this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_UP, duration: this.anim(WINDUP_MS), ease: "Sine.easeOut" });
     }
-    await this.tweenPromise(this.playerSprite, { x: this.meleeX() }, this.anim(LUNGE_OUT_MS), this.ghostTrail(this.playerSprite));
+    await this.tweenPromise(
+      hero,
+      { x: startX - WINDUP_PX, angle: LEAN_BACK, scaleX: HERO_SCALE * CROUCH[0], scaleY: HERO_SCALE * CROUCH[1] },
+      this.anim(WINDUP_MS),
+    );
+    if (hasWeapon) {
+      this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_DOWN, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
+    }
+    await this.tweenPromise(
+      hero,
+      { x: this.meleeX(), angle: LEAN_FWD, scaleX: HERO_SCALE * STRETCH[0], scaleY: HERO_SCALE * STRETCH[1] },
+      this.anim(LUNGE_OUT_MS),
+      () => {
+        trail();
+        if (hasWeapon) weaponTrail();
+      },
+    );
+    if (hasWeapon) this.slashArc();
+    onContact?.();
   }
 
-  private async dashBack(home: number): Promise<void> {
+  // back to the stance: at home, upright, at scale, the weapon down
+  private async poseRest(home: number): Promise<void> {
     if (GameState.equipped.weapon) {
       this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
     }
-    await this.tweenPromise(this.playerSprite, { x: home }, this.anim(LUNGE_BACK_MS));
+    await this.tweenPromise(this.playerSprite, { x: home, angle: 0, scaleX: HERO_SCALE, scaleY: HERO_SCALE }, this.anim(LUNGE_BACK_MS));
+  }
+
+  // a blow-style skill's cast: the hero draws back into a crouch with the
+  // weapon up, then thrusts forward as the effects begin (rest: poseRest)
+  private async castPose(): Promise<void> {
+    const hero = this.playerSprite;
+    const hasWeapon = !!GameState.equipped.weapon;
+    if (hasWeapon) {
+      this.weaponOverlay.setAngle(0);
+      this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_UP, duration: this.anim(WINDUP_MS), ease: "Sine.easeOut" });
+    }
+    await this.tweenPromise(
+      hero,
+      { x: hero.x - WINDUP_PX / 2, angle: LEAN_BACK, scaleX: HERO_SCALE * CROUCH[0], scaleY: HERO_SCALE * CROUCH[1] },
+      this.anim(WINDUP_MS),
+    );
+    if (hasWeapon) {
+      this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_DOWN / 2, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
+    }
+    this.tweens.add({
+      targets: hero,
+      x: hero.x + WINDUP_PX,
+      angle: LEAN_FWD,
+      scaleX: HERO_SCALE * STRETCH[0],
+      scaleY: HERO_SCALE * STRETCH[1],
+      duration: this.anim(LUNGE_OUT_MS),
+      ease: "Quad.easeOut",
+    });
+  }
+
+  // one more blow of a weapon tech landing: the blade whips through again
+  // and the hero jabs in, the foe knocked back
+  private meleeHit(crit: boolean): void {
+    if (GameState.equipped.weapon) {
+      this.weaponOverlay.setAngle(-50);
+      this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_DOWN, duration: this.anim(70), ease: "Sine.easeIn" });
+      this.slashArc();
+    }
+    this.nudge(this.playerSprite, 14, 60);
+    this.recoil(this.enemySprite, 1, crit);
+  }
+
+  // the blade's white sweep across the foe's near side, gone in 160ms
+  private slashArc(): void {
+    const g = this.add.graphics().setDepth(5);
+    const [x, y] = [this.enemySprite.x - this.enemySprite.displayWidth / 2, this.enemySprite.y];
+    g.lineStyle(10, 0xffffff, 0.9);
+    g.beginPath();
+    g.arc(x - 20, y, 96, -1.1, 0.9, false);
+    g.strokePath();
+    this.tweens.add({ targets: g, alpha: 0, duration: this.anim(160), onComplete: () => g.destroy() });
   }
 
   // a skill's side effect landed: THORNS' poison here (VENOM STING's dot, in
@@ -2807,7 +2918,7 @@ export class BattleScene extends Phaser.Scene {
 
   // throttled afterimage spawner for a tween's onUpdate: faded copies trail
   // the sprite along its dash, selling the sped-up lunges as speed
-  private ghostTrail(sprite: Phaser.GameObjects.Sprite): () => void {
+  private ghostTrail(sprite: Phaser.GameObjects.Sprite, alpha = 0.35): () => void {
     let last = 0;
     return () => {
       if (this.time.now - last < this.anim(40)) return;
@@ -2816,7 +2927,8 @@ export class BattleScene extends Phaser.Scene {
         .image(sprite.x, sprite.y, sprite.texture.key)
         .setScale(sprite.scaleX, sprite.scaleY)
         .setFlipX(sprite.flipX)
-        .setAlpha(0.35)
+        .setAlpha(alpha)
+        .setAngle(sprite.angle)
         .setTint(0x9fd4ff);
       this.tweens.add({ targets: ghost, alpha: 0, duration: this.anim(180), onComplete: () => ghost.destroy() });
     };
@@ -2830,26 +2942,13 @@ export class BattleScene extends Phaser.Scene {
     await this.tweenPromise(this.enemySprite, { x: startX }, this.anim(LUNGE_BACK_MS));
   }
 
-  // FIGHT's strike: draw back and raise the weapon, dash out swinging,
-  // `onContact` as it connects, a short freeze, then home
+  // FIGHT's strike: strikeIn (draw back, dash, `onContact` as it connects),
+  // a short freeze, then home
   private async lunge(crit = false, onContact?: () => void): Promise<void> {
     const startX = this.playerSprite.x;
-    const targetX = this.meleeX();
-    const hasWeapon = !!GameState.equipped.weapon;
-    const trail = this.ghostTrail(this.playerSprite);
-    if (hasWeapon) this.weaponOverlay.setAngle(0);
-    if (hasWeapon) this.tweens.add({ targets: this.weaponOverlay, angle: -50, duration: this.anim(WINDUP_MS), ease: "Sine.easeOut" });
-    await this.tweenPromise(this.playerSprite, { x: startX - WINDUP_PX }, this.anim(WINDUP_MS));
-    if (hasWeapon) {
-      this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
-    }
-    await this.tweenPromise(this.playerSprite, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
-    onContact?.();
+    await this.strikeIn(onContact);
     await this.wait(this.anim(crit ? CRIT_STOP_MS : HIT_STOP_MS));
-    if (hasWeapon) {
-      this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
-    }
-    await this.tweenPromise(this.playerSprite, { x: startX }, this.anim(LUNGE_BACK_MS));
+    await this.poseRest(startX);
   }
 
   // The weapon and the shield at the hero's hands (ui/HeroGear.ts's layout
