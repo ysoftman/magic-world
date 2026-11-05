@@ -105,6 +105,7 @@ import { TreasureDigger } from "../ui/TreasureDig";
 import { type Rect, Villagers } from "../ui/Villagers";
 import { warmWarp } from "../ui/warpFx";
 import { bakeHero, seasonSkin } from "./BootScene";
+import type { EndingData } from "./EndingScene";
 
 // The last day whose town event (events.ts) was announced. Module scope, so
 // it outlives a Town restart — every battle and field trip ends in one, and
@@ -1829,13 +1830,44 @@ export class TownScene extends Phaser.Scene {
     }
     if (!q.bestiaryReward) {
       const caught = GameState.caughtSpecies();
-      this.dialogue.start(
-        ["The forest is at peace.", `You have caught ${caught} of`, `${CATCHABLE.length} beasts. Catch them`, "all and I will reward you!"],
-        "ELDER",
-      );
+      this.elderTalk([
+        "The forest is at peace.",
+        `You have caught ${caught} of`,
+        `${CATCHABLE.length} beasts. Catch them`,
+        "all and I will reward you!",
+      ]);
       return;
     }
-    this.dialogue.start(["The realm owes you", "everything, hero."], "ELDER");
+    this.elderTalk(["The realm owes you", "everything, hero."]);
+  }
+
+  // The talks that carry no reward, once the hero has seen the ending: they
+  // end by offering to recall it, the only way back to a screen that comes
+  // once. Before the MOSS GOLEM falls it is the plain talk.
+  private elderTalk(lines: string[]): void {
+    if (!GameState.quest.forestBoss) {
+      this.dialogue.start(lines, "ELDER");
+      return;
+    }
+    this.dialogue.ask([...lines, "RECALL YOUR DEEDS?"], "ELDER", ["RECALL", "BYE"], (i) => {
+      if (i !== 0) return;
+      // the true end only once it has been earned; ESC takes the forest's
+      if (!GameState.quest.volcanoBoss) return this.watchEnding(false);
+      this.dialogue.ask(["WHICH TALE?"], "ELDER", ["FOREST", "VOLCANO"], (j) => this.watchEnding(j === 1), 0);
+    });
+  }
+
+  // The ending again, from the saved run as it stands (EndingScene { replay }:
+  // nothing is rewarded or saved, and it comes back here). Held like a season's
+  // fade, so nothing moves while the screen goes out.
+  private watchEnding(epilogue: boolean): void {
+    this.turningSeason = true;
+    this.encounterCooldown = ENCOUNTER_COOLDOWN;
+    this.walk.idle();
+    this.cameras.main.fadeOut(SEASON_FADE, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start("Ending", { epilogue, replay: true } satisfies EndingData);
+    });
   }
 
   private startHunterDialogue(): void {

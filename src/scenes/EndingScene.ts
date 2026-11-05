@@ -15,6 +15,9 @@ import { isTouchDevice } from "../ui/TouchControls";
 export interface EndingData {
   // the FLAME DRAKE's first fall: the last region's boss closes the whole run
   epilogue?: boolean;
+  // watched again from the town's ELDER: no change to the save, and back to
+  // the town where the hero stood, not on to the title or the forest lane
+  replay?: boolean;
 }
 
 // Every region in the order the story opens them, for the epilogue's credits
@@ -140,6 +143,7 @@ export class EndingScene extends Phaser.Scene {
     this.leaving = false;
     this.ready = false;
     const epilogue = data.epilogue === true;
+    const replay = data.replay === true;
     // Phaser keeps the last start()'s data when the next start() passes none,
     // so without this a plain ending after an epilogue in the same session
     // (a new game, MOSS GOLEM again) would replay the epilogue
@@ -185,7 +189,10 @@ export class EndingScene extends Phaser.Scene {
         // { fromForest }, not {}: GameState.pos is where the hero left the
         // town, the forest lane's last tile, and set down there they walked
         // straight back into the forest
-        if (epilogue) this.scene.start("Title");
+        // never without data (a start with none replays the last, this one's
+        // { replay } included): GameState.pos is where the hero stood
+        if (replay) this.scene.start("Town", {});
+        else if (epilogue) this.scene.start("Title");
         else this.scene.start("Town", { fromForest: true });
       });
     };

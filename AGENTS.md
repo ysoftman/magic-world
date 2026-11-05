@@ -975,6 +975,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
     금화). 스프라이트가 destroy 되면(`clear()`) 그 tween 도 끊긴다.
   - 몸(o.actor)을 칠하는 actor 이펙트를 패널 아이콘에 쓸 때는 빈 actor(`eyes: []`, 빈 mask)를 넘겨 그 효과의 장식만
     굽는다(도감 하트, `BestiaryUI` 의 `HEARTS`). actor 의 높이가 장식의 높이를 정한다.
+- 엔딩은 마을 ELDER 의 보상 없는 대화(`elderTalk`, `forestBoss` 이후) 끝의 RECALL 로 다시 본다. 대화창 선택지는 터치에서 둘까지라
+  FLAME DRAKE 를 쓰러뜨렸으면 두 번째 질문(FOREST/VOLCANO)으로 나눴다. `watchEnding` 이 `{ epilogue, replay: true }` 로
+  시작하고 EndingScene 은 저장·보상 없이 끝나면 `Town {}`(GameState.pos 그대로)으로 돌아간다. 마을 `turningSeason` 이
+  페이드 동안의 움직임을 막는 같은 가드다.
 - 엔딩(`EndingScene`)의 축하 불꽃도 pixelfx explosions/firework-burst 다. 마을 축제처럼 `addLightCanvas` 에 실시간으로
   그리되, 요약 양옆 빈 칸(`FIREWORK_BOX`, 모든 글자 줄에서 10px: MOSS GOLEM 278x262, 에필로그 330x316)에 한쪽 하나씩
   캔버스를 두고 1px 로 그린다. 60개 seed 로 잰 burst 의 범위(별과 12/255 넘는 빛)는 좌우 98·위 76·아래 149px
