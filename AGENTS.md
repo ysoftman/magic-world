@@ -749,6 +749,16 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   (`fx.ts` 의 fx-restore-hp/-mp/-all, holy/heal-aoe, BattleScene `ringOn`). 색은 필드 가방(InventoryUI `HEALS`)과 같아
   같은 아이템이 필드와 전투에서 같은 연출이다. 실제 사례: 씨앗 섬광의 글로우를 light 1 로 구우면 crop 에 잘려 밝은 풀밭
   위에 네모 판이 보였다(0.45s 부터, light 0.5).
+- 숨결을 쓰는 보스 강타(FLAME DRAKE INFERNO·SALAMANDER FLAME SPIT·GLACIER GOLEM FROST BREATH)는 돌진 대신 `fx.ts` 의
+  `fx-breath-fire`·`fx-spit-fire`·`fx-breath-frost`(pixelfx fire/fire-breath·ice/frost-breath, `soften`, directional)를
+  입에서 영웅 쪽으로 뿜는다(BattleScene `BREATHS`·`breathOn`, 입 자리 `focus` 는 보스 격자와 배율 2 기준). 루프라 알파
+  앞 20%·뒤 20% 로 페이드하고 피격은 300ms 뒤에 시작한다. 보스 격자를 다시 그리면 `focus` 를 다시 맞춘다.
+- 돌 종(TROLL KING·MOSS GOLEM, BattleScene `PETRIFY_KIN`)의 처치는 `statusFx.ts` 의 `petrify`(status/petrified, `fells`,
+  `breaks` 2.2)다. 이펙트의 석상 단계가 길어 `DEATH_FX_MS` 1800 에서 약 1.5배속이다. 심연에서도 disintegrate 보다 앞선다.
+- 영웅이 쓰러지면(`defeat`·`arenaDefeat`) `soulFx.ts` 가 영웅 그림(외형·장비)으로 구운 spawn/soul-rise 를 2.2초에 재생한다
+  (BattleScene `soulRise`, 기다리지 않아 귀환 흐름은 늦지 않다). 상태창 속으로 들어가지 않게 height 24·`CEILING` 234 로 잘랐다.
+  시트는 영웅 HP 가 최대의 40% 이하면 기술 시트보다 먼저, 아니면 뒤에 warm 한다(`SOUL_WARM_HP`). 새 시트 두 장의
+  텍스처 크기와 첫 전투 프레임 시간은 `TODO.md` 의 실기기 항목에 얹어 잰다.
 - BOMB 은 `icon-bomb` 을 영웅 손에서 적 발밑으로 포물선으로 던지고(BattleScene `lobBomb`), 떨어진 자리(`GROUND_Y`)에서
   fx-bomb(explosions/grenade 의 BLOW 1.62s 이후만)이 터진다. 나는 적도 땅에서 터진다. 실제 사례: grenade 파편 줄기는
   원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224).
