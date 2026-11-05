@@ -368,12 +368,13 @@ export class TitleScene extends Phaser.Scene {
       ]);
     };
 
-    // the questions name the slot they act on; the longest, "SLOT 3: NEW
-    // GAME+? Y/N", is 22 x 32 = 704px (x 288..992)
+    // the questions name the slot they act on, but NEW GAME+'s says what it
+    // does instead ("NEW GAME+" alone told a first-timer nothing); the longest,
+    // "KEEP YOUR HERO, TOUGHER FOES? Y/N", is 33 x 32 = 1056px (x 112..1168)
     const askDelete = () => confirm("confirmDelete", `DELETE SLOT ${GameState.saveSlot}`, "Y: DELETE");
     // the replay rewrites the save (quests, chests, half the gold), so it gets
     // the same Y/N as the other two
-    const askPlus = () => confirm("confirmPlus", `SLOT ${GameState.saveSlot}: NEW GAME+`, "Y: NEW GAME+");
+    const askPlus = () => confirm("confirmPlus", "KEEP YOUR HERO, TOUGHER FOES", "Y: NEW GAME+");
     // names what comes back: "RESTORE TWELVECHARSX LV30? Y/N" is 30 x 32 =
     // 960px (x 160..1120). It swaps, so the save it replaces becomes the
     // backup and U again puts it back.
