@@ -1782,7 +1782,7 @@ export class TownScene extends Phaser.Scene {
       return;
     }
     if (!q.bossDefeated) {
-      // on NEW GAME+ the ELDER knows the hero, and warns the beasts have grown
+      // on HARD MODE the ELDER knows the hero, and warns the beasts have grown
       // (GameState.enemyScale) before the same first errand as ever. A first
       // talk can be a first meeting, so no "welcome back"
       const greeting =

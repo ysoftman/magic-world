@@ -35,7 +35,7 @@ import { bakeHero, HERO_LOOKS } from "./BootScene";
 // 320px — "LV 30 SLIMES 5/5" (every quest label is at most 10; one space
 // after the level, not the two it had) and a name of 12 — so the card is
 // 20 + 32 + 8 + 320 + 20 = 400px; three with 20px between span x=20..1260.
-// The header, "< SLOT 1 NG+99 >" at 16, and an empty or damaged slot's lines
+// The header, "< SLOT 1 HARD 99 >" at 16, and an empty or damaged slot's lines
 // stay centered across the full 360px: an empty slot's free third line says
 // when damaged copies of it are kept aside, "DAMAGED COPY KEPT" and "99
 // DAMAGED COPIES" both 17 = 340px. The old single card's gold/day/beasts/
@@ -67,16 +67,16 @@ const cardX = (slot: number): number => GAME_WIDTH / 2 + (slot - (SAVE_SLOTS + 1
 // 264 = 1008px, +6px stroke each = 1032px, plus 3 x 48px gaps = 1176px,
 // x=52..1228. The old single hint line ran 1248px, 16px off each screen edge.
 const MENU_Y = 660;
-// Once NEW GAME+ is open, five buttons (~1500px) no longer fit one row, so the
-// menu splits in two. y=636: "C: CONTINUE" + "P: NEW GAME+" = 270 + 294 + 48
+// Once HARD MODE is open, five buttons (~1500px) no longer fit one row, so the
+// menu splits in two. y=636: "C: CONTINUE" + "P: HARD MODE" = 270 + 294 + 48
 // = 612px, x=334..946; y=684: "N: NEW GAME" + "D: DELETE" + "O: SETTINGS" =
 // 270 + 222 + 270 + 96 = 858px, x=211..1069. Glyphs run 624..648 (16px under
 // the prompt's 608) and 672..699 (21px off the bottom); the padded hit boxes
 // meet at 660 without overlapping. Row two is also why the version tag is up
 // in the top-right corner (see create()).
 // U: RESTORE (240 + 6 stroke = 246px) joins row one when the slot has a
-// backup: "C: CONTINUE" + "P: NEW GAME+" + "U: RESTORE" = 270 + 294 + 246 +
-// 2 x 48 = 906px (x 187..1093); without NEW GAME+ it is C + U = 564px. A
+// backup: "C: CONTINUE" + "P: HARD MODE" + "U: RESTORE" = 270 + 294 + 246 +
+// 2 x 48 = 906px (x 187..1093); without HARD MODE it is C + U = 564px. A
 // damaged slot's single row N + D + U + O is 1152px (x 64..1216), an empty
 // slot's N + U + O 882px — both inside the 1176px four-button row.
 // X: DAMAGED (246px, as U) comes up when the slot has damaged copies kept
@@ -224,7 +224,7 @@ export class TitleScene extends Phaser.Scene {
         const save = readSaveSummary(slot);
         // a save that won't parse: kept as it is, shown but not loadable
         const damaged = isSaveDamaged(slot);
-        const header = `SLOT ${slot}${save && save.ngPlus > 0 ? ` NG+${save.ngPlus}` : ""}`;
+        const header = `SLOT ${slot}${save && save.ngPlus > 0 ? ` HARD ${save.ngPlus}` : ""}`;
         lines[0].setText(picked ? `< ${header} >` : header).setColor(picked ? "#ffd166" : "#9f9fd0");
         lines[1].setText(damaged ? "DAMAGED" : save ? save.name : "EMPTY").setColor(damaged ? "#ff5555" : save ? "#ffffff" : DIM_TEXT);
         const kept = !damaged && !save ? damagedCopyKeys(slot).length : 0;
@@ -300,7 +300,7 @@ export class TitleScene extends Phaser.Scene {
     const offInput = onInputChange(() => setButtons(shownRows));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, offInput);
 
-    // NEW GAME+ opens once the save has felled the FLAME DRAKE (the true end)
+    // HARD MODE opens once the save has felled the FLAME DRAKE (the true end)
     const canPlus = () => readSaveSummary()?.quest.volcanoBoss === true;
 
     const showMenu = () => {
@@ -317,7 +317,7 @@ export class TitleScene extends Phaser.Scene {
       }).setColor(damaged ? "#ff5555" : "#ffffff");
       const settingsButton: Button = ["O: SETTINGS", () => settings.open()];
       const restore: Button[] = GameState.hasBackup() ? [["U: RESTORE", askRestore]] : [];
-      const plus: Button[] = canPlus() ? [["P: NEW GAME+", askPlus]] : [];
+      const plus: Button[] = canPlus() ? [["P: HARD MODE", askPlus]] : [];
       const purge: Button[] = damagedCopyKeys().length > 0 ? [["X: DAMAGED", askPurge]] : [];
       if (!hasSave) {
         setButtons([[["N: NEW GAME", newGame], ...restore, ...purge, settingsButton]]);
@@ -368,13 +368,13 @@ export class TitleScene extends Phaser.Scene {
       ]);
     };
 
-    // the questions name the slot they act on, but NEW GAME+'s says what it
-    // does instead ("NEW GAME+" alone told a first-timer nothing); the longest,
+    // the questions name the slot they act on, but HARD MODE's says what it
+    // does as well, for a first-timer; the longest,
     // "KEEP YOUR HERO, TOUGHER FOES? Y/N", is 33 x 32 = 1056px (x 112..1168)
     const askDelete = () => confirm("confirmDelete", `DELETE SLOT ${GameState.saveSlot}`, "Y: DELETE");
     // the replay rewrites the save (quests, chests, half the gold), so it gets
     // the same Y/N as the other two
-    const askPlus = () => confirm("confirmPlus", "KEEP YOUR HERO, TOUGHER FOES", "Y: NEW GAME+");
+    const askPlus = () => confirm("confirmPlus", "KEEP YOUR HERO, TOUGHER FOES", "Y: HARD MODE");
     // names what comes back: "RESTORE TWELVECHARSX LV30? Y/N" is 30 x 32 =
     // 960px (x 160..1120). It swaps, so the save it replaces becomes the
     // backup and U again puts it back.

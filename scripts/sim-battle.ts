@@ -7,7 +7,7 @@
 // level-up gains — each marked with where it comes from, so a change there
 // has to be mirrored here.
 //
-// The model, kept simple: day, NG+0, no meal, not rested, no accessory, no
+// The model, kept simple: day, HARD 0, no meal, not rested, no accessory, no
 // bestiary bonus. The hero FIGHTs; at 35% HP or less drinks a POTION (while
 // any are left) or casts HEAL; answers a boss wind-up with WARD once learned,
 // with DEFEND before that or without the MP for it; casts the foe's weakness
@@ -16,7 +16,7 @@
 // roughly the rounds a hero of that level has fought beside it.
 //
 // The late-game options (--refine, --forged, --ng, --abyss, --hipotions,
-// --talisman, --meal; see --help) dress that hero for NEW GAME+ and the
+// --talisman, --meal; see --help) dress that hero for HARD MODE and the
 // ABYSS's GUARDIANs, as the BLACKSMITH's REFINE was sized with (drops.ts).
 // Left out, the run is the one above.
 //
@@ -103,7 +103,7 @@ type Foe = ReturnType<typeof scaleEnemy>;
 // the monsters.ts and battleRules.ts comments say: 4.8-8.3 rounds beside the
 // WOLF, 32-37% of max HP taken (heals not subtracted). A boss falling before
 // its intended level is seen, not tuned: those comments aim at a threat, not
-// a win rate, and NEW GAME+ is the challenge. An unarmed Lv8 hero beats the
+// a win rate, and HARD MODE is the challenge. An unarmed Lv8 hero beats the
 // MOSS GOLEM ~91% of the time with the WOLF, ~30% alone (a point or two
 // either way a run). The lost progression sim (a WOLF player who takes each
 // boss on as soon as it reaches 90%: 95-100% against the KING at Lv5, MOSS
@@ -144,7 +144,7 @@ if (args.includes("--help") || args.includes("-h")) {
   late-game kits (none changes the default run):
   --refine     the GEAR columns' weapon and armor at BLACKSMITH REFINE +N
   --forged     the GEAR columns in DRAKE BLADE + GLACIER MAIL, not the intended gear
-  --ng         NEW GAME+ cycle N (GameState.enemyScale)
+  --ng         HARD MODE cycle N (GameState.enemyScale)
   --abyss      the GUARDIAN of ABYSS floor FLOOR (a multiple of 5) instead, in the forged kit
   --hipotions  HI-POTIONs carried too, drunk before POTIONs
   --talisman   the TALISMAN worn: no poison, no freeze
@@ -674,7 +674,7 @@ const kit = [
   GREEDY && (SKILLS_ON ? "greedy, SKILLs" : "greedy, spells only"),
 ].filter(Boolean);
 console.log(
-  `BATTLE SIM  ${N} fights a cell, day, NG+${NG}, ${MEAL ? "" : "no meal, "}not rested, ${TALISMAN ? "" : "no accessory, "}no bestiary bonus, ` +
+  `BATTLE SIM  ${N} fights a cell, day, HARD ${NG}, ${MEAL ? "" : "no meal, "}not rested, ${TALISMAN ? "" : "no accessory, "}no bestiary bonus, ` +
     `${POTIONS} POTION(s), WOLF bond ${BOND ?? "min(5, floor(level/4))"}${kit.length > 0 ? ` | ${kit.join(", ")}` : ""}`,
 );
 console.log("each cell: win%  mean rounds  damage taken as % of max HP (heals not subtracted)");

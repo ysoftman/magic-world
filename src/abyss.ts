@@ -30,7 +30,7 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 //   progress isn't saved, so a reload or a quit to the title loses at most
 //   five floors — and a checkpoint start brings the HP and MP the hero
 //   walks in with, no refill (the town's HOME is the place for that). It is
-//   kept through NEW GAME+ like the record beside it; B1 is always still
+//   kept through HARD MODE like the record beside it; B1 is always still
 //   offered when the cycle's harder foes put it out of reach.
 // - The stair up asks before it leaves (STAY first, and on ESC: walking onto
 //   it by mistake ended deep runs), and leaving by it from B2 down opens a
@@ -42,7 +42,7 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 //   fall anywhere down here, so a death still costs the floors; a dive from
 //   B1 leaves it waiting, and leaving again keeps the deeper of the two. The
 //   floor is built anew and the hero walks in with HP and MP as they are, as
-//   from a checkpoint; NEW GAME+ keeps it on the same terms.
+//   from a checkpoint; HARD MODE keeps it on the same terms.
 // - No day or night underground: no night stat/loot shift, no night
 //   encounter rate, a standing gloom instead of the clock's.
 export const ABYSS_W = 22;
@@ -73,18 +73,18 @@ export function abyssOpen(q: { volcanoBoss: boolean }, ngPlus: number): boolean 
   return q.volcanoBoss || ngPlus > 0;
 }
 
-// Depth scaling, multiplied onto NEW GAME+'s (GameState.enemyScale) for every
+// Depth scaling, multiplied onto HARD MODE's (GameState.enemyScale) for every
 // fight down here:
-// - stat: +6% HP/ATK a floor below B1. The product with NEW GAME+ stops at
+// - stat: +6% HP/ATK a floor below B1. The product with HARD MODE stops at
 //   ABYSS_STAT_CAP: at x4 the hardest ordinary blow (SALAMANDER, ATK 21 -> 84)
 //   crits a Lv30 hero in GLACIER MAIL (DEF ~45, HP ~195) for at most
 //   2 x (1.2 x 84 - 45) = 112, so a full-HP hero can't be one-shot by a roll
 //   it had no answer to; past the cap a run still ends, by attrition (three
 //   capped fights empty that HP bar). A first playthrough reaches the cap at
-//   B51, NEW GAME+1 (x1.5) at B29, NEW GAME+3 (x2.5) at B11. HP is clamped
+//   B51, HARD MODE1 (x1.5) at B29, HARD MODE3 (x2.5) at B11. HP is clamped
 //   to 999 on top (BattleScene: the enemy window holds three digits).
 // - loot: gold/EXP +2% a floor, a third of the stat step, so each floor down
-//   costs more than it pays; capped at x2 with NEW GAME+'s. A GUARDIAN pays
+//   costs more than it pays; capped at x2 with HARD MODE's. A GUARDIAN pays
 //   ABYSS_GUARDIAN_GOLD_SHARE of its (scaled) gold, as the ARENA pays a cut:
 //   its first kill already paid in full. The yardstick is hunting the
 //   VOLCANO by day: 62.3 G a fight (its 40/35/25 MAGMA SLIME / FIRE IMP /
@@ -216,7 +216,7 @@ export interface AbyssFloor {
 export const cellCenter = (c: Cell): { x: number; y: number } => ({ x: c.tx * TILE + TILE / 2, y: c.ty * TILE + TILE / 2 });
 
 // The floor's seed: the run's own (rolled when the dive starts), the floor
-// and the NEW GAME+ cycle, so every run digs a different abyss while one run
+// and the HARD MODE cycle, so every run digs a different abyss while one run
 // can rebuild the floor it left for a battle exactly as it was.
 export function floorSeed(runSeed: number, floor: number, cycle: number): number {
   let h = (Math.imul(runSeed ^ Math.imul(floor, 0x27d4eb2f), 0x9e3779b1) + Math.imul(cycle + 1, 0x165667b1)) | 0;

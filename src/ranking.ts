@@ -8,7 +8,7 @@ export interface RankEntry {
   name: string;
   level: number;
   date: string; // YYYY-MM-DD when the level was reached
-  // the hero's best ARENA run, NEW GAME+ cycle and deepest ABYSS floor, last
+  // the hero's best ARENA run, HARD MODE cycle and deepest ABYSS floor, last
   // seen at this level; absent on rows written before the board tracked them
   arena?: number;
   ng?: number;
@@ -79,7 +79,7 @@ function persist(): void {
 // Returns the 1-based rank the entry earned (0 when the level didn't crack the
 // top 10).
 //
-// The row also carries the hero's ARENA best, NEW GAME+ cycle and ABYSS
+// The row also carries the hero's ARENA best, HARD MODE cycle and ABYSS
 // record, read from GameState here rather than passed in so GameState.save()'s
 // existing call keeps working as is. All three only ever grow, so a collapsed
 // row takes the newer values — a Lv30 hero's row follows every later run,

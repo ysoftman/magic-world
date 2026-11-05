@@ -2,7 +2,7 @@ import type { IngredientKey } from "./cooking";
 import type { MaterialKey } from "./drops";
 
 // HOME's extensions, built in order at the HOME panel (ui/HomeUI.ts), each
-// for gold and materials, each kept for good (NEW GAME+ included: the house
+// for gold and materials, each kept for good (HARD MODE included: the house
 // is the hero's, not a chapter's). What they do stays off the battle
 // numbers: longer meals, a few free ingredients, one warded opening.
 //

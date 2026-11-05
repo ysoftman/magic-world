@@ -275,7 +275,7 @@ const ENEMY_STATUS_RIGHT = GAME_WIDTH - 52;
 // rows, right of the HP bar (which ends at x=240).
 const PLAYER_STATUS_MIN_X = 324;
 const STATUS_ROWS = [90, 114, 138];
-// the enemy side works the same way: "HP 700/700" (an NG+3 FLAME DRAKE, the
+// the enemy side works the same way: "HP 700/700" (an HARD 3 FLAME DRAKE, the
 // most HP in the game) ends at x=1056, so one tag fills row 1 and the rest stack below, right of
 // the HP bar (which ends at x=992). With a boss's CHG, RAGE, a companion's
 // PSN/BRN and CHL all up, the fourth takes a third row (y 138..158), above
@@ -642,25 +642,25 @@ export class BattleScene extends Phaser.Scene {
     // to the copy, so ENEMIES stays the daytime baseline. Two exceptions, from
     // the balance audit:
     // - a boss keeps its daytime HP/ATK, though not its daytime payout. A boss
-    //   is a gate the story sends you through, and night x1.25 on NEW GAME+'s
-    //   x2.5 left an NG+3 night FLAME DRAKE unwinnable. The TROLL KING, a
+    //   is a gate the story sends you through, and night x1.25 on HARD MODE's
+    //   x2.5 left an HARD 3 night FLAME DRAKE unwinnable. The TROLL KING, a
     //   giant, keeps the whole shift: it roams the town fields like any wild
-    //   foe, so meeting it at night is a choice, and it's Lv8 content that NG+
+    //   foe, so meeting it at night is a choice, and it's Lv8 content that HARD
     //   outgrows.
     // - the ARENA takes no night shift at all. Its bouts are the bosses (stats
     //   already exempt) and that TROLL KING, and its prize is a share of their
-    //   gold, so night would only pay x1.5 for the same risk. NEW GAME+ scaling
+    //   gold, so night would only pay x1.5 for the same risk. HARD MODE scaling
     //   still applies there: that risk is real.
     // - the ABYSS has no night either: no sky underground, and its depth
     //   scaling below is its whole risk/reward curve (abyss.ts).
-    // NEW GAME+: each cycle hardens every foe on top of the night shift
+    // HARD MODE: each cycle hardens every foe on top of the night shift
     // (GameState.enemyScale; 1 and 1 on a first playthrough), and in the ABYSS
     // the floor's depth on top of that (abyss.ts abyssScale, capped). HP stops
     // at ENEMY_HP_MAX, which only the deep ABYSS ever reaches. A GUARDIAN pays
     // a cut of its gold, as an ARENA bout does: its first kill already paid
     // in full (abyss.ts). So does a field boss met again once its quest flag
     // is set (the ARENA's own lineup check, read before this fight's victory
-    // sets it, and cleared by NEW GAME+ so a cycle's first kill pays in
+    // sets it, and cleared by HARD MODE so a cycle's first kill pays in
     // full). Its field raises it on every visit and the hero comes back from
     // the fight beside it, so a full purse a kill was a farm: the FLAME
     // DRAKE's 1,260 G by day on an 8+ streak, 1,890 by night, one kill every
@@ -3430,9 +3430,9 @@ export class BattleScene extends Phaser.Scene {
     // from the ABYSS, where nothing sets a flag
     if (!this.abyss && this.enemy.name === ENEMIES.troll.name) GameState.quest.trollDefeated = true;
     // read before the boss branch below sets the flags: only the first MOSS
-    // GOLEM / FLAME DRAKE kill (of each NEW GAME+ cycle, which clears them)
+    // GOLEM / FLAME DRAKE kill (of each HARD MODE cycle, which clears them)
     // rolls the ending / epilogue, a rematch just ends the battle — and the
-    // ABYSS is all rematch, even in a NEW GAME+ cycle that hasn't yet beaten
+    // ABYSS is all rematch, even in a HARD MODE cycle that hasn't yet beaten
     // the boss it meets down there as a GUARDIAN (abyss.ts)
     const firstMoss = !caught && !this.abyss && this.enemy.name === ENEMIES.mossGolem.name && !GameState.quest.forestBoss;
     const firstDrake = !caught && !this.abyss && this.enemy.name === ENEMIES.flameDrake.name && !GameState.quest.volcanoBoss;
@@ -3497,7 +3497,7 @@ export class BattleScene extends Phaser.Scene {
       if (streakBonus > 0 || found.length > 0) this.time.delayedCall(360, () => Sfx.pickup());
       // The whole payout on one page, where it took five, a Z each (the foe,
       // the gold, the streak, the find, the EXP, then "Battle won!"). Every
-      // figure has four digits at most: the biggest purse is an NG+3 night
+      // figure has four digits at most: the biggest purse is an HARD 3 night
       // FLAME DRAKE's first kill on an 8+ streak with PUMPKIN PIE, 3639G
       // (STREAK +1470), EXP +1890. The longest name with them all at four,
       // "GLACIER GOLEM falls! +2599G (STREAK +1050)  EXP +1260", is 53 of a

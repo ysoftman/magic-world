@@ -224,7 +224,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     ...atLeast(() => GameState.arenaBest, ARENA_BOSSES.length),
   },
   {
-    // the deepest floor any run reached (abyss.ts), kept through NEW GAME+.
+    // the deepest floor any run reached (abyss.ts), kept through HARD MODE.
     // 22 glyphs, inside AchievementsUI's 34.
     id: "abyss-diver",
     name: "ABYSS DIVER",
@@ -244,16 +244,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     ...atLeast(() => GameState.gold, MAX_GOLD),
   },
   {
-    // NEW GAME+ wipes the quest flags, so volcanoBoss is only true again once
+    // HARD MODE wipes the quest flags, so volcanoBoss is only true again once
     // the drake falls on the replay. 33 glyphs, inside AchievementsUI's 34.
     id: "encore",
     name: "ENCORE",
-    desc: "Beat the FLAME DRAKE in NEW GAME+",
+    desc: "Beat the FLAME DRAKE in HARD MODE",
     check: () => GameState.ngPlus >= 1 && GameState.quest.volcanoBoss,
   },
   {
     // every step of the FARMER's, FISHER's and TRAVELER's chains (favors.ts).
-    // NEW GAME+ replays them like the HUNTER's jobs; the trophy stays.
+    // HARD MODE replays them like the HUNTER's jobs; the trophy stays.
     id: "good-neighbor",
     name: "GOOD NEIGHBOR",
     desc: "Finish every townsfolk favor",

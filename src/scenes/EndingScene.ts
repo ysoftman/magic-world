@@ -204,7 +204,7 @@ export class EndingScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, leave);
 
     // where the title has it, top right (x 1040..1264, y 12..28): at the
-    // bottom it stood 16px off the epilogue's NEW GAME+ note on the same line
+    // bottom it stood 16px off the epilogue's HARD MODE note on the same line
     // and read as its last word; the headlines start at y 66
     this.add.pixelText(GAME_WIDTH - 16, 12, VERSION_TAG, retroStyle(4, DIM_TEXT)).setOrigin(1, 0);
   }
@@ -281,9 +281,9 @@ export class EndingScene extends Phaser.Scene {
   // Widths at retroStyle(n) = n*4 px a glyph, all centered on 1280:
   // headline 21 x 48 = 1008, sub 30 x 32 = 960, the summary's longest row
   // ("NAME" + a 12-glyph name) 25 x 24 = 600, the journey 43 x 20 = 860,
-  // THE TRUE END 12 x 64 = 768, the NEW GAME+ note at most 48 x 16 = 768.
+  // THE TRUE END 12 x 64 = 768, the HARD MODE note at most 48 x 16 = 768.
   // Rows: headline 66..114, sub 134..166, summary 182..478, journey 502..522,
-  // THE TRUE END 554..626 with its shadow, prompt 652..684, NEW GAME+ note
+  // THE TRUE END 554..626 with its shadow, prompt 652..684, HARD MODE note
   // 694..710 — the one band left free, 10px under the prompt and 10px off the
   // bottom (the version tag is top right, out of the way).
   private showEpilogue(): void {
@@ -351,15 +351,15 @@ export class EndingScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    // The drake's fall is what opens NEW GAME+ (TitleScene offers it once the
+    // The drake's fall is what opens HARD MODE (TitleScene offers it once the
     // save has volcanoBoss), and nothing else in the game says so; on touch
     // it names the title's button, since there is no P key to press, and with
     // a pad the button that sends P there (LT, "...PRESS LT ON THE TITLE
     // SCREEN" 49 x 16 = 784px)
     const plus = bindKeyHint(this.add.pixelText(GAME_WIDTH / 2, 702, "", retroStyle(4, "#ffd166")), () =>
       !usingPad() && isTouchDevice()
-        ? "NEW GAME+ UNLOCKED - TAP NEW GAME+ ON THE TITLE"
-        : `NEW GAME+ UNLOCKED - PRESS ${keyNames("P", "title")} ON THE TITLE SCREEN`,
+        ? "HARD MODE UNLOCKED - TAP HARD MODE ON THE TITLE"
+        : `HARD MODE UNLOCKED - PRESS ${keyNames("P", "title")} ON THE TITLE SCREEN`,
     )
       .setOrigin(0.5)
       .setAlpha(0);

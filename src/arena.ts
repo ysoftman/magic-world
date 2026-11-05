@@ -19,7 +19,7 @@ import type { ENEMIES } from "./monsters";
 //   potions; a full refill would make it five separate fights.
 // - Losing ends the run instead of the usual defeat (half the gold): the
 //   hero is carried back out at 1 HP with what the run has won.
-// - The prize is ARENA_GOLD_SHARE of each beaten boss's gold (NEW GAME+
+// - The prize is ARENA_GOLD_SHARE of each beaten boss's gold (HARD MODE
 //   loot scaling included; no night bonus, as bouts take no night shift —
 //   see BattleScene.init), plus ARENA_CLEAR_BONUS of that on a
 //   full clear. Each bout's share is paid, and the record and the save
@@ -51,7 +51,7 @@ export const ARENA_CLEAR_BONUS = 0.5;
 // for the TROLL KING (a roaming giant, no story of its own) the flag a won
 // fight against it sets, beaten or caught (BattleScene.victory). It used to
 // be a bestiary sighting, so a hero who met it and ran was matched against
-// it, and NEW GAME+, which keeps the bestiary but clears the flags, had it in
+// it, and HARD MODE, which keeps the bestiary but clears the flags, had it in
 // the lineup before even the KING SLIME.
 export const ARENA_BOSSES: Array<{ key: keyof typeof ENEMIES; beaten: () => boolean }> = [
   { key: "king", beaten: () => GameState.quest.bossDefeated },

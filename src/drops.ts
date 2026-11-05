@@ -58,7 +58,7 @@ const DROP_TABLE: Record<string, { material: MaterialKey; chance: number; count:
   flameDrake: { material: "drakeScale", chance: 1, count: 1 },
 };
 
-// BattleScene works on a copy of the species (night/NG+ rescale it), so the
+// BattleScene works on a copy of the species (night/HARD rescale it), so the
 // name is what still ties a fight back to its ENEMIES entry
 const BY_NAME = new Map(Object.entries(ENEMIES).map(([key, def]) => [def.name, DROP_TABLE[key]]));
 
@@ -122,7 +122,7 @@ export const RECIPES: Recipe[] = [
 // The balance sim set the size (bun run sim:battle --refine N; the deep kit
 // is --abyss 45 --level 30 --potions 0 --hipotions 10 --talisman --meal def):
 // at +5 a Lv30 hero in the forged kit with a WOLF takes the ABYSS's B45
-// GLACIER GOLEM from 59% to 80%, and NEW GAME+3 (--forged --ng 3) stays a
+// GLACIER GOLEM from 59% to 80%, and HARD MODE3 (--forged --ng 3) stays a
 // fight, its GLACIER 10% to 26% and its DRAKE 1% to 3%; stacked on a full
 // bestiary (+5) and PARTNER (+3), 92%, 50% and 16%. +2 a level made B45 near
 // sure (88%) before either bonus. The B50 DRAKE stays at 0% whatever the

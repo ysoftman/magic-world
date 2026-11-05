@@ -243,7 +243,7 @@ export class QuestLog {
     for (let i = 0; i < DONE_ROWS; i++) {
       this.doneRows.push(text(DONE_X, ROW_Y + i * DONE_GAP, 5, "#7fbf7f"));
     }
-    // "QUEST JOURNAL  NG+99" on a replay: 20 x 32 = 640px, x=320..960
+    // "QUEST JOURNAL  HARD 99" on a replay: 20 x 32 = 640px, x=320..960
     this.title = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
 
     this.root = scene.add
@@ -305,7 +305,7 @@ export class QuestLog {
   private refresh(): void {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
-    this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  NG+${GameState.ngPlus}` : "QUEST JOURNAL");
+    this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
     const all = objectives();
     const open = all.filter((o) => !o.done);
     const done = all.filter((o) => o.done);

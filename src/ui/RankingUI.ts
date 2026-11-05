@@ -8,11 +8,11 @@ import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
 
 // Cells are retroStyle(6) (24px a glyph), headers retroStyle(5) (20px). The
-// ARENA and NG+ columns widened the panel (960 -> 1040), and the ABYSS one
+// ARENA and HARD columns widened the panel (960 -> 1040), and the ABYSS one
 // to the widest any panel goes (1160, x 60..1220, like the quest journal:
 // it ends where the touch menu column starts, x>=1222), rather than
 // shrinking the text: RK "10." 100..172, NAME (12 glyphs) 196..484, LV "30"
-// 516..564, ARENA (header) 604..704, NG+ "+12" 724..796, ABYSS (header)
+// 516..564, ARENA (header) 604..704, HARD "+12" 724..796, ABYSS (header)
 // 820..920 over "B999" 820..916, DATE "2026-10-25" 940..1180 — 40px inside
 // the right edge, at least 20px between columns.
 const PANEL_W = 1160;
@@ -80,7 +80,7 @@ export class RankingUI {
       { x: COL_NAME, label: "NAME" },
       { x: COL_LEVEL, label: "LV" },
       { x: COL_ARENA, label: "ARENA" },
-      { x: COL_NG, label: "NG+" },
+      { x: COL_NG, label: "HARD" },
       { x: COL_ABYSS, label: "ABYSS" },
       { x: COL_DATE, label: "DATE" },
     ];
@@ -220,7 +220,7 @@ export class RankingUI {
         this.levelCells[i].setText(String(e.level)).setColor(color);
         // "-" for none yet, and for rows written before the board kept these
         this.arenaCells[i].setText(e.arena ? String(e.arena) : "-").setColor(e.arena ? color : DIM_TEXT);
-        this.ngCells[i].setText(e.ng ? `+${e.ng}` : "-").setColor(e.ng ? color : DIM_TEXT);
+        this.ngCells[i].setText(e.ng ? `${e.ng}` : "-").setColor(e.ng ? color : DIM_TEXT);
         // the deepest floor, as the ABYSS names it (B1 is 1)
         this.abyssCells[i].setText(e.abyss ? `B${e.abyss}` : "-").setColor(e.abyss ? color : DIM_TEXT);
         this.dateCells[i].setText(e.date).setColor(color);

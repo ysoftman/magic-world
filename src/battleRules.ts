@@ -795,7 +795,7 @@ export const regenAmount = (hp: number, curHp: number): number => Math.min(hp - 
 /**
  * The foe as a battle meets it: night (outside the ARENA and the ABYSS)
  * hardens an ordinary foe and pays x1.5, a boss keeping its daytime HP and
- * ATK; then NEW GAME+'s scale, in the ABYSS times its floor's depth
+ * ATK; then HARD MODE's scale, in the ABYSS times its floor's depth
  * (abyss.ts), HP capped at ENEMY_HP_MAX; a GUARDIAN pays its gold share.
  * `night` is isNight() && not the ABYSS, as BattleScene works it out. A
  * field boss's (or the TROLL KING's) `rematch` pays the gold its ARENA bout

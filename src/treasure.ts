@@ -46,7 +46,7 @@ import {
 // /tmp/pwcheck/sim report.ts: a fight every ~26s with the encounter waits,
 // battle time timed in the live game), ~5 maps an hour, each to an even pick
 // of the open regions. A dig pays the middle of its region's range (the
-// table below, x the NEW GAME+ loot scale like a battle's gold): ~160G on
+// table below, x the HARD MODE loot scale like a battle's gold): ~160G on
 // average once all five are open, ~135G with four. Then ~0.8 materials (60%
 // of digs find some, 30% of those two pieces), a CANDY 10% and a shop piece
 // 4%, a HI-POTION once all four are owned (/tmp/pwcheck/econ-sim
@@ -291,7 +291,7 @@ export interface DigState {
 /**
  * Digs up `map`'s chest into `state` and says what came out, as one line for
  * a toast: at most "DUG UP 420G, 2 FROST SCALE & AN IRON SHIELD!" (44 glyphs,
- * NEW GAME+3's x1.75 on the snow field's 240G).
+ * HARD MODE3's x1.75 on the snow field's 240G).
  */
 export function digUp(map: TreasureMap, state: DigState, rand: () => number = Math.random): string {
   const def = REGIONS[map.region];

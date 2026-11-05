@@ -39,7 +39,7 @@ export const UNLOCK_TIPS: UnlockTip[] = [
     id: "ngplus",
     place: "town",
     get text() {
-      return `NEW GAME+ IS OPEN: PRESS ${keyNames("P", "title")} ON THE TITLE!`;
+      return `HARD MODE IS OPEN: PRESS ${keyNames("P", "title")} ON THE TITLE!`;
     },
     when: () => GameState.quest.volcanoBoss,
   },
@@ -78,7 +78,7 @@ export const UNLOCK_TIPS: UnlockTip[] = [
  * Shows the next unseen tip for `place` whose moment has come, at most one a
  * call so a burst (the arena and the forest open together) queues a second
  * apart. A save from before the tips (seenTips null) is first seeded with
- * everything already true — or with every tip in NEW GAME+, which has seen
+ * everything already true — or with every tip in HARD MODE, which has seen
  * them all — and shows nothing. True when seenTips changed, so the caller
  * saves (quietly, like a claimed achievement).
  */

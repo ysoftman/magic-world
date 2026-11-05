@@ -82,7 +82,7 @@ const BATTLE: Record<number, string> = {
 };
 // The title (TitleScene's keydown): A still continues or starts, the d-pad
 // picks the slot, RB is U (RESTORE), RT M and Start O as in the field. X is
-// N (NEW GAME), LB D (DELETE), LT P (NEW GAME+), and Y types Y, the only key
+// N (NEW GAME), LB D (DELETE), LT P (HARD MODE), and Y types Y, the only key
 // that answers their Y/N: every other button backs out. A press alone never
 // loses a save, and the three that replace one keep it as the slot's backup
 // (U brings it back). X (deleting damaged copies, which keeps nothing) stays

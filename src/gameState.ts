@@ -100,7 +100,7 @@ export const EQUIP_BONUS: Record<EquipmentKey, number> = {
   antidoteCharm: 0,
   emberRing: 0,
   // the forged tier: two over MYTHRIL, and the one place to tune it (balance
-  // audit) — enough to be worth the hunt, not enough to skip NEW GAME+
+  // audit) — enough to be worth the hunt, not enough to skip HARD MODE
   lifeCharm: 0,
   talisman: 0,
   glacierMail: 8,
@@ -440,7 +440,7 @@ export function migrateLegacySave(): void {
 }
 
 // Each slot keeps its last overwritten save under one backup key (only the
-// one, for the space), written just before NEW GAME / NEW GAME+ / IMPORT
+// one, for the space), written just before NEW GAME / HARD MODE / IMPORT
 // replace the slot; restoreSave() swaps it back. A slot that won't parse is
 // never just dropped: its bytes are parked under a timestamped "-corrupt"
 // key first, one per incident, so nothing damaged is ever overwritten.
@@ -519,7 +519,7 @@ export function onSaved(callback: () => void): () => void {
 // The L²/2 term keeps pace with monster EXP, which grows ~16x from the cave
 // to the volcano: on the old linear 10 + 10L a hero who fought ~15 battles a
 // region reached each superboss 4-6 levels over its intended level and hit
-// Lv30 before the FLAME DRAKE, leaving NEW GAME+ nothing to grow into. Now the
+// Lv30 before the FLAME DRAKE, leaving HARD MODE nothing to grow into. Now the
 // same pace meets KING/MOSS/GLACIER/DRAKE near Lv 6/11/18/24 and ends the
 // first run around Lv25. Never below the old curve, so an old save's exp
 // can't already exceed its level's requirement.
@@ -579,7 +579,7 @@ export const BATTLE_SPEEDS = [1, 1.5, 2];
 
 const clampVolume = (v: unknown): number => (typeof v === "number" && v >= 0 && v <= 1 ? Math.round(v * 10) / 10 : 1);
 
-// NEW GAME+ enemy scaling per cycle. A cleared hero starts NG+ near the level
+// HARD MODE enemy scaling per cycle. A cleared hero starts HARD near the level
 // cap in the best gear, so +50% HP/ATK a cycle is what keeps the bosses a
 // fight; EXP/gold only +25%, since EXP stops mattering at the cap and gold is
 // capped too. Stops growing after the third cycle: past that the FLAME DRAKE's
@@ -588,7 +588,7 @@ const NG_STAT_STEP = 0.5;
 const NG_LOOT_STEP = 0.25;
 const NG_SCALE_CAP = 3;
 // Quest fields that are lifetime records rather than chapter progress, so
-// NEW GAME+ keeps them: the achievement counters, and the bestiary reward,
+// HARD MODE keeps them: the achievement counters, and the bestiary reward,
 // which follows the catch record that is kept (it would otherwise pay out a
 // second time for catches made last cycle).
 const NG_KEEP_QUEST = ["goldenSlimes", "wispsDefeated", "comboCapped", "bestiaryReward"] as const;
@@ -642,7 +642,7 @@ export const GameState = {
   // the season (season.ts, counted from day 0) the town last announced,
   // -1 for none yet, so a reload doesn't announce it again
   seasonSeen: -1,
-  // records for the trophy board (achievements.ts), kept through NEW GAME+
+  // records for the trophy board (achievements.ts), kept through HARD MODE
   // like fishCaught: meals served at HOME, BOUNTY BOARD bounties finished on
   // days gone by (today's claimed one counts live, see achievements.ts),
   // deliveries handed in, LUCKY WHEEL jackpots spun
@@ -741,7 +741,7 @@ export const GameState = {
   farmMinutes: 360,
   farmNightMinutes: nightMinutesBefore(360),
   pos: undefined as { x: number; y: number } | undefined,
-  // NEW GAME+ cycle: 0 on a first playthrough, +1 each time a cleared save
+  // HARD MODE cycle: 0 on a first playthrough, +1 each time a cleared save
   // starts over (beginNewGamePlus). enemyScale() turns it into multipliers.
   ngPlus: 0,
   // ids of the one-time unlock tips already shown (unlockTips.ts). null for
@@ -955,13 +955,13 @@ export const GameState = {
   },
 
   // Multipliers BattleScene applies to an enemy's HP/ATK (stat) and its
-  // EXP/gold (loot) for the current NEW GAME+ cycle; 1 and 1 on a first run.
+  // EXP/gold (loot) for the current HARD MODE cycle; 1 and 1 on a first run.
   enemyScale(): { stat: number; loot: number } {
     const n = Math.min(this.ngPlus, NG_SCALE_CAP);
     return { stat: 1 + NG_STAT_STEP * n, loot: 1 + NG_LOOT_STEP * n };
   },
 
-  // NEW GAME+, on a loaded save that has beaten the FLAME DRAKE: back to day
+  // HARD MODE, on a loaded save that has beaten the FLAME DRAKE: back to day
   // one in town, keeping what the hero *is* — level, stats, gear and what is
   // worn, catches and sightings, trophies, the fish log, the companion and its
   // bond — and replaying what the hero *did*: every ELDER and HUNTER chapter,
@@ -986,7 +986,7 @@ export const GameState = {
       arenaBest: this.arenaBest,
       abyssBest: this.abyssBest,
       // kept like the record: what the hero has reached, and B1 is always
-      // still on offer when NEW GAME+'s harder foes make it too deep
+      // still on offer when HARD MODE's harder foes make it too deep
       abyssCheckpoint: this.abyssCheckpoint,
       // and the portal with it, on the same terms
       abyssPortal: this.abyssPortal,
@@ -1357,7 +1357,7 @@ export const GameState = {
         }
       }
       this.pos = data.pos;
-      // saves from before NEW GAME+ are a first playthrough
+      // saves from before HARD MODE are a first playthrough
       this.ngPlus = ngPlusOf(data);
       // missing on saves from before the tips: null, seeded by unlockTips.ts
       this.seenTips = Array.isArray(data.seenTips) ? data.seenTips.filter((t: unknown): t is string => typeof t === "string") : null;
@@ -1536,7 +1536,7 @@ function wornTexture(key: unknown): string | null {
   return typeof key === "string" && Object.keys(EQUIP_TEXTURE).includes(key) ? EQUIP_TEXTURE[key as EquipmentKey] : null;
 }
 
-// the save's NEW GAME+ cycle; 0 for saves from before it and for junk values
+// the save's HARD MODE cycle; 0 for saves from before it and for junk values
 function ngPlusOf(data: { ngPlus?: unknown } | null | undefined): number {
   const n = data?.ngPlus;
   return typeof n === "number" && Number.isInteger(n) && n > 0 ? n : 0;

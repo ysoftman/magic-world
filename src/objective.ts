@@ -283,7 +283,7 @@ export function objectivePoints(spot: ObjectiveSpot | null, region: Region): Arr
  * cave only pointed the way back out, which told someone looking for the
  * stair it wasn't here (a player took it for gone), and with no goal at all
  * (CATCH, QUEST DONE) nothing pointed anywhere. A goal inside the cave is
- * kept: the KING's lair in a NEW GAME+ cycle, and the BATS job, whose whole
+ * kept: the KING's lair in a HARD MODE cycle, and the BATS job, whose whole
  * map is the goal and points nowhere. From the first dive on the guide is
  * the quest's alone; the minimap's violet dot and the cave's help line still
  * say where the stair is.

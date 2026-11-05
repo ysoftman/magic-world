@@ -18,8 +18,8 @@
 // only the battle's own payout (not loot or the bounty), so the farm and pond
 // economy sits where it was. In the balance sim (ingredients never run out)
 // a meal every fight cuts the hunt to the FLAME DRAKE only from 15.2 to 14.9
-// minutes, but it tips the hard fights: NEW GAME+1's DRAKE at the level just
-// past the first one (16.5) 74% -> 95%, NEW GAME+3's (Lv30, the forged kit,
+// minutes, but it tips the hard fights: HARD MODE1's DRAKE at the level just
+// past the first one (16.5) 74% -> 95%, HARD MODE3's (Lv30, the forged kit,
 // ten HI-POTIONs) 54% -> 77% on BEAN SOUP, 83% with the FEATHER BEDS' WARD
 // as well. The best meal is BEAN SOUP for the KING SLIME, GRILLED FISH for
 // the MOSS and GLACIER GOLEMs. Kept up every fight (/tmp/pwcheck/econ-sim
