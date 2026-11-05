@@ -392,7 +392,7 @@ export class AbyssScene extends Phaser.Scene {
     startWaterAnimation(this, this.layer);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    boundCameraToMap(this, ABYSS_W * TILE, ABYSS_H * TILE);
+    boundCameraToMap(this, ABYSS_W * TILE, ABYSS_H * TILE, true);
 
     this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
     this.fieldKeys = new FieldKeys(this);

@@ -28,6 +28,7 @@ import { helpOpen } from "./ui/HelpPopup";
 import { placeHeroGear } from "./ui/HeroGear";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
+import { isTouchDevice } from "./ui/TouchControls";
 import { type WarpWalker, warmWarp, warping, warpOut } from "./ui/warpFx";
 import { showUnlockTip, type TipPlace } from "./unlockTips";
 import type { Weather } from "./weather";
@@ -755,6 +756,10 @@ export function askAbyssDive(scene: Phaser.Scene, walk: HeroWalk, dialogue: Dial
   );
 }
 
+// Two tiles: the Z disc (screen y 532..636) clears a chest on row 14 only when
+// the map's foot sits 128px higher.
+export const TOUCH_CAMERA_FOOT = TILE * 2;
+
 /**
  * Bounds the main camera to a w x h map plus, while the status HUD is up, a
  * STATUS_HUD_HEIGHT strip above it. The HUD covers the top 88px of the screen,
@@ -763,15 +768,20 @@ export function askAbyssDive(scene: Phaser.Scene, walk: HeroWalk, dialogue: Dial
  * empty, and it is behind the HUD whenever the camera can reach it. Tracks
  * the HUD toggle (S), so a hidden HUD doesn't leave a bare band at the top.
  * Physics bounds are the caller's and stay the map itself.
+ *
+ * `touchFoot` lets the camera sink TOUCH_CAMERA_FOOT below the map's foot on
+ * touch, for the fields with something in the bottom-right corner (a chest,
+ * a stair) that the Z and ESC discs would otherwise sit on.
  */
-export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number): void {
+export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number, touchFoot = false): void {
   const cam = scene.cameras.main;
+  const foot = touchFoot && isTouchDevice() ? TOUCH_CAMERA_FOOT : 0;
   let inset = -1;
   const apply = (): void => {
     const next = GameState.hudVisible ? STATUS_HUD_HEIGHT : 0;
     if (next === inset) return;
     inset = next;
-    cam.setBounds(0, -inset, w, h + inset);
+    cam.setBounds(0, -inset, w, h + inset + foot);
   };
   apply();
   scene.events.on(Phaser.Scenes.Events.UPDATE, apply);

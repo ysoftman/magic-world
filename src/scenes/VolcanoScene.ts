@@ -216,7 +216,7 @@ export class VolcanoScene extends Phaser.Scene {
     startWaterAnimation(this, this.layer, [[T_LAVA_A, T_LAVA_B]], LAVA_ANIM_DELAY);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    boundCameraToMap(this, VOLCANO_W * TILE, VOLCANO_H * TILE);
+    boundCameraToMap(this, VOLCANO_W * TILE, VOLCANO_H * TILE, true);
 
     this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
     this.fieldKeys = new FieldKeys(this);
