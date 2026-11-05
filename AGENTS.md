@@ -777,6 +777,7 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   fire 0.70·spit 0.88·frost 0.87MB(타이틀 warm), 전투 중에만 petrify 1.15·soul-rise 1.08MB 다. 서리 숨결은 설원
   낮에 가장 옅지만 읽히고, 석상은 동굴·ABYSS·화산·설원·숲 어느 배경에서도 읽힌다. 모바일 GPU 의 첫 전투 프레임 시간은
   `TODO.md` 의 실기기 항목에서 잰다.
+- FIGHT 의 일격(BattleScene `lunge`)은 뒤로 물러서며 무기를 들고(`WINDUP_MS`) 돌진해, 접촉하는 순간(`onContact`) 피해·이펙트·흔들림이 나고 짧게 멈춘 뒤(`HIT_STOP_MS`, 치명타 `CRIT_STOP_MS`) 돌아온다. 맞은 쪽은 x 로만 밀렸다 돌아온다(`recoil`, 숨쉬기·보스 박동과 안 겹치게). 적의 공격이 영웅을 칠 때도 영웅이 같이 밀린다. 실제 사례: 예전에는 영웅이 제자리로 돌아온 뒤에야 피해가 났다.
 - BOMB 은 `icon-bomb` 을 영웅 손에서 적 발밑으로 포물선으로 던지고(BattleScene `lobBomb`), 떨어진 자리(`GROUND_Y`)에서
   fx-bomb(explosions/grenade 의 BLOW 1.62s 이후만)이 터진다. 나는 적도 땅에서 터진다. 실제 사례: grenade 파편 줄기는
   원점 위 105칸(4px 에서 y 36)까지 올라가 적 창을 가로질렀다 → crop 위 58칸(y 224).

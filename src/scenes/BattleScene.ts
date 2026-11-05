@@ -85,6 +85,15 @@ import type { EndingData } from "./EndingScene";
 // snappy lunges (out/back) — slow enough to read, fast enough to feel quick
 const LUNGE_OUT_MS = 90;
 const LUNGE_BACK_MS = 110;
+// a strike's anticipation (the hero draws back and raises the weapon), the
+// freeze on contact, and the foe's knock-back (a crit's farther)
+const WINDUP_MS = 100;
+const WINDUP_PX = 14;
+const HIT_STOP_MS = 50;
+const CRIT_STOP_MS = 90;
+const RECOIL_PX = 10;
+const CRIT_RECOIL_PX = 18;
+const RECOIL_MS = 90;
 // breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
 const IDLE_BOB_PX = 4;
 // a flier's breathing is a hover: higher and quicker, wings at work
@@ -1588,25 +1597,35 @@ export class BattleScene extends Phaser.Scene {
 
   private async playerAttack(): Promise<void> {
     Sfx.attack();
-    await this.lunge();
     this.addCombo();
     const comboBonus = this.comboBonus();
     const { dmg, crit } = rollDamage(this.heroAtk(), this.enemy.def);
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
-    Sfx.strike();
-    if (crit) Sfx.critical();
-    this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
-    this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
-    this.fxOn(this.enemySprite, "fx-slash", HIT_FX_MS);
-    if (crit) this.fxOn(this.enemySprite, "fx-crit", HIT_FX_MS);
-    this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
-    this.hitBurst.explode(crit ? 16 : 8);
-    shake(this.cameras.main, crit ? 120 : 60, crit ? 0.012 : 0.004);
-    this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, crit);
+    // the blow lands at the contact, the hero still out at the foe
+    await this.lunge(crit, () => {
+      Sfx.strike();
+      if (crit) Sfx.critical();
+      this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
+      this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      this.fxOn(this.enemySprite, "fx-slash", HIT_FX_MS);
+      if (crit) this.fxOn(this.enemySprite, "fx-crit", HIT_FX_MS);
+      this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+      this.hitBurst.explode(crit ? 16 : 8);
+      shake(this.cameras.main, crit ? 120 : 60, crit ? 0.012 : 0.004);
+      this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, crit);
+      this.recoil(this.enemySprite, 1, crit);
+    });
     const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
     await this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
+  }
+
+  // a struck fighter's knock-back along the ground (dir 1 pushes it right)
+  // and back; x only, so the breathing and a boss's pulse keep their own
+  private recoil(sprite: Phaser.GameObjects.Sprite, dir: 1 | -1, crit: boolean): void {
+    const px = (crit ? CRIT_RECOIL_PX : RECOIL_PX) * dir;
+    this.tweens.add({ targets: sprite, x: `+=${px}`, duration: this.anim(RECOIL_MS), yoyo: true, ease: "Quad.easeOut" });
   }
 
   private canCast(spell: Spell): boolean {
@@ -2491,6 +2510,7 @@ export class BattleScene extends Phaser.Scene {
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
     shake(this.cameras.main, crit ? 120 : 80, crit ? 0.012 : 0.006);
+    this.recoil(this.playerSprite, -1, crit);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, crit);
     await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
     this.setPlayerTint(undefined);
@@ -2810,17 +2830,22 @@ export class BattleScene extends Phaser.Scene {
     await this.tweenPromise(this.enemySprite, { x: startX }, this.anim(LUNGE_BACK_MS));
   }
 
-  private async lunge(): Promise<void> {
+  // FIGHT's strike: draw back and raise the weapon, dash out swinging,
+  // `onContact` as it connects, a short freeze, then home
+  private async lunge(crit = false, onContact?: () => void): Promise<void> {
     const startX = this.playerSprite.x;
     const targetX = this.meleeX();
     const hasWeapon = !!GameState.equipped.weapon;
     const trail = this.ghostTrail(this.playerSprite);
+    if (hasWeapon) this.weaponOverlay.setAngle(0);
+    if (hasWeapon) this.tweens.add({ targets: this.weaponOverlay, angle: -50, duration: this.anim(WINDUP_MS), ease: "Sine.easeOut" });
+    await this.tweenPromise(this.playerSprite, { x: startX - WINDUP_PX }, this.anim(WINDUP_MS));
     if (hasWeapon) {
-      // wind-up, then swing down through the lunge
-      this.weaponOverlay.setAngle(-20);
       this.tweens.add({ targets: this.weaponOverlay, angle: 60, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
     }
     await this.tweenPromise(this.playerSprite, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
+    onContact?.();
+    await this.wait(this.anim(crit ? CRIT_STOP_MS : HIT_STOP_MS));
     if (hasWeapon) {
       this.tweens.add({ targets: this.weaponOverlay, angle: 0, duration: this.anim(LUNGE_BACK_MS), ease: "Sine.easeOut" });
     }
