@@ -1046,7 +1046,9 @@ export class BattleScene extends Phaser.Scene {
         this.closeSkills();
         return;
       }
-      if (e.code === "KeyZ") this.pickSkill();
+      // X again casts the cursor's move, which opens on the last one used: a
+      // repeat is X X
+      if (e.code === "KeyZ" || e.code === "KeyX") this.pickSkill();
       return;
     }
 
@@ -1446,7 +1448,7 @@ export class BattleScene extends Phaser.Scene {
     this.msgText.setVisible(false);
     this.skillInfoText.setText(`${skill.name}  ${this.skillCost(skill)} MP  ${skill.info}`).setVisible(true);
     this.skillHintText.setVisible(true);
-    bindKeyHint(this.skillHintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
+    bindKeyHint(this.skillHintText, () => keyHint("HJKL:MOVE  Z/X:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
     this.skillPageText.setText(`< ${page + 1}/${pages} >`).setVisible(pages > 1);
   }
 
