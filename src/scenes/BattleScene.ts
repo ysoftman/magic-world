@@ -168,6 +168,17 @@ const BOMB_HOP = 140;
 const BOMB_FX_MS = 900;
 // a restore's ring (ringOn): its 1.75s sheet at 1.5x, about the bag's 1.2s
 const RESTORE_FX_MS = 1200;
+// A boss's breath (breathOn, fx.ts fx-breath-*): the sheet's ms at 1x, and
+// how long after it starts the blow lands, as the cone reaches the hero. The
+// tilt turns it about the foe's mouth down toward the hero's chest; the
+// crops in fx.ts are cut for it.
+const BREATH_FX_MS = 900;
+const BREATH_LAND_MS = 300;
+const BREATHS: Record<string, { key: string; tilt: number }> = {
+  [ENEMIES.flameDrake.name]: { key: "fx-breath-fire", tilt: -0.13 },
+  [ENEMIES.salamander.name]: { key: "fx-spit-fire", tilt: 0 },
+  [ENEMIES.iceGolem.name]: { key: "fx-breath-frost", tilt: -0.06 },
+};
 // A companion skill's own sheet (fx.ts COMPANION_SHEETS) as its blow lands
 // (skillFxOn), in place of the plain strike's fx-hit: its ms at 1x, on the
 // foe's feet or, `ground`, on the ground under it (a flier's too); `back`, its
@@ -2566,7 +2577,12 @@ export class BattleScene extends Phaser.Scene {
     this.charging = false;
     this.tellCooldown = BOSS_TELL_COOLDOWN;
     this.updateEnemyStatus();
-    await this.enemyLunge();
+    // a breath streams out of the mouth where a blow lunges in
+    const breath = BREATHS[this.enemy.name];
+    if (breath) {
+      this.breathOn(breath);
+      await this.wait(this.anim(BREATH_LAND_MS));
+    } else await this.enemyLunge();
     Sfx.hit();
     Sfx.critical();
     const { dmg, note, braced } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
@@ -2588,6 +2604,16 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     await this.freezeHero();
+  }
+
+  // the breath's loop over the hero, fading in and out (the sheet is a loop, so
+  // its first frame is a full stream); the tilt turns it about the mouth
+  private breathOn(breath: { key: string; tilt: number }): void {
+    const ms = this.anim(BREATH_FX_MS);
+    const sprite = playFx(this, breath.key, this.enemySprite.x, this.enemySprite.y, ms, this.enemyBaseScale, true);
+    sprite.setRotation(breath.tilt).setAlpha(0);
+    this.tweens.add({ targets: sprite, alpha: 1, duration: ms * 0.2 });
+    this.tweens.add({ targets: sprite, alpha: 0, delay: ms * 0.8, duration: ms * 0.2 });
   }
 
   // A special that couldn't land falls back to a plain attack: no stacking

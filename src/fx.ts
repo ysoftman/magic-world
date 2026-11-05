@@ -4,9 +4,11 @@ import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModu
 import * as arcaneOrb from "pixelfx/fx/arcane/arcane-orb";
 import * as grenade from "pixelfx/fx/explosions/grenade";
 import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
+import * as fireBreath from "pixelfx/fx/fire/fire-breath";
 import * as fireRing from "pixelfx/fx/fire/fire-ring";
 import * as fireball from "pixelfx/fx/fire/fireball";
 import * as healAoe from "pixelfx/fx/holy/heal-aoe";
+import * as frostBreath from "pixelfx/fx/ice/frost-breath";
 import * as iceLance from "pixelfx/fx/ice/ice-lance";
 import * as icicleFall from "pixelfx/fx/ice/icicle-fall";
 import * as snowflakeBurst from "pixelfx/fx/ice/snowflake-burst";
@@ -30,6 +32,7 @@ import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { ART_PX, readableCanvas } from "./pixelart";
+import { soften } from "./sheetFx";
 import { SKILL_SHEETS } from "./skillSheets";
 import { TECH_SHEETS } from "./techSheets";
 
@@ -292,6 +295,53 @@ const PIXEL_SHEETS: Record<string, PixelSheet> = {
     span: [0, 0.9],
     frames: 14,
     crop: [13, 18, 136, 104],
+  },
+  // a boss's strike (BattleScene breathOn, BOSS_TELLS): the breath leaves the
+  // foe's mouth and streams left over the hero, as drawn mirrored
+  // (directional). The sheet's anchor is the mouth and `focus` puts it on the
+  // foe's art, off its middle: FLAME DRAKE's head-on mouth 10 cells over the
+  // middle (its head is rows 7..15 of 48), GLACIER GOLEM's 11 over. The
+  // streams are loops, so BattleScene fades them in and out. BattleScene
+  // tilts each about the mouth down toward the hero (BREATHS): the crops keep
+  // the cone under y 224 (the stat windows end at 200) and over y 488 (the
+  // menu rows) all along it, the foe's mouth being at about y 328 and the far
+  // end 65px lower, and soften dithers the cut edges so flames thin out
+  // instead of ending on a line. Speed 400 (320 by default) stretches the fire to
+  // about 125 cells (500px), from the mouth to the hero's side across the
+  // 640px between the fighters. 18 frames of the loop's first 1.2s, 15fps.
+  "fx-breath-fire": {
+    fx: soften(fireBreath),
+    opts: { speed: 400 },
+    span: [0, 1.2],
+    frames: 18,
+    focus: [-5, 10],
+    directional: true,
+    crop: [0, 48, 160, 96],
+  },
+  // FLAME SPIT (SALAMANDER), a thinner, shorter jet of the same fire: speed
+  // 340 and spread 0.17 keep it to about 110 cells (440px) from a mouth at the foe's
+  // left edge, 2 cells over its middle, on the 32-cell grid. Its hero is
+  // level with the mouth, so it is not tilted: 20 under the mouth is y 488.
+  "fx-spit-fire": {
+    fx: soften(fireBreath),
+    opts: { speed: 340, spread: 0.17 },
+    span: [0, 1.2],
+    frames: 18,
+    focus: [-16, 2],
+    directional: true,
+    crop: [0, 32, 160, 92],
+  },
+  // GLACIER GOLEM's FROST BREATH: a cone of icy wind, frost puffs and
+  // crystals; it sags as it slows, so it is cropped 36 under the mouth and 24
+  // over (the mouth at about y 324), tilted a little less (0.06). It reaches
+  // 150 cells of its 184; cut at 135 cells (540px) it ends at the hero.
+  "fx-breath-frost": {
+    fx: soften(frostBreath),
+    span: [0, 1.2],
+    frames: 18,
+    focus: [-6, 11],
+    directional: true,
+    crop: [0, 26, 147, 86],
   },
 };
 
