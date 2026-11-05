@@ -301,6 +301,7 @@ type MenuAction =
   | "defend"
   | "run"
   | "steal"
+  | "foe"
   | "potion"
   | "mPotion"
   | "candy"
@@ -919,7 +920,8 @@ export class BattleScene extends Phaser.Scene {
       // has nothing to pick
       { label: "E:ITEM", action: "item", enabled: () => this.hasItems() },
       { label: "D:DEFEND", action: "defend" },
-      { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
+      // the yard has nothing to steal; its C changes the foe (practice.ts)
+      this.practice ? { label: "C:FOE", action: "foe" } : { label: "S:STEAL", action: "steal", enabled: () => this.stealAvailable() },
       { label: this.practice ? "ESC:EXIT" : "ESC:RUN", action: "run", enabled: () => !this.arena },
     ];
     // Always size 5 (20px a glyph), within 48px margins (1184px of room), and
@@ -1142,6 +1144,10 @@ export class BattleScene extends Phaser.Scene {
     }
     if (e.code === "KeyD") {
       this.resolveAction("defend");
+      return;
+    }
+    if (e.code === "KeyC" && this.practice) {
+      this.resolveAction("foe");
       return;
     }
     if (e.code === "KeyE") {
@@ -1534,6 +1540,8 @@ export class BattleScene extends Phaser.Scene {
       if (!action) await this.thaw();
 
       switch (action) {
+        case "foe":
+          return this.practiceFoe(this.practice!, 1);
         case "run": {
           if (this.practice) return this.exitPractice(this.practice);
           this.resetCombo();
@@ -3668,15 +3676,22 @@ export class BattleScene extends Phaser.Scene {
     this.end();
   }
 
-  // A yard foe down: nothing is won, and the next foe comes in behind a short
-  // fade, for as long as the player stays
+  // A yard foe down: nothing is won, and the same foe comes in again behind
+  // a short fade, for as long as the player stays (C:FOE picks another)
   private async practiceVictory(run: PracticeRun): Promise<void> {
     Sfx.victory();
     this.fell();
-    await this.say(`${this.enemy.name} is down! Next foe...`);
+    await this.say(`${this.enemy.name} is down! Again...`);
+    this.practiceFoe(run, 0);
+  }
+
+  // the yard's next bout, `step` foes along the roster (0 for the same one)
+  private practiceFoe(run: PracticeRun, step: number): void {
+    this.running = false;
     this.cameras.main.fadeOut(this.anim(300), 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.restart({ enemy: practiceEnemy(run.round + 1), from: this.origin, practice: { ...run, round: run.round + 1 } });
+      const foe = run.foe + step;
+      this.scene.restart({ enemy: practiceEnemy(foe), from: this.origin, practice: { ...run, foe, round: run.round + 1 } });
     });
   }
 

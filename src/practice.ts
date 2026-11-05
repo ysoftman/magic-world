@@ -1,7 +1,7 @@
 import { GameState } from "./gameState";
 import { ENEMIES } from "./monsters";
 
-// The town's TRAINING YARD: foe after foe for as long as the player stays,
+// The town's TRAINING YARD: the same foe again and again for as long as the player stays, C:FOE moving on to the next,
 // the hero's HP and MP never running out, nothing won or lost. BattleScene
 // restarts into the next foe as each falls and leaves only when the player
 // picks EXIT (the menu's ESC); a restart carries this run along.
@@ -11,8 +11,10 @@ import { ENEMIES } from "./monsters";
 // or to stock potions, and no EXP, gold, drop, streak, quest or achievement
 // count comes of it (BattleScene.practiceVictory goes round all of it).
 export interface PracticeRun {
-  /** foes beaten so far, which also picks the next one */
+  /** bouts fought so far */
   round: number;
+  /** the roster's foe now fought: again and again until the player picks the next (C:FOE) */
+  foe: number;
   hp: number;
   mp: number;
   bag: Record<string, number>;
@@ -22,10 +24,10 @@ export interface PracticeRun {
 // fights are the story's and the ARENA's
 const ROSTER = Object.keys(ENEMIES).filter((key) => !ENEMIES[key].boss && !ENEMIES[key].giant);
 
-export const practiceEnemy = (round: number): string => ROSTER[round % ROSTER.length];
+export const practiceEnemy = (foe: number): string => ROSTER[((foe % ROSTER.length) + ROSTER.length) % ROSTER.length];
 
 export function startPracticeRun(): PracticeRun {
-  return { round: 0, hp: GameState.player.hp, mp: GameState.player.mp, bag: { ...GameState.inventory } };
+  return { round: 0, foe: 0, hp: GameState.player.hp, mp: GameState.player.mp, bag: { ...GameState.inventory } };
 }
 
 export function endPracticeRun(run: PracticeRun): void {

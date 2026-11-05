@@ -403,7 +403,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   묶인 동작은 탭 경로를 함께 만든다. 실제 사례: 아이템 목록을 닫는 길이 ESC 뿐이라 터치에서는
   아이템을 쓰지 않고는 나올 수 없었고, 재고가 0 이면 전투가 멈췄다 → 지금은 목록 밖을 탭하면
   메뉴로 돌아간다(`BattleScene` 의 `closeItems`).
-- 마을 TRAINING YARD(ARENA 관리인의 TRAIN, `src/practice.ts`)는 `Battle { practice }` 로 시작한다. HP/MP 는 매 프레임 채우고(`refillHero`), 적이 쓰러지면 `practiceVictory` 가 보상·집계 없이 `scene.restart` 로 다음 적(`practiceEnemy`, 보스·거인 뺀 순서)을 넣고, 메뉴 ESC:EXIT(`exitPractice`)만 끝낸다. 들어갈 때의 HP/MP·가방을 `endPracticeRun` 이 돌려놓아 힐·소모·비축에 못 쓴다. 식사 충전·휴식 효과·잡기·훔치기·밤 안내는 꺼진다. 새 전투 보상·집계를 `victory()` 에 더하면 `practice` 가 그 앞에서 빠지는지 본다. 관리인 첫 질문은 `ARENA`/`TRAIN` 둘이고 ESC 는 `escPick` 2 로 떠난다.
+- 마을 TRAINING YARD(ARENA 관리인의 TRAIN, `src/practice.ts`)는 `Battle { practice }` 로 시작한다. HP/MP 는 매 프레임 채우고(`refillHero`), 적이 쓰러지면 `practiceVictory` 가 보상·집계 없이 `scene.restart` 로 같은 적을 다시 넣고, 메뉴 C:FOE(`practiceFoe`, S:STEAL 자리, 스펠 첫 글자 F/H/I/B/W/N 과 안 겹침)가 명단(`practiceEnemy`, 보스·거인 뺀 순서)의 다음 적으로 바꾸고, ESC:EXIT(`exitPractice`)만 끝낸다. 들어갈 때의 HP/MP·가방을 `endPracticeRun` 이 돌려놓아 힐·소모·비축에 못 쓴다. 식사 충전·휴식 효과·잡기·훔치기·밤 안내는 꺼진다. 새 전투 보상·집계를 `victory()` 에 더하면 `practice` 가 그 앞에서 빠지는지 본다. 관리인 첫 질문은 `ARENA`/`TRAIN` 둘이고 ESC 는 `escPick` 2 로 떠난다.
 - 전투 SKILL 목록 안에서 X 를 한 번 더 누르면 Z 처럼 커서의 기술을 쓴다(`X X`). 목록이 마지막에 쓴 기술에서 열려서
   같은 기술의 반복이 두 번 누름이다. 키 안내는 `Z/X:OK` 다.
 - 전투 SKILL 목록(X:SKILL, 첫 기술을 배우는 Lv2 부터)은 배우는 순서대로 3열 x 4행, 한 쪽 12개다(26개면 3쪽).
