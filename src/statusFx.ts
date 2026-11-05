@@ -567,10 +567,19 @@ function layerOf(fx: FxModule, back: boolean): FxModule {
 // whole canvas (no crop), its anchor on row origin[1] of each. `cell`: the
 // screen px an effect pixel is shown at on its battler.
 function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet, cell: number): void {
+  if (sheet.ceiling === undefined) return;
+  fadeAboveCeiling(scene, key, sheet.fx.meta.size[1], sheet.fx.meta.origin[1], sheet.ceiling, cell);
+}
+
+/**
+ * The same for a sheet baked outside this file (soulFx.ts): `h` is the frame's
+ * height in the texture (its crop's), `originY` its anchor's row in it,
+ * `ceiling` the screen px over the anchor, `cell` the screen px of a pixel.
+ */
+export function fadeAboveCeiling(scene: Phaser.Scene, key: string, h: number, originY: number, ceiling: number, cell: number): void {
   const tex = scene.textures.get(key);
-  if (sheet.ceiling === undefined || !(tex instanceof Phaser.Textures.CanvasTexture)) return;
-  const h = sheet.fx.meta.size[1];
-  const gone = Math.max(0, sheet.fx.meta.origin[1] - Math.round(sheet.ceiling / cell));
+  if (!(tex instanceof Phaser.Textures.CanvasTexture)) return;
+  const gone = Math.max(0, originY - Math.round(ceiling / cell));
   const ctx = tex.getContext();
   ctx.save();
   ctx.globalCompositeOperation = "destination-out";

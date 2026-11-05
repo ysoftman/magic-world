@@ -70,6 +70,7 @@ import type { PixelText } from "../pixelText";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
+import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
@@ -239,6 +240,10 @@ const SHATTER_KIN = [ENEMIES.frostMoth, ENEMIES.auroraMoth, ENEMIES.yeti, ENEMIE
 const BURNAWAY_KIN = [ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
 // stone and the troll that turns to it: the forest's boss and golem
 const PETRIFY_KIN = [ENEMIES.troll, ENEMIES.mossGolem].map((e) => e.name);
+
+// a hero at this share of its max HP or less has its fall (soulFx.ts) baked
+// before the move sheets, as the next blow or two may be its last
+const SOUL_WARM_HP = 0.4;
 
 // status labels sit right-aligned on the HP rows, 20px inside each window
 const PLAYER_STATUS_RIGHT = 476;
@@ -3037,6 +3042,10 @@ export class BattleScene extends Phaser.Scene {
     // there (25ms, headless).
     const death = this.deathOf();
     if (death) warm(foe, death);
+    // The hero's fall (soulFx.ts), ahead of the move sheets when it is a blow
+    // or two from it, behind them otherwise (below).
+    const frail = GameState.player.hp <= GameState.effMaxHp() * SOUL_WARM_HP;
+    if (frail) warmSoul(this, hero);
     // The hero's moves' sheets (skillFx.ts, techFx.ts), wanted from the first
     // turn: the last move used, then the companion's (fx.ts COMPANION_SHEETS:
     // its first skill comes after the hero's first turn at the soonest), then
@@ -3058,6 +3067,7 @@ export class BattleScene extends Phaser.Scene {
         .flatMap(sheetsOf),
     );
     if (rest.size > 0) warmFx(this, [...rest]);
+    if (!frail) warmSoul(this, hero);
   }
 
   // How the foe dies, if not in fx-poof: its own kind's way (a creature of
@@ -3409,6 +3419,7 @@ export class BattleScene extends Phaser.Scene {
     this.heroIdle?.stop();
     if (this.arena) return this.arenaDefeat(this.arena);
     Sfx.gameover();
+    this.soulRise();
     await this.say("You have fallen...");
     const lost = Math.floor(GameState.gold * DEATH_GOLD_LOSS);
     GameState.gold -= lost;
@@ -3432,6 +3443,14 @@ export class BattleScene extends Phaser.Scene {
       // and the like, waking the hero at that exit instead of the centre
       this.scene.start("Town", {});
     });
+  }
+
+  // The hero's soul leaving its body (soulFx.ts), played as the fall's first
+  // line comes up and not waited for, so the way home is no later for it.
+  // The hit's flash goes out of the body it dims.
+  private soulRise(): void {
+    this.playerSprite.clearTint();
+    playSoul(this, this.playerSprite, this.anim(2200));
   }
 
   // An ARENA bout won: bank this boss's share of the prize and, unless it was
@@ -3471,6 +3490,7 @@ export class BattleScene extends Phaser.Scene {
   // by the keeper (GameState.pos, kept from when the Town handed over).
   private async arenaDefeat(run: ArenaRun): Promise<void> {
     Sfx.gameover();
+    this.soulRise();
     await this.say("You fall in the ARENA...");
     GameState.player.hp = 1;
     this.updatePlayerStats();
