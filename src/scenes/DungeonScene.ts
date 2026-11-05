@@ -27,6 +27,7 @@ import {
   addRoamer,
   addTownExitLabel,
   askAbyssDive,
+  askWarpHome,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -237,7 +238,7 @@ export class DungeonScene extends Phaser.Scene {
     boundCameraToMap(this, DUNGEON_W * TILE, DUNGEON_H * TILE, true);
 
     this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
-    this.fieldKeys = new FieldKeys(this);
+    this.fieldKeys = new FieldKeys(this, { warp: true });
     const help = addHelpPopup(
       this,
       [
@@ -251,6 +252,7 @@ export class DungeonScene extends Phaser.Scene {
         ["S", "HUD"],
         ["M", "MUTE"],
         ["CTRL+S", "SAVE"],
+        ["W", "WARP HOME"],
         ["Q", "QUIT"],
         ["?", "HELP"],
       ],
@@ -354,6 +356,12 @@ export class DungeonScene extends Phaser.Scene {
       () => this.quit(),
     );
 
+    // W: the warp home question, not over a panel or a way out already begun
+    this.fieldKeys.takeWarpKey(
+      () => this.uiBlocking() || this.exitingDungeon,
+      () => this.warpHome(),
+    );
+
     // Items and the bestiary are reachable here too now; without them a low-HP
     // run through the cave or forest had no way to drink a potion outside of a
     // battle.
@@ -378,6 +386,15 @@ export class DungeonScene extends Phaser.Scene {
 
   private uiBlocking(): boolean {
     return this.panels.blocking();
+  }
+
+  // W: back to HOME in town, blinking out. The exit flag holds off fights and
+  // the exits as the walk out's does (the hero is held still meanwhile).
+  private warpHome(): void {
+    if (this.exitingDungeon) return;
+    askWarpHome(this, this.walk, this.dialogue, () => {
+      this.exitingDungeon = true;
+    });
   }
 
   // YES to the quit question, or the settings' QUIT chip on touch

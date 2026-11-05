@@ -22,6 +22,7 @@ import {
   addBorderDressing,
   addRoamer,
   addTownExitSign,
+  askWarpHome,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -219,7 +220,7 @@ export class VolcanoScene extends Phaser.Scene {
     boundCameraToMap(this, VOLCANO_W * TILE, VOLCANO_H * TILE, true);
 
     this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
-    this.fieldKeys = new FieldKeys(this);
+    this.fieldKeys = new FieldKeys(this, { warp: true });
     const help = addHelpPopup(
       this,
       [
@@ -233,6 +234,7 @@ export class VolcanoScene extends Phaser.Scene {
         ["S", "HUD"],
         ["M", "MUTE"],
         ["CTRL+S", "SAVE"],
+        ["W", "WARP HOME"],
         ["Q", "QUIT"],
         ["?", "HELP"],
       ],
@@ -299,6 +301,12 @@ export class VolcanoScene extends Phaser.Scene {
       () => this.quit(),
     );
 
+    // W: the warp home question, not over a panel or a way out already begun
+    this.fieldKeys.takeWarpKey(
+      () => this.uiBlocking() || this.exitingVolcano,
+      () => this.warpHome(),
+    );
+
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
@@ -320,6 +328,15 @@ export class VolcanoScene extends Phaser.Scene {
 
   private uiBlocking(): boolean {
     return this.panels.blocking();
+  }
+
+  // W: back to HOME in town, blinking out. The exit flag holds off fights and
+  // the exits as the walk out's does (the hero is held still meanwhile).
+  private warpHome(): void {
+    if (this.exitingVolcano) return;
+    askWarpHome(this, this.walk, this.dialogue, () => {
+      this.exitingVolcano = true;
+    });
   }
 
   // YES to the quit question, or the settings' QUIT chip on touch

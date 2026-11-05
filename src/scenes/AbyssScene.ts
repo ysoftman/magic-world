@@ -24,6 +24,7 @@ import {
   addBorderDressing,
   addRoamer,
   addTownExitLabel,
+  askWarpHome,
   boundCameraToMap,
   buildTileLayers,
   createWalkAnimations,
@@ -395,7 +396,7 @@ export class AbyssScene extends Phaser.Scene {
     boundCameraToMap(this, ABYSS_W * TILE, ABYSS_H * TILE, true);
 
     this.walk = new HeroWalk(this, this.player, { shadow, companion: this.companionFollower, weapon, shield });
-    this.fieldKeys = new FieldKeys(this);
+    this.fieldKeys = new FieldKeys(this, { warp: true });
     const help = addHelpPopup(
       this,
       [
@@ -409,6 +410,7 @@ export class AbyssScene extends Phaser.Scene {
         ["S", "HUD"],
         ["M", "MUTE"],
         ["CTRL+S", "SAVE"],
+        ["W", "WARP HOME"],
         ["Q", "QUIT"],
         ["?", "HELP"],
       ],
@@ -518,6 +520,12 @@ export class AbyssScene extends Phaser.Scene {
       () => this.quit(),
     );
 
+    // W: the warp home question, not over a panel or a way out already begun
+    this.fieldKeys.takeWarpKey(
+      () => this.uiBlocking() || this.leaving || !run,
+      () => this.warpHome(),
+    );
+
     if (this.uiBlocking()) {
       this.walk.halt();
       this.panels.update();
@@ -575,6 +583,27 @@ export class AbyssScene extends Phaser.Scene {
         });
       },
       0,
+    );
+  }
+
+  // W: back to HOME in town, blinking out as the stair down does. What the
+  // stair up keeps it keeps: the portal on this floor (askLeave), so the next
+  // dive can start there, and the run ends as a walk out's does.
+  private warpHome(): void {
+    if (this.leaving || !run) return;
+    const portal = portalOnLeave(run.floor, GameState.abyssPortal);
+    askWarpHome(
+      this,
+      this.walk,
+      this.dialogue,
+      () => {
+        GameState.abyssPortal = portal;
+        this.toasts.quietSave();
+        this.leaving = true;
+      },
+      () => {
+        run = null;
+      },
     );
   }
 

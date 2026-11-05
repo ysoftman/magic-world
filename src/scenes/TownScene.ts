@@ -103,7 +103,7 @@ import { STATUS_HUD_HEIGHT, STATUS_HUD_TOAST_Y, StatusHud } from "../ui/StatusHu
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { type Rect, Villagers } from "../ui/Villagers";
-import { warmWarp } from "../ui/warpFx";
+import { WARP_IN_MS, warmWarp, warpIn } from "../ui/warpFx";
 import { bakeHero, seasonSkin } from "./BootScene";
 import type { EndingData } from "./EndingScene";
 
@@ -214,6 +214,13 @@ const stepIn = (pos: { x: number; y: number }): { x: number; y: number } => {
   return { x: pos.x + dx * TILE * 2, y: pos.y + dy * TILE * 2 };
 };
 
+// where a hero warped home (W in a field) is set down: on the tile row under
+// the house's door, in line with it (the HOME bubble and C reach from here),
+// read from HOUSE_POS each time so a map editor move carries over. Clear of
+// every talk spot by far (the nearest, the rank board, is over 130px off) and
+// walkable on the shipped map; create() falls back to the spawn if not.
+const homeDoor = (): { x: number; y: number } => ({ x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + 2 * TILE + TILE / 2 });
+
 // a display object's world-space box, in the shape Villagers takes
 const rectOf = (obj: { getBounds(): Phaser.Geom.Rectangle }): Rect => {
   const b = obj.getBounds();
@@ -319,6 +326,8 @@ export class TownScene extends Phaser.Scene {
     fromForest?: boolean;
     fromSnow?: boolean;
     fromVolcano?: boolean;
+    // W in a field (sceneCommon's askWarpHome): set down at HOME's door, blinking in
+    fromWarp?: boolean;
     mapOpen?: boolean;
     rested?: boolean;
   }): void {
@@ -508,18 +517,22 @@ export class TownScene extends Phaser.Scene {
     const fromForest = !!data?.fromForest;
     const fromSnow = !!data?.fromSnow;
     const fromVolcano = !!data?.fromVolcano;
-    const spawn = fromDungeon
-      ? stepIn(CAVE_POS)
-      : fromForest
-        ? stepIn(FOREST_POS)
-        : fromSnow
-          ? stepIn(SNOW_POS)
-          : fromVolcano
-            ? stepIn(VOLCANO_POS)
-            : respawn;
+    const fromWarp = !!data?.fromWarp;
+    const spawn = fromWarp
+      ? homeDoor()
+      : fromDungeon
+        ? stepIn(CAVE_POS)
+        : fromForest
+          ? stepIn(FOREST_POS)
+          : fromSnow
+            ? stepIn(SNOW_POS)
+            : fromVolcano
+              ? stepIn(VOLCANO_POS)
+              : respawn;
     // just walked out of the cave/forest/snow/volcano: hold off re-triggering
     // it in case the player is still holding the walk-in key
-    if (fromDungeon || fromForest || fromSnow || fromVolcano) this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
+    if (fromDungeon || fromForest || fromSnow || fromVolcano || fromWarp)
+      this.encounterCooldown = Math.max(this.encounterCooldown, ENCOUNTER_COOLDOWN);
     // the map editor can paint a tree (or water) over wherever the hero was
     // standing — drop them back at the town spawn rather than inside a wall
     const safeSpawn = isWalkableCell(level, Math.floor(spawn.x / TILE), Math.floor(spawn.y / TILE)) ? spawn : PLAYER_SPAWN;
@@ -853,6 +866,13 @@ export class TownScene extends Phaser.Scene {
       GameState.pos = { x: this.player.x, y: this.player.y };
     });
     saveOnShutdown(this, [this.panels, this.villagers, this.minimap, this.night, this.companionFollower, help, this.touch]);
+
+    // Warped home: the hero blinks in (warpFx.ts), the entry grace running on
+    // past it, and the keys are dropped meanwhile (FieldKeys.leaving).
+    if (fromWarp) {
+      this.encounterCooldown += WARP_IN_MS;
+      warpIn(this, this.walk);
+    }
   }
 
   // One place decides how an exit to another map is drawn, so the three

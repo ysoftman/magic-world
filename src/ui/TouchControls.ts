@@ -21,6 +21,7 @@ const KEY_CODES: Record<string, number> = {
   KeyA: 65,
   KeyO: 79,
   KeyT: 84,
+  KeyW: 87,
   Slash: 191,
 };
 
@@ -34,17 +35,23 @@ const MENU: Array<[label: string, code: string]> = [
   ["A", "KeyA"],
   ["T", "KeyT"],
   ["O", "KeyO"],
+  ["W", "KeyW"],
   ["?", "Slash"],
 ];
-// x: 1222..1270, clear of Z (x <= 1180). y: seven buttons (the Town's full
-// set) from 126, under the HUD (88) and the y=100 toasts, down to 474, above
-// the dialogue box (480) and Z (532) — which is why they're r=24 at a 50px
-// pitch, 2px apart, rather than bigger. The map-edited note (y 160..180)
-// ends at x=1210, left of the column, so the two never meet.
+// x: 1222..1270, clear of Z (x <= 1180). y: the column ends at 474, above
+// the dialogue box (480), and starts under the HUD (88) and the y=100 toasts.
+// Seven buttons (the Town's full set, I U B A T O ?) are r=24 at a 50px pitch,
+// 2px apart, from 150. The fields have W as well, eight (the most of any
+// scene): r=21 at 46px, 4px apart, centres 131..453, discs y 110..474. The
+// map-edited note (y 160..180) ends at x=1210, left of the column, so the two
+// never meet.
 const MENU_X = 1246;
-const MENU_TOP = 150;
-const MENU_GAP = 50;
+const MENU_BOTTOM = 474;
+const MENU_FULL = 7;
+const MENU_PITCH = 50;
 const MENU_R = 24;
+const MENU_TIGHT_PITCH = 46;
+const MENU_TIGHT_R = 21;
 // The discs' black fill. At 0.25 a map tag under the d-pad (BLACKSMITH, at
 // the new game's spawn) showed through near full strength and its letters
 // ran into the arrows; at 0.5 it reads as dimmed ground behind them, and the
@@ -158,8 +165,14 @@ export class TouchControls {
   // Town alone, and a panel a scene adds later appears without touching this.
   private menu(scene: Phaser.Scene): void {
     const keys = scene.input.keyboard?.keys ?? [];
-    MENU.filter(([, code]) => keys[KEY_CODES[code]]).forEach(([label, code], i) => {
-      this.button(scene, MENU_X, MENU_TOP + i * MENU_GAP, MENU_R, label, code, 6);
+    const shown = MENU.filter(([, code]) => keys[KEY_CODES[code]]);
+    // past seven, the discs shrink and close up so the column still ends at 474
+    const tight = shown.length > MENU_FULL;
+    const pitch = tight ? MENU_TIGHT_PITCH : MENU_PITCH;
+    const r = tight ? MENU_TIGHT_R : MENU_R;
+    const top = MENU_BOTTOM - r - (Math.max(shown.length, MENU_FULL) - 1) * pitch;
+    shown.forEach(([label, code], i) => {
+      this.button(scene, MENU_X, top + i * pitch, r, label, code, 6);
     });
   }
 

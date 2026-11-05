@@ -756,6 +756,30 @@ export function askAbyssDive(scene: Phaser.Scene, walk: HeroWalk, dialogue: Dial
   );
 }
 
+/**
+ * W on a field: the dialogue box asks WARP HOME? and YES blinks the hero out
+ * (warpFx.ts's warpOut) and starts the town, which sets it down in front of
+ * HOME and blinks it in (TownScene's fromWarp). Free, with no cooldown. `leaving`
+ * runs as the hero starts to blink out and is the scene's own: its exit flag
+ * (which holds off the fights and the exits, as walkOut's callers' do) and
+ * anything the way out keeps (the ABYSS's portal); `done` runs as the fade ends,
+ * before the town starts. NO and ESC (the last choice) close the box. Four
+ * glyphs of text, two choices: all a touch question holds (DialogueBox).
+ */
+export function askWarpHome(scene: Phaser.Scene, walk: HeroWalk, dialogue: DialogueBox, leaving: () => void, done?: () => void): void {
+  // the look or gear may have changed since the scene's warm (warpFx.ts)
+  warmWarp(scene);
+  dialogue.ask(["WARP HOME?"], "", ["YES", "NO"], (i) => {
+    if (i !== 0) return;
+    leaving();
+    // data of its own, never a stale { fromForest } replayed by Phaser
+    warpOut(scene, walk, () => {
+      done?.();
+      scene.scene.start("Town", { fromWarp: true });
+    });
+  });
+}
+
 // Two tiles: the Z disc (screen y 532..636) clears a chest on row 14 only when
 // the map's foot sits 128px higher.
 export const TOUCH_CAMERA_FOOT = TILE * 2;
@@ -932,7 +956,7 @@ export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
 }
 
 /** The keys every map scene reads alike, besides walking (FieldKeys). */
-export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" | "Q";
+export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" | "Q" | "W";
 
 /**
  * S (the HUD) and CTRL+S (save), M (mute), T (the minimap), the panels' I B
@@ -953,14 +977,15 @@ export type FieldKey = "S" | "CTRL+S" | "M" | "T" | "I" | "B" | "A" | "U" | "O" 
  * or an M held so flipped the HUD or the sound straight back. Built before
  * the scene's TouchControls, so touch gets a button for each of these its
  * MENU has. `toastY` is the scene's toast line (the town's sits under the
- * HUD, the fields' lower).
+ * HUD, the fields' lower). `warp` registers W, the warp home (takeWarpKey):
+ * the five fields pass it, the town does not, HOME being in it.
  */
 export class FieldKeys {
   private readonly queued = new Set<FieldKey>();
   private readonly scene: Phaser.Scene;
   private readonly toastY: number;
 
-  constructor(scene: Phaser.Scene, { toastY = FIELD_TOAST_Y }: { toastY?: number } = {}) {
+  constructor(scene: Phaser.Scene, { toastY = FIELD_TOAST_Y, warp = false }: { toastY?: number; warp?: boolean } = {}) {
     this.scene = scene;
     this.toastY = toastY;
     const kb = scene.input.keyboard!;
@@ -979,6 +1004,8 @@ export class FieldKeys {
     on(K.U, "U");
     on(K.O, "O");
     on(K.Q, "Q");
+    // W, the warp home: the fields only, the town is where it goes
+    if (warp) on(K.W, "W");
   }
 
   /** Whether `key` was pressed since it was last taken; taking it clears it. */
@@ -1037,6 +1064,16 @@ export class FieldKeys {
    */
   takeQuitKey(dialogue: DialogueBox, blocked: () => boolean, quit: () => void): void {
     if (this.take("Q") && !blocked() && !this.leaving()) askQuitToTitle(dialogue, quit);
+  }
+
+  /**
+   * W: the warp home question (askWarpHome), never while `blocked()` — a
+   * panel, a talk, the help, a scene already on its way out or to the title —
+   * nor once the scene is leaving() (a fight's fade, a warp). A W pressed
+   * under a panel is dropped, not kept for when it closes.
+   */
+  takeWarpKey(blocked: () => boolean, ask: () => void): void {
+    if (this.take("W") && !blocked() && !this.leaving()) ask();
   }
 }
 
