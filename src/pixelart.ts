@@ -225,8 +225,7 @@ function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: 
 // density, and art redrawn on a 32-cell grid (drawn at ART_PX as it is, no
 // Scale2x) sits beside the rest without a jump in density. keepBlocky() opts a
 // grid out where Scale2x bends what it was drawn to say (see its calls in
-// src/art). The terrain (art/tiles.ts) is drawn on 32 cells as it stands and
-// needs neither that nor smoothBoundaryOnly() any more.
+// src/art). The terrain (art/tiles.ts) is drawn on 32 cells as it stands.
 export const ART_PX = PIXEL / 2;
 
 // What Scale2x sees past a grid's edge: nothing for a sprite, so it never
@@ -237,10 +236,10 @@ export type GridEdges = "transparent" | "clamp";
 // Scale2x (AdvMAME2x): each cell becomes 2x2, and a corner takes a
 // neighbour's colour where the two edges beside it agree, so a step becomes a
 // diagonal. It only ever reuses colours already there, never blends.
-// `family` (the characters of one terrain, e.g. a transition tile's grass)
-// limits it to the boundary: a corner only changes where the colour it would
-// take lies across that boundary, so the shoreline rounds off while the
-// water's own pattern stays cell for cell what the base water tile draws.
+// `family` limits it to one boundary, between the characters in `family` and
+// the rest: a corner only changes where the colour it would take lies across
+// it. battleHd.ts gives the empty space ("."), so a fighter's outline rounds
+// off while the eyes, mouth and markings inside it keep their blocks.
 export function scale2x(rows: readonly string[], edges: GridEdges = "transparent", family?: string): string[] {
   const pick = (p: string, n: string): string => (family === undefined || family.includes(p) !== family.includes(n) ? n : p);
   const at =
@@ -269,14 +268,9 @@ export function scale2x(rows: readonly string[], edges: GridEdges = "transparent
 }
 
 const blockyGrids = new WeakSet<readonly string[]>();
-const boundaryGrids = new WeakMap<readonly string[], string>();
 // these grids bake as they always did, in full 4px cells
 export function keepBlocky(...grids: ReadonlyArray<readonly string[]>): void {
   for (const grid of grids) blockyGrids.add(grid);
-}
-// these bake through Scale2x across the edge of `family` only (see scale2x)
-export function smoothBoundaryOnly(family: string, ...grids: ReadonlyArray<readonly string[]>): void {
-  for (const grid of grids) boundaryGrids.set(grid, family);
 }
 
 // The cells `rows` bakes to and their size: Scale2x at ART_PX by default; as
@@ -289,7 +283,7 @@ export function bakedCells(
 ): { cells: readonly string[]; px: number } {
   if (px !== undefined) return { cells: rows, px };
   if (blockyGrids.has(rows)) return { cells: rows, px: PIXEL };
-  return { cells: scale2x(rows, edges, boundaryGrids.get(rows)), px: ART_PX };
+  return { cells: scale2x(rows, edges), px: ART_PX };
 }
 
 export function drawRows(

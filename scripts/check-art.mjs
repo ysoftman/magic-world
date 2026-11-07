@@ -403,22 +403,14 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
 
 // ---- the baked result: what Scale2x makes of the grids ----
 // A tileset drawn at ART_PX bakes its grids as they stand. Otherwise the art
-// files name the grids that stay blocky (keepBlocky) and the ones smoothed
-// only across a terrain edge (smoothBoundaryOnly), each file beside its own
-// grids; every other grid bakes through plain Scale2x. A tile bakes with its
-// edges clamped.
-const calls = (fn) =>
-  [...src.matchAll(new RegExp(`^\\s*${fn}\\(([\\s\\S]*?)\\);`, "gm"))].map((m) => ({
-    family: m[1].match(/^\s*"([^"]*)"/)?.[1],
-    names: [...m[1].matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((n) => n[1]),
-  }));
-const blockyCalls = calls("keepBlocky");
-const boundaryCalls = calls("smoothBoundaryOnly");
-const blocky = new Set(blockyCalls.flatMap((c) => c.names));
-const boundaryOf = new Map(boundaryCalls.flatMap((c) => c.names.map((n) => [n, c.family])));
-for (const n of [...blocky, ...boundaryOf.keys()]) if (!grids.has(n)) fail(`${n} is listed for its bake but is no grid`);
-for (const n of asStands)
-  if (blocky.has(n) || boundaryOf.has(n)) fail(`${n} is drawn as it stands at ART_PX and also listed for a 4px bake`);
+// files name the grids that stay blocky (keepBlocky), each file beside its own
+// grids; every other grid bakes through Scale2x. A tile bakes with its edges
+// clamped.
+const blocky = new Set(
+  [...src.matchAll(/^\s*keepBlocky\(([\s\S]*?)\);/gm)].flatMap((m) => [...m[1].matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((n) => n[1])),
+);
+for (const n of blocky) if (!grids.has(n)) fail(`${n} is listed for its bake but is no grid`);
+for (const n of asStands) if (blocky.has(n)) fail(`${n} is drawn as it stands at ART_PX and also listed for a 4px bake`);
 // a blocky grid is shown at the same 2x cell resolution, so both compare cell for cell
 const doubled = (rows) =>
   rows.flatMap((r) => {
@@ -428,12 +420,12 @@ const doubled = (rows) =>
 const bakeTile = (name) => {
   const rows = grids.get(name);
   if (asStands.has(name)) return rows;
-  return blocky.has(name) ? doubled(rows) : scale2x(rows, "clamp", boundaryOf.get(name));
+  return blocky.has(name) ? doubled(rows) : scale2x(rows, "clamp");
 };
-// The floors, the water and the lava, and the transitions' fill, must not
-// bend: drawn as they stand, kept blocky, or (a transition) smoothed across
-// its boundary only. Through plain Scale2x the ripple dashes turned into
-// diagonal streaks.
+// The floors, the water and the lava, and the transitions, must not bend:
+// drawn as they stand (or a floor kept blocky). Through Scale2x the ripple
+// dashes turned into diagonal streaks and a transition's fill bent away from
+// the base tile's beside it.
 const floors = [
   ...Object.values(CALM_LIMITS).flatMap((c) => c.tiles),
   ...["", "_2", "_3", "_4"].flatMap((s) => [`WATER_A${s}`, `WATER_B${s}`]),
@@ -445,14 +437,8 @@ const floors = [
 for (const n of new Set(floors))
   if (grids.has(n) && !asStands.has(n) && !blocky.has(n)) fail(`${n} would bake through Scale2x -- a floor's pattern would bend`);
 for (const key of Object.keys(FAMILY))
-  for (const n of baked.get(key) ?? [])
-    if (!asStands.has(n) && !boundaryOf.has(n)) fail(`${n} would bake through plain Scale2x -- its fill would bend`);
-const families = [...new Set(boundaryOf.values())].map((f) => `"${f}"`).join(", ");
-console.log(
-  `\nbaked: ${asStands.size} tileset grids drawn as they stand at ART_PX, ${blocky.size} kept blocky` +
-    (boundaryOf.size ? `, ${boundaryOf.size} smoothed across ${families} only` : "") +
-    ", the rest through Scale2x",
-);
+  for (const n of baked.get(key) ?? []) if (!asStands.has(n)) fail(`${n} would bake through Scale2x -- its fill would bend`);
+console.log(`\nbaked: ${asStands.size} tileset grids drawn as they stand at ART_PX, ${blocky.size} kept blocky, the rest through Scale2x`);
 
 // water A/B: B still A at a phase in what is baked
 for (const suffix of ["", "_2", "_3", "_4"]) {
@@ -475,71 +461,41 @@ for (const [key, cfg] of Object.entries(FAMILY)) {
 
 // Seams. Every pair of tiles that can sit side by side (the corners they
 // share agree; mask bit 0 TL, 1 TR, 2 BL, 3 BR, 1 = water/path; 0 and 15 are
-// the base tiles, wholly grass and wholly the other terrain).
-// - Drawn as they stand: the boundary has to carry on across the seam, so the
-//   cells either side of it are counted where one is grass and the other not.
-//   The generator cuts a shared edge alike in both tiles; at most SEAM_AS_IS
-//   cells may disagree, where the contour meets the seam between two cells.
-// - Through Scale2x: a tile bakes alone, its edge clamped, so the two halves
-//   may round off a cell differently than one bake of both would; the cells
-//   either side are compared baked both ways, at most SEAM_MAX apart (one
-//   diagonal step of 2px cells).
-const SEAM_MAX = 4;
-const SEAM_AS_IS = 2;
+// the base tiles, wholly grass and wholly the other terrain). The boundary
+// has to carry on across the seam, so the cells either side of it are counted
+// where one is grass and the other not. The generator (scripts/gen-terrain.ts)
+// cuts a shared edge alike in both tiles; at most SEAM_MAX cells may disagree,
+// where the contour meets the seam between two cells.
+const SEAM_MAX = 2;
 for (const [key, cfg] of Object.entries(FAMILY)) {
   const names = baked.get(key);
-  if (!names) continue;
+  if (!names?.every((n) => asStands.has(n))) continue;
   const base = { 0: "GRASS_TILE", 15: key === "shore16" ? "WATER_A" : "PATH_TILE" };
   const nameOf = (m) => base[m] ?? names[m - 1];
   const bit = (m, i) => (m >> i) & 1;
-  const standing = names.every((n) => asStands.has(n));
   const isOther = (m, c) => (m === 0 ? false : m === 15 ? true : cfg.other.includes(c));
-  const joinedBake = (rows) => scale2x(rows, "clamp", boundaryOf.get(names[0]));
   let worst = 0;
   let pairs = 0;
   for (let a = 0; a < 16; a++)
     for (let b = 0; b < 16; b++) {
       if (base[a] && base[b]) continue;
       const [A, B] = [grids.get(nameOf(a)), grids.get(nameOf(b))];
-      const across = bit(a, 1) === bit(b, 0) && bit(a, 3) === bit(b, 2);
-      const down = bit(a, 2) === bit(b, 0) && bit(a, 3) === bit(b, 1);
-      if (standing) {
-        const n = A.length;
-        const sides = [];
-        if (across) sides.push((i) => [A[i][n - 1], B[i][0]]);
-        if (down) sides.push((i) => [A[n - 1][i], B[0][i]]);
-        for (const side of sides) {
-          pairs++;
-          let d = 0;
-          for (let i = 0; i < n; i++) {
-            const [ca, cb] = side(i);
-            if (isOther(a, ca) !== isOther(b, cb)) d++;
-          }
-          worst = Math.max(worst, d);
-          if (d > SEAM_AS_IS)
-            fail(`${key}: ${nameOf(a)} beside ${nameOf(b)} breaks the boundary at the seam in ${d} cells (> ${SEAM_AS_IS})`);
-        }
-        continue;
-      }
-      const [bA, bB] = [bakeTile(nameOf(a)), bakeTile(nameOf(b))];
+      const n = A.length;
       const sides = [];
-      if (across) sides.push([joinedBake(A.map((r, y) => r + B[y])), bA.map((r, y) => r + bB[y]), (_y, x) => x >= 28 && x < 36]);
-      if (down) sides.push([joinedBake([...A, ...B]), [...bA, ...bB], (y) => y >= 28 && y < 36]);
-      for (const [joined, apart, near] of sides) {
+      if (bit(a, 1) === bit(b, 0) && bit(a, 3) === bit(b, 2)) sides.push((i) => [A[i][n - 1], B[i][0]]);
+      if (bit(a, 2) === bit(b, 0) && bit(a, 3) === bit(b, 1)) sides.push((i) => [A[n - 1][i], B[0][i]]);
+      for (const side of sides) {
         pairs++;
         let d = 0;
-        joined.forEach((row, y) => {
-          for (let x = 0; x < row.length; x++) if (near(y, x) && row[x] !== apart[y][x]) d++;
-        });
+        for (let i = 0; i < n; i++) {
+          const [ca, cb] = side(i);
+          if (isOther(a, ca) !== isOther(b, cb)) d++;
+        }
         worst = Math.max(worst, d);
-        if (d > SEAM_MAX) fail(`${key}: ${nameOf(a)} beside ${nameOf(b)} differs at the seam by ${d} cells (> ${SEAM_MAX})`);
+        if (d > SEAM_MAX) fail(`${key}: ${nameOf(a)} beside ${nameOf(b)} breaks the boundary at the seam in ${d} cells (> ${SEAM_MAX})`);
       }
     }
-  console.log(
-    standing
-      ? `${key}: ${pairs} neighbouring pairs, worst seam ${worst} cells off the boundary (<= ${SEAM_AS_IS})`
-      : `${key}: ${pairs} neighbouring pairs, worst seam ${worst} 2px cells (<= ${SEAM_MAX})`,
-  );
+  console.log(`${key}: ${pairs} neighbouring pairs, worst seam ${worst} cells off the boundary (<= ${SEAM_MAX})`);
 }
 
 // terrain calm, measured on the baked cells

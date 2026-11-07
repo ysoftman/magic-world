@@ -40,8 +40,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   // Every texture, once per page load, in the order they always baked. The
-  // grids' Scale2x opt-outs (keepBlocky, smoothBoundaryOnly) are registered
-  // as their modules load, before this runs.
+  // grids' Scale2x opt-outs (keepBlocky) are registered as their modules load,
+  // before this runs.
   private buildTextures(): void {
     bakeTilesets.call(this);
     bakeHeroArt.call(this);

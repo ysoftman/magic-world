@@ -18,8 +18,8 @@ import { ART_PX, scale2x, texelsOf } from "./pixelart";
 //   alone goes through Scale2x once more: where a cell meets the empty space
 //   round the body its corner is cut or filled, so the outline steps by half a
 //   cell, 2px on screen. Inside the outline every cell stays a whole block:
-//   Scale2x limited to the boundary between the body and the empty space, as
-//   smoothBoundaryOnly() limits it to a terrain's edge. A full Scale2x of the
+//   Scale2x limited to the boundary between the body and the empty space
+//   (scale2x's `family`, EMPTY below). A full Scale2x of the
 //   body turned the hero's flat eyes into almonds, the SLIME's mouth into a
 //   curve, the GOBLIN's eyes into slants and the BAT's two unlike eyes into a
 //   squint; an eye, a mouth or a pattern inside the body never touches the
