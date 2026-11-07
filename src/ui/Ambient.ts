@@ -760,6 +760,8 @@ const RAYS_STEP_MS = 1000 / 15;
 function addSunRays(scene: Phaser.Scene): (level: number) => void {
   const [cols, rows] = [GAME_WIDTH / PIXEL, GAME_HEIGHT / PIXEL];
   // the effect's anchor (its floor's middle) on the bottom edge's middle
+  // its light uploaded at two texels to a pixel, blended (smooth): the
+  // shafts' edges step by 2px, the field's cell, not 4px
   const { frame, image, upload } = addLightCanvas(scene, "field-rays", {
     cols,
     rows,
@@ -767,6 +769,7 @@ function addSunRays(scene: Phaser.Scene): (level: number) => void {
     depth: RAYS_DEPTH,
     ox: -cols / 2,
     oy: -rows,
+    smooth: 2,
   });
   const fx = createFx(godRays);
   // where in its loop it starts: anywhere, so no two visits open alike
