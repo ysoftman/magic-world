@@ -1,13 +1,15 @@
 import type Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
+import { ART_PX } from "./pixelart";
 
 // The title screen's backdrop (makeTitleBg, at the end) and the battle
 // backdrops, one per field a fight starts in, baked once at boot
 // (BootScene) as 1280x720 textures: "battle-bg-<region>", and for the town and
 // the forest one per look the season gives their maps ("-autumn", "-winter";
-// art/tilesets.ts battleBgKey picks). Each is drawn in three depths on 4px
-// cells, the fighters' own cell on this screen (their 2px art at scale 2);
-// what sets it back is its lower chroma and contrast:
+// art/tilesets.ts battleBgKey picks). Each is drawn in three depths on 2px
+// cells (C, ART_PX), the cell the field's art has on screen and the fighters'
+// battle textures have (battleHd.ts); what sets it back is its lower chroma
+// and contrast:
 //
 // - far: mountains, a tree wall or a cave wall, close to the sky's colour
 // - mid: hills, trees, rocks or pillars, darker and still muted
@@ -38,14 +40,20 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "./config";
 // the hero sat on his hair and boots (0x6b4226, 0x4a2f1a), a grey winter sky on
 // the wolf's greys, a slate one on his navy trousers. So the town's and the
 // forest's bands around the hero stay green, red-orange or teal, never brown.
+//
+// The backdrops were first drawn on 4px cells, and their sizes are still
+// written in that step (P): the lip is P * 3 high, a mid trunk P * 4 wide, a
+// cloud's lumps P apart. Halving the cell kept every one of those and only
+// made the edges finer. What is one cell, a rim, a dither row, a star, is C.
 
+const C = ART_PX;
 const P = PIXEL;
 const GROUND = 440;
 const W = GAME_WIDTH;
 
 type G = Phaser.GameObjects.Graphics;
 
-const snap = (v: number): number => Math.round(v / P) * P;
+const snap = (v: number): number => Math.round(v / C) * C;
 
 // deterministic, so every boot (and every capture) bakes the same backdrops
 let seed = 1;
@@ -54,17 +62,91 @@ const rand = (): number => {
   return (seed - 1) / 2147483646;
 };
 
-/** Sky bands top to bottom, each seam dithered on one row of cells. */
+/** A fixed 0..1 for an integer: raggedness that comes out the same every boot, without using up rand(). */
+const hash = (n: number): number => {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+/** `a` towards `b` by `t`, channel by channel; past 1 it carries on beyond `b` (a lighter rim), clamped. */
+const mix = (a: number, b: number, t: number): number => {
+  let out = 0;
+  for (const s of [16, 8, 0]) {
+    const ca = (a >> s) & 255;
+    out |= Math.min(255, Math.max(0, Math.round(ca + (((b >> s) & 255) - ca) * t))) << s;
+  }
+  return out;
+};
+
+// A seam between two flat colours: three rows of the lower colour at a
+// quarter, a half and three quarters of their cells, 6px. On 4px cells it was
+// one row at a half; on 2px that one row was a hairline of dots.
+const SEAM = [0.25, 0.5, 0.75] as const;
+
+/** The cells of `row` from x0 to x1 where `on` holds, a rect per run, in the current fill. */
+function cellRuns(g: G, row: number, x0: number, x1: number, on: (x: number) => boolean): void {
+  let start = -1;
+  for (let x = x0; x <= x1; x += C) {
+    if (x < x1 && on(x)) {
+      if (start < 0) start = x;
+    } else if (start >= 0) {
+      g.fillRect(start, row, x - start, C);
+      start = -1;
+    }
+  }
+}
+
+/**
+ * Rows of `color` from `y` down, row k covering `cover[k]` of its cells
+ * (0.25, 0.5 or 0.75). A quarter and three quarters shift by two cells row to
+ * row and a half by one, so no column lines up.
+ */
+function dither(g: G, color: number, y: number, cover: readonly number[]): void {
+  g.fillStyle(color, 1);
+  cover.forEach((c, k) => {
+    const row = y + k * C;
+    const r = row / C;
+    cellRuns(g, row, 0, W, (x) => {
+      const i = x / C;
+      return c >= 0.75 ? (i + 2 * (r & 1)) % 4 !== 2 : c >= 0.5 ? (i + r) % 2 === 0 : (i + 2 * (r & 1)) % 4 === 0;
+    });
+  });
+}
+
+/** Sky bands top to bottom, each seam dithered (SEAM). */
 function sky(g: G, stops: ReadonlyArray<readonly [number, number]>, bottom = GROUND): void {
   stops.forEach(([y, color], i) => {
     const next = stops[i + 1];
     const y1 = next ? next[0] : bottom;
     g.fillStyle(color, 1);
     g.fillRect(0, y, W, y1 - y);
-    if (!next) return;
-    g.fillStyle(next[1], 1);
-    for (let x = 0; x < W; x += P * 2) g.fillRect(x, y1 - P, P, P);
+    if (next) dither(g, next[1], y1 - SEAM.length * C, SEAM);
   });
+}
+
+/**
+ * A shaft of light from (top0..top1, yTop) to (bottom0..bottom1, yBottom),
+ * a row of cells at a time. Drawn as a triangle it came out with smoothed,
+ * off-grid edges.
+ */
+function beam(
+  g: G,
+  yTop: number,
+  top0: number,
+  top1: number,
+  yBottom: number,
+  bottom0: number,
+  bottom1: number,
+  color: number,
+  alpha: number,
+): void {
+  g.fillStyle(color, alpha);
+  for (let y = yTop; y < yBottom; y += C) {
+    const t = (y + C / 2 - yTop) / (yBottom - yTop);
+    const x0 = snap(top0 + (bottom0 - top0) * t);
+    const x1 = snap(top1 + (bottom1 - top1) * t);
+    if (x1 > x0) g.fillRect(x0, y, x1 - x0, C);
+  }
 }
 
 /**
@@ -79,7 +161,7 @@ function columns(g: G, cell: (x: number) => readonly [number, number] | null, bo
     g.fillStyle(run[1], 1);
     g.fillRect(x0, run[0], x1 - x0, bottom - run[0]);
   };
-  for (let x = P; x <= W; x += P) {
+  for (let x = C; x <= W; x += C) {
     const c = x < W ? cell(x) : null;
     if (x === W || c?.[0] !== run?.[0] || c?.[1] !== run?.[1]) {
       flush(x);
@@ -91,9 +173,29 @@ function columns(g: G, cell: (x: number) => readonly [number, number] | null, bo
 
 type Peak = readonly [x: number, top: number, halfWidth: number];
 
+/** The depth in cells of a gully whose middle is column `i` (3..6), or 0 for none: one column in twenty. */
+const gully = (i: number): number => {
+  const h = hash(i);
+  return h < 0.05 ? 3 + Math.floor(h * 80) : 0;
+};
+
+/**
+ * How many cells the snow line drops below its level at column `i`: a wander
+ * of a cell or two, and here and there a tongue down a gully, two cells
+ * shallower each column out from its middle. On 4px cells the edge could only
+ * zigzag a cell up or down in a fixed beat; square-ended tongues read as
+ * icing running down.
+ */
+const snowLine = (i: number): number => {
+  const wander = Math.round(Math.sin(i * 0.61) * 1.4 + Math.sin(i * 1.73 + 2) * 0.9);
+  let tongue = 0;
+  for (let d = -2; d <= 2; d++) tongue = Math.max(tongue, gully(i + d) - Math.abs(d) * 2);
+  return wander + tongue;
+};
+
 /**
  * A range of peaks, the lit (left) face and the shaded (right) face of each,
- * with a jagged cap of snow or ash on the summits if `cap` is given.
+ * with a ragged cap of snow or ash on the summits if `cap` is given.
  */
 function peaks(
   g: G,
@@ -107,7 +209,7 @@ function peaks(
     let best = { top: Number.POSITIVE_INFINITY, peak: list[0] };
     for (const peak of list) {
       const [px, py, hw] = peak;
-      const top = py + (Math.abs(x + P / 2 - px) * (bottom - py)) / hw;
+      const top = py + (Math.abs(x + C / 2 - px) * (bottom - py)) / hw;
       if (top < best.top) best = { top, peak };
     }
     return best;
@@ -116,18 +218,18 @@ function peaks(
     g,
     (x) => {
       const { top, peak } = owner(x);
-      return [snap(top), x + P / 2 < peak[0] ? lit : shade];
+      return [snap(top), x + C / 2 < peak[0] ? lit : shade];
     },
     bottom,
   );
   if (!cap) return;
-  for (let x = 0; x < W; x += P) {
+  for (let x = 0; x < W; x += C) {
     const { top, peak } = owner(x);
-    const capBottom = snap(peak[1] + cap.depth) + ((x / P) % 3 === 1 ? P : 0) + ((x / P) % 5 === 0 ? -P : 0);
+    const capBottom = snap(peak[1] + cap.depth) + snowLine(x / C) * C;
     const t = snap(top);
     if (t >= capBottom) continue;
-    g.fillStyle(x + P / 2 < peak[0] ? cap.lit : cap.shade, 1);
-    g.fillRect(x, t, P, capBottom - t);
+    g.fillStyle(x + C / 2 < peak[0] ? cap.lit : cap.shade, 1);
+    g.fillRect(x, t, C, capBottom - t);
   }
 }
 
@@ -136,28 +238,46 @@ type Wave = readonly [amp: number, period: number, phase: number];
 const wave = (x: number, waves: readonly Wave[]): number =>
   waves.reduce((sum, [amp, period, phase]) => sum + amp * Math.sin((x / period + phase) * Math.PI * 2), 0);
 
-/** Rolling ground above `base`, with a one-cell rim of `rim` along its crest. */
+/** Rolling ground above `base`, with a rim of `rim` along its crest and a cell of half-rim under it. */
 function hills(g: G, base: number, waves: readonly Wave[], color: number, rim?: number, bottom = GROUND): void {
   columns(g, (x) => [snap(base - wave(x, waves)), color], bottom);
   if (rim === undefined) return;
+  const crest = (x: number): number => snap(base - wave(x, waves));
   g.fillStyle(rim, 1);
-  for (let x = 0; x < W; x += P) g.fillRect(x, snap(base - wave(x, waves)), P, P);
+  for (let x = 0; x < W; x += C) g.fillRect(x, crest(x), C, C);
+  g.fillStyle(mix(rim, color, 0.5), 1);
+  for (let x = 0; x < W; x += C) g.fillRect(x, crest(x) + C, C, C);
 }
 
-/** A stepped ellipse, one row of cells at a time. */
+/**
+ * A stepped ellipse, one row of cells at a time. A row wider than both its
+ * neighbours is cut back to the wider of them: rounding each row on its own
+ * left the widest one a lone cell proud of the rest, a nub on each side of a
+ * tree's crown.
+ */
 function blob(g: G, cx: number, cy: number, rx: number, ry: number, color: number, alpha = 1): void {
-  g.fillStyle(color, alpha);
-  for (let y = -ry; y < ry; y += P) {
-    const t = (y + P / 2) / ry;
-    const half = snap(rx * Math.sqrt(Math.max(0, 1 - t * t)));
-    if (half > 0) g.fillRect(snap(cx) - half, snap(cy + y), half * 2, P);
+  const rows: number[] = [];
+  for (let y = -ry; y < ry; y += C) {
+    const t = (y + C / 2) / ry;
+    rows.push(snap(rx * Math.sqrt(Math.max(0, 1 - t * t))));
   }
+  g.fillStyle(color, alpha);
+  rows.forEach((w, k) => {
+    const half = Math.min(w, Math.max(rows[k - 1] ?? 0, rows[k + 1] ?? 0));
+    if (half > 0) g.fillRect(snap(cx) - half, snap(cy - ry + k * C), half * 2, C);
+  });
 }
 
-/** A blob lit from the top left: the dark body, then a smaller lit one up and left of centre. */
+/**
+ * A blob lit from the top left: the dark body, then a smaller lit one up and
+ * left of centre, a cell of a lighter rim round its top and left.
+ */
 function litBlob(g: G, cx: number, cy: number, rx: number, ry: number, dark: number, light: number): void {
   blob(g, cx, cy, rx, ry, dark);
-  blob(g, cx - rx * 0.18, cy - ry * 0.2, rx * 0.72, ry * 0.68, light);
+  const lx = cx - rx * 0.18;
+  const ly = cy - ry * 0.2;
+  blob(g, lx, ly, rx * 0.72, ry * 0.68, mix(dark, light, 1.5));
+  blob(g, lx + C, ly + C, rx * 0.72, ry * 0.68, light);
 }
 
 /** Soft round light: rings of falling alpha. */
@@ -189,26 +309,37 @@ function tree(g: G, x: number, base: number, h: number, dark: number, light: num
 function pine(g: G, x: number, base: number, h: number, dark: number, light: number, snow?: number): void {
   const top = snap(base - h);
   const maxHalf = h * 0.3;
-  for (let y = top; y < base; y += P) {
+  for (let y = top; y < base; y += C) {
     const t = (y - top) / h;
     const tier = (t * 3) % 1;
-    const half = Math.max(P, snap(maxHalf * (0.3 + 0.7 * tier) * (0.45 + 0.55 * t)));
+    const half = Math.max(C, snap(maxHalf * (0.3 + 0.7 * tier) * (0.45 + 0.55 * t)));
+    const snowy = snow !== undefined && tier < 0.12;
     g.fillStyle(dark, 1);
-    g.fillRect(snap(x) - half, y, half * 2, P);
-    g.fillStyle(snow !== undefined && tier < 0.12 ? snow : light, 1);
-    g.fillRect(snap(x) - half, y, snow !== undefined && tier < 0.12 ? half * 2 : Math.max(P, snap(half * 0.7)), P);
+    g.fillRect(snap(x) - half, y, half * 2, C);
+    g.fillStyle(snowy ? snow : light, 1);
+    g.fillRect(snap(x) - half, y, snowy ? half * 2 : Math.max(C, snap(half * 0.7)), C);
   }
 }
 
-/** Scattered pairs of grass blades (or pebbles) on the ground, sparse and close to its colour. */
+// a tuft: a tall blade between two splayed short ones, from one root (10x6).
+// A bare V of two blades read as a bird.
+const TUFT = [
+  [2, 0],
+  [0, 1],
+  [2, 1],
+  [4, 1],
+  [1, 2],
+  [2, 2],
+  [3, 2],
+] as const;
+
+/** Scattered tufts of grass on the ground, sparse and close to its colour. */
 function tufts(g: G, color: number, count: number, y0: number, y1: number): void {
   g.fillStyle(color, 1);
   for (let i = 0; i < count; i++) {
     const x = snap(rand() * (W - P * 3));
     const y = snap(y0 + rand() * (y1 - y0));
-    g.fillRect(x, y, P, P);
-    g.fillRect(x + P * 2, y, P, P);
-    g.fillRect(x + P, y + P, P, P);
+    for (const [dx, dy] of TUFT) g.fillRect(x + dx * C, y + dy * C, C, C);
   }
 }
 
@@ -220,8 +351,28 @@ function ground(g: G, base: number, lip: number, low: number): void {
   g.fillRect(0, GROUND, W, P * 3);
   g.fillStyle(low, 1);
   g.fillRect(0, 600, W, GAME_HEIGHT - 600);
-  g.fillStyle(low, 1);
-  for (let x = 0; x < W; x += P * 2) g.fillRect(x, 600 - P, P, P);
+  dither(g, low, 600 - SEAM.length * C, SEAM);
+}
+
+/**
+ * A glowing seam in the ground: a cell-high line of `color` at `alpha` that
+ * steps a cell `step` (up -1, down 1) into a tail `tail` long, in a faint
+ * halo on the cells round it (not under it, where the two alphas would stack).
+ */
+function seam(g: G, x: number, y: number, w: number, tail: number, step: number, color: number, alpha: number): void {
+  const lines = [
+    [y, x, x + w],
+    [y + step * C, x + w, x + w + tail],
+  ] as const;
+  const core = (row: number, cx: number): boolean => lines.some(([r, a, b]) => r === row && cx >= a && cx < b);
+  const near = (row: number, cx: number): boolean => lines.some(([r, a, b]) => Math.abs(r - row) <= C && cx >= a - C && cx < b + C);
+  const top = Math.min(y, y + step * C) - C;
+  for (let row = top; row <= top + C * 3; row += C) {
+    g.fillStyle(color, alpha * 0.4);
+    cellRuns(g, row, x - C, x + w + tail + C, (cx) => near(row, cx) && !core(row, cx));
+    g.fillStyle(color, alpha);
+    cellRuns(g, row, x, x + w + tail, (cx) => core(row, cx));
+  }
 }
 
 // ---------------------------------------------------------------- town
@@ -476,10 +627,9 @@ const FOREST_WINTER: ForestLook = {
 
 function forest(g: G, look: ForestLook): void {
   sky(g, look.sky);
-  g.fillStyle(look.shaft, look.shaftAlpha);
-  g.fillTriangle(300, 0, 400, 0, 220, GROUND);
-  g.fillTriangle(700, 0, 820, 0, 640, GROUND);
-  g.fillTriangle(1060, 0, 1140, 0, 1010, GROUND);
+  beam(g, 0, 300, 400, GROUND, 220, 220, look.shaft, look.shaftAlpha);
+  beam(g, 0, 700, 820, GROUND, 640, 640, look.shaft, look.shaftAlpha);
+  beam(g, 0, 1060, 1140, GROUND, 1010, 1010, look.shaft, look.shaftAlpha);
   // far: a wall of pines, then a haze of the sky's low band over it
   for (let x = -30; x < W + 60; x += 76) {
     const h = 190 + ((x * 13) % 7) * 14;
@@ -487,7 +637,7 @@ function forest(g: G, look: ForestLook): void {
   }
   g.fillStyle(look.sky[look.sky.length - 1][1], 0.35);
   g.fillRect(0, 160, W, GROUND - 160);
-  // mid: nearer trunks under their crowns, darker
+  // mid: nearer trunks under their crowns, darker, a cell of bark lit on the left
   for (const [x, h] of [
     [130, 250],
     [440, 280],
@@ -497,6 +647,8 @@ function forest(g: G, look: ForestLook): void {
   ] as const) {
     g.fillStyle(look.trunk, 1);
     g.fillRect(snap(x) - P * 2, snap(GROUND - h * 0.5), P * 4, snap(h * 0.5));
+    g.fillStyle(mix(look.trunk, look.midLight, 0.5), 1);
+    g.fillRect(snap(x) - P * 2 + C, snap(GROUND - h * 0.5), C, snap(h * 0.5));
     pine(g, x, GROUND - h * 0.35, h * 0.75, look.mid, look.midLight, look.snow);
   }
   // Winter: the treetops vanish into low cloud. Down to just under the stat
@@ -509,16 +661,25 @@ function forest(g: G, look: ForestLook): void {
     sky(g, look.sky.slice(0, 2), 204);
     g.fillStyle(look.fog, 1);
     g.fillRect(0, 204, W, P * 4);
-    for (const y of [200, 220, 224]) for (let x = ((y / P) % 2) * P; x < W; x += P * 2) g.fillRect(x, y, P, P);
+    dither(g, look.fog, 200, [0.25, 0.75]);
+    dither(g, look.fog, 220, [0.75, 0.5, 0.5, 0.25]);
   }
-  // near: two great trunks framing the clearing
+  // near: two great trunks framing the clearing, rounded by a half-lit cell
+  // each side of the lit stripe, their roots flaring onto the ground
   for (const x of [0, W - 64]) {
     g.fillStyle(look.frame, 1);
     g.fillRect(x, 0, 64, GROUND + P * 2);
+    g.fillStyle(mix(look.frame, look.frameLight, 0.5), 1);
+    g.fillRect(x + P * 2 - C, 0, P * 3 + C * 2, GROUND);
     g.fillStyle(look.frameLight, 1);
     g.fillRect(x + P * 2, 0, P * 3, GROUND);
     g.fillStyle(look.frame, 1);
-    g.fillRect(x === 0 ? 64 : x - P * 4, GROUND - P * 6, P * 4, P * 8);
+    const top = GROUND - P * 6;
+    for (let y = top; y < GROUND + P * 2; y += C) {
+      const t = (y + C - top) / (P * 8);
+      const reach = snap(P * 4 * t * t);
+      if (reach > 0) g.fillRect(x === 0 ? 64 : x - reach, y, reach, C);
+    }
   }
   ground(g, look.ground, look.lip, look.low);
   tufts(g, look.tuft, 34, 452, 480);
@@ -555,18 +716,24 @@ function cave(g: G): void {
     0x231d44,
     0x1d183a,
   );
-  // mid: pillars with a torch each, and a broken one between
-  for (const [x, top] of [
-    [150, 0],
-    [1130, 0],
-    [640, 344],
+  // mid: pillars with a torch each, and a broken one between, its top ragged;
+  // courses of stone below the stat windows, every other joint staggered
+  for (const [x, top, broken] of [
+    [150, 0, false],
+    [1130, 0, false],
+    [640, 344, true],
   ] as const) {
-    g.fillStyle(0x2a2350, 1);
-    g.fillRect(x - 36, top, 72, GROUND - top);
-    g.fillStyle(0x342b5e, 1);
-    g.fillRect(x - 36, top, P * 3, GROUND - top);
+    for (let px = x - 36; px < x + 36; px += C) {
+      const crown = broken ? C * Math.floor(hash(px / C) * 4) : 0;
+      g.fillStyle(px < x - 36 + P * 3 ? 0x342b5e : px >= x + 24 ? 0x221c42 : 0x2a2350, 1);
+      g.fillRect(px, top - crown, C, GROUND - top + crown);
+    }
     g.fillStyle(0x221c42, 1);
-    g.fillRect(x + 24, top, P * 3, GROUND - top);
+    for (let y = 216, k = 0; y < GROUND; y += 36, k++) {
+      if (y < top + P * 2) continue;
+      g.fillRect(x - 36 + P * 3, y, 72 - P * 6, C);
+      g.fillRect(x + (k % 2 ? -12 : 8), y + C, C, Math.min(34, GROUND - y - C));
+    }
   }
   for (const x of [150, 1130]) {
     glow(g, x, 250, 130, 0xffa54d, 0.16);
@@ -583,9 +750,9 @@ function cave(g: G): void {
     [690, 48, 128],
     [760, 24, 64],
   ] as const)
-    for (let y = 0; y < h; y += P) {
+    for (let y = 0; y < h; y += C) {
       const half = snap((w / 2) * (1 - y / h));
-      if (half > 0) g.fillRect(x - half, y, half * 2, P);
+      if (half > 0) g.fillRect(x - half, y, half * 2, C);
     }
   ground(g, 0x3d3931, 0x4a453c, 0x35312a);
   for (const [x, h] of [
@@ -595,15 +762,19 @@ function cave(g: G): void {
     [1188, 72],
   ] as const)
     peaks(g, [[x, GROUND - h, 40]], 0x2c2652, 0x221d40, undefined, GROUND + P * 2);
-  g.fillStyle(0x302c26, 1);
+  // cracks in the floor, a cell of the lip's colour along their lower edge
   for (const [x, y, w] of [
     [160, 460, 120],
     [740, 472, 160],
     [480, 452, 96],
     [1040, 464, 80],
   ] as const) {
-    g.fillRect(x, y, w, P);
-    g.fillRect(x + w, y + P, P * 6, P);
+    g.fillStyle(0x302c26, 1);
+    g.fillRect(x, y, w, C);
+    g.fillRect(x + w, y + C, P * 6, C);
+    g.fillStyle(0x4a453c, 1);
+    g.fillRect(x + C, y + C, w - C, C);
+    g.fillRect(x + w + C, y + C * 2, P * 6 - C, C);
   }
 }
 
@@ -618,10 +789,13 @@ function abyss(g: G): void {
     [400, 0x251848],
   ]);
   // light welling up from below the edge of the world
-  g.fillStyle(0x8b5cf6, 0.05);
-  g.fillTriangle(440, GROUND, 520, 160, 560, GROUND);
-  g.fillTriangle(780, GROUND, 840, 200, 880, GROUND);
-  // far: islands of rock adrift in the dark, their undersides trailing down
+  beam(g, 160, 520, 520, GROUND, 440, 560, 0x8b5cf6, 0.05);
+  beam(g, 200, 840, 840, GROUND, 780, 880, 0x8b5cf6, 0.05);
+  // far: islands of rock adrift in the dark, their undersides trailing down,
+  // a bevel of light along the top and the left, and a stone or two adrift
+  // under each
+  const ROCK = 0x221a3e;
+  const LIT = 0x34285c;
   for (const [x, y, w] of [
     [190, 252, 140],
     [640, 150, 180],
@@ -629,28 +803,40 @@ function abyss(g: G): void {
     [470, 336, 80],
     [800, 330, 64],
   ] as const) {
-    g.fillStyle(0x221a3e, 1);
-    g.fillRect(snap(x - w / 2), snap(y), snap(w), P * 4);
-    for (let k = 1; k * P * 2 < w / 2; k++) {
-      const half = snap(w / 2 - k * P * 2);
-      g.fillRect(snap(x) - half, snap(y) + P * (3 + k), half * 2, P);
+    const left = snap(x - w / 2);
+    g.fillStyle(ROCK, 1);
+    g.fillRect(left, snap(y), snap(w), P * 4);
+    let tip = snap(y) + P * 4;
+    for (let k = 0; snap(w / 2 - P * 2 - k * P) > 0; k++) {
+      const half = snap(w / 2 - P * 2 - k * P);
+      g.fillRect(snap(x) - half, tip, half * 2, C);
+      tip += C;
     }
-    g.fillStyle(0x34285c, 1);
-    g.fillRect(snap(x - w / 2), snap(y), snap(w * 0.7), P);
-    g.fillRect(snap(x - w / 2), snap(y), P, P * 3);
+    g.fillStyle(LIT, 1);
+    g.fillRect(left, snap(y), snap(w * 0.7), C);
+    g.fillRect(left, snap(y), C, P * 3);
+    g.fillStyle(mix(ROCK, LIT, 0.5), 1);
+    g.fillRect(left + C, snap(y) + C, snap(w * 0.7) - C * 2, C);
+    g.fillRect(left + C, snap(y) + C, C, P * 3 - C * 2);
+    for (const [dx, dy] of [
+      [0.12, P * 2],
+      [-0.18, P * 5],
+    ] as const) {
+      g.fillStyle(ROCK, 1);
+      g.fillRect(snap(x + w * dx), tip + dy, P, P);
+      g.fillStyle(LIT, 1);
+      g.fillRect(snap(x + w * dx), tip + dy, C, C);
+    }
   }
   // near: the ledge the fight stands on, cracked with violet light
   ground(g, 0x241f38, 0x332c4e, 0x1e1a30);
-  g.fillStyle(0x6d4fc8, 0.55);
   for (const [x, y, w] of [
     [120, 464, 160],
     [700, 476, 200],
     [420, 452, 120],
     [1020, 468, 120],
-  ] as const) {
-    g.fillRect(x, y, w, P);
-    g.fillRect(x + w, y - P, P * 5, P);
-  }
+  ] as const)
+    seam(g, x, y, w, P * 5, -1, 0x6d4fc8, 0.55);
   for (const [x, h] of [
     [32, 140],
     [1248, 156],
@@ -734,19 +920,20 @@ function volcano(g: G): void {
   );
   g.fillStyle(0x2c1a1a, 1);
   g.fillRect(600, 196, 80, P * 2);
-  // the crater lip, and lava down the near face, dulled so it stays behind
+  // the crater lip, and lava down the near face, dulled so it stays behind,
+  // narrowing as it goes (it stepped from 12px to 8px halfway, a notch at 2px)
   g.fillStyle(0xc2410c, 1);
   g.fillRect(588, 192, 104, P * 2);
   g.fillStyle(0xf59e57, 1);
-  g.fillRect(608, 192, 64, P);
+  g.fillRect(608, 192, 64, C);
   g.fillStyle(0xa8401a, 1);
   for (const [x0, x1] of [
     [616, 520],
     [668, 740],
   ] as const)
-    for (let y = 200; y < GROUND; y += P) {
+    for (let y = 200; y < GROUND; y += C) {
       const t = (y - 200) / (GROUND - 200);
-      g.fillRect(snap(x0 + (x1 - x0) * t), y, P * (t < 0.5 ? 3 : 2), P);
+      g.fillRect(snap(x0 + (x1 - x0) * t), y, snap(P * (3 - t)), C);
     }
   // mid: jagged dark ridges, a rim of glow along their crests
   peaks(
@@ -765,18 +952,15 @@ function volcano(g: G): void {
     [140, 312],
     [1160, 300],
   ] as const)
-    for (let k = 0; k < 6; k++) g.fillRect(snap(px - P * (k + 1) * 2), snap(py + P * (k + 1) * 3), P * 2, P);
+    for (let k = 0; k < 12; k++) g.fillRect(snap(px - P * (k + 1)), snap(py + (k + 1) * 6), P, C);
   // near: cooled rock underfoot, glowing seams, basalt at the edges
   ground(g, 0x2c2527, 0x433a3d, 0x262022);
-  g.fillStyle(0xc2410c, 0.55);
   for (const [x, y, w] of [
     [140, 464, 220],
     [760, 476, 260],
     [460, 452, 140],
-  ] as const) {
-    g.fillRect(x, y, w, P);
-    g.fillRect(x + w, y + P, P * 4, P);
-  }
+  ] as const)
+    seam(g, x, y, w, P * 4, 1, 0xc2410c, 0.55);
   for (const [x, h] of [
     [36, 128],
     [1244, 140],
@@ -790,32 +974,52 @@ function volcano(g: G): void {
 function island(g: G, x: number, y: number, w: number): void {
   blob(g, x, y + 26, w * 0.75, 20, 0x7ef9ff, 0.06);
   const half = w / 2;
-  for (let k = 0; snap(half - k * P * 1.6) > 0; k++) {
-    const hw = snap(half - k * P * 1.6);
+  for (let k = 0; snap(half - k * C * 1.6) > 0; k++) {
+    const hw = snap(half - k * C * 1.6);
     g.fillStyle(0x241a3e, 1);
-    g.fillRect(snap(x) - hw, snap(y) + k * P, hw * 2, P);
+    g.fillRect(snap(x) - hw, snap(y) + k * C, hw * 2, C);
     g.fillStyle(0x3a2a55, 1);
-    g.fillRect(snap(x) - hw, snap(y) + k * P, Math.max(P, snap(hw * 0.8)), P);
+    g.fillRect(snap(x) - hw, snap(y) + k * C, Math.max(C, snap(hw * 0.8)), C);
   }
+  // roots a cell wide, kinking a cell aside every 8px
   g.fillStyle(0x1a1230, 1);
   for (const [dx, len] of [
     [-0.22, 24],
     [0.1, 16],
     [0.26, 12],
   ] as const)
-    g.fillRect(snap(x + w * dx), snap(y + 12), P, len);
+    for (let d = 0; d < len; d += C) g.fillRect(snap(x + w * dx) + (Math.floor(d / 8) % 2) * C, snap(y + 12) + d, C, C);
   blob(g, x, y, half, 14, 0x1f6b46);
   blob(g, x - P, y - P, half * 0.84, 8, 0x2a8a5a);
 }
 
 /** A crystal: a lit left face, a shaded right one. */
 function crystal(g: G, x: number, base: number, h: number, w: number): void {
-  for (let y = 0; y < h; y += P) {
-    const half = Math.max(P / 2, snap((w / 2) * (y / h)));
+  for (let y = 0; y < h; y += C) {
+    const half = Math.max(C, snap((w / 2) * (y / h)));
     g.fillStyle(0x3ab8cc, 1);
-    g.fillRect(snap(x) - half, snap(base - h + y), half * 2, P);
+    g.fillRect(snap(x) - half, snap(base - h + y), half * 2, C);
     g.fillStyle(0x8ff3fb, 1);
-    g.fillRect(snap(x) - half, snap(base - h + y), half, P);
+    g.fillRect(snap(x) - half, snap(base - h + y), half, C);
+  }
+}
+
+/**
+ * A twinkle: a cell at (x, y) and arms of `arm` cells each way, fading out
+ * towards their tips. On 4px cells the arms were solid bars a cell thick.
+ */
+function twinkle(g: G, x: number, y: number, arm: number, color: number, alpha: number): void {
+  g.fillStyle(color, alpha);
+  g.fillRect(x, y, C, C);
+  for (let k = 1; k <= arm; k++) {
+    g.fillStyle(color, alpha * (1 - (k / (arm + 1)) ** 2));
+    for (const [dx, dy] of [
+      [-k, 0],
+      [k, 0],
+      [0, -k],
+      [0, k],
+    ])
+      g.fillRect(x + dx * C, y + dy * C, C, C);
   }
 }
 
@@ -838,7 +1042,7 @@ function title(g: G): void {
   blob(g, 260, 190, 210, 28, 0xc86bd9, 0.1);
   blob(g, 860, 110, 180, 24, 0xc86bd9, 0.1);
   blob(g, 580, 250, 240, 26, 0x64d9e8, 0.08);
-  // stars, a few bright crosses and one falling
+  // stars, the brightest a cell bigger than the rest, a few twinkles and one falling
   for (let i = 0; i < 90; i++) {
     const alpha = 0.15 + rand() * 0.7;
     const x = snap(rand() * W);
@@ -848,21 +1052,19 @@ function title(g: G): void {
     // still takes its three numbers, so the rest stay where they were
     if (x > 1000 && y < 44) continue;
     g.fillStyle(0xffffff, alpha);
-    g.fillRect(x, y, P, P);
+    const size = alpha > 0.7 ? C * 2 : C;
+    g.fillRect(x, y, size, size);
   }
   for (const [x, y, r] of [
     [520, 60, 12],
     [1180, 72, 12],
     [700, 160, 8],
     [1060, 220, 8],
-  ] as const) {
-    g.fillStyle(0xffffff, 0.85);
-    g.fillRect(x - r, y - P / 2, r * 2, P);
-    g.fillRect(x - P / 2, y - r, P, r * 2);
-  }
-  for (let k = 0; k < 5; k++) {
-    g.fillStyle(0xffffff, 0.9 - k * 0.18);
-    g.fillRect(820 - k * 16, 84 + k * 4, P * 2, P);
+  ] as const)
+    twinkle(g, x, y, r / C - 1, 0xffffff, 0.85);
+  for (let k = 0; k < 10; k++) {
+    g.fillStyle(0xffffff, 0.9 - k * 0.08);
+    g.fillRect(820 - k * P * 2, 84 + k * C, P * 2, C);
   }
   // the moon, its halo in rings
   glow(g, 150, 100, 80, 0xfff3c4, 0.3);
@@ -899,12 +1101,15 @@ function title(g: G): void {
   // the floating islands: a pine on the big one, a crystal on the small, a fall of water
   island(g, 230, 320, 200);
   pine(g, 228, 314, 56, 0x0f3d24, 0x17502f);
-  // the fall off the big island's lip lands on the small one
-  for (let y = 332; y < 448; y += P) {
+  // the fall off the big island's lip lands on the small one: two streaks of
+  // spray in it, one wavering a cell side to side, one broken now and then
+  for (let y = 332; y < 448; y += C) {
+    const j = y / C;
     g.fillStyle(0x6fc8dc, 0.45);
-    g.fillRect(300, y, P * 3, P);
+    g.fillRect(300, y, P * 3, C);
     g.fillStyle(0xd9fbff, 0.55);
-    g.fillRect(304 + ((y / P) % 2) * P, y, P, P);
+    g.fillRect(300 + C * (1 + ((j >> 1) & 1)), y, C, C);
+    if (j % 7 !== 3) g.fillRect(300 + C * 4, y, C, C);
   }
   island(g, 330, 452, 100);
   blob(g, 308, 446, 20, 6, 0xd9fbff, 0.3);
@@ -927,21 +1132,22 @@ function title(g: G): void {
     [984, 430, 80],
     [1092, 520, 80],
   ] as const)
-    g.fillRect(x, y, P, h);
+    g.fillRect(x, y, C, h);
   for (const [cx, base, half, h] of [
     [928, 520, 28, 36],
     [1112, 520, 28, 36],
     [1020, 430, 44, 60],
   ] as const)
-    for (let y = 0; y < h; y += P) {
-      const hw = Math.max(P / 2, snap((half * y) / h));
+    for (let y = 0; y < h; y += C) {
+      const hw = Math.max(C, snap((half * y) / h));
       g.fillStyle(ROOF, 1);
-      g.fillRect(cx - hw, base - h + y, hw * 2, P);
+      g.fillRect(cx - hw, base - h + y, hw * 2, C);
       g.fillStyle(0x52296f, 1);
-      g.fillRect(cx - hw, base - h + y, Math.max(P, snap(hw * 0.6)), P);
+      g.fillRect(cx - hw, base - h + y, Math.max(C, snap(hw * 0.6)), C);
     }
   glow(g, 1020, 360, 28, 0x7ef9ff, 0.6);
   blob(g, 1020, 360, 8, 8, 0xd9fbff);
+  // windows with arched tops, the door too
   for (const [x, y] of [
     [964, 528],
     [1000, 528],
@@ -956,10 +1162,12 @@ function title(g: G): void {
     g.fillStyle(0xffd166, 0.25);
     g.fillRect(x - P, y - P, 16, 20);
     g.fillStyle(0xffd166, 1);
-    g.fillRect(x, y, 8, 12);
+    g.fillRect(x, y + C, 8, 12 - C);
+    g.fillRect(x + C, y, 8 - C * 2, C);
   }
+  blob(g, 1020, 584, 20, 12, 0x0b0820);
   g.fillStyle(0x0b0820, 1);
-  g.fillRect(1000, 572, 40, 28);
+  g.fillRect(1000, 584, 40, 16);
   // magic drifting up from the meadow
   for (const [x, y, c, a] of [
     [560, 500, 0x7ef9ff, 0.5],
@@ -968,11 +1176,8 @@ function title(g: G): void {
     [470, 540, 0xd9fbff, 0.3],
     [1140, 470, 0x7ef9ff, 0.45],
     [360, 484, 0xffd166, 0.35],
-  ] as const) {
-    g.fillStyle(c, a);
-    g.fillRect(x - P / 2, y - P * 1.5, P, P * 3);
-    g.fillRect(x - P * 1.5, y - P / 2, P * 3, P);
-  }
+  ] as const)
+    twinkle(g, x, y, 2, c, a);
   // near: the meadow, pines at its edges, crystals in the corner, fireflies
   g.fillStyle(0x12331f, 1);
   g.fillRect(0, HORIZON, W, GAME_HEIGHT - HORIZON);
@@ -980,7 +1185,7 @@ function title(g: G): void {
   g.fillRect(0, HORIZON, W, P);
   g.fillStyle(0x0c2718, 1);
   g.fillRect(0, 668, W, GAME_HEIGHT - 668);
-  for (let x = 0; x < W; x += P * 2) g.fillRect(x, 664, P, P);
+  dither(g, 0x0c2718, 668 - SEAM.length * C, SEAM);
   tufts(g, 0x1c4a2e, 30, 608, 660);
   for (const [x, base, h] of [
     [80, 644, 96],
@@ -1001,8 +1206,15 @@ function title(g: G): void {
     // reshuffle every firefly after the one it skips
     if (x > 1140 && y > 672) continue;
     blob(g, x, y, 8, 8, 0xffe066, 0.12);
-    g.fillStyle(0xffe066, 0.3 + rand() * 0.5);
-    g.fillRect(x - P / 2, y - P / 2, P, P);
+    // a bright cell in a ring of four a little dimmer: one cell alone read as
+    // a speck inside its glow, a ring rather than a light
+    const a = 0.3 + rand() * 0.5;
+    g.fillStyle(0xffe066, a * 0.7);
+    g.fillRect(x - C, y, C * 3, C);
+    g.fillRect(x, y - C, C, C);
+    g.fillRect(x, y + C, C, C);
+    g.fillStyle(0xffe066, a);
+    g.fillRect(x, y, C, C);
   }
 }
 
