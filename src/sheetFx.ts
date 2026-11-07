@@ -6,8 +6,11 @@
 // A wrapper is itself a pixelfx effect module: it creates the effect it
 // wraps (createFx) and draws it into the frame pixelfx hands its own draw
 // (a painter's `frame`, the one field read here), or into a frame of its
-// own that it then copies across.
-import { clearFrame, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+// own that it then copies across. That frame may hold more than one texel to
+// an effect pixel (hiresPaint.ts densityOf, a battle sheet's res): what a
+// wrapper measures in effect pixels it measures in that many texels.
+import { clearFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import { densityOf, finish, hiFrame, hiView } from "./hiresPaint";
 
 // the painter pixelfx hands an effect's draw: only its frame is read here
 interface Painting {
@@ -52,13 +55,16 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => 
  * flame's crown, a falling star, sparks or a ring the crop cuts off thin out
  * into the backdrop instead of ending on a straight line under the stat
  * windows. Each layer is dithered as it is drawn, so a sheet's `layer` works.
+ * In a hi-res frame the band is as wide in effect pixels and dithered texel
+ * by texel, finer.
  */
-export function soften(mod: FxModule, edge = 8): FxModule {
+export function soften(mod: FxModule, edgePx = 8): FxModule {
   return {
     meta: mod.meta,
     create(o: Record<string, unknown>) {
       const inner = createFx(mod, o);
       const dither = (f: FxFrame): void => {
+        const edge = edgePx * densityOf(f);
         for (let y = 0; y < f.h; y++)
           for (let x = 0; x < f.w; x++) {
             const e = Math.min(x, y, f.w - 1 - x, f.h - 1 - y);
@@ -74,10 +80,12 @@ export function soften(mod: FxModule, edge = 8): FxModule {
         update: (dt: number): void => inner.update(dt),
         drawBack: (p: Painting): void => {
           inner.draw(p.frame, "back");
+          finish(p.frame);
           dither(p.frame);
         },
         draw: (p: Painting): void => {
           inner.draw(p.frame, "front");
+          finish(p.frame);
           dither(p.frame);
         },
       };
@@ -109,13 +117,17 @@ export function squeezeX(mod: FxModule, from: number, to: number, len: number): 
         update: (dt: number): void => inner.update(dt),
         draw: (p: Painting): void => {
           const dst = p.frame;
-          if (!tmp || tmp.w !== dst.w + cut || tmp.h !== dst.h || tmp.ox !== dst.ox || tmp.oy !== dst.oy)
-            tmp = createFrame(dst.w + cut, dst.h, dst.ox, dst.oy);
+          // from, len and cut in the frame's texels
+          const k = densityOf(dst);
+          const [F, N, CUT] = [from * k, len * k, cut * k];
+          if (!tmp || tmp.w !== dst.w + CUT || tmp.h !== dst.h || tmp.ox !== dst.ox || tmp.oy !== dst.oy)
+            tmp = hiFrame(dst.w + CUT, dst.h, dst.ox, dst.oy, k);
           clearFrame(tmp);
           inner.draw(tmp);
+          finish(tmp);
           for (let c = 0; c < dst.w; c++) {
             const x = c + dst.ox;
-            const sx = x < from ? x : x < from + len ? from + Math.floor(((x - from) * (to - from)) / len) : x + cut;
+            const sx = x < F ? x : x < F + N ? F + Math.floor(((x - F) * (to - from)) / len) : x + CUT;
             const sc = sx - dst.ox;
             for (let r = 0; r < dst.h; r++) {
               const i = r * tmp.w + sc;
@@ -137,7 +149,9 @@ const luma = (c: number): number => (c & 255) * 0.299 + ((c >>> 8) & 255) * 0.58
  * its pixels becomes one, the brightest solid one where two or more are
  * solid (or a lone bright one: a spark, a ring's thin line), the light
  * averaged. For an effect much bigger than a 32-cell foe with no size of its
- * own to turn down (a black hole's disk, 124 cells across).
+ * own to turn down (a black hole's disk, 124 cells across). Into a frame of
+ * an even number of texels to a cell (a battle sheet's 2) nothing is lost:
+ * the effect draws straight in at half that, its own pixels whole.
  */
 export function half(mod: FxModule): FxModule {
   const [w, h] = mod.meta.size;
@@ -147,11 +161,22 @@ export function half(mod: FxModule): FxModule {
     create(o: Record<string, unknown>) {
       const inner = createFx(mod, o);
       let tmp: FxFrame | undefined;
+      // the frame drawn into at half its density, by frame
+      const views = new WeakMap<FxFrame, FxFrame>();
       const down = (dst: FxFrame, layer: "back" | "front"): void => {
+        const k = densityOf(dst);
+        if (k % 2 === 0) {
+          const view = views.get(dst) ?? hiView(dst, k / 2);
+          views.set(dst, view);
+          inner.draw(view, layer);
+          finish(view);
+          return;
+        }
         if (!tmp || tmp.w !== dst.w * 2 || tmp.h !== dst.h * 2 || tmp.ox !== dst.ox * 2 || tmp.oy !== dst.oy * 2)
-          tmp = createFrame(dst.w * 2, dst.h * 2, dst.ox * 2, dst.oy * 2);
+          tmp = hiFrame(dst.w * 2, dst.h * 2, dst.ox * 2, dst.oy * 2, k);
         clearFrame(tmp);
         inner.draw(tmp, layer);
+        finish(tmp);
         const { color, light } = tmp;
         for (let r = 0; r < dst.h; r++)
           for (let c = 0; c < dst.w; c++) {

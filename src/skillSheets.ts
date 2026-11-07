@@ -35,12 +35,15 @@ export const BEAM_REACH = 144;
 const BEAM_CUT = BEAM_L - BEAM_REACH;
 
 export const SKILL_SHEETS: Record<string, PixelSheet> = {
+  // whole frames: skillFx.ts shows the beam a share of its frame's width at a
+  // time (setCrop), which a trimmed frame would cut in its own box
   "fx-sk-beam": {
     fx: squeezeX(arcaneBeam, BEAM_HX + 15, BEAM_HX + BEAM_L - 24, BEAM_L - 39 - BEAM_CUT),
     span: [0, 1.2],
     frames: 18,
     focus: [BEAM_HX, BEAM_HY],
     crop: [22, 28, 22 + 187, 86],
+    trimFrames: false,
   },
   "fx-sk-thorns": { fx: thorns, span: [0.06, 2], frames: 18, focus: [114, 0], crop: [48, 20, 48 + 140, 86] },
   "fx-sk-missiles": {

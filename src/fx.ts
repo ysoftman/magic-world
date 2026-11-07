@@ -1,6 +1,6 @@
 /*! pixelfx (github.com/patch-gg/pixelfx) | MIT License | Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez */
 import Phaser from "phaser";
-import { clearFrame, composite, createFrame, createFx, type FxFrame, type FxModule } from "pixelfx";
+import { clearFrame, composite, createFx, type FxFrame, type FxModule } from "pixelfx";
 import * as arcaneOrb from "pixelfx/fx/arcane/arcane-orb";
 import * as grenade from "pixelfx/fx/explosions/grenade";
 import * as smallExplosion from "pixelfx/fx/explosions/small-explosion";
@@ -31,6 +31,7 @@ import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
 import * as poof from "pixelfx/fx/spawn/poof";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
+import { densityOf, finish, hiFrame } from "./hiresPaint";
 import { ART_PX, readableCanvas } from "./pixelart";
 import { soften } from "./sheetFx";
 import { SKILL_SHEETS } from "./skillSheets";
@@ -116,10 +117,12 @@ export function warmEncounterOut(camera: Phaser.Cameras.Scene2D.Camera): void {
 
 // The pixelfx effects (github:patch-gg/pixelfx, MIT, by Patch and Hugo
 // Duprez). A pixelfx effect is code drawing into a pixel buffer over time;
-// here it is sampled into a sheet's frames at boot, one pixelfx pixel to a
-// texel. Its pixels are drawn for a 24x38 figure, so one is one art cell:
-// shown at ART_PX x the battler's scale, 4px, over any foe: a boss or giant
-// is drawn on a bigger grid (48 cells), not at a bigger scale.
+// here it is sampled into a sheet's frames at boot. Its pixels are drawn for
+// a 24x38 figure, so one is one art cell: shown at ART_PX x the battler's
+// scale, 4px, over any foe: a boss or giant is drawn on a bigger grid (48
+// cells), not at a bigger scale. A battle sheet is baked at BATTLE_RES texels
+// to that cell (hiresPaint.ts), so the shapes the effect draws come out at
+// the field's 2px; a sheet elsewhere (the field's, a body's) at one.
 export interface PixelSheet {
   /** the effect: `import * as name from "pixelfx/fx/<category>/<name>"` */
   fx: FxModule;
@@ -140,6 +143,19 @@ export interface PixelSheet {
   crop?: [number, number, number, number];
   /** only what goes behind a battler ("back", played under its sprite) or in front ("front"); both by default */
   layer?: "back" | "front";
+  /**
+   * texels to an effect pixel (hiresPaint.ts): the texture is res x res the
+   * size and shown at 1/res the scale, its size, place and frames the same.
+   * 1 by default; the battle's tables take BATTLE_RES.
+   */
+  res?: number;
+  /**
+   * each frame packed cut to what it draws, shown at its place in the whole
+   * frame (sheetBaker): the same sprite, a third to a half the texture for
+   * the battle's (theirs by default). Not for a sheet whose frames are
+   * cropped by hand on screen (setCrop counts in the frame's own texels).
+   */
+  trimFrames?: boolean;
 }
 
 // a 32-cell battler's middle to its feet, in art cells: an impact this high
@@ -448,8 +464,18 @@ const COMPANION_SHEETS: Record<string, PixelSheet> = {
   "fx-coin": { fx: coinSpin, span: [0, 1.6], frames: 24, focus: [0, -19], crop: [6, 3, 50, 44] },
 };
 
+// Texels to an effect pixel in the battle's sheets: a 4px cell is two texels
+// of 2px, the field's own art cell (hiresPaint.ts). Four times the texels at
+// that, so their frames are trimmed (PixelSheet.trimFrames): a Lv30 hero's moves
+// took 83MB of texture untrimmed. A sheet's own `res` and `trimFrames` win.
+const BATTLE_RES = 2;
+const battleRes = (table: Record<string, PixelSheet>): Record<string, PixelSheet> =>
+  Object.fromEntries(Object.entries(table).map(([key, sheet]) => [key, { res: BATTLE_RES, trimFrames: true, ...sheet }]));
+// the title's, at the battle's density
+const BATTLE_SHEETS = battleRes(PIXEL_SHEETS);
+
 // every sheet by key, for playing one
-const SHEETS: Record<string, PixelSheet> = { ...PIXEL_SHEETS, ...COMPANION_SHEETS, ...SKILL_SHEETS, ...TECH_SHEETS };
+const SHEETS: Record<string, PixelSheet> = battleRes({ ...PIXEL_SHEETS, ...COMPANION_SHEETS, ...SKILL_SHEETS, ...TECH_SHEETS });
 
 // a sheet's frames, the texture point put on (x, y) as a fraction of a frame,
 // and whether it turns to face the blow
@@ -482,17 +508,20 @@ export function sheetInfo(pixel: PixelSheet): SheetInfo {
 
 // the widest texture a sheet may be: some mobile GPUs go no further (AGENTS.md)
 const MAX_TEXTURE_W = 2048;
-// glow fades out over a frame's last pixels, so a halo the frame cuts off does
-// not end in a straight edge (as pixelfx's own sheet export does)
+// glow fades out over a frame's last pixels (effect pixels: res x the
+// texels), so a halo the frame cuts off does not end in a straight edge (as
+// pixelfx's own sheet export does)
 const EDGE_FADE = 8;
 
-function fadeEdges({ w, h, light }: FxFrame): void {
+function fadeEdges(frame: FxFrame): void {
+  const { w, h, light } = frame;
+  const edge = EDGE_FADE * densityOf(frame);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const e = Math.min(x, y, w - 1 - x, h - 1 - y);
-      if (e >= EDGE_FADE || !(light[i] & 0xffffff)) continue;
-      const u = (e + 0.5) / EDGE_FADE;
+      if (e >= edge || !(light[i] & 0xffffff)) continue;
+      const u = (e + 0.5) / edge;
       const k = u * u * (3 - 2 * u);
       const l = light[i];
       light[i] =
@@ -503,16 +532,74 @@ function fadeEdges({ w, h, light }: FxFrame): void {
     }
 }
 
+// A frame cut to what it draws (PixelSheet.trimFrames): its box's top-left in the
+// frame, and the box's pixels.
+interface Cut {
+  x: number;
+  y: number;
+  img: ImageData;
+}
+
+// the box round every pixel of `img` with any alpha in it (a clear 1x1 for
+// an empty frame)
+function cutOf(img: ImageData): Cut {
+  const { width: w, height: h } = img;
+  const px = new Uint32Array(img.data.buffer);
+  let [x0, y0, x1, y1] = [w, h, -1, -1];
+  for (let y = 0; y < h; y++)
+    for (let x = 0, i = y * w; x < w; x++, i++)
+      if (px[i] >>> 24) {
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y);
+        y1 = y;
+      }
+  if (x1 < 0) return { x: 0, y: 0, img: new ImageData(1, 1) };
+  const cut = new ImageData(x1 - x0 + 1, y1 - y0 + 1);
+  for (let y = y0; y <= y1; y++) cut.data.set(img.data.subarray((y * w + x0) * 4, (y * w + x1 + 1) * 4), (y - y0) * cut.width * 4);
+  return { x: x0, y: y0, img: cut };
+}
+
+// a clear texel between packed frames, so one shown turned or scaled (a shot
+// aimed at the foe, a black hole swelling) never picks up its neighbour's edge
+const GAP = 1;
+
+// The cuts on shelves, tallest first, in the narrowest width (by 8s, up to
+// MAX_TEXTURE_W) that makes the least texture: its size and each cut's place.
+function packCuts(cuts: Cut[]): { w: number; h: number; at: [number, number][] } {
+  const order = cuts.map((_, i) => i).sort((a, b) => cuts[b].img.height - cuts[a].img.height);
+  const widest = Math.max(...cuts.map((c) => c.img.width));
+  let best = { w: 0, h: 0, at: [] as [number, number][] };
+  for (let W = widest; W <= MAX_TEXTURE_W; W = W === MAX_TEXTURE_W ? W + 1 : Math.min(MAX_TEXTURE_W, W + 8)) {
+    const at: [number, number][] = [];
+    let [x, y, shelf] = [0, 0, 0];
+    for (const i of order) {
+      const { width, height } = cuts[i].img;
+      if (x > 0 && x + width > W) [x, y, shelf] = [0, y + shelf + GAP, 0];
+      at[i] = [x, y];
+      x += width + GAP;
+      shelf = Math.max(shelf, height);
+    }
+    const H = y + shelf;
+    const fits = H <= MAX_TEXTURE_W;
+    if (!best.w || (fits && (best.h > MAX_TEXTURE_W || W * H < best.w * best.h))) best = { w: W, h: H, at };
+  }
+  return best;
+}
+
 // The frames sit in a grid no wider than MAX_TEXTURE_W, each the effect's own
 // canvas (meta.size, or its crop) with its anchor at meta.origin; light (glow) becomes
 // colour with alpha, which reads as a glow over the dark battle backdrops.
-// `step` draws the sheet's next frames for about `ms` (always at least one)
-// and says whether it is done. The canvas is drawn apart and only added under
-// `key` with its last frame in, so textures.exists() never finds a part-baked
-// sheet, and one given up on (`drop`) leaves nothing behind.
+// A sheet that `trimFrames` packs each frame cut to what it draws instead (Phaser
+// shows a trimmed frame at its place in the whole one: same origin, same
+// sprite size). `step` draws the sheet's next frames for about `ms` (always
+// at least one) and says whether it is done. The canvas is drawn apart and
+// only added under `key` with its last frame in, so textures.exists() never
+// finds a part-baked sheet, and one given up on (`drop`) leaves nothing behind.
 function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step: (ms: number) => boolean; drop: () => void } {
   const [x0, y0, x1, y1] = cropOf(sheet);
-  const [w, h] = [x1 - x0, y1 - y0];
+  const res = sheet.res ?? 1;
+  const [w, h] = [(x1 - x0) * res, (y1 - y0) * res];
   const [ax, ay] = sheet.fx.meta.origin;
   const { from, to, frames } = spanOf(sheet);
   const cols = Math.min(frames, Math.max(1, Math.floor(MAX_TEXTURE_W / w)));
@@ -524,37 +611,64 @@ function sheetBaker(scene: Phaser.Scene, key: string, sheet: PixelSheet): { step
   // took 24-48ms against 1.3-1.6ms, and once the art was off the GPU too
   // (makeTexture) a Lv30 battle's 41 sheets took 232-335ms instead of
   // 140-197ms (headless Chrome; now 24ms). The texture drawn is the same.
-  const canvas = readableCanvas(cols * w, Math.ceil(frames / cols) * h);
-  const ctx = canvas.getContext("2d");
+  // A trimmed sheet's is made once its frames are cut and packed.
+  let canvas = sheet.trimFrames ? undefined : readableCanvas(cols * w, Math.ceil(frames / cols) * h);
+  const cuts: Cut[] = [];
   // a canvas given up on: its pixels let go now rather than at a collection
   const release = (): void => {
+    cuts.length = 0;
+    if (!canvas) return;
     canvas.width = 0;
     canvas.height = 0;
   };
   const fx = createFx(sheet.fx, sheet.opts);
-  const frame = createFrame(w, h, x0 - ax, y0 - ay);
+  const frame = hiFrame(w, h, (x0 - ax) * res, (y0 - ay) * res, res);
   const img = new ImageData(w, h);
   if (from > 0) fx.update(from);
   let f = 0;
+  // how long the last frame took to draw: the next is not started unless it
+  // fits in what is left of `ms`, so a step is not stretched by a whole frame
+  // past it (a hi-res frame of the battle's dearest sheets takes 5-9ms)
+  let last = 0;
   const step = (ms: number): boolean => {
     const end = performance.now() + ms;
-    do {
+    let drew = false;
+    while (f < frames && (!drew || performance.now() + last < end)) {
+      const t = performance.now();
       if (f > 0) fx.update((to - from) / frames);
       clearFrame(frame);
       fx.draw(frame, sheet.layer);
+      finish(frame);
       fadeEdges(frame);
       composite(frame, img.data, null);
-      ctx?.putImageData(img, ...at(f));
+      if (sheet.trimFrames) cuts.push(cutOf(img));
+      else canvas?.getContext("2d")?.putImageData(img, ...at(f));
       f++;
-    } while (f < frames && performance.now() < end);
-    if (f < frames) return false;
+      drew = true;
+      last = performance.now() - t;
+    }
+    // a trimmed sheet's packing and upload in a step of their own
+    if (f < frames || (drew && sheet.trimFrames && ms !== Number.POSITIVE_INFINITY)) return false;
     // baked whole meanwhile by a scene that could not wait: keep that one
-    if (scene.textures.exists(key)) release();
-    else {
-      const tex = scene.textures.addCanvas(key, canvas);
+    if (scene.textures.exists(key)) {
+      release();
+      return true;
+    }
+    if (!sheet.trimFrames) {
+      const tex = canvas && scene.textures.addCanvas(key, canvas);
       for (let i = 0; i < frames; i++) tex?.add(i, 0, ...at(i), w, h);
       tex?.refresh();
+      return true;
     }
+    const pack = packCuts(cuts);
+    canvas = readableCanvas(pack.w, pack.h);
+    const ctx = canvas.getContext("2d");
+    for (const [i, c] of cuts.entries()) ctx?.putImageData(c.img, ...pack.at[i]);
+    const tex = scene.textures.addCanvas(key, canvas);
+    for (const [i, c] of cuts.entries())
+      tex?.add(i, 0, ...pack.at[i], c.img.width, c.img.height)?.setTrim(w, h, c.x, c.y, c.img.width, c.img.height);
+    tex?.refresh();
+    cuts.length = 0;
     return true;
   };
   return { step, drop: release };
@@ -565,9 +679,16 @@ export function bakePixelSheet(scene: Phaser.Scene, key: string, sheet: PixelShe
   if (!scene.textures.exists(key)) sheetBaker(scene, key, sheet).step(Number.POSITIVE_INFINITY);
 }
 
-/** Draws every sheet not yet baked into its own texture, frames numbered 0..n-1. */
+/**
+ * The title's sheets it did not get to (a Continue pressed before its warm
+ * was through), baked over the battle's first frames (warmSheets) in the
+ * title's order, the blows first; one wanted before its turn comes is baked
+ * as it is played (fxSprite). All at once in the battle's create they held
+ * its first frame for 100-140ms at a texel to a cell, and would for some
+ * 1.2s at the battle's density (hiresPaint.ts).
+ */
 export function bakeBattleFx(scene: Phaser.Scene): void {
-  for (const [key, sheet] of Object.entries(PIXEL_SHEETS)) if (!scene.textures.exists(key)) bakePixelSheet(scene, key, sheet);
+  warmSheets(scene, BATTLE_SHEETS);
 }
 
 // How much of a frame warmSheets spends baking. A sheet a frame held the
@@ -649,7 +770,7 @@ export function warmSheets(scene: Phaser.Scene, sheets: Record<string, PixelShee
  * queue (warmSheets).
  */
 export function warmBattleFx(scene: Phaser.Scene, after: Record<string, PixelSheet> = {}): void {
-  warmSheets(scene, { ...PIXEL_SHEETS, ...after });
+  warmSheets(scene, { ...BATTLE_SHEETS, ...after });
 }
 
 /** Bakes the companion sheets `keys` (COMPANION_SHEETS) over the next frames of `scene` (warmSheets). */
@@ -660,16 +781,33 @@ export function warmFx(scene: Phaser.Scene, keys: string[]): void {
 // the scale battlers are shown at, a boss's and a giant's too
 const BATTLER_SCALE = 2;
 
+// A sheet's texture for a battler shown at `scale`, and its res: the sheet's
+// own when a texel comes out a whole number of pixels (at 2x, or at the
+// companions' 1x, a texel 1px), or else one of its own (key@res) baked here
+// at a texel to a pixel: at 1.5x (a cell 3px) 1.5px texels drew 1px and 2px
+// columns by turns. Nothing is shown at such a scale now; such a texture is
+// not warmed ahead, so one that is should go in warmBattleFx's.
+function textureFor(scene: Phaser.Scene, key: string, scale: number): [string, number] {
+  let sheet = SHEETS[key];
+  let tex = key;
+  if (!Number.isInteger((scale * ART_PX) / (sheet.res ?? 1))) {
+    sheet = { ...sheet, res: scale * ART_PX };
+    tex = `${key}@${sheet.res}`;
+  }
+  // a sheet its battle's warm has not got to yet (warmFx), or such a texture
+  if (!scene.textures.exists(tex)) bakePixelSheet(scene, tex, sheet);
+  return [tex, sheet.res ?? 1];
+}
+
 // a sheet's sprite at (x, y) on the cell of a battler shown at `scale`; a
 // negative scaleX mirrors it round its origin (flipX turns a frame round its
 // middle, which would move an off-centre origin)
 function fxSprite(scene: Phaser.Scene, key: string, x: number, y: number, scale: number, left: boolean): Phaser.GameObjects.Sprite {
-  // a companion sheet its battle's warm has not got to yet (warmFx)
-  if (!scene.textures.exists(key)) bakePixelSheet(scene, key, SHEETS[key]);
+  const [tex, res] = textureFor(scene, key, scale);
   const { origin, directional } = infoOf(key);
-  const s = scale * ART_PX;
+  const s = (scale * ART_PX) / res;
   return scene.add
-    .sprite(x, y, key, 0)
+    .sprite(x, y, tex, 0)
     .setOrigin(...origin)
     .setScale(left && directional ? -s : s, s);
 }
