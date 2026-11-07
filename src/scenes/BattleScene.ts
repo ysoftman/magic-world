@@ -3214,6 +3214,14 @@ export class BattleScene extends Phaser.Scene {
     const pal = COMPANION_SKILLS[GameState.companion ?? ""];
     const warm = (target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode?: Phaser.TintModes): void =>
       this.statusFx.warm(target, kind, tint, mode);
+    // How the foe dies, first: a first-turn blow can fell it, played some 0.7s
+    // in after a quick FIGHT and Z, before any status can land. Behind a Lv30
+    // hero's 34 move sheets (1.2s of the warm) a shatter was baked on the spot
+    // there (25ms, headless); baked off the foe's "@hd" picture (statusFx
+    // hdBody) a death is the dearest sheet of the battle (a shatter 80ms), and
+    // behind the status sheets it was in at 0.77s.
+    const death = this.deathOf();
+    if (death) warm(foe, death);
     if (big) warm(foe, "rage", ENRAGE_TINT);
     // BOLT's shock and WEB SNARE skip bosses and giants
     if (!big && casts("shock")) warm(foe, "shock");
@@ -3232,12 +3240,6 @@ export class BattleScene extends Phaser.Scene {
     }
     if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
-    // How the foe dies, ahead of the move sheets below: a first-turn blow can
-    // fell it, played some 0.7s in after a quick FIGHT and Z, and behind a Lv30
-    // hero's 34 move sheets (1.2s of the warm) a shatter was baked on the spot
-    // there (25ms, headless).
-    const death = this.deathOf();
-    if (death) warm(foe, death);
     // The hero's fall (soulFx.ts), ahead of the move sheets when it is a blow
     // or two from it, behind them otherwise (below).
     const frail = GameState.player.hp <= GameState.effMaxHp() * SOUL_WARM_HP;

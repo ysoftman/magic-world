@@ -4,7 +4,7 @@ import * as soulRise from "pixelfx/fx/spawn/soul-rise";
 import { bakePixelSheet, type PixelSheet, sheetInfo, warmSheets } from "./fx";
 import { GameState } from "./gameState";
 import { ART_PX, texelsOf } from "./pixelart";
-import { fadeAboveCeiling } from "./statusFx";
+import { fadeAboveCeiling, hdBody } from "./statusFx";
 import { GEAR_LAYOUT } from "./ui/HeroGear";
 
 // The hero's fall in a battle (BattleScene defeat): its outline flares, a pale
@@ -15,7 +15,11 @@ import { GEAR_LAYOUT } from "./ui/HeroGear";
 // it, not pixelfx's 24x38 stand-in: hero-down-0 mirrored, and the weapon and
 // the shield at the hero's hands (GEAR_LAYOUT.down at the battle's 2x, a cell
 // being 2 art px as the field's), one art cell (ART_PX texels) to a pixelfx
-// pixel, as statusFx.ts reads a battler. A look or gear changed is a new body,
+// pixel, as statusFx.ts reads a battler; and, as statusFx bakes a battler the
+// battle draws on twice the cells, at two texels to that pixel with each
+// cell's quarters in their colours off the pictures' "@hd" (statusFx hdBody),
+// so the soul and the dimmed body are the 2px hero the battle shows. A look
+// or gear changed is a new body,
 // its sheet keyed by its picture's hash, baked ahead for the battle
 // (warmSoul) and removed with it. The hero is left to the battle (the
 // effect's actorAlpha is 1): the effect dims it as the soul leaves.
@@ -59,12 +63,18 @@ interface Actor {
 }
 
 // a body read off the art: its actor, the texels from the hero's middle down
-// to its feet (the anchor), and a hash of its picture for the sheet's key
+// to its feet (the anchor), and a hash of its picture for the sheet's key;
+// `subs`, the actor in its cells' quarters' colours off the "@hd" pictures
+// (statusFx hdBody), when every picture has one
 interface Body {
   actor: Actor;
+  subs: Actor[] | null;
   feet: number;
   id: string;
 }
+
+// texels to an effect pixel in a sheet baked from the "@hd" pictures (a cell's quarters)
+const HD_RES = ART_PX;
 
 // the hero as the battle draws it, each picture's middle `dx`, `dy` px off
 // the hero's at the battle's 2x (the gear overlays are not mirrored)
@@ -83,6 +93,10 @@ function layers(): { key: string; dx: number; dy: number; flip: boolean }[] {
 function bodyOf(scene: Phaser.Scene): Body | null {
   const cells = new Map<number, number>();
   const at = (cx: number, cy: number): number => (cy + 512) * 1024 + cx + 512;
+  // the "@hd" pictures' texels, from the hero's middle as the cells are
+  const texels = new Map<number, number>();
+  const atTexel = (x: number, y: number): number => (y + 1024) * 4096 + x + 1024;
+  let hd = true;
   let [left, right, top, bottom] = [Infinity, -Infinity, Infinity, -Infinity];
   for (const { key, dx, dy, flip } of layers()) {
     const frame = scene.textures.getFrame(key);
@@ -107,6 +121,29 @@ function bodyOf(scene: Phaser.Scene): Body | null {
           [left, right, top, bottom] = [Math.min(left, mx), Math.max(right, mx), Math.min(top, my), Math.max(bottom, my)];
           break;
         }
+    // its "@hd" over the same cells, a texel a quarter, mirrored as the art is
+    const hdFrame = scene.textures.exists(`${key}@hd`) ? scene.textures.getFrame(`${key}@hd`) : null;
+    const hdSrc = hdFrame?.source.image;
+    const hdData =
+      hdFrame &&
+      hdFrame.cutWidth === tw &&
+      hdFrame.cutHeight === th &&
+      (hdSrc instanceof HTMLCanvasElement || hdSrc instanceof HTMLImageElement)
+        ? texelsOf(hdSrc, hdFrame.cutX, hdFrame.cutY, tw, th)
+        : null;
+    if (!hdData) {
+      hd = false;
+      continue;
+    }
+    for (let y = 0; y < th; y++)
+      for (let x = 0; x < tw; x++) {
+        const i = (y * tw + x) * 4;
+        if (hdData[i + 3] === 0) continue;
+        texels.set(
+          atTexel(ox * ART_PX + (flip ? tw - 1 - x : x), oy * ART_PX + y),
+          ((255 << 24) | (hdData[i + 2] << 16) | (hdData[i + 1] << 8) | hdData[i]) >>> 0,
+        );
+      }
   }
   if (right < left) return null;
   const [w, h] = [right - left + 1, bottom - top + 1];
@@ -122,32 +159,49 @@ function bodyOf(scene: Phaser.Scene): Body | null {
       hash = Math.imul(hash ^ c, 0x01000193) >>> 0;
     }
   const ay = -h;
+  const actor: Actor = { mask: { w, h, data: mask }, pixels, x: left, y: ay, w, h, k: 2, head: [0, ay], chest: [0, Math.round(ay * 0.6)] };
+  // each cell's quarter (top left, top right, bottom left, bottom right) off the "@hd" texels, its own colour where empty
+  const quarter = (q: number): Actor => {
+    const px = new Uint32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const c = pixels[y * w + x];
+        if (c) px[y * w + x] = texels.get(atTexel((left + x) * HD_RES + (q & 1), (top + y) * HD_RES + (q >> 1))) ?? c;
+      }
+    return { ...actor, pixels: px };
+  };
   return {
-    actor: { mask: { w, h, data: mask }, pixels, x: left, y: ay, w, h, k: 2, head: [0, ay], chest: [0, Math.round(ay * 0.6)] },
+    actor,
+    subs: hd ? [0, 1, 2, 3].map(quarter) : null,
     feet: (bottom + 1) * ART_PX,
     id: hash.toString(36),
   };
 }
 
-const keyOf = (body: Body, isSoft: boolean): string => `soul-rise:${body.id}${isSoft ? ":soft" : ""}`;
+const keyOf = (body: Body, isSoft: boolean): string => `soul-rise:${body.id}${body.subs ? ":hd" : ""}${isSoft ? ":soft" : ""}`;
+
+// texels to an effect pixel of a body's sheet
+const resOf = (body: Body): number => (body.subs ? HD_RES : 1);
 
 function sheetOf(body: Body, isSoft: boolean): PixelSheet {
+  const res = resOf(body);
   return {
-    fx: FX,
+    fx: body.subs ? hdBody(FX, body.subs) : FX,
     opts: { actor: body.actor, height: LIFT, ...(isSoft ? { light: SOFT_LIGHT } : {}) },
     span: SPAN,
     frames: FRAMES,
     crop: CROP,
+    res,
+    trimFrames: res > 1,
   };
 }
 
 // a sheet's ceiling faded once, on the hero's cell (the battle's 2x)
 const faded = new Set<string>();
-function settle(scene: Phaser.Scene, key: string, cell: number): void {
+function settle(scene: Phaser.Scene, key: string, cell: number, res: number): void {
   if (faded.has(key)) return;
   faded.add(key);
-  const [, y0] = CROP;
-  fadeAboveCeiling(scene, key, CROP[3] - y0, FX.meta.origin[1] - y0, CEILING, cell);
+  fadeAboveCeiling(scene, key, FX.meta.origin[1] - CROP[1], CEILING, cell, res);
   // the battle's end takes the texture with it
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
     faded.delete(key);
@@ -164,7 +218,7 @@ export function warmSoul(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite): 
   if (!body) return;
   const isSoft = soft();
   const key = keyOf(body, isSoft);
-  warmSheets(scene, { [key]: sheetOf(body, isSoft) }, (k) => settle(scene, k, ART_PX * Math.round(hero.scaleX)));
+  warmSheets(scene, { [key]: sheetOf(body, isSoft) }, (k) => settle(scene, k, ART_PX * Math.round(hero.scaleX), resOf(body)));
 }
 
 /**
@@ -186,11 +240,11 @@ export function playSoul(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite, m
     if (process.env.NODE_ENV !== "production")
       console.info(`[soulFx] ${key} baked on the spot in ${(performance.now() - t0).toFixed(1)}ms`);
   }
-  settle(scene, key, ART_PX * Math.round(hero.scaleX));
+  settle(scene, key, ART_PX * Math.round(hero.scaleX), resOf(body));
   const sprite = scene.add
     .sprite(hero.x, hero.y + body.feet * hero.scaleY, key, 0)
     .setOrigin(...sheetInfo(sheet).origin)
-    .setScale(hero.scaleX * ART_PX);
+    .setScale((hero.scaleX * ART_PX) / resOf(body));
   scene.tweens.addCounter({
     from: 0,
     to: 1,

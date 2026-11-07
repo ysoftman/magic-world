@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import type { FxModule } from "pixelfx";
+import type { FxFrame, FxModule, Painter } from "pixelfx";
 import * as pixelfx from "pixelfx";
+import { clearFrame, createFrame, painterFor } from "pixelfx";
 import * as divineShield from "pixelfx/fx/holy/divine-shield";
 import * as heal from "pixelfx/fx/holy/heal";
 import * as freeze from "pixelfx/fx/ice/freeze";
@@ -19,6 +20,7 @@ import * as stunned from "pixelfx/fx/status/stunned";
 import { battleSource } from "./battleHd";
 import { bakePixelSheet, type PixelSheet, warmSheets } from "./fx";
 import { GameState } from "./gameState";
+import { densityOf } from "./hiresPaint";
 import { ART_PX, texelsOf } from "./pixelart";
 
 // The battle's status and recovery effects: pixelfx effects that act on a
@@ -27,6 +29,11 @@ import { ART_PX, texelsOf } from "./pixelart";
 // (burning's flames float at its head height, poisoned and frozen repaint its
 // whole body), so each sheet is baked for one battler: its texture read back
 // one art cell (ART_PX texels) to a pixelfx pixel, mirrored as the sprite is.
+// A battler the battle draws on twice the cells (its "@hd" texture,
+// battleHd.ts) has its sheets baked at two texels to that pixel (fx.ts
+// PixelSheet.res) with the body's colours read off those cells (hdBody), so
+// what an effect paints of the body is at the field's 2px as the battler is,
+// and the effect's own flames, frost and stars keep the size they have.
 // Baked on first use and kept for the battle, one per battler, effect and,
 // for poison and rage, the tint the battler shows: the effect repaints the
 // body, and the purple it is flashed (the red an enraged boss keeps) has to
@@ -470,8 +477,18 @@ interface FramePixels {
 // empty cells at its inner corners, which would read as cells of the body.
 const bodyKey = (sprite: Phaser.GameObjects.Sprite): string => battleSource(sprite.texture.key);
 
-function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
-  const frame = sprite.scene.textures.getFrame(bodyKey(sprite), sprite.frame.name) ?? sprite.frame;
+// The texture the battle draws a battler with where that is not its art: its
+// "@hd" (battleHd.ts), the art's size at a texel a cell, twice the art's
+// cells (or the outline-smoothed copy, its half cells). Its texels are the
+// colours of each art cell's 2x2 (HD_RES) quarters.
+const hdKey = (sprite: Phaser.GameObjects.Sprite): string | null => (sprite.texture.key !== bodyKey(sprite) ? sprite.texture.key : null);
+
+// texels to an art cell in a battler's "@hd" texture, and to an effect pixel
+// in a sheet baked from it (PixelSheet.res)
+const HD_RES = ART_PX;
+
+function framePixels(sprite: Phaser.GameObjects.Sprite, key: string): FramePixels | null {
+  const frame = sprite.scene.textures.getFrame(key, sprite.frame.name) ?? sprite.frame;
   const src = frame.source.image;
   if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return null;
   const tw = frame.cutWidth;
@@ -482,23 +499,36 @@ function framePixels(sprite: Phaser.GameObjects.Sprite): FramePixels | null {
   return data && { data, tw, th };
 }
 
+// pixelfx colours are ImageData bytes read as one number: R in the low byte
+const packed = ([r, g, b]: Rgb): number => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+
 // The sprite's frame read back on the art grid: a cell is on when any of its
 // texels is, in that texel's colour. `feet` is the texels from the frame's top
 // to the line under its lowest cell, where the effect's anchor goes. `trim`
 // crops the frame to the cells that are on (the mask, a.x/a.y/a.w/a.h and the
 // head with it), the anchor staying where the frame's would be. `lift`: the
-// cells the body hovers over the anchor (a flier over the ground).
+// cells the body hovers over the anchor (a flier over the ground). With `hd`
+// (the battler's "@hd" texels) `subs` is the same body four times, each cell
+// in the colour of one of its quarters there (top left, top right, bottom
+// left, bottom right, mirrored with the sprite), its own colour where that
+// quarter is empty, for hdBody.
 function actorOf(
   sprite: Phaser.GameObjects.Sprite,
   { data, tw, th }: FramePixels,
   recolor: ((c: Rgb) => Rgb) | null,
   trim = false,
   lift = 0,
-): { actor: Actor; feet: number } {
+  hd: FramePixels | null = null,
+): { actor: Actor; subs: Actor[] | null; feet: number } {
   const w = Math.ceil(tw / ART_PX);
   const h = Math.ceil(th / ART_PX);
   const mask = new Uint8Array(w * h);
   const pixels = new Uint32Array(w * h);
+  const quarters = hd ? [0, 1, 2, 3].map(() => new Uint32Array(w * h)) : null;
+  const colourOf = (bytes: Uint8ClampedArray, i: number): number => {
+    const rgb: Rgb = [bytes[i], bytes[i + 1], bytes[i + 2]];
+    return packed(recolor ? recolor(rgb) : rgb);
+  };
   // the cells that are on: columns left..right, rows top..bottom (mirrored columns)
   let [left, right, top, bottom] = [w, -1, h, 0];
   for (let cy = 0; cy < h; cy++)
@@ -509,13 +539,18 @@ function actorOf(
         if (x >= tw || y >= th) continue;
         const i = (y * tw + x) * 4;
         if (data[i + 3] === 0) continue;
-        const [r, g, b] = recolor ? recolor([data[i], data[i + 1], data[i + 2]]) : [data[i], data[i + 1], data[i + 2]];
         // mirrored as the sprite is drawn
         const mx = sprite.flipX ? w - 1 - cx : cx;
         const at = cy * w + mx;
         mask[at] = 1;
-        // pixelfx colours are ImageData bytes read as one number: R in the low byte
-        pixels[at] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+        pixels[at] = colourOf(data, i);
+        quarters?.forEach((q, s) => {
+          // the quarter's texel, its column mirrored within the cell too
+          const dx = s & 1;
+          const qx = cx * HD_RES + (sprite.flipX ? HD_RES - 1 - dx : dx);
+          const qi = ((cy * HD_RES + (s >> 1)) * tw + qx) * 4;
+          q[at] = hd && hd.data[qi + 3] > 0 ? colourOf(hd.data, qi) : pixels[at];
+        });
         [left, right, top, bottom] = [Math.min(left, mx), Math.max(right, mx), Math.min(top, cy), Math.max(bottom, cy)];
         break;
       }
@@ -533,16 +568,22 @@ function actorOf(
     head: [0, ay],
     chest: [0, Math.round(ay * 0.6)],
   });
-  if (!trim || right < left) return { actor: actor(mask, pixels, x, y, w, h), feet };
+  // the same mask for all four, so what an effect works out once per body (cached by its mask) is the same in each
+  const withSubs = (a: Actor, crop: (px: Uint32Array) => Uint32Array): { actor: Actor; subs: Actor[] | null; feet: number } => ({
+    actor: a,
+    subs: quarters?.map((q) => ({ ...a, pixels: crop(q) })) ?? null,
+    feet,
+  });
+  if (!trim || right < left) return withSubs(actor(mask, pixels, x, y, w, h), (px) => px);
   const [cw, ch] = [right - left + 1, bottom - top + 1];
   const cropped = new Uint8Array(cw * ch);
-  const croppedPixels = new Uint32Array(cw * ch);
-  for (let cy = 0; cy < ch; cy++)
-    for (let cx = 0; cx < cw; cx++) {
-      cropped[cy * cw + cx] = mask[(top + cy) * w + left + cx];
-      croppedPixels[cy * cw + cx] = pixels[(top + cy) * w + left + cx];
-    }
-  return { actor: actor(cropped, croppedPixels, x + left, -ch - lift, cw, ch), feet };
+  const crop = (px: Uint32Array): Uint32Array => {
+    const out = new Uint32Array(cw * ch);
+    for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++) out[cy * cw + cx] = px[(top + cy) * w + left + cx];
+    return out;
+  };
+  for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++) cropped[cy * cw + cx] = mask[(top + cy) * w + left + cx];
+  return withSubs(actor(cropped, crop(pixels), x + left, -ch - lift, cw, ch), crop);
 }
 
 // a pixelfx effect's draw and drawBack, and how much of its body a death
@@ -562,37 +603,167 @@ function layerOf(fx: FxModule, back: boolean): FxModule {
   return layer;
 }
 
-// Erases what a baked sheet draws over its ceiling, frame by frame, and fades
-// the CEILING_FADE rows under it: a status sheet's frames are the effect's
-// whole canvas (no crop), its anchor on row origin[1] of each. `cell`: the
-// screen px an effect pixel is shown at on its battler.
-function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet, cell: number): void {
-  if (sheet.ceiling === undefined) return;
-  fadeAboveCeiling(scene, key, sheet.fx.meta.size[1], sheet.fx.meta.origin[1], sheet.ceiling, cell);
+// an effect live: the module itself (a pure effect), or what its create()
+// made of it (one that keeps a state: a death's shards, a soul)
+interface Live {
+  update?: (dt: number, o: Record<string, unknown>) => void;
+  draw: Draw;
+  drawBack?: Draw;
+}
+interface Acting extends Layers {
+  create?: (o: Record<string, unknown>) => Live;
+}
+// the painter createFx hands a draw: its frame, and the layer it is on
+type Drawing = Painter & { layer?: string };
+
+// drawBack then draw on one painter, as createFx does with no layer asked for
+function drawLayers(live: Live, p: Drawing, t: number, o: Record<string, unknown>): void {
+  const layer = p.layer;
+  if (live.drawBack) {
+    p.layer = "back";
+    live.drawBack(p, t, o);
+  }
+  p.layer = "front";
+  live.draw(p, t, o);
+  p.layer = layer;
+}
+
+// A body's colours that count each read: whether an effect drew with them
+function watched(px: Uint32Array, read: () => void): Uint32Array {
+  return new Proxy(px, {
+    get(target, prop) {
+      if (typeof prop === "string" && prop.charCodeAt(0) >= 48 && prop.charCodeAt(0) <= 57) read();
+      const v = Reflect.get(target, prop, target);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+}
+
+// The texels of a res-2 frame that are a pixel's top right, bottom left or
+// bottom right (quarter 1-3 by their parity: a body cell's top left texel is
+// an even one) take that pixel of their quarter's draw at one texel a pixel
+// (`low`, quarters 0-3), wherever it differs from the top left's (low[0]):
+// there the effect painted the body, and the texel shows its own colour as
+// the effect made it. Everywhere else the frame's own texel stays.
+function mergeQuarters(frame: FxFrame, low: FxFrame[]): void {
+  const base = low[0];
+  const { w, h, ox, oy, color } = frame;
+  for (let y = 0; y < h; y++) {
+    const sy = y + oy;
+    const row = ((sy >> 1) - base.oy) * base.w - base.ox;
+    for (let x = 0; x < w; x++) {
+      const sx = x + ox;
+      const q = (sx & 1) | ((sy & 1) << 1);
+      if (q === 0) continue;
+      const i = row + (sx >> 1);
+      const c = low[q].color[i];
+      if (c !== base.color[i]) color[y * w + x] = c;
+    }
+  }
 }
 
 /**
- * The same for a sheet baked outside this file (soulFx.ts): `h` is the frame's
- * height in the texture (its crop's), `originY` its anchor's row in it,
- * `ceiling` the screen px over the anchor, `cell` the screen px of a pixel.
+ * `fx` on a body at twice its cells, for a sheet of HD_RES (2) texels to an
+ * effect pixel (PixelSheet.res). `subs` (actorOf) are the body four times,
+ * cell for cell, each in its cells' quarters' colours. The effect draws into
+ * the sheet's frame as ever, in the top left quarters' colours, its shapes at
+ * 2 texels a pixel. Then, on a frame where it painted with the body's colours
+ * (its draw read them, or its create did and kept them in its state, as a
+ * death's shards do), it is drawn again once per quarter at a texel a pixel
+ * and with no light, which is cheap, and mergeQuarters gives each texel of
+ * the body its own quarter's colour as the effect made it: frozen, poisoned,
+ * petrified, in shards or a flare, the body is the battler's 2px picture, and
+ * the flames, frost, stars and glow are the frame's own, the size they ever
+ * were. The plain sheet baked a pixel's four texels in its one colour: a 4px
+ * body over the 2px battler.
  */
-export function fadeAboveCeiling(scene: Phaser.Scene, key: string, h: number, originY: number, ceiling: number, cell: number): void {
+export function hdBody(fx: FxModule, subs: Actor[]): FxModule {
+  const real = fx as Acting;
+  const live = (o: Record<string, unknown>): Live => (real.create ? real.create(o) : real);
+  const wrapped = {
+    meta: real.meta,
+    actorAlpha: real.actorAlpha,
+    create(opts: Record<string, unknown>): Live {
+      let reads = 0;
+      const own = { ...opts, actor: { ...subs[0], pixels: watched(subs[0].pixels, () => reads++) } };
+      const main = live(own);
+      // its colours kept in what create made: every frame shows them
+      const kept = reads > 0;
+      const quarters = subs.map((actor) => {
+        const o = { ...opts, actor };
+        return { o, live: live(o) };
+      });
+      let low: FxFrame[] = [];
+      return {
+        update(dt: number): void {
+          main.update?.(dt, own);
+          for (const q of quarters) q.live.update?.(dt, q.o);
+        },
+        draw(p: unknown, t: number): void {
+          const painter = p as Drawing;
+          reads = 0;
+          drawLayers(main, painter, t, own);
+          const frame = painter.frame;
+          if ((!kept && reads === 0) || densityOf(frame) !== HD_RES) return;
+          const [w, h, ox, oy] = [frame.w / HD_RES, frame.h / HD_RES, frame.ox / HD_RES, frame.oy / HD_RES];
+          if (low[0]?.w !== w || low[0].h !== h || low[0].ox !== ox || low[0].oy !== oy) low = subs.map(() => createFrame(w, h, ox, oy));
+          quarters.forEach((q, i) => {
+            const at = painterFor(clearFrame(low[i])) as Drawing;
+            at.place(Number(opts.x ?? 0), Number(opts.y ?? 0), !!opts.flip, Number(opts.angle ?? 0));
+            at.fade = painter.fade;
+            at.lightK = 0;
+            drawLayers(q.live, at, t, q.o);
+          });
+          mergeQuarters(frame, low);
+        },
+      };
+    },
+  };
+  return wrapped as unknown as FxModule;
+}
+
+// Erases what a baked sheet draws over its ceiling and fades the CEILING_FADE
+// pixels under it: a status sheet's frames are the effect's whole canvas (no
+// crop), its anchor on row origin[1] of each. `cell`: the screen px an effect
+// pixel is shown at on its battler; `res`: the texels to one (PixelSheet.res).
+function fadeAbove(scene: Phaser.Scene, key: string, sheet: StatusSheet, cell: number, res: number): void {
+  if (sheet.ceiling === undefined) return;
+  fadeAboveCeiling(scene, key, sheet.fx.meta.origin[1], sheet.ceiling, cell, res);
+}
+
+/**
+ * The same for a sheet baked outside this file (soulFx.ts): `originY` is its
+ * anchor's row in a frame (its crop's), in effect pixels, `ceiling` the screen
+ * px over the anchor, `cell` the screen px of an effect pixel, `res` the
+ * texels to one. Frame by frame, at each frame's place on the canvas: a frame
+ * packed cut to what it draws (PixelSheet.trimFrames) is cut at its whole frame's
+ * line, some rows down it.
+ */
+export function fadeAboveCeiling(scene: Phaser.Scene, key: string, originY: number, ceiling: number, cell: number, res = 1): void {
   const tex = scene.textures.get(key);
   if (!(tex instanceof Phaser.Textures.CanvasTexture)) return;
-  const gone = Math.max(0, originY - Math.round(ceiling / cell));
+  const gone = Math.max(0, originY - Math.round(ceiling / cell)) * res;
+  const band = CEILING_FADE * res;
   const ctx = tex.getContext();
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-out";
-  for (let y = 0; y < tex.height; y += h) {
+  for (const name of tex.getFrameNames()) {
+    const frame = tex.get(name);
+    // the whole frame's top row on the canvas
+    const top = frame.cutY - (frame.trimmed ? frame.y : 0);
+    if (top + gone + band <= frame.cutY) continue;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight);
+    ctx.clip();
+    ctx.globalCompositeOperation = "destination-out";
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, y, tex.width, gone);
-    const fade = ctx.createLinearGradient(0, y + gone, 0, y + gone + CEILING_FADE);
+    ctx.fillRect(frame.cutX, top, frame.cutWidth, gone);
+    const fade = ctx.createLinearGradient(0, top + gone, 0, top + gone + band);
     fade.addColorStop(0, "rgba(0, 0, 0, 1)");
     fade.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = fade;
-    ctx.fillRect(0, y + gone, tex.width, CEILING_FADE);
+    ctx.fillRect(frame.cutX, top + gone, frame.cutWidth, band);
+    ctx.restore();
   }
-  ctx.restore();
   tex.refresh();
 }
 
@@ -636,6 +807,8 @@ export function breakOf(kind: StatusKind): number {
 export class StatusFx {
   // each sheet ready to show (baked, its ceiling faded), and the texels from its battler's top to its feet
   private readonly feet = new Map<string, number>();
+  // each sheet's texels to an effect pixel (PixelSheet.res): HD_RES for a battler drawn on its "@hd"
+  private readonly res = new Map<string, number>();
   // every texture baked or queued for this battle, removed at its end (a warm cut off halfway leaves some)
   private readonly textures = new Set<string>();
   // the textures whose ceiling is faded: a warm finishing after a bake that could not wait must not fade it twice
@@ -653,6 +826,7 @@ export class StatusFx {
       this.faded.clear();
       this.frames.clear();
       this.feet.clear();
+      this.res.clear();
       this.lifts.clear();
     });
   }
@@ -742,21 +916,25 @@ export class StatusFx {
     if (!bake) return;
     let left = plan.layers.length;
     warmSheets(this.scene, bake.sheets, (key) => {
-      this.settle(key, kind, target);
+      this.settle(key, kind, target, bake.res);
       left -= 1;
-      if (left === 0) this.feet.set(plan.key, bake.feet);
+      if (left === 0) {
+        this.res.set(plan.key, bake.res);
+        this.feet.set(plan.key, bake.feet);
+      }
     });
   }
 
-  // What a bake of `kind` on `target` reads, so its key: the battler's frame,
-  // its mirroring, the tint a "tinted" body shows (`tint` in `mode`, else the
+  // What a bake of `kind` on `target` reads, so its key: the battler's frame
+  // (its "@hd" texture's, which a body is baked from at HD_RES), its
+  // mirroring, the tint a "tinted" body shows (`tint` in `mode`, else the
   // sprite's now) and, for a sheet with a soft glow, whether it is soft.
   private plan(target: Phaser.GameObjects.Sprite, kind: StatusKind, tint?: number, mode = Phaser.TintModes.MULTIPLY): Plan {
     const sheet = STATUS_SHEETS[kind];
     const tinted = sheet.body !== "tinted" ? null : tint === undefined ? tintOf(target.tintTopLeft, target.tintMode) : tintOf(tint, mode);
     const soft = sheet.soft !== undefined && (!GameState.flashes || reducedMotion());
     const lift = sheet.fells ? (this.lifts.get(target) ?? 0) : 0;
-    const key = `status-${kind}:${bodyKey(target)}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}${lift ? `:lift${lift}` : ""}`;
+    const key = `status-${kind}:${target.texture.key}:${target.frame.name}${target.flipX ? ":flip" : ""}${tinted ? `:${tinted.id}` : ""}${soft ? ":soft" : ""}${lift ? `:lift${lift}` : ""}`;
     return {
       key,
       layers: sheet.layered ? [`${key}:back`, `${key}:front`] : [key],
@@ -766,19 +944,37 @@ export class StatusFx {
     };
   }
 
-  // each of the plan's textures as bakePixelSheet and warmSheets take it, the
-  // battler's body handed over, and the battler's feet
+  // a battler's frame of `key` read back, once a battle
+  private read(target: Phaser.GameObjects.Sprite, key: string): FramePixels | null {
+    const at = `${key}:${target.frame.name}`;
+    if (!this.frames.has(at)) this.frames.set(at, framePixels(target, key));
+    return this.frames.get(at) ?? null;
+  }
+
+  // Each of the plan's textures as bakePixelSheet and warmSheets take it, the
+  // battler's body handed over, the battler's feet and the sheets' res. A
+  // battler drawn on its "@hd" has them at HD_RES, the body in its quarters'
+  // colours (hdBody) and each frame packed cut to what it draws (PixelSheet
+  // trimFrames: four times the texels, as fx.ts's battle sheets).
   private bakeOf(
     target: Phaser.GameObjects.Sprite,
     kind: StatusKind,
     plan: Plan,
-  ): { sheets: Record<string, PixelSheet>; feet: number } | null {
+  ): { sheets: Record<string, PixelSheet>; feet: number; res: number } | null {
     const sheet = STATUS_SHEETS[kind];
-    const at = `${bodyKey(target)}:${target.frame.name}`;
-    if (!this.frames.has(at)) this.frames.set(at, framePixels(target));
-    const pixels = this.frames.get(at);
+    const pixels = this.read(target, bodyKey(target));
     if (!pixels) return null;
-    const body = actorOf(target, pixels, plan.recolor, sheet.trim, plan.lift);
+    const hd = hdKey(target);
+    const quarters = hd && this.read(target, hd);
+    const body = actorOf(
+      target,
+      pixels,
+      plan.recolor,
+      sheet.trim,
+      plan.lift,
+      quarters && quarters.tw === pixels.tw && quarters.th === pixels.th ? quarters : null,
+    );
+    const res = body.subs ? HD_RES : 1;
     const opts = {
       ...sheet.opts,
       actor: body.actor,
@@ -787,18 +983,19 @@ export class StatusFx {
     };
     const sheets: Record<string, PixelSheet> = {};
     plan.layers.forEach((key, i) => {
-      sheets[key] = { ...sheet, fx: sheet.layered ? layerOf(sheet.fx, i === 0) : sheet.fx, opts };
+      const fx = sheet.layered ? layerOf(sheet.fx, i === 0) : sheet.fx;
+      sheets[key] = { ...sheet, fx: body.subs ? hdBody(fx, body.subs) : fx, opts, res, trimFrames: res > 1 };
       this.textures.add(key);
     });
-    return { sheets, feet: body.feet };
+    return { sheets, feet: body.feet, res };
   }
 
   // a texture just baked: its ceiling faded, once, on the cell of `target`
   // at its own size (a throb's 1.15x left out)
-  private settle(key: string, kind: StatusKind, target: Phaser.GameObjects.Sprite): void {
+  private settle(key: string, kind: StatusKind, target: Phaser.GameObjects.Sprite, res: number): void {
     if (this.faded.has(key)) return;
     this.faded.add(key);
-    fadeAbove(this.scene, key, STATUS_SHEETS[kind], ART_PX * Math.round(target.scaleX));
+    fadeAbove(this.scene, key, STATUS_SHEETS[kind], ART_PX * Math.round(target.scaleX), res);
   }
 
   // The sheet (or its two layers) for `kind` on `target`, baked here if no
@@ -813,11 +1010,14 @@ export class StatusFx {
       // a layer a warm still under way has finished is skipped
       for (const [key, s] of Object.entries(bake.sheets)) {
         bakePixelSheet(this.scene, key, s);
-        this.settle(key, kind, target);
+        this.settle(key, kind, target, bake.res);
       }
       feet = bake.feet;
+      this.res.set(plan.key, bake.res);
       this.feet.set(plan.key, feet);
     }
+    // an effect pixel ART_PX battler texels at any res, a texel 1/res of it
+    const scale = (target.scaleX * ART_PX) / (this.res.get(plan.key) ?? 1);
     const {
       size: [w, h],
       origin: [ax, ay],
@@ -831,7 +1031,7 @@ export class StatusFx {
       for (const s of sprites)
         s.setFrame(f)
           .setPosition(target.x, target.y + texels * target.scaleY)
-          .setScale(target.scaleX * ART_PX);
+          .setScale(scale);
     };
     show(0);
     return {
