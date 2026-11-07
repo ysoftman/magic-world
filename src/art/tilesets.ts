@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { makeTilesetTexture } from "../pixelart";
+import { ART_PX, makeTilesetTexture } from "../pixelart";
 import type { TileSkin } from "../sceneCommon";
 import { type Season, seasonLook, seasonToday } from "../season";
 import {
@@ -105,9 +105,11 @@ const SNOW_WATER_PALETTE = { d: 0x123a57, B: 0x1b4d72, W: 0x2a6690, l: 0x5d9ac0,
 // The canopy's lit top-left (H, c) carries the snow and the shaded side stays a
 // dark spruce green, so the same sphere reads as a laden conifer.
 const SNOW_TREE_PALETTE = { b: 0x0b231d, S: 0x123329, D: 0x1d4a3e, c: 0xa9bfcf, H: 0xe6eef5, t: 0x4a3a2c, T: 0x2f241a };
-// grass tones (g/q) equal SNOW_GRASS_PALETTE's g/h, as SHORE/ROAD do for grass
-const SNOW_SHORE_PALETTE = { W: 0x2a6690, B: 0x1b4d72, h: 0xc4e6f5, l: 0x5d9ac0, g: 0xaebfce, q: 0xb5c5d3 };
-const SNOW_ROAD_PALETTE = { p: 0x8c8f96, P: 0x7d8087, S: 0x999ca3, m: 0x9a9da4, g: 0xaebfce, q: 0xb5c5d3 };
+// grass tones (g/q) equal SNOW_GRASS_PALETTE's g/h, as SHORE/ROAD do for grass;
+// the shore's d and the road's h are the snow water's and path's, which their
+// fills carry on (art/tiles.ts SHORE_PALETTE), as in every skin below
+const SNOW_SHORE_PALETTE = { W: 0x2a6690, B: 0x1b4d72, h: 0xc4e6f5, l: 0x5d9ac0, d: 0x123a57, g: 0xaebfce, q: 0xb5c5d3 };
+const SNOW_ROAD_PALETTE = { p: 0x8c8f96, h: 0x92959c, P: 0x7d8087, S: 0x999ca3, m: 0x9a9da4, g: 0xaebfce, q: 0xb5c5d3 };
 
 // The texture keys buildTileLayers() reads for the snow field.
 export const SNOW_SKIN = { tiles: "tiles16-snow", shore: "shore16-snow", road: "road16-snow" } as const;
@@ -128,8 +130,8 @@ const FOREST_TALL_PALETTE = { g: 0x263f2a, h: 0x2d4a31 };
 const FOREST_WATER_PALETTE = { d: 0x081c1f, B: 0x0f2c2f, W: 0x163a3c, l: 0x2f5f5a, h: 0x8db8a0 };
 const FOREST_TREE_PALETTE = { b: 0x061a10, S: 0x0b2a1b, D: 0x123d27, c: 0x1d5534, H: 0x3a7a45, t: 0x3d2c1b, T: 0x261a0f };
 // grass tones (g/q) equal FOREST_GRASS_PALETTE's g/h, as for the other skins
-const FOREST_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, g: 0x2f4b30, q: 0x34522f };
-const FOREST_ROAD_PALETTE = { p: 0x6a5236, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x2f4b30, q: 0x34522f };
+const FOREST_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, d: 0x081c1f, g: 0x2f4b30, q: 0x34522f };
+const FOREST_ROAD_PALETTE = { p: 0x6a5236, h: 0x765633, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x2f4b30, q: 0x34522f };
 
 // The texture keys buildTileLayers() reads for the forest.
 export const FOREST_SKIN = { tiles: "tiles16-forest", shore: "shore16-forest", road: "road16-forest" } as const;
@@ -154,8 +156,8 @@ const CAVE_WATER_PALETTE = { d: 0x050c16, B: 0x0a1626, W: 0x102136, l: 0x24405f,
 const CAVE_GRASS_PALETTE = { g: 0x3a3632, h: 0x3f3a35 };
 // unused in today's cave (no zone is marked there), kept in the cave's tones
 const CAVE_TALL_PALETTE = { g: 0x312d2a, h: 0x37332f };
-const CAVE_SHORE_PALETTE = { W: 0x102136, B: 0x0a1626, h: 0x6a8fb0, l: 0x24405f, g: 0x3a3632, q: 0x3f3a35 };
-const CAVE_ROAD_PALETTE = { p: 0x3a3632, P: 0x312e2a, S: 0x433e38, m: 0x45403a, g: 0x3a3632, q: 0x3f3a35 };
+const CAVE_SHORE_PALETTE = { W: 0x102136, B: 0x0a1626, h: 0x6a8fb0, l: 0x24405f, d: 0x050c16, g: 0x3a3632, q: 0x3f3a35 };
+const CAVE_ROAD_PALETTE = { p: 0x3a3632, h: 0x3f3a35, P: 0x312e2a, S: 0x433e38, m: 0x45403a, g: 0x3a3632, q: 0x3f3a35 };
 
 // The texture keys buildTileLayers() reads for the cave.
 export const CAVE_SKIN = { tiles: "tiles16-cave", shore: "shore16-cave", road: "road16-cave" } as const;
@@ -174,8 +176,8 @@ const AUTUMN_GRASS_PALETTE = { g: 0x4a6028, h: 0x4e662b };
 const AUTUMN_TALL_PALETTE = { g: 0x42542a, h: 0x46592c };
 const AUTUMN_TREE_PALETTE = { b: 0x3a1408, S: 0x6e2a10, D: 0x9a4418, c: 0xc8662a, H: 0xe8a040, t: 0x4a3620, T: 0x2f2113 };
 // grass tones (g/q) equal AUTUMN_GRASS_PALETTE's g/h, as for the other skins
-const AUTUMN_SHORE_PALETTE = { W: 0x0133a9, B: 0x01207f, h: 0x7fc6f0, l: 0x2f6ecb, g: 0x4a6028, q: 0x4e662b };
-const AUTUMN_ROAD_PALETTE = { p: 0x735f43, P: 0x5e4c33, S: 0x887356, m: 0x897353, g: 0x4a6028, q: 0x4e662b };
+const AUTUMN_SHORE_PALETTE = { W: 0x0133a9, B: 0x01207f, h: 0x7fc6f0, l: 0x2f6ecb, d: 0x011654, g: 0x4a6028, q: 0x4e662b };
+const AUTUMN_ROAD_PALETTE = { p: 0x735f43, h: 0x796446, P: 0x5e4c33, S: 0x887356, m: 0x897353, g: 0x4a6028, q: 0x4e662b };
 export const AUTUMN_SKIN = { tiles: "tiles16-autumn", shore: "shore16-autumn", road: "road16-autumn" } as const;
 
 // The forest in autumn: its moss a warmer, yellower olive at the same depth
@@ -185,8 +187,8 @@ export const AUTUMN_SKIN = { tiles: "tiles16-autumn", shore: "shore16-autumn", r
 const FOREST_AUTUMN_GRASS_PALETTE = { g: 0x3a5226, h: 0x3e5729 };
 const FOREST_AUTUMN_TALL_PALETTE = { g: 0x324624, h: 0x364b27 };
 const FOREST_AUTUMN_TREE_PALETTE = { b: 0x200a06, S: 0x4a1a0c, D: 0x742c12, c: 0xa04a1c, H: 0xcf7a30, t: 0x3d2c1b, T: 0x261a0f };
-const FOREST_AUTUMN_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, g: 0x3a5226, q: 0x3e5729 };
-const FOREST_AUTUMN_ROAD_PALETTE = { p: 0x6a5236, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x3a5226, q: 0x3e5729 };
+const FOREST_AUTUMN_SHORE_PALETTE = { W: 0x163a3c, B: 0x0f2c2f, h: 0x8db8a0, l: 0x2f5f5a, d: 0x081c1f, g: 0x3a5226, q: 0x3e5729 };
+const FOREST_AUTUMN_ROAD_PALETTE = { p: 0x6a5236, h: 0x765633, P: 0x56432c, S: 0x7a5f40, m: 0x7b603f, g: 0x3a5226, q: 0x3e5729 };
 export const FOREST_AUTUMN_SKIN = { tiles: "tiles16-forestautumn", shore: "shore16-forestautumn", road: "road16-forestautumn" } as const;
 
 /**
@@ -279,7 +281,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 
   // Separate texture keys, so these carry no tiles16 index and never collide.
@@ -302,7 +305,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -323,7 +327,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 
   // The snow field's skin (SNOW_SKIN): entry for entry the three bakes above
@@ -361,7 +366,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -382,7 +388,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: SNOW_SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: SNOW_SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -403,7 +410,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: SNOW_ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: SNOW_ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 
   // The forest's skin (FOREST_SKIN), the same way: entry for entry the base
@@ -441,7 +449,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -462,7 +471,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: FOREST_SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: FOREST_SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -483,7 +493,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: FOREST_ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: FOREST_ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 
   // The cave's skin (CAVE_SKIN), the same way again. Trees keep their own
@@ -521,7 +532,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: CAVE_ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -542,7 +554,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: CAVE_SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: CAVE_SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -563,7 +576,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: CAVE_ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: CAVE_ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 
   // The autumn skins (AUTUMN_SKIN, FOREST_AUTUMN_SKIN), the same way: entry
@@ -602,7 +616,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -623,7 +638,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: AUTUMN_SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: AUTUMN_SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -644,7 +660,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: AUTUMN_ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: AUTUMN_ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -679,7 +696,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROCK_TILE, palette: ROCK_PALETTE },
       { rows: SCORCH_TILE, palette: SCORCH_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -700,7 +718,8 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: SHORE_TILE_13, palette: FOREST_AUTUMN_SHORE_PALETTE },
       { rows: SHORE_TILE_14, palette: FOREST_AUTUMN_SHORE_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
   makeTilesetTexture(
     this,
@@ -721,6 +740,7 @@ export function bakeTilesets(this: Phaser.Scene): void {
       { rows: ROAD_TILE_13, palette: FOREST_AUTUMN_ROAD_PALETTE },
       { rows: ROAD_TILE_14, palette: FOREST_AUTUMN_ROAD_PALETTE },
     ],
-    16,
+    32,
+    ART_PX,
   );
 }

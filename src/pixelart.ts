@@ -225,7 +225,8 @@ function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: 
 // density, and art redrawn on a 32-cell grid (drawn at ART_PX as it is, no
 // Scale2x) sits beside the rest without a jump in density. keepBlocky() opts a
 // grid out where Scale2x bends what it was drawn to say (see its calls in
-// art/tiles.ts, art/npcs.ts and art/landmarks.ts).
+// src/art). The terrain (art/tiles.ts) is drawn on 32 cells as it stands and
+// needs neither that nor smoothBoundaryOnly() any more.
 export const ART_PX = PIXEL / 2;
 
 // What Scale2x sees past a grid's edge: nothing for a sprite, so it never
@@ -395,17 +396,23 @@ export function texelsOf(
 // MapEditor's scene.restart() restarts its owning scene, not Boot. Moving
 // texture baking into a scene that can restart means calling
 // scene.textures.remove(key) first.
+//
+// `px` draws the grids as they stand at that cell size (the 32-cell terrain
+// at ART_PX, art/tilesets.ts); without it they are 16-cell ones and bake as
+// makeTexture's do (bakedCells).
 export function makeTilesetTexture(
   scene: Phaser.Scene,
   key: string,
   tiles: Array<{ rows: string[]; palette: PixelMap }>,
   tileSize: number,
+  px?: number,
 ): void {
+  const pitch = tileSize * (px ?? PIXEL);
   const g = scene.add.graphics();
   tiles.forEach((t, i) => {
-    drawRows(g, t.rows, t.palette, i * tileSize * PIXEL, 0, { edges: "clamp" });
+    drawRows(g, t.rows, t.palette, i * pitch, 0, { edges: "clamp", px });
   });
-  g.generateTexture(key, tiles.length * tileSize * PIXEL, tileSize * PIXEL);
+  g.generateTexture(key, tiles.length * pitch, pitch);
   g.destroy();
 }
 
