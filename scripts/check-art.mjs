@@ -560,12 +560,15 @@ console.log("baked terrain stays within its calm limits");
 // ---- grids drawn as they stand: square, 32 cells or 48 at ART_PX ----
 // (32 cells x 2px is the 64px every other sprite bakes to; the bosses and
 // the giant are 48 cells, a 96px texture, src/art/monsters.ts), 64 or 96 at
-// 1px, the same textures at twice the cells
+// 1px, the same textures at twice the cells. Two particles are smaller than
+// a sprite and named here: the spark (32px) and the firefly (48px),
+// src/art/props.ts.
+const SMALL_AT_ART_PX = { spark: 16, firefly: 24 };
 // A landmark at ART_PX (src/art/landmarks.ts) covers whole map tiles instead,
 // 32 cells a tile each way, square or not: a 2x2-tile building is 64x64, the
 // farm's 3x2 field 96x64. One grid, no stacking.
 const TILE_CELLS = TILE / (PIXEL / 2);
-const squareSizes = (bakes, sizes, label, tiles = null) => {
+const squareSizes = (bakes, sizes, label, small = {}, tiles = null) => {
   const bySize = new Map(sizes.map((n) => [n, 0]));
   const sizeOf = new Map();
   for (const [key, expr] of bakes) {
@@ -577,7 +580,7 @@ const squareSizes = (bakes, sizes, label, tiles = null) => {
       tiles.push(`${key} ${size / TILE_CELLS}x${rows / TILE_CELLS}`);
       continue;
     }
-    if (!sizes.includes(size)) {
+    if (!sizes.includes(size) && small[key] !== size) {
       fail(`${key} is drawn at ${label} but ${parts[0]} is ${size} cells wide, not ${sizes.join(" or ")}`);
       continue;
     }
@@ -592,7 +595,7 @@ const squareSizes = (bakes, sizes, label, tiles = null) => {
   return sizeOf;
 };
 const tileBakes = [];
-const artSize = squareSizes(artPx, [32, 48], "ART_PX", tileBakes);
+const artSize = squareSizes(artPx, [32, 48], "ART_PX", SMALL_AT_ART_PX, tileBakes);
 console.log(`landmarks drawn at ART_PX over whole map tiles: ${tileBakes.length} (${tileBakes.join(", ")})`);
 const hdSize = squareSizes(hdPx, [64, 96], "1px (the battle's own)");
 

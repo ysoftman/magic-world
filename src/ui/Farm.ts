@@ -5,7 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { addIngredient, INGREDIENTS } from "../cooking";
 import { HARVEST_MULT, isEventToday } from "../events";
 import { CROPS, type CropDef, type CropKey, cropClock, cropLeft, cropReadyAt, FARM_PLOTS, type FarmPlot, GameState } from "../gameState";
-import { ART_PX, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { isWet, weatherToday } from "../weather";
 import { type FieldFx, GOLD_BURST, GREEN_BURST, PanelFx } from "./fieldFx";
@@ -81,48 +81,6 @@ const nightReady = (plot: FarmPlot): string => {
   return wait < 1440 ? `READY ${clockAt(cropReadyAt(plot))}` : `IN ${remainText(wait)}`;
 };
 
-// Ripe-plant art for the crops BootScene doesn't bake; TownScene's field
-// sprites look up `crop-${key}` for every CropKey. Same 16x16 framing as
-// CORN_TILE/BEAN_TILE so the sprout -> tinted -> ripe stages line up.
-const PUMPKIN_PALETTE = { d: 0x14532d, s: 0x15803d, g: 0x4ade80, r: 0x9a3412, o: 0xea580c, O: 0xf97316, y: 0xfdba74 };
-const PUMPKIN_TILE = [
-  "................",
-  "................",
-  "................",
-  ".......sd.......",
-  "....ggsd..g.....",
-  "...g...sdgg.....",
-  "....oOOrrOOo....",
-  "...oOyOrrOOOo...",
-  "..oOyOOrrOOOOo..",
-  "..oOyOOrrOOOOo..",
-  "..oOOOOrrOOOOo..",
-  "..ooOOOrrOOOoo..",
-  "...ooOOrrOOoo...",
-  "....oooooooo....",
-  "................",
-  "................",
-];
-const MOONFLOWER_PALETTE = { d: 0x14532d, s: 0x15803d, g: 0x4ade80, w: 0xe0e7ff, b: 0xa5b4fc, B: 0x818cf8, c: 0xfef9c3, C: 0xfde047 };
-const MOONFLOWER_TILE = [
-  "................",
-  "......wwww......",
-  "....bwwwwwwb....",
-  "...bwwwccwwwb...",
-  "...bwwcCCcwwb...",
-  "...bwwwccwwwb...",
-  "....bbwwwwbb....",
-  "......BbbB......",
-  ".......gs.......",
-  "...gg..gs..gg...",
-  "....ggggsggg....",
-  ".......gs.......",
-  ".......gd.......",
-  "......dggd......",
-  "................",
-  "................",
-];
-
 export class FarmUI {
   private scene: Phaser.Scene;
   private active = false;
@@ -153,10 +111,6 @@ export class FarmUI {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.fx = new PanelFx(scene, BLOOM, GREEN_BURST, GOLD_BURST);
-    // once per game, like StatusHud's sun/moon: TownScene can restart (map
-    // editor), and baking an existing key again draws over the old texture
-    if (!scene.textures.exists("crop-pumpkin")) makeTexture(scene, "crop-pumpkin", PUMPKIN_TILE, PUMPKIN_PALETTE);
-    if (!scene.textures.exists("crop-moonflower")) makeTexture(scene, "crop-moonflower", MOONFLOWER_TILE, MOONFLOWER_PALETTE);
 
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
