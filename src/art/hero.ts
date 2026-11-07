@@ -270,12 +270,15 @@ function drawHero(this: Phaser.Scene): void {
 }
 
 // One idle frame per look for the pickers (ui/LookPicker.ts), under keys of
-// their own, so showing all four at once never touches the hero-* textures.
+// their own, so showing all four at once never touches the hero-* textures;
+// and the battle's frame at twice the cells in that look ("@hd"), which the
+// look picker draws at 2x: its 2px cells, where the idle frame at 2x was 4px.
 // Drawn through `scene`, not `this`: check:art reads `makeTexture(this, ...)`
 // calls with a named palette, and a computed one would throw its pairing off.
 function drawLookPreviews(scene: Phaser.Scene): void {
   HERO_LOOKS.forEach((_, i) => {
     makeTexture(scene, `hero-look-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_LEGS_IDLE_32], heroLookPalette(i), ART_PX);
+    makeTexture(scene, `hero-look-${i}@hd`, [...HERO_HEAD_64, ...HERO_TORSO_64, ...HERO_LEGS_STRIDE_A_64], heroLookPalette(i), 1);
   });
 }
 
