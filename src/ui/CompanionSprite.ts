@@ -4,9 +4,13 @@ import { TILE } from "../levels";
 import { ENEMIES } from "../monsters";
 
 // How far behind the hero, along the path the hero actually walked, the
-// companion keeps: a body's width (the hero's is 40px) plus a little air, so
-// the two never overlap and a corner is cut the way the hero cut it.
-const FOLLOW_GAP = 44;
+// companion keeps (gapFor): half the hero's body (its 40px), half the
+// companion's texture at SCALE and a little air, so the two never overlap
+// side by side and a corner is cut the way the hero cut it. A 64px companion
+// keeps 56px back, the TROLL KING (96px) 72px.
+const HERO_HALF = 20;
+const AIR = 4;
+const gapFor = (width: number): number => HERO_HALF + (width * SCALE) / 2 + AIR;
 // the hero's path is sampled each time it has moved this far
 const TRAIL_STEP = 4;
 // a hero jump longer than this between two frames is a teleport (a door, a
@@ -15,26 +19,33 @@ const TELEPORT = TILE * 1.5;
 // where the companion appears on entry or after a teleport, the same gap
 // away: off the hero's left shoulder, else the first of the others clear of
 // a wall, water or tree (an ABYSS landing is often against the west wall)
-const BESIDE = [
-  { dx: -FOLLOW_GAP, dy: 4 },
-  { dx: FOLLOW_GAP, dy: 4 },
-  { dx: 0, dy: FOLLOW_GAP },
-  { dx: 0, dy: -FOLLOW_GAP },
+const besideAt = (gap: number) => [
+  { dx: -gap, dy: 4 },
+  { dx: gap, dy: 4 },
+  { dx: 0, dy: gap },
+  { dx: 0, dy: -gap },
 ];
-// a pet, not a second hero: the hero sprite is 64px, the field textures too
-const SCALE = 0.75;
+// Its field art as the map draws a roamer of its kind, 1x: a 32-cell grid at
+// ART_PX, a cell 2px as the hero's and every other sprite's, so a pet the
+// hero's size (64px; the TROLL KING, a giant, 96px as it roams the town). At
+// 0.75 its cells were 1.5px, 1px and 2px columns by turns.
+const SCALE = 1;
+// its shadow: the hero's own (pixelart.ts addGroundShadow) under a 64px
+// texture, in proportion under a bigger one
+const SHADOW_W = 40;
+const SHADOW_H = 16;
+const SHADOW_DY = 28;
 // a hop per step while walking, still when the hero stops
 const HOP_PX = 4;
 const HOP_MS = 280;
-const SHADOW_DY = 22;
 
 /**
  * The companion chosen in the Bestiary (B), trailing the hero in every
  * walkable scene. Purely cosmetic and collides with nothing — battle still
  * reads GameState.companion itself for the companion's attack. It walks the
- * hero's own path FOLLOW_GAP behind, stops when the hero stops, turns to the
- * way it walks, hops while it walks (not with reduced motion), and sorts in
- * front of or behind the hero by y. A change in the Bestiary shows at once,
+ * hero's own path a gap behind (gapFor), stops when the hero stops, turns to
+ * the way it walks, hops while it walks (not with reduced motion), and sorts
+ * in front of or behind the hero by y. A change in the Bestiary shows at once,
  * even behind an open panel: it re-checks GameState.companion every frame
  * after the update, while update() only feeds it the hero's position.
  */
@@ -49,13 +60,16 @@ export class CompanionSprite {
   // where the companion stood last frame, before its hop
   private last: { x: number; y: number };
   private walking = 0;
+  // how far behind the hero it keeps and its shadow under it, for its texture
+  private gap = gapFor(64);
+  private shadowDy = SHADOW_DY;
   private readonly calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   private readonly onPostUpdate = (_time: number, delta: number): void => this.step(delta);
 
   constructor(scene: Phaser.Scene, startX: number, startY: number) {
     this.scene = scene;
     this.hero = { x: startX, y: startY };
-    this.shadow = scene.add.ellipse(startX, startY, 30, 12, 0x000000, 0.35).setDepth(5).setVisible(false);
+    this.shadow = scene.add.ellipse(startX, startY, SHADOW_W, SHADOW_H, 0x000000, 0.35).setDepth(5).setVisible(false);
     this.sprite = scene.add.sprite(startX, startY, "slime").setScale(SCALE).setVisible(false);
     this.placeBeside();
     this.last = { ...this.trail[0] };
@@ -92,7 +106,7 @@ export class CompanionSprite {
 
   // a fresh path that starts beside the hero and runs to them
   private placeBeside(): void {
-    const spots = BESIDE.map(({ dx, dy }) => ({ x: this.hero.x + dx, y: this.hero.y + dy }));
+    const spots = besideAt(this.gap).map(({ dx, dy }) => ({ x: this.hero.x + dx, y: this.hero.y + dy }));
     this.trail = [spots.find((p) => !this.solidAt(p.x, p.y)) ?? spots[0], { ...this.hero }];
     this.walking = 0;
   }
@@ -108,7 +122,7 @@ export class CompanionSprite {
     if (GameState.companion !== this.currentName) {
       this.currentName = GameState.companion;
       const def = this.currentName ? Object.values(ENEMIES).find((e) => e.name === this.currentName) : undefined;
-      if (def) this.sprite.setTexture(def.texture);
+      if (def) this.fit(def.texture);
       else this.currentName = null;
     }
     const shown = this.currentName !== null;
@@ -116,9 +130,9 @@ export class CompanionSprite {
     this.shadow.setVisible(shown);
     if (!shown) return;
 
-    // the point FOLLOW_GAP back along the trail from the hero, and the trail
+    // the point a gap back along the trail from the hero, and the trail
     // trimmed to just past it
-    let left = FOLLOW_GAP;
+    let left = this.gap;
     let at = { ...this.trail[0] };
     for (let i = this.trail.length - 1; i > 0; i--) {
       const a = this.trail[i];
@@ -140,9 +154,18 @@ export class CompanionSprite {
     else if (dx < -0.3) this.sprite.setFlipX(false);
     this.last = at;
     this.sprite.setPosition(at.x, at.y - this.hop());
-    this.shadow.setPosition(at.x, at.y + SHADOW_DY);
+    this.shadow.setPosition(at.x, at.y + this.shadowDy);
     // the hero stands at depth 10: in front of them when lower on the screen
     this.sprite.setDepth(at.y > this.hero.y ? 10.5 : 9.5);
+  }
+
+  // a new companion's texture, its gap behind the hero and its shadow
+  private fit(texture: string): void {
+    this.sprite.setTexture(texture);
+    const k = (this.sprite.height * SCALE) / 64;
+    this.gap = gapFor(this.sprite.width);
+    this.shadow.setSize(SHADOW_W * k, SHADOW_H * k);
+    this.shadowDy = SHADOW_DY * k;
   }
 
   private hop(): number {
