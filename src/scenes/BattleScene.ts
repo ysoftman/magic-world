@@ -2212,10 +2212,12 @@ export class BattleScene extends Phaser.Scene {
   // speeds up while its size shrinks fast and then slowly, and its 140px
   // hop (a flier's FLY_LIFT less, being up that much already) peaks late
   // (p * p), over the hero rather than under the foe's stat window: checked
-  // in 0.001 steps for every catchable foe from the ground line, no top edge
-  // rises above y 247 (the TROLL KING's), 47px under the windows, and it
-  // clears the hero's head but for a brush of under 10ms. BATTLE SPEED
-  // applies: 0.88s at 1x.
+  // in 0.001 steps for every catchable foe from its rest on the ground line
+  // to its rest at COMPANION_SCALE, no opaque top edge rises above y 231 (the
+  // TROLL KING's, 96px at 2x shrinking), 31px under the windows, and it
+  // clears the hero's head (x 280..360, y 352..408) but for a brush of 12ms
+  // at most (the SALAMANDER's), under a frame. BATTLE SPEED applies: 0.88s
+  // at 1x.
   private async catchFx(): Promise<void> {
     const sprite = this.enemySprite;
     this.enemyIdle?.stop();
@@ -2441,16 +2443,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // FIREBALL: the FIRE IMP throws one from where it stands, with a hop
-  // toward the foe, in place of a dash: FIRE's own shot at 1.5x, a 3px cell
-  // (the imp's own when it stood at 1.5x). onHit as it lands (its burst,
-  // companionSkill).
+  // toward the foe, in place of a dash: FIRE's own shot at the imp's 2px
+  // cell (COMPANION_SCALE). onHit as it lands (its burst, companionSkill).
   private async companionCast(onHit: () => void): Promise<void> {
     const sprite = this.companionSprite;
     if (!sprite) return;
     const foe = this.enemySprite;
     const [x, y] = [sprite.x + COMPANION_SHOT_X, sprite.y];
     this.tweens.add({ targets: sprite, x: sprite.x + 16, duration: this.anim(90), yoyo: true });
-    const shot = loopFx(this, "fx-fireball", x, y, this.anim(30), 1.5).setRotation(Math.atan2(foe.y - y, foe.x - x));
+    const shot = loopFx(this, "fx-fireball", x, y, this.anim(30), COMPANION_SCALE).setRotation(Math.atan2(foe.y - y, foe.x - x));
     await this.tweenPromise(shot, { x: foe.x, y: foe.y }, this.anim(COMPANION_SHOT_MS));
     shot.destroy();
     shake(this.cameras.main, 100, 0.006);
@@ -2458,17 +2459,19 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // PILFER: three coins (fx.ts fx-coin) spin off the foe in arcs, a beat
-  // apart, to the goblin's place as it dashes back, at 1.5x (a 3px cell, the
-  // goblin's own when it stood at 1.5x). Each next one hops higher; the
-  // highest (PILFER_HOP + 48) tops out at y 206 over a flier, the windows'
-  // bottom 200.
+  // apart, to the goblin's place as it dashes back, at its 2px cell
+  // (COMPANION_SCALE). Each next one hops higher. The highest (PILFER_HOP +
+  // 48), off the highest flier (the NIGHT WISP), has its top at y 181 at its
+  // peak, between the windows (x 496..784, under the NIGHT/ARENA/ABYSS note
+  // to y 116), and no higher than y 202 where it passes over one (their
+  // bottom 200), off a coin's opaque texels frame by frame.
   private pilferCoins(): void {
     const goblin = this.companionSprite;
     if (!goblin) return;
     const [fromX, fromY] = [this.enemySprite.x, this.enemySprite.y];
     const [toX, toY] = [COMPANION_X, goblin.y];
     for (let i = 0; i < 3; i++) {
-      const coin = loopFx(this, "fx-coin", fromX, fromY, this.anim(30), 1.5).setVisible(false);
+      const coin = loopFx(this, "fx-coin", fromX, fromY, this.anim(30), COMPANION_SCALE).setVisible(false);
       this.tweens.addCounter({
         from: 0,
         to: 1,
