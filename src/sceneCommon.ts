@@ -373,7 +373,8 @@ function buildFrayedEdges(
 
 // Border dressing (addBorderDressing): a darker filler between neighbouring
 // wall objects, a hair outward, behind them; and in front, now and then, a
-// full one or a small one (a shrub, a stone) set in toward the field.
+// full one or a small one (a shrub, a stone, half a wall tile) set in toward
+// the field.
 const BORDER_BACK_DEPTH = OBJECT_LAYER_DEPTH - 0.2;
 const BORDER_FRONT_DEPTH = OBJECT_LAYER_DEPTH + 0.2;
 const BORDER_BACK_SHADE = 0.72;
@@ -400,16 +401,21 @@ function tileFrame(scene: Phaser.Scene, textureKey: string, index: number): stri
 const tilesetTexels = new Map<string, ImageData>();
 
 /**
- * Tile `index` of a tileset (32 cells, ART_PX) redrawn `cells` cells a side,
- * each cell taken from the nearest one of the tile's own: a bigger or smaller
- * copy that keeps the 2px cell the map is drawn in. A texture of its own,
- * kept for the page. setScale() on the tile stretched its cells to 2.4px or
- * 1.2px, which drew as uneven 1px and 3px steps along every wall.
+ * Tile `index` of a tileset (32 cells, ART_PX) at half its size: 16 cells,
+ * still ART_PX, a texture of its own kept for the page. Each cell is one 2x2
+ * block of the tile's: the tile's outline (its darkest colour) where the block
+ * meets the empty space round it, so the outline stays whole; else the colour
+ * most of the block is, the darker of two on a tie; empty where most of it is.
+ *
+ * The dressing used to setScale() the tile (0.55-1.19), which stretched its
+ * 2px cells to 1.1-2.4px and drew uneven 1px and 3px steps along every wall.
+ * Resampled to round(32 x scale) cells instead, it doubled or dropped rows and
+ * columns of the drawing: outlines two cells thick or broken, the boulder's
+ * crack three cells wide. So the dressing has two sizes, the tile as drawn
+ * and this half.
  */
-function sizedTile(scene: Phaser.Scene, textureKey: string, index: number, cells: number): { key: string; frame?: string } {
-  const side = TILE / ART_PX;
-  if (cells === side) return { key: textureKey, frame: tileFrame(scene, textureKey, index) };
-  const key = `${textureKey}#${index}@${cells}`;
+function halfTile(scene: Phaser.Scene, textureKey: string, index: number): { key: string; frame?: string } {
+  const key = `${textureKey}#${index}@half`;
   if (scene.textures.exists(key)) return { key };
   let texels = tilesetTexels.get(textureKey);
   if (!texels) {
@@ -419,44 +425,65 @@ function sizedTile(scene: Phaser.Scene, textureKey: string, index: number, cells
     texels = read;
     tilesetTexels.set(textureKey, read);
   }
-  const size = cells * ART_PX;
+  const data = texels.data;
+  const cells = TILE / ART_PX;
+  // the colour (RGBA as one number, 0 for empty) of cell (x, y) of the tile
+  const cell = (x: number, y: number): number => {
+    const j = (y * ART_PX * texels.width + index * TILE + x * ART_PX) * 4;
+    return data[j + 3] ? ((data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | 0xff) >>> 0 : 0;
+  };
+  const luma = (c: number): number => 0.299 * (c >>> 24) + 0.587 * ((c >>> 16) & 255) + 0.114 * ((c >>> 8) & 255);
+  let outline = 0;
+  for (let y = 0; y < cells; y++)
+    for (let x = 0; x < cells; x++) {
+      const c = cell(x, y);
+      if (c && (!outline || luma(c) < luma(outline))) outline = c;
+    }
+  const half = cells / 2;
+  const size = half * ART_PX;
   const canvas = readableCanvas(size, size);
   const ctx = canvas.getContext("2d");
   if (!ctx) return { key: textureKey, frame: tileFrame(scene, textureKey, index) };
   const out = ctx.createImageData(size, size);
-  const from = (c: number): number => Math.floor(((c + 0.5) * side) / cells) * ART_PX;
-  for (let y = 0; y < size; y++) {
-    const sy = from(Math.floor(y / ART_PX)) + (y % ART_PX);
-    for (let x = 0; x < size; x++) {
-      const sx = index * TILE + from(Math.floor(x / ART_PX)) + (x % ART_PX);
-      const i = (y * size + x) * 4;
-      const j = (sy * texels.width + sx) * 4;
-      for (let k = 0; k < 4; k++) out.data[i + k] = texels.data[j + k];
+  for (let ty = 0; ty < half; ty++)
+    for (let tx = 0; tx < half; tx++) {
+      const block = [cell(2 * tx, 2 * ty), cell(2 * tx + 1, 2 * ty), cell(2 * tx, 2 * ty + 1), cell(2 * tx + 1, 2 * ty + 1)];
+      const solid = block.filter((c) => c);
+      let pick = 0;
+      if (solid.length >= 2) {
+        if (solid.length < 4 && solid.includes(outline)) pick = outline;
+        else {
+          const count = new Map<number, number>();
+          for (const c of solid) count.set(c, (count.get(c) ?? 0) + 1);
+          pick = [...count].sort((a, b) => b[1] - a[1] || luma(a[0]) - luma(b[0]))[0][0];
+        }
+      }
+      for (let dy = 0; dy < ART_PX; dy++)
+        for (let dx = 0; dx < ART_PX; dx++) {
+          const i = ((ty * ART_PX + dy) * size + tx * ART_PX + dx) * 4;
+          out.data.set([pick >>> 24, (pick >>> 16) & 255, (pick >>> 8) & 255, pick & 255], i);
+        }
     }
-  }
   ctx.putImageData(out, 0, 0);
   scene.textures.addCanvas(key, canvas);
   return { key };
 }
 
-// where to put an image `cells` cells a side so its top-left corner, and so
-// every cell, sits on the 2px grid: the nearest centre to `at` that does
-const onGrid = (at: number, cells: number): number => {
-  const half = (cells * ART_PX) / 2;
-  return Math.round((at - half) / ART_PX) * ART_PX + half;
-};
+// where to put an image `px` px a side so its top-left corner, and so every
+// cell, sits on the 2px grid: the nearest centre to `at` that does
+const onGrid = (at: number, px: number): number => Math.round((at - px / 2) / ART_PX) * ART_PX + px / 2;
 
 /**
  * Dresses a field's outer wall — the ring of trees or rocks round its edge —
  * so it reads as a wood or a rock face instead of one object stamped every
- * tile: behind the ring, a darker, larger one between each pair; in front,
- * here and there a second rank or a shrub or stone, set in toward the field
- * on the north, west and east (never the south, where it would be drawn
- * under a hero standing behind it). Drawn from the skin's own wall tile, so
- * seasons follow; picked by coordinate hash, so a cell always dresses the
- * same. Nothing collides — the walkable ground is exactly what it was — and
- * nothing is put within two tiles of `clear` (the exit gap and its sign, the
- * cave mouth).
+ * tile: behind the ring, a darker one between each pair; in front, here and
+ * there a second rank or a shrub or stone (the wall tile at half size), set
+ * in toward the field on the north, west and east (never the south, where it
+ * would be drawn under a hero standing behind it). Drawn from the skin's own
+ * wall tile, so seasons follow; picked by coordinate hash, so a cell always
+ * dresses the same. Nothing collides — the walkable ground is exactly what it
+ * was — and nothing is put within two tiles of `clear` (the exit gap and its
+ * sign, the cave mouth).
  */
 export function addBorderDressing(
   scene: Phaser.Scene,
@@ -468,13 +495,13 @@ export function addBorderDressing(
   const w = level[0]?.length ?? 0;
   const near = (x: number, y: number): boolean =>
     clear.some((p) => Math.abs(Math.floor(p.x / TILE) - x) <= 2 && Math.abs(Math.floor(p.y / TILE) - y) <= 2);
-  const side = TILE / ART_PX;
-  // a wall tile at `scale` of its size, as a tile of whole 2px cells, its
-  // centre moved at most a pixel so the cells sit on the grid
-  const dress = (tile: number, hash: number, scale: number, x: number, y: number): Phaser.GameObjects.Image => {
-    const cells = Math.round(side * scale);
-    const { key, frame } = sizedTile(scene, skin.tiles, renderIndexes(tile)[hash % renderIndexes(tile).length], cells);
-    return scene.add.image(onGrid(x, cells), onGrid(y, cells), key, frame);
+  // a wall tile, whole or at half size, its centre moved at most a pixel so
+  // its cells sit on the 2px grid
+  const dress = (tile: number, hash: number, half: boolean, x: number, y: number): Phaser.GameObjects.Image => {
+    const index = renderIndexes(tile)[hash % renderIndexes(tile).length];
+    const { key, frame } = half ? halfTile(scene, skin.tiles, index) : { key: skin.tiles, frame: tileFrame(scene, skin.tiles, index) };
+    const px = half ? TILE / 2 : TILE;
+    return scene.add.image(onGrid(x, px), onGrid(y, px), key, frame);
   };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -490,7 +517,7 @@ export function addBorderDressing(
       const nx = x + ax;
       const ny = y + ay;
       if (hash % 3 !== 0 && OBJECT_TILES.has(level[ny]?.[nx] ?? -1) && !near(nx, ny)) {
-        dress(tile, hash >>> 3, 1 + ((hash >>> 6) % 20) / 100, cx + (ax * TILE) / 2 - ix * 12, cy + (ay * TILE) / 2 - iy * 12)
+        dress(tile, hash >>> 3, false, cx + (ax * TILE) / 2 - ix * 12, cy + (ay * TILE) / 2 - iy * 12)
           .setTint(shade(BORDER_BACK_SHADE))
           .setFlipX(((hash >>> 9) & 1) === 1)
           .setDepth(BORDER_BACK_DEPTH);
@@ -501,13 +528,7 @@ export function addBorderDressing(
       const small = front > 0;
       const jitter = ((hash >>> 15) % 25) - 12;
       const reach = small ? BORDER_FRONT_REACH + 0.1 : BORDER_FRONT_REACH;
-      dress(
-        tile,
-        hash >>> 18,
-        small ? 0.55 + ((hash >>> 20) % 20) / 100 : 0.9 + ((hash >>> 20) % 15) / 100,
-        cx + ix * TILE * reach + ax * jitter,
-        cy + iy * TILE * reach + ay * jitter,
-      )
+      dress(tile, hash >>> 18, small, cx + ix * TILE * reach + ax * jitter, cy + iy * TILE * reach + ay * jitter)
         .setTint(shade(small ? 0.85 : 0.95))
         .setFlipX(((hash >>> 23) & 1) === 1)
         .setDepth(BORDER_FRONT_DEPTH);
