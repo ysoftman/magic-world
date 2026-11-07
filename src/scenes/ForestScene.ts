@@ -431,7 +431,7 @@ export class ForestScene extends Phaser.Scene {
   private spawnTreasures(): void {
     for (const t of FOREST_TREASURE_POS) {
       const opened = GameState.openedTreasures.includes(t.id);
-      addGroundShadow(this, t, { w: 40, h: 14, yOffset: 24 });
+      addGroundShadow(this, t, { w: 40, h: 16, yOffset: 24 });
       const chest = this.add.image(t.x, t.y, opened ? "chest-open" : "chest").setDepth(9);
       if (opened) continue;
       const zone = this.add.zone(t.x, t.y, TILE, TILE);

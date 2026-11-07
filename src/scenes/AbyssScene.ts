@@ -749,7 +749,7 @@ export class AbyssScene extends Phaser.Scene {
     const c = this.floor.chest;
     if (!c || !run) return;
     const at = cellCenter(c);
-    addGroundShadow(this, at, { w: 40, h: 14, yOffset: 24 });
+    addGroundShadow(this, at, { w: 40, h: 16, yOffset: 24 });
     const chest = this.add.image(at.x, at.y, run.chestOpened ? "chest-open" : "chest").setDepth(9);
     if (run.chestOpened) return;
     const zone = this.add.zone(at.x, at.y, TILE, TILE);

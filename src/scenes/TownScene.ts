@@ -393,7 +393,7 @@ export class TownScene extends Phaser.Scene {
     // shadow shares the depth and is added first, so it stays under the house.
     this.track(
       "HOUSE_POS",
-      addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 118, h: 22, yOffset: 66, depth: HOUSE_DEPTH }),
+      addGroundShadow(this, { x: HOUSE_POS.x + TILE, y: HOUSE_POS.y + TILE }, { w: 120, h: 24, yOffset: 66, depth: HOUSE_DEPTH }),
     );
     this.houseImage = this.track(
       "HOUSE_POS",
@@ -967,7 +967,7 @@ export class TownScene extends Phaser.Scene {
   // a keeper's prop on its own ground shadow, carried with them in the
   // editor; solid at its foot, like a tree trunk, so the hero walks round it
   private addProp(landmark: string, pos: { x: number; y: number }, key: string): void {
-    this.track(landmark, addGroundShadow(this, pos, { w: 52, h: 14 }));
+    this.track(landmark, addGroundShadow(this, pos, { w: 52, h: 16 }));
     this.track(landmark, this.add.image(pos.x, pos.y, key).setDepth(9));
     this.addBlocker(landmark, pos.x, pos.y + 12, 48, 24);
   }
@@ -983,7 +983,7 @@ export class TownScene extends Phaser.Scene {
     const { key, lights, hearth } = WORKPLACES[landmark];
     const x = pos.x + TILE / 2;
     const y = pos.y - TILE * 1.5;
-    this.track(landmark, addGroundShadow(this, { x, y }, { w: 120, h: 18, yOffset: 60, depth: HOUSE_DEPTH }));
+    this.track(landmark, addGroundShadow(this, { x, y }, { w: 120, h: 20, yOffset: 60, depth: HOUSE_DEPTH }));
     this.track(landmark, this.add.image(x, y, seasonLook("town") === "winter" ? `${key}-winter` : key).setDepth(HOUSE_DEPTH));
     // at the art's depth, added after it so over it, under the hero (10)
     if (hearth) this.track(landmark, addProp(this, HEARTH, x + hearth.dx, y + hearth.dy, HOUSE_DEPTH));
@@ -1019,7 +1019,7 @@ export class TownScene extends Phaser.Scene {
   // the faces in it violet.
   private addAbyssGate(): void {
     const pos = ABYSS_GATE_POS;
-    this.track("ABYSS_GATE_POS", addGroundShadow(this, pos, { w: 56, h: 14 }));
+    this.track("ABYSS_GATE_POS", addGroundShadow(this, pos, { w: 56, h: 16 }));
     this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate").setDepth(9));
     const glow = this.track("ABYSS_GATE_POS", this.add.image(pos.x, pos.y, "abyss-gate-glow").setDepth(9));
     this.tweens.add({ targets: glow, alpha: 0.2, duration: 1400, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
