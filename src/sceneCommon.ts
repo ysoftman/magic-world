@@ -395,6 +395,10 @@ function tileFrame(scene: Phaser.Scene, textureKey: string, index: number): stri
   return key;
 }
 
+// halfTile keeps a tile's most saturated colour through its 2x2 blocks when
+// it covers no more than this share of the tile
+const ACCENT_SHARE = 0.03;
+
 // A tileset's texels, read once a page per tileset: its canvas is a GPU one
 // (generateTexture), so each read waits on the GPU, and the dressing asks for
 // a score of tiles a map.
@@ -404,8 +408,14 @@ const tilesetTexels = new Map<string, ImageData>();
  * Tile `index` of a tileset (32 cells, ART_PX) at half its size: 16 cells,
  * still ART_PX, a texture of its own kept for the page. Each cell is one 2x2
  * block of the tile's: the tile's outline (its darkest colour) where the block
- * meets the empty space round it, so the outline stays whole; else the colour
- * most of the block is, the darker of two on a tie; empty where most of it is.
+ * meets the empty space round it, so the outline stays whole; else its accent
+ * where the block has any, so a line one or two cells wide stays a line;
+ * else the colour most of the block is, the darker of two on a tie; empty
+ * where most of it is. The accent is the tile's most saturated colour when it
+ * is a rare one (ACCENT_SHARE): the boulder's lava crack (1.5% of it, chroma
+ * 222), which the majority dropped from block after block. No tree has one:
+ * their most saturated colour is a canopy tone, 15-19% of the tile, and the
+ * cave's crack is a dark grey seam.
  *
  * The dressing used to setScale() the tile (0.55-1.19), which stretched its
  * 2px cells to 1.1-2.4px and drew uneven 1px and 3px steps along every wall.
@@ -433,12 +443,22 @@ function halfTile(scene: Phaser.Scene, textureKey: string, index: number): { key
     return data[j + 3] ? ((data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | 0xff) >>> 0 : 0;
   };
   const luma = (c: number): number => 0.299 * (c >>> 24) + 0.587 * ((c >>> 16) & 255) + 0.114 * ((c >>> 8) & 255);
+  const chroma = (c: number): number => {
+    const rgb = [c >>> 24, (c >>> 16) & 255, (c >>> 8) & 255];
+    return Math.max(...rgb) - Math.min(...rgb);
+  };
   let outline = 0;
+  const tally = new Map<number, number>();
   for (let y = 0; y < cells; y++)
     for (let x = 0; x < cells; x++) {
       const c = cell(x, y);
-      if (c && (!outline || luma(c) < luma(outline))) outline = c;
+      if (!c) continue;
+      tally.set(c, (tally.get(c) ?? 0) + 1);
+      if (!outline || luma(c) < luma(outline)) outline = c;
     }
+  const solidCells = [...tally.values()].reduce((a, b) => a + b, 0);
+  const [vivid = 0, vividCells = 0] = [...tally].sort((a, b) => chroma(b[0]) - chroma(a[0]))[0] ?? [];
+  const accent = vividCells <= solidCells * ACCENT_SHARE ? vivid : 0;
   const half = cells / 2;
   const size = half * ART_PX;
   const canvas = readableCanvas(size, size);
@@ -452,6 +472,7 @@ function halfTile(scene: Phaser.Scene, textureKey: string, index: number): { key
       let pick = 0;
       if (solid.length >= 2) {
         if (solid.length < 4 && solid.includes(outline)) pick = outline;
+        else if (accent && solid.includes(accent)) pick = accent;
         else {
           const count = new Map<number, number>();
           for (const c of solid) count.set(c, (count.get(c) ?? 0) + 1);
