@@ -3038,8 +3038,9 @@ export class BattleScene extends Phaser.Scene {
   // Puts a fighter, already at its scale, on the ground at groundY (a flier
   // FLY_LIFT over it) with a shadow there, in place of the shadow it had (a
   // caught monster's new texture). The shadow spans the feet two cells wider
-  // each side, or FLY_SHADOW_W of the body for a flier; it lies on the
-  // backdrop's 4px cells, 3 to 5 rows of them, and under every fighter.
+  // each side, or FLY_SHADOW_W of the body for a flier, 12 to 20px tall (3 to
+  // 5 cells of 4px), stepped in 2px as the fighters and the backdrop are, and
+  // lies under every fighter.
   private stand(sprite: Phaser.GameObjects.Sprite, groundY: number, flying = false, old?: Stance): Stance {
     old?.shadow.destroy();
     const scale = sprite.scaleX;
@@ -3053,10 +3054,12 @@ export class BattleScene extends Phaser.Scene {
     const half = Math.max(PIXEL * 2, Math.round(w / 2 / PIXEL) * PIXEL);
     const h = Phaser.Math.Clamp(Math.round((half * 2 * 0.16) / PIXEL) * PIXEL, PIXEL * 3, PIXEL * 5);
     const shadow = this.add.graphics({ x: sprite.x, y: groundY }).fillStyle(0x000000, 1);
-    for (let top = -h / 2; top < h / 2; top += PIXEL) {
-      const mid = (top + PIXEL / 2) / (h / 2);
-      const hw = Math.round((half * Math.sqrt(1 - mid * mid)) / PIXEL) * PIXEL;
-      shadow.fillRect(-hw, top, hw * 2, PIXEL);
+    // its rows and their ends in the battlers' 2px cells (ART_PX); its width
+    // and height stay whole 4px cells as above
+    for (let top = -h / 2; top < h / 2; top += ART_PX) {
+      const mid = (top + ART_PX / 2) / (h / 2);
+      const hw = Math.round((half * Math.sqrt(1 - mid * mid)) / ART_PX) * ART_PX;
+      shadow.fillRect(-hw, top, hw * 2, ART_PX);
     }
     this.children.moveBelow(shadow, this.enemySprite);
     const stance = {
