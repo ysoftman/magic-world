@@ -28,8 +28,8 @@ import { ART_PX, makeTexture } from "../pixelart";
 // the bodies still read there (screenshots). If one ever needs more, lift
 // the backdrop a little behind that spot, weighed against backdrops.ts's
 // nothing-bright-behind-the-characters rule.
-const SLIME_PALETTE = { o: 0x082419, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
-const GOLD_SLIME_PALETTE = { o: 0x6b4508, s: 0xb7791f, g: 0xe8b923, m: 0xfad643, h: 0xfdeea0, w: 0xfffdf0 };
+export const SLIME_PALETTE = { o: 0x082419, s: 0x1c8a5e, g: 0x2fbd70, m: 0x4ade80, h: 0x86eb9c, w: 0xd6fadf };
+export const GOLD_SLIME_PALETTE = { o: 0x6b4508, s: 0xb7791f, g: 0xe8b923, m: 0xfad643, h: 0xfdeea0, w: 0xfffdf0 };
 const SLIME_32 = [
   "................................",
   "................................",
@@ -143,7 +143,7 @@ const KING_SLIME_48 = [
 // read as big goblins; they have their own grids below. K is dark enough to
 // stand off the forest's moss and scrub (at 0x173d2a it was within RGB
 // distance 40 of them all round), and no darker.
-const GOBLIN_PALETTE = {
+export const GOBLIN_PALETTE = {
   K: 0x0d261a,
   S: 0x4fae72,
   s: 0x7fdc9c,
@@ -155,7 +155,7 @@ const GOBLIN_PALETTE = {
   R: 0x5c3a1a,
   f: 0xf1fdf5,
 };
-const CURSED_GOBLIN_PALETTE = {
+export const CURSED_GOBLIN_PALETTE = {
   K: 0x3b0d4f,
   S: 0x8a3fb5,
   s: 0xc06ee8,
@@ -280,7 +280,7 @@ const TROLL_48 = [
 // dark mask on the brow, red eyes, a pale muzzle tapering to the nose, fangs
 // and two front legs. K just dark enough to clear the forest's scrub, which
 // swallowed the whole outline at 0x1e2433 (a companion follows into it).
-const WOLF_PALETTE = {
+export const WOLF_PALETTE = {
   K: 0x171c28,
   D: 0x56647a,
   G: 0x75849a,
@@ -331,7 +331,7 @@ const WOLF_32 = [
 // tip, lit from within (white core out to a dark rim), two hollow eyes either
 // side of the core and a curling tail. The 16-cell wisp stayed blocky because
 // Scale2x pulled its eyes lopsided; this one is drawn at ART_PX as it stands.
-const WISP_PALETTE = { k: 0x082f49, d: 0x0c4a6e, c: 0x1d7fb8, C: 0x38bdf8, l: 0x8fd7fa, w: 0xe8f7ff };
+export const WISP_PALETTE = { k: 0x082f49, d: 0x0c4a6e, c: 0x1d7fb8, C: 0x38bdf8, l: 0x8fd7fa, w: 0xe8f7ff };
 const WISP_32 = [
   ".................kk.............",
   ".................kk.............",
@@ -369,7 +369,7 @@ const WISP_32 = [
 
 // frost moth on a 32-cell grid: four frosted wings with an eye-spot each, a
 // furred body, feathered antennae and red eyes
-const FROST_MOTH_PALETTE = {
+export const FROST_MOTH_PALETTE = {
   K: 0x1c4f6e,
   d: 0x0369a1,
   b: 0x38bdf8,
@@ -384,7 +384,7 @@ const FROST_MOTH_PALETTE = {
 // AURORA MOTH (the snow field's jackpot): the frost moth's wings in the
 // northern lights, violet at the edge through green to a pale pink, a lilac
 // body, gold eyes, on a deep violet outline that holds against the snow
-const AURORA_MOTH_PALETTE = {
+export const AURORA_MOTH_PALETTE = {
   K: 0x2e1065,
   d: 0x6d28d9,
   b: 0x34d399,
@@ -435,7 +435,7 @@ const FROST_MOTH_32 = [
 // left), long arms, a blue face (a/s) with brows, a glint in each eye and the
 // flat grumpy mouth it always had -- Scale2x had turned that mouth down, so
 // the 16-cell yeti stayed blocky
-const YETI_PALETTE = {
+export const YETI_PALETTE = {
   K: 0x334155,
   S: 0x94a3b8,
   F: 0xcbd5e1,
@@ -552,11 +552,11 @@ const ICE_GOLEM_48 = [
 
 // Volcano roster. The magma slime is SLIME_32 again in a molten ramp, the
 // same one-grid-many-palettes trick as the king slime; the rest are new shapes.
-const MAGMA_SLIME_PALETTE = { o: 0x3b0d06, s: 0x7c2d12, g: 0xc2410c, m: 0xf97316, h: 0xfdba74, w: 0xfef3c7 };
+export const MAGMA_SLIME_PALETTE = { o: 0x3b0d06, s: 0x7c2d12, g: 0xc2410c, m: 0xf97316, h: 0xfdba74, w: 0xfef3c7 };
 // fire imp on a 32-cell grid: bone horns (pale on their lit side, so they read
 // on the ash), slanted glowing eyes, a fanged grin, flame-orange wings on
 // their bones and a lit tail tip
-const FIRE_IMP_PALETTE = {
+export const FIRE_IMP_PALETTE = {
   K: 0x1c0a0a,
   R: 0x991b1b,
   r: 0xdc2626,
@@ -607,7 +607,7 @@ const FIRE_IMP_32 = [
 // side-on fire lizard on a 32-cell grid: flame tongues along its spine (a
 // white-hot root, yellow, orange tips), dark spots, a pale belly, an eye with
 // a pupil and a tail hooked under it
-const SALAMANDER_PALETTE = {
+export const SALAMANDER_PALETTE = {
   K: 0x1c0a0a,
   d: 0x7c2d12,
   O: 0xc2410c,
@@ -728,7 +728,7 @@ const FLAME_DRAKE_48 = [
 // scalloped membranes (d/B), a furred body (B b z q), red eyes and an open
 // screech with fangs. The membrane sits a step lighter than the old bat's so
 // it still stands off the cave floor without the old white mouth.
-const BAT_PALETTE = {
+export const BAT_PALETTE = {
   K: 0x1e0b3d,
   d: 0x5b21b6,
   B: 0x7c3aed,
@@ -778,7 +778,7 @@ const BAT_32 = [
 // wasp on a 32-cell grid: a big yellow head with black visor eyes (a glint
 // each) and mandibles, glassy wings (v w W) and a striped abdomen whose black
 // bands catch a sheen (j) on the lit side
-const WASP_PALETTE = {
+export const WASP_PALETTE = {
   K: 0x2a1c05,
   O: 0xb06f06,
   Y: 0xe8a20c,
@@ -795,7 +795,7 @@ const WASP_PALETTE = {
 // SILVER WASP (the forest's jackpot): the same wasp in polished steel over
 // near-black bands and glassy wings, its outline near black: a blue-grey
 // 0x1c1d26 lost 39% of it to the forest's dark green scrub
-const SILVER_WASP_PALETTE = {
+export const SILVER_WASP_PALETTE = {
   K: 0x141018,
   O: 0x5f6675,
   Y: 0x9aa1ae,
@@ -847,7 +847,7 @@ const WASP_32 = [
 // spider on a 32-cell grid: legs arched up and out (two cells wide, lit along
 // one), a big pair of red eyes over a small pair, fangs and an hourglass on
 // its back
-const SPIDER_PALETTE = {
+export const SPIDER_PALETTE = {
   K: 0x1e0b3d,
   d: 0x5b21b6,
   B: 0x7c3aed,
@@ -898,7 +898,7 @@ const SPIDER_32 = [
 // orc on a 32-cell grid: olive skin (a step off the goblin's mint and the
 // forest floor's blue-green), a topknot, a heavy brow over red eyes, tusks, a
 // bandolier and a club in its right hand
-const ORC_PALETTE = {
+export const ORC_PALETTE = {
   K: 0x1f2a0c,
   S: 0x5a7a2a,
   s: 0x7fa23a,
