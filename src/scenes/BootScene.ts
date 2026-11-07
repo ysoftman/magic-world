@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { bakeHdBosses } from "../art/hdBosses";
 import { bakeHdMonsters } from "../art/hdMonsters";
 import { bakeHeroArt } from "../art/hero";
 import { bakeIcons } from "../art/icons";
@@ -49,6 +50,7 @@ export class BootScene extends Phaser.Scene {
     bakeNpcs.call(this);
     bakeMonsters.call(this);
     bakeHdMonsters.call(this);
+    bakeHdBosses.call(this);
     bakeProps.call(this);
     bakeIcons.call(this);
     bakeLandmarks.call(this);

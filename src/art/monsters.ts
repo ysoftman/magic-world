@@ -10,8 +10,9 @@ import { ART_PX, makeTexture } from "../pixelart";
 // GOLEM, FLAME DRAKE) are 48-cell grids, a 96px texture; the rest are 32
 // cells, 64px. The five were 32-cell art drawn at 1.5x in the field (3px
 // cells) and 3x in battle (6px), coarser than everything round them. At 96px
-// they draw at 1x and 2x, as big as they were, in the field's 2px and the
-// battle's 4px cells, half as many cells again across.
+// they draw at 1x in the field, as big as they were, on its 2px cells. The
+// battle draws every monster from its own grid twice as dense (art/hdMonsters.ts,
+// art/hdBosses.ts, under "<key>@hd") at 2x, on 2px cells as well.
 
 // The slimes on a 32-cell grid at ART_PX: one dome lit from the top left
 // (shadow / base / light / highlight bands off an ellipsoid), a specular blob
@@ -70,7 +71,7 @@ const SLIME_32 = [
 // (c y Y, the TROLL KING's gold) with a blue gem in its band (j J). It wore
 // SLIME_32, a red slime and nothing more. Its outline o, the red's darkest
 // step, clears the cave floor it roams by RGB distance 57.
-const KING_SLIME_PALETTE = {
+export const KING_SLIME_PALETTE = {
   o: 0x631028,
   s: 0x99182f,
   g: 0xcf2130,
@@ -82,6 +83,8 @@ const KING_SLIME_PALETTE = {
   Y: 0xfde68a,
   j: 0x38bdf8,
   J: 0x1d4ed8,
+  // the battle grid's (art/hdBosses.ts) soft edge round the specular blob
+  v: 0xfbb69e,
 };
 const KING_SLIME_48 = [
   "................................................",
@@ -210,7 +213,7 @@ const GOBLIN_32 = [
 // eyes, a broad nose, an underbite with tusks (t) and lower teeth, a
 // loincloth and short bowed legs. Its crown reaches the top row: at 2x in
 // battle that is y 264, under the enemy window (to 200).
-const TROLL_PALETTE = {
+export const TROLL_PALETTE = {
   K: 0x141c14,
   S: 0x4a584c,
   s: 0x6f7f70,
@@ -224,6 +227,10 @@ const TROLL_PALETTE = {
   y: 0xfacc15,
   Y: 0xfde68a,
   g: 0xdc2626,
+  // the battle grid's (art/hdBosses.ts): the tusks' and nails' shaded side,
+  // the crown stones' glint
+  T: 0xb3ad94,
+  G: 0xfecaca,
 };
 const TROLL_48 = [
   ".................KK....KK....KK.................",
@@ -486,7 +493,7 @@ const YETI_32 = [
 // ridges (q) and dark valleys (d) between its facets, a dark crack at its
 // core, crystal clusters on its shoulders and three on its helm, glowing eyes
 // in a dark visor, chamfered stone arms and knuckled, cracked fists (J j H)
-const ICE_GOLEM_PALETTE = {
+export const ICE_GOLEM_PALETTE = {
   K: 0x0c3440,
   d: 0x0e7490,
   c: 0x22d3ee,
@@ -660,7 +667,7 @@ const SALAMANDER_32 = [
 // a snout lit along its top with nostrils and teeth at the corners, cheek
 // spikes, a glowing throat and belly of plates, small clawed forelimbs,
 // clawed feet and a spaded tail. It stands (not `flying`, src/monsters.ts).
-const FLAME_DRAKE_PALETTE = {
+export const FLAME_DRAKE_PALETTE = {
   K: 0x1c0a0a,
   R: 0x7f1d1d,
   r: 0xb91c1c,
@@ -673,6 +680,8 @@ const FLAME_DRAKE_PALETTE = {
   Y: 0xfef08a,
   n: 0x78716c,
   N: 0xd6d3d1,
+  // the battle grid's (art/hdBosses.ts) scales on the darkest red
+  D: 0x5a1414,
 };
 const FLAME_DRAKE_48 = [
   "...............KKK............KKK...............",
@@ -957,7 +966,7 @@ const ORC_32 = [
 // the head's moss, a glowing crack at its core (it regenerates) and seams
 // (c) in the stone. K just dark enough to clear the forest's scrub, its boss
 // zone, which swallowed the whole outline at 0x1e2620.
-const MOSS_GOLEM_PALETTE = {
+export const MOSS_GOLEM_PALETTE = {
   K: 0x151c17,
   S: 0x5b6b5c,
   s: 0x7f8f80,
@@ -968,6 +977,10 @@ const MOSS_GOLEM_PALETTE = {
   m: 0x4d7a35,
   M: 0x7fb04a,
   c: 0x37433a,
+  // the battle grid's (art/hdBosses.ts): the eyes' and the core's bright
+  // middle, the flowers' hearts in the moss
+  E: 0xd4fadc,
+  f: 0xf2e08a,
 };
 const MOSS_GOLEM_48 = [
   "................................................",
