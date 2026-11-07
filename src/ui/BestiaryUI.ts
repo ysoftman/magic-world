@@ -26,15 +26,20 @@ const PAGES = Math.max(1, Math.ceil(SPECIES.length / PER_PAGE));
 // reads as its own name's. Name and note used to touch (a 40px block at 52)
 const ROW_GAP = 56;
 const ROW_HALF = 22;
-const ICON_SCALE = (ROW_GAP / 80) * 0.9;
+// Half size: the art's 2px cells a screen px each, as the panels' item icons
+// are. At 0.63x (just under the row gap) a cell came out 1 or 2px by turns,
+// the picture pulled out of shape; 32px for a 64px foe, 48px for a boss's
+// 96px (48 cells), still 8px clear of the next row's.
+const ICON_SCALE = 0.5;
 // not wider: a touch device's menu-button strip starts at x=1220
 const PANEL_W = 1160;
 const COL_W = 560;
-// per column: the cursor, the icon (40px at this scale), then the name far
-// enough right to clear the widest sprite. The cursor stands left of the
-// icon: between icon and name it sat on the icon's right edge. Its ink (x
-// 93..108 in the left column) keeps 30px inside the panel; in the right
-// column (from x=653) it keeps 13px clear of a left-column line at NAME_W
+// per column: the cursor, the icon (32px at ICON_SCALE, a boss's 48px), then
+// the name far enough right to clear the widest sprite. The cursor stands
+// left of the icon: between icon and name it sat on the icon's right edge.
+// Its ink (x 93..108 in the left column) keeps 30px inside the panel; in the
+// right column (from x=653) it keeps 13px clear of a left-column line at
+// NAME_W
 const COL_X = GAME_WIDTH / 2 - PANEL_W / 2 + 40;
 const CURSOR_DX = 2;
 const ICON_DX = 40;
@@ -253,7 +258,7 @@ export class BestiaryUI {
       const icon = scene.add
         .sprite(x + ICON_DX, y, SPECIES[0].texture)
         // the source art is a full 64px tile; 1.4x overlapped the rows above
-        // and below it, so keep it just under the row gap
+        // and below it
         .setScale(ICON_SCALE)
         .setScrollFactor(0)
         .setDepth(152)
@@ -529,12 +534,8 @@ export class BestiaryUI {
       const rowSeen = GameState.seenMonsters.includes(def.name);
       const rowCaught = GameState.caught.filter((n) => n === def.name).length;
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
-      // ICON_SCALE is for 64px art: a boss's 96px (48 cells) comes to the
-      // same 40px as everyone else
-      icon
-        .setTexture(def.texture)
-        .setScale((ICON_SCALE * 64) / icon.width)
-        .setVisible(rowSeen);
+      // every foe's art at ICON_SCALE, its cells a px whatever its size
+      icon.setTexture(def.texture).setScale(ICON_SCALE).setVisible(rowSeen);
       const { weak, can } = rowSeen ? speciesNotes(def) : { weak: "", can: "" };
       const partner = rowCaught > 0 && GameState.isPartner(def.name);
       // a row without a note (unseen, or a plain SLIME) keeps its name

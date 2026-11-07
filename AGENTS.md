@@ -651,7 +651,9 @@ bakeHero 가 외형이 바뀔 때마다 같이), 일반 몬스터(`hdMonsters.ts
 그려서, 짝수 가장자리의 2px 선이 홀수~홀수 px 에 걸쳤고 전투 창·HUD 의 1px 선은 아트 칸의 절반이었다(감사 결과 마을
 화면의 홀수 px 타일 76→0). 일회용 감사기(/tmp/pwcheck/px2/)는 화면 스냅샷의 색 경계 run 최대공약수와 위상을 16px
 타일마다 잰다. 필드 바닥 그림자(`addGroundShadow`, 필드 동료)는 `stepEllipse` 가 Ellipse 의 경로를 2px
-줄로 바꿔 그린다(전투 그림자 BattleScene `stand()` 와 같은 계단). Ellipse 를 받는 곳(sceneCommon·Villagers)은 그대로다.
+줄로 바꿔 그린다(전투 그림자 BattleScene `stand()` 와 같은 계단). Ellipse 를 받는 곳(sceneCommon·Villagers)은 그대로다. 도감 아이콘은 몬스터
+텍스처를 0.5배(1px 칸, 아이템 아이콘과 같은 밀도, 보스 48px)로 그린다. 실제 사례: 0.63배는 칸이 1.26px 라 1·2px
+가 섞여 얼굴이 일그러졌다. 2px 칸으로 하려면 아이콘이 64px 라 줄(56px) 배치를 다시 짜야 한다.
 
 아이템 아이콘은 `icon-<키>` 텍스처다(인벤토리·소재·요리 재료·요리 키, 보물 지도는
 `icon-map`). 16칸 그리드를 기본 Scale2x 로 구워 64px 이 되고, 패널은 그 절반인
