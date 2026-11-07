@@ -47,96 +47,166 @@ const HERO_PALETTE = {
 };
 
 // The hero on a 32-cell grid, drawn at ART_PX (2px), so its texture is the
-// same 64px as every other sprite's. The draft was Scale2x of the old 16-cell
-// hero (same silhouette, so the equipment overlays and the shadow still sit
-// where they did), then shaded by hand: a contour round the hair and a shine
-// along its crown, a glint in each eye, the face shaded on its right, the
-// tunic lit on its left and shaded on its right, a buckle in front, the
-// trousers' inner edges and the boots' tops. Head, torso and legs stack as
-// before (18 + 6 + 8 rows); the back and the side view wear the torso
-// without the buckle.
+// same 64px as every other sprite's. A young adventurer of about 3.6 heads,
+// not the old two-head chibi (a head half the height): 29 rows from the hair
+// (row 1) to the boots (row 29, where the battle's footing and the shadow read
+// the feet), the head 8 rows (28%), a neck and shoulders (rows 9-10, 14 wide)
+// over a torso of 9 rows (31%) with the arms hanging at its sides (16 wide
+// with the cuffs) and 12 rows of legs (41%). The hands are cells 8-9 and 22-23
+// on rows 18-20, a hand's grip being what ui/HeroGear.ts puts the gear on. The
+// face is a 10x8 head, a swept fringe and a clean cheek (a dark outline round
+// a face this small read as a beard): two one-cell eyes, the lower face and
+// the chin edged in the skin's shade (S). Head, torso and legs stack as 9 + 9 +
+// 14 rows (the legs' last two rows empty); the back and the side view wear the
+// torso without the V neck and the buckle. The villagers do not share these
+// legs any more (HERO_LEGS_* below).
 const HERO_HEAD_32 = [
   "................................",
-  "................................",
-  "................................",
-  "................................",
-  "...........dddddddddd...........",
-  ".........ddhhhhhhhhhhdd.........",
-  ".........dhHHHHHhhhhhhd.........",
-  ".......ddHHHHHHHhhhhhhhdd.......",
-  ".......dhHHhhhhhhhhhhhhhd.......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhssssssssssssSShhd......",
-  "......dhssssssssssssssSShd......",
-  "......dhssweeessssweeeSShd......",
-  "......dhsseeeesssseeeeSShd......",
-  "......dhssssssssssssssSShd......",
-  ".......dhssssssssssssSShd.......",
-  ".......ddhhhhhhhhhhhhhhdd.......",
-  ".........dddddddddddddd.........",
+  ".............dddddd.............",
+  "............dhHHhhhd............",
+  "...........dhHhhhhhhd...........",
+  "...........dhhhsssshd...........",
+  "...........SssessessS...........",
+  "...........SssessesSS...........",
+  "............SsssssSS............",
+  ".............SSSSSS.............",
 ];
 
 const HERO_UP_HEAD_32 = [
   "................................",
-  "................................",
-  "................................",
-  "................................",
-  "...........dddddddddd...........",
-  ".........ddhhhhhhhhhhdd.........",
-  ".........dhHHHHHhhhhhhd.........",
-  ".......ddHHHHHHHhhhhhhhdd.......",
-  ".......dhHHhhhhhhhhhhhhhd.......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  ".......dhhhhhhhhhhhhhhhhd.......",
-  ".......ddhhhhhhhhhhhhhhdd.......",
-  ".........dddddddddddddd.........",
+  ".............dddddd.............",
+  "............dhHHhhhd............",
+  "...........dhhhhhhhhd...........",
+  "...........dhhhhhhhhd...........",
+  "...........dhhhhhhhhd...........",
+  "...........dhhhhhhhhd...........",
+  "............dhhhhhhd............",
+  ".............dddddd.............",
 ];
 
 const HERO_SIDE_HEAD_32 = [
   "................................",
-  "................................",
-  "................................",
-  "................................",
-  "...........dddddddddd...........",
-  ".........ddhhhhhhhhhhdd.........",
-  ".........dhHHHHHhhhhhhd.........",
-  ".......ddHHHHHHHhhhhhhhdd.......",
-  ".......dhHHhhhhhhhhhhhhhd.......",
-  "......dhhhhhhhhhhhhhhhhhhd......",
-  "......dhhssssssssssssssssss.....",
-  "......dhssssssssssssssssssss....",
-  "......dhssssssssssssweeessss....",
-  "......dhsssssssssssseeeessss....",
-  "......dhssssssssssssssssssss....",
-  ".......dhssssssssssssssssss.....",
-  ".......ddhhhhhhhhhhhhhhd........",
-  ".........dddddddddddddd.........",
+  ".............dddddd.............",
+  "............dhHHhhhd............",
+  "...........dhHhhhhhhd...........",
+  "...........dhhhhhhssS...........",
+  "...........dhhhhhsseS...........",
+  "...........dhhhhhsseSS..........",
+  "............dhhhsssSd...........",
+  ".............dddddd.............",
 ];
 
 const HERO_TORSO_32 = [
-  "..........TTttttttttuu..........",
-  ".........TTttttttttttuu.........",
-  ".........TTttttttttttuu.........",
-  ".......TTttttttttttttttuu.......",
-  "......TTtttbbbbyybbbbtttuu......",
-  "......TTttbbbbbyybbbbbttuu......",
+  "..............sssS..............",
+  ".........TTtttsssStttuu.........",
+  "........TTtttttsStttttuu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttubbbbyybbbbutu........",
+  "........uuuBBBByyBBBBuuu........",
 ];
 
 const HERO_TORSO_BACK_32 = [
-  "..........TTttttttttuu..........",
+  "..............sssS..............",
   ".........TTttttttttttuu.........",
-  ".........TTttttttttttuu.........",
-  ".......TTttttttttttttttuu.......",
-  "......TTtttbbbbbbbbbbtttuu......",
-  "......TTttbbbbbbbbbbbbttuu......",
+  "........TTttttttttttttuu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttuttttttttttutu........",
+  "........Ttubbbbbbbbbbutu........",
+  "........uuuBBBBBBBBBBuuu........",
 ];
 
-// the walk cycle's legs (the villagers keep the 16-cell legs below)
+const HERO_STRIDE_A_32 = [
+  "........ss.pppppppppP.ss........",
+  "........ss.pppppppppP.ss........",
+  "........sS.pppP..pppP...........",
+  "........SSpppP....pppP..........",
+  "..........pppP....pppP..........",
+  ".........pppP......pppP.........",
+  ".........pppP......pppP.........",
+  "........pppP........pppP........",
+  "........pppP........pppP........",
+  "........pppP........pppP........",
+  ".......OOOOO........OOOOO.......",
+  ".......ooooo........ooooo.......",
+  "................................",
+  "................................",
+];
+
+const HERO_PASS_A_32 = [
+  "........ss.pppppppppP.ss........",
+  "........ss.pppppppppP.ss........",
+  "........sS.pppppppppP.sS........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "..........OOOOO..OOOOO..........",
+  "..........ooooo..ooooo..........",
+  "................................",
+  "................................",
+];
+
+const HERO_STRIDE_B_32 = [
+  "........ss.pppppppppP.ss........",
+  "........ss.pppppppppP.ss........",
+  "..........pppP....pppPsS........",
+  "..........pppP....pppPSS........",
+  "..........pppP....pppP..........",
+  "..........pppP....pppP..........",
+  "..........pppP....pppP..........",
+  "..........pppP....pppP..........",
+  "..........pppP....pppP..........",
+  "..........pppP....pppP..........",
+  ".........OOOOO....OOOOO.........",
+  ".........ooooo....ooooo.........",
+  "................................",
+  "................................",
+];
+
+const HERO_PASS_B_32 = [
+  "........ss.pppppppppP.ss........",
+  "........ss.pppppppppP.ss........",
+  "........sS.pppppppppP.sS........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppppppppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "..........OOOOO..OOOOO..........",
+  "..........ooooo..ooooo..........",
+  "................................",
+  "................................",
+];
+
+const HERO_IDLE_32 = [
+  "........ss.pppppppppP.ss........",
+  "........ss.pppppppppP.ss........",
+  "........sS.pppP..pppP.sS........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "...........pppP..pppP...........",
+  "..........OOOOO..OOOOO..........",
+  "..........ooooo..ooooo..........",
+  "................................",
+  "................................",
+];
+
+// the villagers' legs (npcs.ts), the hero's old 8-row walk cycle; the hero's own
+// longer legs are HERO_STRIDE_A_32 and the rest above
 export const HERO_LEGS_STRIDE_A_32 = [
   "....ss....pppP....pppP....ss....",
   "....sss..pppP......pppP..sss....",
@@ -152,28 +222,6 @@ export const HERO_LEGS_PASS_A_32 = [
   "....ss....pppppppppppP....ss....",
   "....sss..pppppppppppppP..sss....",
   ".....ssspppppppppppppppPsss.....",
-  "......sspppppppppppppppPss......",
-  "........OOOOOOOOOOOOOOOO........",
-  ".........oooooooooooooo.........",
-  "................................",
-  "................................",
-];
-
-const HERO_LEGS_STRIDE_B_32 = [
-  "....ss....pppP....pppP....ss....",
-  "....ss...ppppP....ppppP...ss....",
-  ".........ppppP....ppppP.........",
-  "........pppppP....pppppP........",
-  "........OOOOOO....OOOOOO........",
-  ".........oooo......oooo.........",
-  "................................",
-  "................................",
-];
-
-const HERO_LEGS_PASS_B_32 = [
-  "........pppppppppppppppP........",
-  "........pppppppppppppppP........",
-  "......sspppppppppppppppPss......",
   "......sspppppppppppppppPss......",
   "........OOOOOOOOOOOOOOOO........",
   ".........oooooooooooooo.........",
@@ -251,7 +299,7 @@ const flipRows = (rows: string[]): string[] => rows.map((r) => [...r].reverse().
 // still `makeTexture(this, ..., HERO_PALETTE)` so check:art pairs these grids
 // with their palette like every other bake.
 function drawHero(this: Phaser.Scene): void {
-  const walkFrames = [HERO_LEGS_STRIDE_A_32, HERO_LEGS_PASS_A_32, HERO_LEGS_STRIDE_B_32, HERO_LEGS_PASS_B_32];
+  const walkFrames = [HERO_STRIDE_A_32, HERO_PASS_A_32, HERO_STRIDE_B_32, HERO_PASS_B_32];
   for (let i = 0; i < walkFrames.length; i++) {
     const legs = walkFrames[i];
     makeTexture(this, `hero-down-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...legs], HERO_PALETTE, ART_PX);
@@ -260,10 +308,10 @@ function drawHero(this: Phaser.Scene): void {
     makeTexture(this, `hero-left-${i}`, [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...legs], HERO_PALETTE, ART_PX);
   }
 
-  makeTexture(this, "hero-idle-down", [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
-  makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
-  makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
-  makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-down", [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_IDLE_32], HERO_PALETTE, ART_PX);
+  makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...HERO_IDLE_32], HERO_PALETTE, ART_PX);
 
   // the frame the battle shows, at twice the cells (battleHd.ts), in the same look
   makeTexture(this, "hero-down-0@hd", [...HERO_HEAD_64, ...HERO_TORSO_64, ...HERO_LEGS_STRIDE_A_64], HERO_PALETTE, 1);
@@ -277,7 +325,7 @@ function drawHero(this: Phaser.Scene): void {
 // calls with a named palette, and a computed one would throw its pairing off.
 function drawLookPreviews(scene: Phaser.Scene): void {
   HERO_LOOKS.forEach((_, i) => {
-    makeTexture(scene, `hero-look-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_LEGS_IDLE_32], heroLookPalette(i), ART_PX);
+    makeTexture(scene, `hero-look-${i}`, [...HERO_HEAD_32, ...HERO_TORSO_32, ...HERO_IDLE_32], heroLookPalette(i), ART_PX);
     makeTexture(scene, `hero-look-${i}@hd`, [...HERO_HEAD_64, ...HERO_TORSO_64, ...HERO_LEGS_STRIDE_A_64], heroLookPalette(i), 1);
   });
 }
@@ -315,7 +363,7 @@ export function bakeHero(scene: Phaser.Scene, look: number): void {
 // that cell on the hero's hand. The blade rises from the hand up and out at
 // 45 degrees, lit along its upper edge (W) and shaded along its lower (v),
 // past a cross-guard, with the pommel below the grip; the shield is a small
-// heater (8x10 cells, about a third of the hero's width) with a lit rim (h)
+// heater (8x10 cells, a third of the hero's height) with a lit rim (h)
 // and a glint on the boss (w), hung from the hand beside the body.
 // (G the guard's shade and B the grip's wrap, the battle's 64-cell blade's
 // own, art/hdHero.ts; d its back edge)

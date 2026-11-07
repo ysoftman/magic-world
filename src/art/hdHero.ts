@@ -6,24 +6,28 @@
 // the art's own palettes: HERO_PALETTE, so a look (bakeHero) recolours them
 // too, and the gear's tiers.
 //
-// Each is its 32-cell grid's layout doubled, a cell (x, y) there the cells
-// (2x..2x+1, 2y..2y+1) here: the head, the hands (rows 48-55, the gear's grip
-// on them, ui/HeroGear.ts) and the feet (row 59, the battle's footing reads
-// the 32-cell art) are where they were, and the gear's grip is still its
-// centre cells (32..33, 32..33). Drafted from the 32-cell grids doubled
-// through Scale2x, the outline then thinned to one cell (2px), and redrawn
-// by hand with what 32 cells had no room for:
+// The hero is its 32-cell grid's layout doubled (art/hero.ts: a 3.6-head
+// adventurer, a cell (x, y) there the cells (2x..2x+1, 2y..2y+1) here): the
+// hair at row 2 and the head 16 rows (28% of the 58-row height, 20 wide), a
+// neck (rows 18-19), shoulders (rows 20-21, 26-30 wide) and a torso of 18
+// rows with the arms at its sides (32 wide), 24 rows of legs; the hands (rows
+// 36-41, cells 16-19 and 44-47, the gear's grip on them, ui/HeroGear.ts) and
+// the feet (row 59, the battle's footing reads the 32-cell art) are where the
+// 32-cell art has them, and the gear's grip is still its centre cells (32..33,
+// 32..33). The gear is the old 64-cell art: only where it sits changed.
 //
 // - the hero (hero-down-0, the frame the battle shows, flipped): the head
 //   rounded, a fringe in swept clumps with partings (K, the hair's shade, as
 //   also down its right side and round the face), the shine a crescent
-//   toward the light with a glint (I); the eyes rounded, a glint top left and
-//   an iris (i) under it, a small smile (m), the jaw shaded (S); a V neck
-//   edged in the tunic's deepest shade (U), the shoulder's highlight (V),
-//   folds toward the belt, the hem in shade; the belt's lower edge shaded (B)
-//   round a buckle with a hole (Y its shade); the trousers lit down each
-//   leg (Q), the arms shaded underneath, the boots a lit cuff, a shine on
-//   the toe and a sole (z). Its new shades follow the look (heroShades).
+//   toward the light with a glint (I); round eyes of 4x4 cells with a glint
+//   top left and an iris (i) under it (the head is half the old one's width,
+//   so the eyes lost a column each, not their shape), a small smile (m), the
+//   jaw shaded (S); a V neck edged in the tunic's deepest shade (U), the
+//   shoulder's highlight (V), folds converging toward the belt, the sleeves'
+//   cuffs in shade; a belt of three rows round a buckle with a hole (Y its
+//   shade); the trousers lit down each leg (Q), the hands shaded underneath,
+//   the boots a lit cuff, a shine on the toe and a sole (z). Its new shades
+//   follow the look (heroShades).
 // - the blade (equip-*-sword): a lit edge, a fuller (v) down the middle, a
 //   dark back edge (d); a cross-guard with a lit and a shaded edge (G); the
 //   grip wrapped (B) and a round pommel.
@@ -38,70 +42,70 @@
 export const HERO_HEAD_64 = [
   "................................................................",
   "................................................................",
-  "................................................................",
-  "................................................................",
-  "................................................................",
-  "................................................................",
-  "................................................................",
-  "................................................................",
-  ".......................dddddddddddddddddd.......................",
-  ".....................ddhhhhhhhhhhhhhhhhhhdd.....................",
-  "...................ddhhhhhhhhhhhhhhhhhhhhhhdd...................",
-  "..................dhhhhhhhhhhhhhhhhhhhhhhhhhhd..................",
-  ".................dhhhhhIIhhHHHHHHhhhhhhhhhhhhhd.................",
-  "................dhhhhIIHHHHHHHHHHhhhhhhhhhhhhhKd................",
-  "...............dhhhhIHHHHHHHHhhhhhhhhhhhhhhhhhhKd...............",
-  "..............dhhhhhHHHHHhhhhhhhhhhhhhhhhhhhhhhKKd..............",
-  "..............dhhhHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhKd..............",
-  ".............dhhhHHHHhhhhhhhhKhhhhhhhhhhhhhhhhhhKKd.............",
-  ".............dhhHHHHhhKhhhhhhhKhhhhhhKhhhhhhhhhhKKd.............",
-  "............dhhHHHHhhhhKhhhhhhKhhhhhhKhhhhhhKhhhKKKd............",
-  "............dhhhhhhhhhhhKhhhhhhKhhhhhhKhhhhhhKhhKKKd............",
-  "............dhhhhshhhhhhshhhhhhshhhhhhshhhhhSSShKKKd............",
-  "............dhhhhssshhhssshhhhhsshhhhhsshhhSSSShKKKd............",
-  "............dhhhssssshhsssshhhsssshhhsssshhsSSSSKKKd............",
-  "............dhhKssssseeeeeeshhssssshseeeeeesSSSSKKKd............",
-  "............dhhKssssewweeeeessssssssewweeeeeSSSSKKKd............",
-  "............dhhKssssewweiieessssssssewweiieeSSSSKKKd............",
-  "............dhhKssssseeeeeesssssssssseeeeeesSSSSKKKd............",
-  "............dhhKssssssssssssssssssssssssssssSSSSKKKd............",
-  ".............dhhKssssssssssssssssssssssssssSSSSKKKd.............",
-  ".............dhhKsssssssssssssmssmsssssssssSSSSKKKd.............",
-  "..............dhhhhssssssssssssmmssssssssSSSSKKKKd..............",
-  "..............dhhhhhssssssssssssssssssssSSSSKKKKKd..............",
-  "...............ddhhhhhsssssssssssssssSSSSSKKKKKdd...............",
-  ".................ddhhhhhhsSSSSSSSSSSSSSKKKKKKdd.................",
-  "...................dddddddddddddddddddddddddd...................",
+  "...........................dddddddddd...........................",
+  ".........................ddhhhhhhhhhhdd.........................",
+  "........................dhIIHHhhhhhhhhKd........................",
+  ".......................dhIHHHHhhhhhhhhhKd.......................",
+  "......................dhhHHHHhhhhhhhhhhhKd......................",
+  "......................dhhHHhhhKhhhhhhhhKKd......................",
+  "......................dhhhhKsshhhKsshhhhKd......................",
+  "......................dhKssssssssssssssKKd......................",
+  "......................dhKsseesssssseesSKKd......................",
+  "......................dhKseweesssseweeSKKd......................",
+  "......................dhKseiiesssseiieSKKd......................",
+  "......................dhKsseesssssseesSKKd......................",
+  ".......................dhKssssmssmsssSKKd.......................",
+  "........................dhKssssmmsssSKKd........................",
+  "..........................ddKsssssSKdd..........................",
+  "............................dddddddd............................",
 ];
 
 export const HERO_TORSO_64 = [
-  "....................VVTttttUssssssSSUttttuuu....................",
-  "...................VTTttttttUssssSSUttttttuuu...................",
-  "..................TTTttttttttUssSSUttttttttuuu..................",
-  "..................TTTtttttttttUUUUtttttttttuuu..................",
-  "..................TTTttutttttttttttttttttutuuu..................",
-  ".................TTTttutttttttttttttttttttutuuu.................",
-  "...............TTTttttutttttttttttttttttttutttuuU...............",
-  ".............TTTtttttutttttttttttttttttttttuttttuuU.............",
-  "............TTTtttttttbbbbbbbbyyyybbbbbbbbtttttttuuU............",
-  "............TTTttttttbbbbbbbbbyBBybbbbbbbbbttttttuuU............",
-  "............TTTtttttbbbbbbbbbbyBBybbbbbbbbbbtttttuuU............",
-  ".............TTTuuuuBBBBBBBBBBYYYYBBBBBBBBBBuuuuuuU.............",
+  "............................SSSSSSSS............................",
+  "............................ssssssSS............................",
+  "...................VTTtttttUssssssSSUtttttuuu...................",
+  ".................VTTttttttttUsssssSUttttttttuuu.................",
+  "................TTttuttttttttUsssSUttttttututtuu................",
+  "................TTttutttttttttUsSUtttttttututtuu................",
+  "................TTttutTttttttttttttttttttututtuu................",
+  "................TTttutTttttttttttttttttttututtuu................",
+  "................TTttutTtttuttttttttttutttututtuu................",
+  "................TTttutTttttuttttttttuttttututtuu................",
+  "................TTttutTttttuttttttttuttttututtuu................",
+  "................TTttutTtttttuttttttutttttututtuu................",
+  "................TTttutTtttttuttttttutttttututtuu................",
+  "................TTttutTttttttuttttuttttttututtuu................",
+  "................TTttutTttttttuttttuttttttututtuu................",
+  "................TTttuubbbbbbbbyyyybbbbbbbbuuttuu................",
+  "................uuuuuubbbbbbbbyBBybbbbbbbbuuuuuu................",
+  "................UUUUuuBBBBBBBBYYYYBBBBBBBBuuUUUU................",
 ];
 
 export const HERO_LEGS_STRIDE_A_64 = [
-  ".........ss.........QpppppPP........QpppppPP.........sS.........",
-  "........sssss......QpppppPP..........QpppppPP......ssssS........",
-  "........Sssss......QpppppPP..........QpppppPP......ssssS........",
-  ".........ssssss..QppppppPP............QppppppPP..sssssS.........",
-  ".........SSsssssQpppppppPP............QppppppPPPsssssSS.........",
-  "...........sssssQppppppPP..............QppppppPPssssS...........",
-  "...........SSsssQppppppPP..............QppppppPPsssSS...........",
-  ".............SSSQpppppPP................QpppppPPSSS.............",
-  "................OOOOOOOOOOO..........OOOOOOOOOOO................",
-  ".................oOOoooooooo........ooOOooooooo.................",
-  "..................oooooooooo........oooooooooo..................",
-  "...................zzzzzzzz..........zzzzzzzz...................",
+  "................ssss..PPPPPPPPPPPPPPPPPPPP..ssss................",
+  "................ssss..QpppppppppppppppppPP..ssss................",
+  "................sssS..QpppppppppppppppppPP..sssS................",
+  "................sssS..QpppppppppppppppppPP..sssS................",
+  "................ssSS..QpppppPP....QpppppPP..ssSS................",
+  ".................SS...QpppppPP....QpppppPP...SS.................",
+  ".....................QpppppPP......QpppppPP.....................",
+  ".....................QpppppPP......QpppppPP.....................",
+  "....................QpppppPP........QpppppPP....................",
+  "....................QpppppPP........QpppppPP....................",
+  "....................QpppppPP........QpppppPP....................",
+  "...................QpppppPP..........QpppppPP...................",
+  "...................QpppppPP..........QpppppPP...................",
+  "..................QpppppPP............QpppppPP..................",
+  "..................QpppppPP............QpppppPP..................",
+  "..................QpppppPP............QpppppPP..................",
+  ".................QpppppPP..............QpppppPP.................",
+  ".................QpppppPP..............QpppppPP.................",
+  "................QpppppPP................QpppppPP................",
+  "................PPPPPPPP................PPPPPPPP................",
+  "..............OOOOOOOOOO................OOOOOOOOOO..............",
+  "..............oOOOoooooo................oOOOoooooo..............",
+  "..............oooooooooo................oooooooooo..............",
+  "...............zzzzzzzz..................zzzzzzzz...............",
   "................................................................",
   "................................................................",
   "................................................................",

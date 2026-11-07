@@ -82,7 +82,7 @@ const use = (g, p) => {
 };
 // `const legs = walkFrames[i]` inside the hero loop
 const ALIAS = {
-  legs: ["HERO_LEGS_STRIDE_A_32", "HERO_LEGS_PASS_A_32", "HERO_LEGS_STRIDE_B_32", "HERO_LEGS_PASS_B_32"],
+  legs: ["HERO_STRIDE_A_32", "HERO_PASS_A_32", "HERO_STRIDE_B_32", "HERO_PASS_B_32"],
 };
 const expand = (expr) => {
   const names = [];
@@ -589,6 +589,43 @@ for (const [key, , palette] of hdPx) {
     fail(
       `${key} is drawn with ${palette}, but ${base} with ${[...new Set(arts.map((a) => a.palette))].join(", ")} -- use the art's palette`,
     );
+}
+
+// The hero's proportions: a head 25-29% of the standing height (3.5-4 heads), the
+// feet on the row the battle's footing reads (29 of 32 cells, 59 of 64), the
+// back and side views as tall as the front, every walk frame ending on the
+// feet row. Stacked head + torso + legs as drawHero does.
+{
+  const span = (rows) => {
+    const ys = rows.map((r, i) => ([...r].some((c) => c !== TRANSPARENT) ? i : -1)).filter((i) => i >= 0);
+    return [ys[0], ys[ys.length - 1]];
+  };
+  const stackOf = (...names) => names.flatMap((n) => grids.get(n) ?? fail(`hero grid ${n} missing`) ?? []);
+  const sets = [
+    ["32-cell", 32, 29, "HERO_HEAD_32", ["HERO_UP_HEAD_32", "HERO_SIDE_HEAD_32"], "HERO_TORSO_32", ["HERO_IDLE_32", ...ALIAS.legs]],
+    ["64-cell", 64, 59, "HERO_HEAD_64", [], "HERO_TORSO_64", ["HERO_LEGS_STRIDE_A_64"]],
+  ];
+  for (const [label, , feet, head, otherHeads, torso, legSets] of sets) {
+    if (!grids.has(head)) continue;
+    const headRows = grids.get(head).length;
+    const [top, headBottom] = span(grids.get(head));
+    for (const other of otherHeads) {
+      const [t, b] = span(grids.get(other) ?? []);
+      if (t !== top || b !== headBottom) fail(`${other} spans rows ${t}-${b}, not ${top}-${headBottom} like ${head}`);
+    }
+    for (const legs of legSets) {
+      const rows = stackOf(head, torso, legs);
+      const [, bottom] = span(rows);
+      if (bottom !== feet) fail(`${legs} ends on row ${bottom} of the ${label} hero, not the feet row ${feet}`);
+      const height = bottom - top + 1;
+      const share = (headBottom - top + 1) / height;
+      if (share < 0.25 || share > 0.29)
+        fail(
+          `the ${label} hero's head is ${(share * 100).toFixed(1)}% of its height (${headBottom - top + 1} of ${height} rows), not 25-29%`,
+        );
+    }
+    void headRows;
+  }
 }
 
 // BLUE's light and shade in HERO_PALETTE must be what heroShades() derives

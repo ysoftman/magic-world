@@ -89,7 +89,7 @@ export class LookPicker {
       // the look at twice the cells (art/hero.ts drawLookPreviews) at 2x: its
       // cells 2px as the battle's hero, its middle on an even x (lookX is
       // odd) so they sit on the screen's 2px grid
-      const hero = scene.add.image(Math.floor(lookX(i) / 2) * 2, lookY(i) - 6, `hero-look-${i}@hd`).setScale(2);
+      const hero = scene.add.image(Math.floor(lookX(i) / 2) * 2, lookY(i) - 2, `hero-look-${i}@hd`).setScale(2);
       const name = scene.add.pixelText(lookX(i), lookY(i) + NAME_DY, look.name, retroStyle(5, "#f5f5f5")).setOrigin(0.5);
       const need = scene.add
         .pixelText(lookX(i), lookY(i) - 6, String(lookNeeds(i)), retroStyle(8, PICKED))

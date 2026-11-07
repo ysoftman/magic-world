@@ -15,18 +15,21 @@ interface Place {
 }
 
 // Where the hero holds its gear, per facing. The hands are the 32-cell
-// hero's cells 4-5 and 26-27 on rows 24-27, i.e. 22px either side of its
-// centre and 18-20px below it, so the shield (16x20px, about a third of the
-// hero's width) hangs at the hand beside the body and the blade rises from
-// the other hand up and out, both clear of the face. Facing the camera both
-// are in front; from behind the shield is slung on the back and the blade is
-// behind the body; side on, the leading hand's blade is in front and the
-// trailing hand's shield behind.
+// hero's cells 8-9 and 22-23 on rows 17-20 (hanging at the hips), i.e. 14-16px
+// either side of its centre and 6px below it (the hero's texture is 64px, its
+// middle px 32, a grip cell px 32-33), so the shield (16x20px, a third of the
+// hero's height) hangs at the left hand over the arm and the blade rises from
+// the right hand up and out, clear of the head (the head ends at cell 20, the
+// blade starts past cell 23). Facing the camera both are in front; from behind
+// the shield is slung on the back and the blade is behind the body; side on,
+// the leading hand's blade is in front and the trailing hand's shield behind.
+// The 64-cell battle hero (art/hdHero.ts) has the same hands at the same px
+// offsets doubled (battle syncGear), so a change here moves it too.
 export const GEAR_LAYOUT: Record<Facing, { weapon: Place; shield: Place }> = {
-  down: { weapon: { x: 22, y: 18, flip: false, above: true }, shield: { x: -22, y: 18, flip: false, above: true } },
-  up: { weapon: { x: 22, y: 18, flip: false, above: false }, shield: { x: 0, y: 10, flip: false, above: true } },
-  right: { weapon: { x: 22, y: 18, flip: false, above: true }, shield: { x: -22, y: 18, flip: false, above: false } },
-  left: { weapon: { x: -22, y: 18, flip: true, above: true }, shield: { x: 22, y: 18, flip: true, above: false } },
+  down: { weapon: { x: 14, y: 6, flip: false, above: true }, shield: { x: -16, y: 6, flip: false, above: true } },
+  up: { weapon: { x: 14, y: 6, flip: false, above: false }, shield: { x: 0, y: -2, flip: false, above: true } },
+  right: { weapon: { x: 14, y: 6, flip: false, above: true }, shield: { x: -16, y: 6, flip: false, above: false } },
+  left: { weapon: { x: -14, y: 6, flip: true, above: true }, shield: { x: 16, y: 6, flip: true, above: false } },
 };
 
 type GearSprite = Phaser.GameObjects.Sprite;
