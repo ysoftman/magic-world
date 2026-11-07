@@ -18,7 +18,7 @@ import { encounterOut } from "../fx";
 import { GameState } from "../gameState";
 import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_ROCK, T_TALL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ENEMIES } from "../monsters";
-import { addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
+import { ART_PX, addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import {
   addBorderDressing,
@@ -104,7 +104,10 @@ const CHEST_LOOT: Array<{ key: "potion" | "hiPotion" | "ether"; chance: number; 
 // The stairs, baked here rather than in BootScene since only the ABYSS and
 // the cave's way down use them: the cave's own stone (art/tilesets.ts's
 // CAVE_ROCK_PALETTE), steps narrowing into a void with a violet glow, and a
-// flight rising into daylight for the way back up.
+// flight rising into daylight for the way back up. 32-cell grids drawn at
+// ART_PX, a cell 2px as on the field round them, with the slabs' joints
+// across the steps and chips in the walls; the pit is where it was, under
+// the rift that turns in it (abyssRift.ts STAIR_RIFT).
 const STAIRS_PALETTE = {
   b: 0x141518,
   S: 0x2a2c31,
@@ -119,41 +122,73 @@ const STAIRS_PALETTE = {
 };
 // biome-ignore format: kept one row per line so the art reads as a grid
 const STAIRS_DOWN = [
-  "................",
-  "..bbbbbbbbbbbb..",
-  ".bHHHHHHHHHHHHb.",
-  ".bccccccccccccb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bSHHHHHHHHHHSb.",
-  ".bSccccccccccSb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bSSDDDDDDDDSSb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bSSkkkkkkkkSSb.",
-  ".bSkkkppppkkkSb.",
-  ".bSkkpPPPPpkkSb.",
-  ".bSkkkppppkkkSb.",
-  ".bbbbbbbbbbbbbb.",
-  "................",
+  "................................",
+  "................................",
+  ".....bbbbbbbbbbbbbbbbbbbbbb.....",
+  "...bbHHcHHHHHHcHHHHHHcHHHHHbb...",
+  "...bbHHHHHHcHHHHHHcHHHHHHcHHb...",
+  "..bHcHHHHHHcHHHHHHcHHHHHHcHHHb..",
+  "..bcDccccccDccccccDccccccDcccb..",
+  "..bcDccccccDccccccDccccccDcccb..",
+  "..bSSDSSSSSSSSSSSSSSSSSSSSSDSb..",
+  "..bSSSSSSSSSSSSSSSSSSSSSSSSDSb..",
+  "..bSSSSHcHHHHHHcHHHHHHcHHSSSSb..",
+  "..bSSDHHcHHHHHHcHHHHHHcHHHSSSb..",
+  "..bSSSccccccDccccccDccccccSSSb..",
+  "..bSSSScccccDccccccDcccccSDSSb..",
+  "..bSSSSDSSSSSSSSSSDDSSSSSSSSDb..",
+  "..bSSSSSSSSSSSSSSSSSSSSSSSSSSb..",
+  "..bSSSSSDDDDDDDDDDDDDDDDSSSSSb..",
+  "..bSSSSSDDDDDDDDDDDDDDDDSSSSDb..",
+  "..bSSSSSSDSSSSSSSSSSSSSSSSSSSb..",
+  "..bSSSSSSSSSSSSDSSSSSDSSDSSSSb..",
+  "..bSSSSSSkkkkkkkkkkkkkkSSSSSSb..",
+  "..bSSSSkkkkkkkkkkkkkkkkkkSDSSb..",
+  "..bSSSSkkkkkkppppppkkkkkkSSSSb..",
+  "..bSDSkkkkkppppppppppkkkkkSSSb..",
+  "..bDSSkkkkppPPPPPPPPppkkkkSSSb..",
+  "..bSSSkkkkppPPPPPPPPppkkkkSSSb..",
+  "..bSSSkkkkkppppppppppkkkkkSSSb..",
+  "..bbSSkkkkkkppppppppkkkkkkSSbb..",
+  "..bbbSkkkkkkppppppppkkkkkkDbbb..",
+  "...bbbbbbbbbbbbbbbbbbbbbbbbbb...",
+  "................................",
+  "................................",
 ];
-// biome-ignore format: as above
+// biome-ignore format: kept one row per line so the art reads as a grid
 const STAIRS_UP = [
-  "................",
-  "..bbbbbbbbbbbb..",
-  ".bLLLLLLLLLLLLb.",
-  ".bllllllllllllb.",
-  ".bHHHHHHHHHHHHb.",
-  ".bccccccccccccb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bHHHHHHHHHHHHb.",
-  ".bccccccccccccb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bHHHHHHHHHHHHb.",
-  ".bccccccccccccb.",
-  ".bSSSSSSSSSSSSb.",
-  ".bHHHHHHHHHHHHb.",
-  ".bbbbbbbbbbbbbb.",
-  "................",
+  "................................",
+  "................................",
+  ".....bbbbbbbbbbbbbbbbbbbbbb.....",
+  "...bbLLlLLLLLLlLLLLLLlLLLLLbb...",
+  "...bbLLLLLLlLLLLLLlLLLLLLlLLb...",
+  "..bLlLLLLLLlLLLLLLlLLLLLLlLLLb..",
+  "..blHllllllHllllllHllllllHlllb..",
+  "..blHllllllHllllllHllllllHlllb..",
+  "..bHHHHHcHHHHHHcHHHHHHcHHHHHHb..",
+  "..bHHHHHcHHHHHHcHHHHHHcHHHHHHb..",
+  "..bcccccDccccccDccccccDccccccb..",
+  "..bcccccDccccccDccccccDccccccb..",
+  "..bSSSDSSSSSSSSSSSSSSSSSSSSSSb..",
+  "..bSSSSSSSSSSSSSSSSSSSSSSSDSSb..",
+  "..bHHcHHHHHHcHHHHHHcHHHHHHcHHb..",
+  "..bHHcHHHHHHcHHHHHHcHHHHHHcHHb..",
+  "..bccccccDccccccDccccccDcccccb..",
+  "..bccccccDccccccDccccccDcccccb..",
+  "..bSSSSSSDSSSSSSSSSSSSSSSSSSSb..",
+  "..bSSSSSSSSSSSSDSSSSSDSSDSSSSb..",
+  "..bHHHHHHHHHHHHHHHHHHHHHHHHHHb..",
+  "..bHHHHHHHHHHHHHHHHHHHHHHHHHHb..",
+  "..bccccccccccccccccccccccccccb..",
+  "..bccccccccccccccccccccccccccb..",
+  "..bDSSSSSSSSSSSSSSSSDSSSSSSSSb..",
+  "..bSSSSSSSSSSSSDSDSSSSSSSSSSSb..",
+  "..bHHHHHHHHHHHHHHHHHHHHHHHHHHb..",
+  "..bbHHHHHHHHHHHHHHHHHHHHHHHHbb..",
+  "..bbbHHHHHHHHHHHHHHHHHHHHHHbbb..",
+  "...bbbbbbbbbbbbbbbbbbbbbbbbbb...",
+  "................................",
+  "................................",
 ];
 export const STAIRS_DOWN_KEY = "abyss-stairs-down";
 const STAIRS_UP_KEY = "abyss-stairs-up";
@@ -161,8 +196,8 @@ const STAIRS_UP_KEY = "abyss-stairs-up";
 // once per page load: generateTexture onto an existing key composites
 export function bakeAbyssStairs(scene: Phaser.Scene): void {
   if (scene.textures.exists(STAIRS_DOWN_KEY)) return;
-  makeTexture(scene, STAIRS_DOWN_KEY, STAIRS_DOWN, STAIRS_PALETTE);
-  makeTexture(scene, STAIRS_UP_KEY, STAIRS_UP, STAIRS_PALETTE);
+  makeTexture(scene, STAIRS_DOWN_KEY, STAIRS_DOWN, STAIRS_PALETTE, ART_PX);
+  makeTexture(scene, STAIRS_UP_KEY, STAIRS_UP, STAIRS_PALETTE, ART_PX);
 }
 
 // One dive, from the stair in the cave to the walk back out (or a fall). It

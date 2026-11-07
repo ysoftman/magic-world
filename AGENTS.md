@@ -596,7 +596,11 @@ BootScene 은 순서대로 부르기만 한다. 씬이 쓰는 이름은 BootScen
 최상위, 격자 정의 뒤에 둔다. 모듈을 불러올 때 등록되어 굽기보다 먼저 실행되고, 정의 앞에 두면
 TDZ 로 부팅이 죽는다.
 32칸(보스·거인은 48칸)으로 다시 그린 그리드는 `makeTexture(..., ART_PX)` 로 Scale2x 없이
-굽고, check:art 가 32x32 또는 48x48 정사각인지 본다.
+굽고, check:art 가 32x32 또는 48x48 정사각인지 본다. 필드 건물·랜드마크(`landmarks.ts`: 동굴 입구, 작업장 6채,
+밭, HOME 집 단계와 눈 덮개, 표지판)와 심연 계단(`AbyssScene`)도 2px 칸 격자를 ART_PX 로 굽는다. 이것들은 맵 타일
+단위(한 타일 32칸)라 check:art 가 32칸 배수의 한 장짜리 격자(64x64, 밭 96x64)를 따로 센다. 실제 사례: 4px 칸
+격자를 Scale2x 로 굽던 건물은 경계만 2px 이고 안쪽은 4px 덩어리라 옆의 2px 영웅보다 뭉툭했고, 집과 표지판은
+Graphics 사각형이라 디테일이 주변보다 한참 낮았다.
 
 영웅·NPC·몬스터는 32칸 그리드이고, 보스·거인 5종(KING SLIME·TROLL KING·MOSS GOLEM·
 GLACIER GOLEM·FLAME DRAKE)만 48칸이다. 몬스터 그리드 두 개는 여러 텍스처가

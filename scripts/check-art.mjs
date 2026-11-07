@@ -499,13 +499,22 @@ console.log("baked terrain stays within its calm limits");
 // (32 cells x 2px is the 64px every other sprite bakes to; the bosses and
 // the giant are 48 cells, a 96px texture, src/art/monsters.ts), 64 or 96 at
 // 1px, the same textures at twice the cells
-const squareSizes = (bakes, sizes, label) => {
+// A landmark at ART_PX (src/art/landmarks.ts) covers whole map tiles instead,
+// 32 cells a tile each way, square or not: a 2x2-tile building is 64x64, the
+// farm's 3x2 field 96x64. One grid, no stacking.
+const TILE_CELLS = TILE / (PIXEL / 2);
+const squareSizes = (bakes, sizes, label, tiles = null) => {
   const bySize = new Map(sizes.map((n) => [n, 0]));
   const sizeOf = new Map();
   for (const [key, expr] of bakes) {
     const parts = [...expr.matchAll(/\.\.\.(?:flipRows\()?([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => ALIAS[m[1]]?.[0] ?? m[1]);
     if (!parts.length) parts.push(expr.trim().replace(/^flipRows\(|\)$/g, ""));
     const size = grids.get(parts[0])?.[0]?.length;
+    const rows = grids.get(parts[0])?.length;
+    if (tiles && !sizes.includes(size) && parts.length === 1 && size % TILE_CELLS === 0 && rows % TILE_CELLS === 0 && rows > 0) {
+      tiles.push(`${key} ${size / TILE_CELLS}x${rows / TILE_CELLS}`);
+      continue;
+    }
     if (!sizes.includes(size)) {
       fail(`${key} is drawn at ${label} but ${parts[0]} is ${size} cells wide, not ${sizes.join(" or ")}`);
       continue;
@@ -520,7 +529,9 @@ const squareSizes = (bakes, sizes, label) => {
   console.log(`textures drawn at ${label}: ${sizes.map((n) => `${bySize.get(n)} at ${n}x${n}`).join(", ")}`);
   return sizeOf;
 };
-const artSize = squareSizes(artPx, [32, 48], "ART_PX");
+const tileBakes = [];
+const artSize = squareSizes(artPx, [32, 48], "ART_PX", tileBakes);
+console.log(`landmarks drawn at ART_PX over whole map tiles: ${tileBakes.length} (${tileBakes.join(", ")})`);
 const hdSize = squareSizes(hdPx, [64, 96], "1px (the battle's own)");
 
 // ---- the battle's own grids: "<key>@hd", twice the cells of <key>'s art, its palette ----
