@@ -568,7 +568,7 @@ const SMALL_AT_ART_PX = { spark: 16, firefly: 24 };
 // 32 cells a tile each way, square or not: a 2x2-tile building is 64x64, the
 // farm's 3x2 field 96x64. One grid, no stacking.
 const TILE_CELLS = TILE / (PIXEL / 2);
-const squareSizes = (bakes, sizes, label, small = {}, tiles = null) => {
+const squareSizes = (bakes, sizes, label, tiles = null, small = {}) => {
   const bySize = new Map(sizes.map((n) => [n, 0]));
   const sizeOf = new Map();
   for (const [key, expr] of bakes) {
@@ -595,7 +595,7 @@ const squareSizes = (bakes, sizes, label, small = {}, tiles = null) => {
   return sizeOf;
 };
 const tileBakes = [];
-const artSize = squareSizes(artPx, [32, 48], "ART_PX", SMALL_AT_ART_PX, tileBakes);
+const artSize = squareSizes(artPx, [32, 48], "ART_PX", tileBakes, SMALL_AT_ART_PX);
 console.log(`landmarks drawn at ART_PX over whole map tiles: ${tileBakes.length} (${tileBakes.join(", ")})`);
 const hdSize = squareSizes(hdPx, [64, 96], "1px (the battle's own)");
 
