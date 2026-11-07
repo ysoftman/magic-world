@@ -26,8 +26,11 @@
 //   it is drawn again at texels, r between the farthest middle written and
 //   the nearest one beside them left out. Any other run fills its cells, as
 //   blocky as at one texel to a cell, at their size.
-//   explosions/_lib's own fast disc steps aside for the painter's each()
-//   whenever cs or sn are not the identity's, which they never are here.
+//   Code with a fast path of its own for an unturned painter, that walks
+//   the buffers at a texel to a cell (explosions/_lib's disc, weather/_lib's
+//   pass() and rows(), the whole-sky passes), tests the painter's cs and sn
+//   first: here they are NaN, so it always takes its general way through the
+//   painter, a cell at a time (as blocky as at one texel to a cell).
 // - code that writes the light buffer by p.cellX (shadow/_lib's black star):
 //   it reaches one texel of each cell; finish() takes the light off the rest
 //   of the cells it emptied.
@@ -77,16 +80,16 @@ type Fn = (...args: never[]) => unknown;
 type Colour = number | ((...a: number[]) => number);
 const call = (v: Colour, ...a: number[]): number => (typeof v === "function" ? v(...a) : v);
 const proto = Painter.prototype;
+// ordered dither thresholds (4x4 Bayer), pixelfx's put()'s own
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 
 /**
  * A frame `w` x `h` texels, its top-left at (`ox`, `oy`) texels from the
  * effect's anchor, drawn into at `k` texels to an effect pixel. At 1, just
  * pixelfx's own frame.
  */
-export function hiFrame(w: number, h: number, ox: number, oy: number, k: number): FxFrame {
-  const frame: HiFrame = createFrame(w, h, ox, oy);
-  if (k !== 1) scaled(frame, k);
-  return frame;
+export function hiFrame(w: number, h: number, ox: number, oy: number, k: number, opts?: HiOptions): FxFrame {
+  return hires(createFrame(w, h, ox, oy), k, opts);
 }
 
 /**
@@ -95,9 +98,32 @@ export function hiFrame(w: number, h: number, ox: number, oy: number, k: number)
  */
 export function hiView(frame: FxFrame, k: number): FxFrame {
   const { w, h, ox, oy, color, light } = frame;
-  const view: HiFrame = { w, h, ox, oy, color, light };
-  if (k !== 1) scaled(view, k);
-  return view;
+  return hires({ w, h, ox, oy, color, light }, k);
+}
+
+/** How a hi-res frame meets code that walks its buffers itself. */
+export interface HiOptions {
+  /**
+   * the raw fields (C, L, w, h, ox, oy, tx, ty) in cells, over a buffer of a
+   * texel to a cell, for code that walks the buffers itself at a texel to a
+   * cell when the painter is not turned (weather/_lib's pass() and rows(), the
+   * whole-sky passes): it takes its fast way at its own speed, and what it
+   * wrote goes into the texels before the painter draws anything else, a
+   * blend over a texel unlike the cell's first one blended again over it. Not
+   * for code that walks them by the painter's own texels (shadow/_lib's
+   * unlight, through each())
+   */
+  rawCells?: boolean;
+}
+
+/**
+ * `frame` (pixelfx's shape, its w, h, ox, oy in texels) drawn into at `k`
+ * texels to an effect pixel from now on: its painter (painterFor) is the
+ * hi-res one. At 1, left as it is.
+ */
+export function hires<F extends FxFrame>(frame: F, k: number, opts: HiOptions = {}): F {
+  if (k !== 1) scaled(frame, k, opts);
+  return frame;
 }
 
 // the cells shadow/_lib's black star emptied of light through cellX, by frame
@@ -131,16 +157,56 @@ export function finish(frame: FxFrame): void {
   cells.length = 0;
 }
 
-// The painter of `frame`, drawing at k texels to an effect pixel. Its cs and
-// sn carry k (the rotation's cosine and sine times k), so the transform it
-// keeps in tx, ty, fx, cs, sn maps cells straight to texels, and any code
-// testing for the identity (explosions/_lib) takes the general way.
-function scaled(frame: HiFrame, k: number): void {
+// The painter of `frame`, drawing at k texels to an effect pixel. Its turn
+// is kept here (the rotation's cosine and sine times k, so the transform maps
+// cells straight to texels) and its own cs and sn are NaN, so any code
+// testing them for the identity takes its general way (header).
+function scaled(frame: HiFrame, k: number, { rawCells = false }: HiOptions): void {
   frame.k = k;
   const p = painterFor(frame);
-  const put = proto.put;
-  const add = proto.add;
-  const blendPx = proto.blendPx;
+  // the frame's texels: its size, place and buffers never change
+  const { w: FW, h: FH, ox: FOX, oy: FOY, color: FC, light: FL } = frame;
+
+  // pixelfx's put, add and blendPx on those (theirs read the painter's own
+  // fields, which rawCells gives in cells)
+  const put = (sx: number, sy: number, c: number, a = 1): void => {
+    if (!c) return;
+    const aa = a * p.fade;
+    if (aa < 1 && aa <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
+    const x = sx - FOX;
+    const y = sy - FOY;
+    if (x < 0 || y < 0 || x >= FW || y >= FH) return;
+    FC[y * FW + x] = c;
+  };
+  const add = (sx: number, sy: number, c: number, kk = 1): void => {
+    const K = kk * p.fade * p.lightK;
+    if (K <= 0.004) return;
+    const x = sx - FOX;
+    const y = sy - FOY;
+    if (x < 0 || y < 0 || x >= FW || y >= FH) return;
+    const i = y * FW + x;
+    const d = FL[i];
+    const r = Math.min(255, (d & 255) + (c & 255) * K) | 0;
+    const g = Math.min(255, ((d >>> 8) & 255) + ((c >>> 8) & 255) * K) | 0;
+    const b = Math.min(255, ((d >>> 16) & 255) + ((c >>> 16) & 255) * K) | 0;
+    FL[i] = (255 << 24) | (b << 16) | (g << 8) | r;
+  };
+  const over = (d: number, c: number, a: number): number => {
+    const da = (d >>> 24) / 255;
+    const oa = a + da * (1 - a);
+    const q = a / oa;
+    const ch = (s: number): number => (((c >>> s) & 255) * q + ((d >>> s) & 255) * (1 - q)) & 255;
+    return (((oa * 255) & 255) << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0);
+  };
+  const blendPx = (sx: number, sy: number, c: number, a: number): void => {
+    const aa = a * p.fade;
+    if (!c || aa <= 0.004) return;
+    const x = sx - FOX;
+    const y = sy - FOY;
+    if (x < 0 || y < 0 || x >= FW || y >= FH) return;
+    const i = y * FW + x;
+    FC[i] = over(FC[i], c, aa);
+  };
   const k2 = k * k;
   // half a cell less half a texel: a cell's middle to its top-left texel
   const lead = k / 2 - 0.5;
@@ -148,20 +214,151 @@ function scaled(frame: HiFrame, k: number): void {
   emptied.set(frame, cells);
 
   // cells to texels and back
-  const X = (x: number, y: number): number => p.tx + x * p.fx * p.cs - y * p.sn;
-  const Y = (x: number, y: number): number => p.ty + x * p.fx * p.sn + y * p.cs;
-  const LX = (sx: number, sy: number): number => (((sx - p.tx) * p.cs + (sy - p.ty) * p.sn) * p.fx) / k2;
-  const LY = (sx: number, sy: number): number => (-(sx - p.tx) * p.sn + (sy - p.ty) * p.cs) / k2;
+  let [tx, ty, flip, cs, sn] = [0, 0, 1, k, 0];
+  const X = (x: number, y: number): number => tx + x * flip * cs - y * sn;
+  const Y = (x: number, y: number): number => ty + x * flip * sn + y * cs;
+  const LX = (sx: number, sy: number): number => (((sx - tx) * cs + (sy - ty) * sn) * flip) / k2;
+  const LY = (sx: number, sy: number): number => (-(sx - tx) * sn + (sy - ty) * cs) / k2;
+  // what code outside reads of the transform: cs never the identity's, sn
+  // only for rawCells' fast ways (header)
+  const unturned = (): void => {
+    p.cs = Number.NaN;
+    p.sn = rawCells && sn === 0 ? 0 : Number.NaN;
+    p.fx = flip;
+    if (rawCells) return;
+    p.tx = tx;
+    p.ty = ty;
+  };
   // the top-left texel of the cell drawn at (x, y): its box [x, x+1) mapped,
   // on the nearest texel (on the cell itself for whole x, y)
   const bx = (x: number, y: number): number => Math.floor(X(x + 0.5, y + 0.5) - lead);
   const by = (x: number, y: number): number => Math.floor(Y(x + 0.5, y + 0.5) - lead);
 
-  const block = (sx: number, sy: number, write: (x: number, y: number) => void): void => {
-    for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) write(sx + dx, sy + dy);
-  };
   const writes = [put, blendPx, add] as const;
   const PUT = 0;
+  // A cell's k x k texels from its top-left (sx, sy), by one of writes, the
+  // fade and light worked out once: the clipped painters of the weather and
+  // the sun rays light their glow a cell at a time, a pixel a write.
+  const block = (kind: number, sx: number, sy: number, c: number, a: number): void => {
+    if (kind === 1 || !c) {
+      if (c) for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) blendPx(sx + dx, sy + dy, c, a);
+      return;
+    }
+    const x0 = Math.max(sx, FOX) - FOX;
+    const x1 = Math.min(sx + k, FOX + FW) - FOX;
+    const y0 = Math.max(sy, FOY) - FOY;
+    const y1 = Math.min(sy + k, FOY + FH) - FOY;
+    if (x0 >= x1 || y0 >= y1) return;
+    if (kind === PUT) {
+      const aa = a * p.fade;
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) if (aa >= 1 || aa > BAYER[(((y + FOY) & 3) << 2) | ((x + FOX) & 3)]) FC[y * FW + x] = c;
+      return;
+    }
+    const K = a * p.fade * p.lightK;
+    if (K <= 0.004) return;
+    const [cr, cg, cb] = [(c & 255) * K, ((c >>> 8) & 255) * K, ((c >>> 16) & 255) * K];
+    for (let y = y0; y < y1; y++)
+      for (let x = x0; x < x1; x++) {
+        const i = y * FW + x;
+        const d = FL[i];
+        FL[i] =
+          (255 << 24) |
+          ((Math.min(255, ((d >>> 16) & 255) + cb) | 0) << 16) |
+          ((Math.min(255, ((d >>> 8) & 255) + cg) | 0) << 8) |
+          (Math.min(255, (d & 255) + cr) | 0);
+      }
+  };
+
+  // rawCells: the fields code outside walks the buffers by, in cells, over a
+  // buffer of a texel to a cell (header). `held` from its first read of C or
+  // L, the cells as they were then in c0 and l0 (each cell's first texel),
+  // until the painter is next asked to draw: then what changed goes into the
+  // texels (up).
+  const [W, H] = [FW / k, FH / k];
+  let held = false;
+  let up = (): void => {};
+  if (rawCells) {
+    const [sc, sl, c0, l0] = [0, 1, 2, 3].map(() => new Uint32Array(W * H));
+    const down = (): void => {
+      if (held) return;
+      endRun();
+      held = true;
+      for (let cy = 0; cy < H; cy++)
+        for (let cx = 0, i = cy * W, t = cy * k * FW; cx < W; cx++, i++, t += k) {
+          sc[i] = c0[i] = FC[t];
+          sl[i] = l0[i] = FL[t];
+        }
+    };
+    // The write that took a cell's first texel from b to n, made on each of
+    // its texels: n where a texel was b too (a sky just cleared: all of it).
+    // Elsewhere a blend of the colour at the alpha it took to make n of b (an
+    // opaque write's alpha is 1), when b let it be worked out (not opaque).
+    const colour = (t: number, b: number, n: number): void => {
+      let a = Number.NaN;
+      let c = 0;
+      for (let dy = 0; dy < k; dy++)
+        for (let dx = 0, j = t + dy * FW; dx < k; dx++, j++) {
+          const d = FC[j];
+          if (d === b) {
+            FC[j] = n;
+            continue;
+          }
+          if (Number.isNaN(a)) {
+            const [ba, na] = [(b >>> 24) / 255, (n >>> 24) / 255];
+            a = ba < 1 ? (na - ba) / (1 - ba) : -1;
+            const q = a / na;
+            for (const s of [16, 8, 0])
+              c |= Math.max(0, Math.min(255, Math.round((((n >>> s) & 255) - ((b >>> s) & 255) * (1 - q)) / q))) << s;
+          }
+          FC[j] = a > 0.004 && a < 1 ? over(d, c, a) : n;
+        }
+    };
+    // light only adds: the same added to each texel (n where any of it fell)
+    const light = (t: number, b: number, n: number): void => {
+      const dr = (n & 255) - (b & 255);
+      const dg = ((n >>> 8) & 255) - ((b >>> 8) & 255);
+      const db = ((n >>> 16) & 255) - ((b >>> 16) & 255);
+      const fell = dr < 0 || dg < 0 || db < 0;
+      for (let dy = 0; dy < k; dy++)
+        for (let dx = 0, j = t + dy * FW; dx < k; dx++, j++) {
+          const d = FL[j];
+          FL[j] =
+            fell || d === b
+              ? n
+              : (255 << 24) |
+                (Math.min(255, ((d >>> 16) & 255) + db) << 16) |
+                (Math.min(255, ((d >>> 8) & 255) + dg) << 8) |
+                Math.min(255, (d & 255) + dr);
+        }
+    };
+    up = (): void => {
+      if (!held) return;
+      held = false;
+      for (let cy = 0; cy < H; cy++)
+        for (let cx = 0, i = cy * W, t = cy * k * FW; cx < W; cx++, i++, t += k) {
+          if (sc[i] !== c0[i]) colour(t, c0[i], sc[i]);
+          if (sl[i] !== l0[i]) light(t, l0[i], sl[i]);
+        }
+    };
+    const cellField = (get: () => unknown): PropertyDescriptor => ({ get, set: () => {}, configurable: true });
+    Object.defineProperties(p, {
+      C: cellField(() => {
+        down();
+        return sc;
+      }),
+      L: cellField(() => {
+        down();
+        return sl;
+      }),
+      w: cellField(() => W),
+      h: cellField(() => H),
+      ox: cellField(() => FOX / k),
+      oy: cellField(() => FOY / k),
+      tx: cellField(() => tx / k),
+      ty: cellField(() => ty / k),
+    });
+  }
 
   // Whole-cell writes after toX/toY, held until the painter is asked for
   // anything else: the point asked for (cells) and each write's cell, kind
@@ -180,8 +377,7 @@ function scaled(frame: HiFrame, k: number): void {
     for (let i = 5; disc && i < ops.length; i += 5) disc = ops[i + 2] === kind && ops[i + 3] === c && ops[i + 4] === a;
     const write = writes[kind];
     if (!disc) {
-      for (let i = 0; i < ops.length; i += 5)
-        block(ops[i] * k, ops[i + 1] * k, (sx, sy) => writes[ops[i + 2]].call(p, sx, sy, ops[i + 3], ops[i + 4]));
+      for (let i = 0; i < ops.length; i += 5) block(ops[i + 2], ops[i] * k, ops[i + 1] * k, ops[i + 3], ops[i + 4]);
       return;
     }
     // the disc's radius: past the farthest middle written, short of the
@@ -205,48 +401,55 @@ function scaled(frame: HiFrame, k: number): void {
     }
     const R = (rOut > rIn && Number.isFinite(rOut) ? (rIn + rOut) / 2 : rIn + 0.5) * k;
     // every texel whose middle is within R of the point
-    const [tx, ty] = [x * k, y * k];
-    const sy0 = Math.max(Math.floor(ty - R), p.oy);
-    const sy1 = Math.min(Math.ceil(ty + R), p.oy + p.h - 1);
+    const [cx0, cy0] = [x * k, y * k];
+    const sy0 = Math.max(Math.floor(cy0 - R), FOY);
+    const sy1 = Math.min(Math.ceil(cy0 + R), FOY + FH - 1);
     for (let sy = sy0; sy <= sy1; sy++) {
-      const dy = sy + 0.5 - ty;
+      const dy = sy + 0.5 - cy0;
       if (dy * dy > R * R) continue;
       const span = Math.sqrt(R * R - dy * dy);
-      const sx1 = Math.min(Math.floor(tx + span - 0.5), p.ox + p.w - 1);
-      for (let sx = Math.max(Math.ceil(tx - span - 0.5), p.ox); sx <= sx1; sx++) write.call(p, sx, sy, c, a);
+      const sx1 = Math.min(Math.floor(cx0 + span - 0.5), FOX + FW - 1);
+      for (let sx = Math.max(Math.ceil(cx0 - span - 0.5), FOX); sx <= sx1; sx++) write(sx, sy, c, a);
     }
   };
-  endRuns.set(frame, endRun);
+  // before any drawing: rawCells' writes into the texels, a run held drawn
+  const ready = (): void => {
+    up();
+    endRun();
+  };
+  endRuns.set(frame, ready);
   // a whole-cell write: held in the run, or straight to the texel without one
   const cellWrite = (kind: number, sx: number, sy: number, c: number, a: number): void => {
+    up();
     if (run) {
       if (kind !== PUT || c) run.ops.push(sx, sy, kind, c, a);
-    } else writes[kind].call(p, sx, sy, c, a);
+    } else writes[kind](sx, sy, c, a);
   };
   const startRun = (): { x: number; y: number; ops: number[] } => {
+    up();
     if (!run) run = { x: Number.NaN, y: Number.NaN, ops: [] };
     else if (run.ops.length) {
-      endRun();
+      ready();
       run = { x: Number.NaN, y: Number.NaN, ops: [] };
     }
     return run;
   };
   const putCell = (x: number, y: number, c: number, a: number): void => {
-    endRun();
+    ready();
     if (!c) return;
-    block(bx(x, y), by(x, y), (sx, sy) => put.call(p, sx, sy, c, a));
+    block(0, bx(x, y), by(x, y), c, a);
   };
 
   const blend = (x: number, y: number, c: number, a: number): void => {
-    endRun();
-    block(bx(x, y), by(x, y), (sx, sy) => blendPx.call(p, sx, sy, c, a));
+    ready();
+    block(1, bx(x, y), by(x, y), c, a);
   };
   const dot = (x: number, y: number, c: number, a = 1): void => {
     if (a > 0) putCell(x, y, c, a);
   };
   // every texel whose middle falls in the cells' box, with that middle in cells
   const each = (x0: number, y0: number, x1: number, y1: number, fn: (x: number, y: number, sx: number, sy: number) => void): void => {
-    endRun();
+    ready();
     let ax = Number.POSITIVE_INFINITY;
     let bxx = Number.NEGATIVE_INFINITY;
     let ay = Number.POSITIVE_INFINITY;
@@ -261,10 +464,10 @@ function scaled(frame: HiFrame, k: number): void {
       ay = Math.min(ay, sy);
       byy = Math.max(byy, sy);
     }
-    const sx0 = Math.max(Math.floor(ax), p.ox);
-    const sx1 = Math.min(Math.ceil(bxx), p.ox + p.w - 1);
-    const sy0 = Math.max(Math.floor(ay), p.oy);
-    const sy1 = Math.min(Math.ceil(byy), p.oy + p.h - 1);
+    const sx0 = Math.max(Math.floor(ax), FOX);
+    const sx1 = Math.min(Math.ceil(bxx), FOX + FW - 1);
+    const sy0 = Math.max(Math.floor(ay), FOY);
+    const sy1 = Math.min(Math.ceil(byy), FOY + FH - 1);
     for (let sy = sy0; sy <= sy1; sy++)
       for (let sx = sx0; sx <= sx1; sx++) {
         const cx = sx + 0.5;
@@ -280,32 +483,30 @@ function scaled(frame: HiFrame, k: number): void {
     const K = kk * p.fade * p.lightK;
     if (K <= 0.004) return null;
     const [cr, cg, cb] = [c & 255, (c >>> 8) & 255, (c >>> 16) & 255];
-    const { L, w, ox, oy } = p;
     return (sx, sy, f) => {
       const v = f * K;
       if (v <= 0.004) return;
-      const i = (sy - oy) * w + sx - ox;
-      const d = L[i];
+      const i = (sy - FOY) * FW + sx - FOX;
+      const d = FL[i];
       const r = Math.min(255, (d & 255) + cr * v) | 0;
       const g = Math.min(255, ((d >>> 8) & 255) + cg * v) | 0;
       const b = Math.min(255, ((d >>> 16) & 255) + cb * v) | 0;
-      L[i] = (255 << 24) | (b << 16) | (g << 8) | r;
+      FL[i] = (255 << 24) | (b << 16) | (g << 8) | r;
     };
   };
 
   const own: Record<string, Fn> = {
     reset(): Painter {
-      endRun();
+      ready();
       proto.reset.call(p);
-      p.cs = k;
+      [tx, ty, flip, cs, sn] = [0, 0, 1, k, 0];
+      unturned();
       return p;
     },
-    place(x: number, y: number, flip = false, angle = 0): Painter {
-      p.tx = x * k;
-      p.ty = y * k;
-      p.fx = flip ? -1 : 1;
-      p.cs = Math.cos(angle) * k;
-      p.sn = Math.sin(angle) * k;
+    place(x: number, y: number, mirrored = false, angle = 0): Painter {
+      [tx, ty, flip] = [x * k, y * k, mirrored ? -1 : 1];
+      [cs, sn] = [Math.cos(angle) * k, Math.sin(angle) * k];
+      unturned();
       return p;
     },
     // in cells, for code that walks the frame itself (fire/_lib solid, soft)
@@ -323,11 +524,11 @@ function scaled(frame: HiFrame, k: number): void {
     fromY: (sx: number, sy: number): number => LY(sx * k, sy * k),
     // a cell's top-left texel, for code writing the buffers by it (the black star)
     cellX(x: number, y: number): number {
-      endRun();
+      ready();
       return bx(Math.floor(x), Math.floor(y));
     },
     cellY(x: number, y: number): number {
-      endRun();
+      ready();
       const sy = by(Math.floor(x), Math.floor(y));
       cells.push(bx(Math.floor(x), Math.floor(y)), sy);
       return sy;
@@ -339,21 +540,21 @@ function scaled(frame: HiFrame, k: number): void {
     add: (sx: number, sy: number, c: number, kk = 1): void => cellWrite(2, sx, sy, c, kk),
     blend,
     get(x: number, y: number): number {
-      endRun();
-      const sx = bx(x, y) - p.ox;
-      const sy = by(x, y) - p.oy;
-      return sx < 0 || sy < 0 || sx >= p.w || sy >= p.h ? 0 : p.C[sy * p.w + sx];
+      ready();
+      const sx = bx(x, y) - FOX;
+      const sy = by(x, y) - FOY;
+      return sx < 0 || sy < 0 || sx >= FW || sy >= FH ? 0 : FC[sy * FW + sx];
     },
     px: (x: number, y: number, c: number): void => putCell(x, y, c, 1),
     dot,
     light(x: number, y: number, c: number, kk = 1): void {
-      endRun();
-      block(bx(x, y), by(x, y), (sx, sy) => add.call(p, sx, sy, c, kk));
+      ready();
+      block(2, bx(x, y), by(x, y), c, kk);
     },
     each,
     // a cell thick: a run of k texels across the line at each texel along it
     line(x0: number, y0: number, x1: number, y1: number, c: Colour, a: Colour = 1): void {
-      endRun();
+      ready();
       const [ax, ay, ex, ey] = [bx(x0, y0), by(x0, y0), bx(x1, y1), by(x1, y1)];
       const dx = ex - ax;
       const dy = ey - ay;
@@ -368,15 +569,15 @@ function scaled(frame: HiFrame, k: number): void {
         if (!cc) continue;
         const o = Math.round(along ? ay + dy * u : ax + dx * u);
         for (let j = 0; j < k; j++) {
-          if (along) put.call(p, s, o + j, cc, aa);
-          else put.call(p, o + j, s, cc, aa);
+          if (along) put(s, o + j, cc, aa);
+          else put(o + j, s, cc, aa);
         }
       }
     },
     // on the texel grid when it is not turned, by its cells' middles when it is
     rect(x: number, y: number, w: number, h: number, c: number, a = 1): void {
-      endRun();
-      if (p.sn !== 0) {
+      ready();
+      if (sn !== 0) {
         proto.rect.call(p, x, y, w, h, c, a);
         return;
       }
@@ -386,7 +587,7 @@ function scaled(frame: HiFrame, k: number): void {
       const X1 = Math.round(Math.max(ax, bx2));
       const Y0 = Math.round(Math.min(ay, by2));
       const Y1 = Math.round(Math.max(ay, by2));
-      for (let sy = Y0; sy < Y1; sy++) for (let sx = X0; sx < X1; sx++) put.call(p, sx, sy, c, a);
+      for (let sy = Y0; sy < Y1; sy++) for (let sx = X0; sx < X1; sx++) put(sx, sy, c, a);
     },
     // filled shapes as pixelfx's (each() at texels), the angle worked out only
     // for a colour or alpha that asks for it: Math.atan2 on every texel was an
@@ -404,7 +605,7 @@ function scaled(frame: HiFrame, k: number): void {
         if (d2 > r * r) return;
         const d = Math.sqrt(d2) / r;
         const ang = turn ? Math.atan2(dy, dx) : 0;
-        blendPx.call(p, sx, sy, call(c, d, ang), call(a, d, ang));
+        blendPx(sx, sy, call(c, d, ang), call(a, d, ang));
       });
     },
     circle(cx: number, cy: number, r: number, c: Colour, a: Colour = 1): void {
@@ -421,28 +622,28 @@ function scaled(frame: HiFrame, k: number): void {
         const d = Math.sqrt(d2) / r;
         const ang = turn ? Math.atan2(dy, dx) : 0;
         const col = call(c, d, ang);
-        if (col) put.call(p, sx, sy, col, call(a, d, ang));
+        if (col) put(sx, sy, col, call(a, d, ang));
       });
     },
     // the light: pixelfx's, in texels (r and R times k), each row walked only
     // where it can be lit, the light added in place (Painter.add's own sums)
     glow(x: number, y: number, r: number, c: number, kk = 0.5): void {
-      endRun();
+      ready();
       if (r < 1 || kk <= 0.004) return;
       const cx = X(x, y);
       const cy = Y(x, y);
       const R = r * k;
       const lit = lighter(c, kk);
       if (!lit) return;
-      const sy0 = Math.max(Math.floor(cy - R), p.oy);
-      const sy1 = Math.min(Math.ceil(cy + R), p.oy + p.h - 1);
+      const sy0 = Math.max(Math.floor(cy - R), FOY);
+      const sy1 = Math.min(Math.ceil(cy + R), FOY + FH - 1);
       for (let sy = sy0; sy <= sy1; sy++) {
         const dy = (sy + 0.5 - cy) / R;
         const dy2 = dy * dy;
         if (dy2 >= 1) continue;
         const span = Math.sqrt(1 - dy2) * R;
-        const sx1 = Math.min(Math.ceil(cx + span), p.ox + p.w - 1);
-        for (let sx = Math.max(Math.floor(cx - span), p.ox); sx <= sx1; sx++) {
+        const sx1 = Math.min(Math.ceil(cx + span), FOX + FW - 1);
+        for (let sx = Math.max(Math.floor(cx - span), FOX); sx <= sx1; sx++) {
           const dx = (sx + 0.5 - cx) / R;
           const d = dx * dx + dy2;
           if (d >= 1) continue;
@@ -452,7 +653,7 @@ function scaled(frame: HiFrame, k: number): void {
       }
     },
     glowLine(x0: number, y0: number, x1: number, y1: number, r: number, c: number, kk = 0.5): void {
-      endRun();
+      ready();
       if (r < 1 || kk <= 0.004) return;
       const lit = lighter(c, kk);
       if (!lit) return;
@@ -464,10 +665,10 @@ function scaled(frame: HiFrame, k: number): void {
       const dx = ex - ax;
       const dy = ey - ay;
       const L2 = dx * dx + dy * dy || 1e-9;
-      const sy0 = Math.max(Math.floor(Math.min(ay, ey) - R), p.oy);
-      const sy1 = Math.min(Math.ceil(Math.max(ay, ey) + R), p.oy + p.h - 1);
-      const sx0 = Math.max(Math.floor(Math.min(ax, ex) - R), p.ox);
-      const sx1 = Math.min(Math.ceil(Math.max(ax, ex) + R), p.ox + p.w - 1);
+      const sy0 = Math.max(Math.floor(Math.min(ay, ey) - R), FOY);
+      const sy1 = Math.min(Math.ceil(Math.max(ay, ey) + R), FOY + FH - 1);
+      const sx0 = Math.max(Math.floor(Math.min(ax, ex) - R), FOX);
+      const sx1 = Math.min(Math.ceil(Math.max(ax, ex) + R), FOX + FW - 1);
       for (let sy = sy0; sy <= sy1; sy++)
         for (let sx = sx0; sx <= sx1; sx++) {
           const px = sx + 0.5;
@@ -482,7 +683,7 @@ function scaled(frame: HiFrame, k: number): void {
         }
     },
     glowRing(x: number, y: number, R: number, r: number, c: number, kk = 0.5): void {
-      endRun();
+      ready();
       if (r < 1 || kk <= 0.004) return;
       const lit = lighter(c, kk);
       if (!lit) return;
@@ -491,16 +692,16 @@ function scaled(frame: HiFrame, k: number): void {
       const RR = R * k;
       const rr = r * k;
       const E = RR + rr;
-      const sy0 = Math.max(Math.floor(cy - E), p.oy);
-      const sy1 = Math.min(Math.ceil(cy + E), p.oy + p.h - 1);
+      const sy0 = Math.max(Math.floor(cy - E), FOY);
+      const sy1 = Math.min(Math.ceil(cy + E), FOY + FH - 1);
       for (let sy = sy0; sy <= sy1; sy++) {
         const dy = sy + 0.5 - cy;
         if (Math.abs(dy) >= E) continue;
         // the row's span outside the hole the ring leaves (its inner edge)
         const out = Math.sqrt(E * E - dy * dy);
         const inner = RR > rr && Math.abs(dy) < RR - rr ? Math.sqrt((RR - rr) ** 2 - dy * dy) : 0;
-        const sx1 = Math.min(Math.ceil(cx + out), p.ox + p.w - 1);
-        for (let sx = Math.max(Math.floor(cx - out), p.ox); sx <= sx1; sx++) {
+        const sx1 = Math.min(Math.ceil(cx + out), FOX + FW - 1);
+        for (let sx = Math.max(Math.floor(cx - out), FOX); sx <= sx1; sx++) {
           const ddx = sx + 0.5 - cx;
           if (inner && Math.abs(ddx) < inner - 1) {
             sx = Math.max(sx, Math.floor(cx + inner) - 1);

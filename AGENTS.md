@@ -698,8 +698,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
 - 밤·날씨는 그리지 않는다. BattleScene 이 하늘 오버레이를, BattleWeather 가
   비·눈·재를 덮는다.
 - 전투의 비·폭풍·눈·눈보라는 pixelfx weather 루프를 시트로 굽지 않고(12초 루프를 15fps 로 구우면 230KB
-  프레임 180장) `src/ui/PixelWeather.ts` 가 15fps 로 320x118 CanvasTexture(4px 칸, y 0..472)에 바로 다시
-  그린다. 이펙트 바닥을 지평선(y 440)에 두고 그 아래에는 front 층(가까운 빗방울·물보라)만 그린다. 실제 사례:
+  프레임 180장) `src/ui/PixelWeather.ts` 가 15fps 로 640x236 CanvasTexture(한 칸 2텍셀, 텍셀 2px, y 0..472)에
+  바로 다시 그린다(`hiresPaint` 의 `rawCells`). 빗줄기·바람 줄은 한 칸(4px) 굵기에 계단만 2px 이고, 하늘 패스(안개·비
+  장막·눈 장막, weather/_lib 의 pass/rows)는 효과가 칸마다 계산해 4px 그대로다. 1텍셀(2px) 줄도 시험했지만 비의
+  잉크가 절반이라 비가 약해지고 눈보라 줄이 거의 사라져 버렸다(결정). 이펙트 바닥을 지평선(y 440)에 두고 그 아래에는 front 층(가까운 빗방울·물보라)만 그린다. 실제 사례:
   back 층의 바닥(젖은 lip 줄·웅덩이 띠·눈 더미)이 지평선을 따라 밝은 줄을 그었다. 다시 그리기 한 번은 back
   층(폭풍은 두 띠) → front·합성·업로드로 여러 프레임에 나눈다. 화산재는 예전 Ambient 파티클과 스모그
   그대로다. pixelfx snow 에 재 팔레트를 입혀도 `snow.js` 가 정해 둔 WHITE(큰 눈송이 중심·눈 더미 꼭대기·
@@ -846,7 +848,10 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   `soften`(crop 가장자리 8칸의 솔리드 픽셀을 Bayer 디더로 녹임. 실제 사례: 연기·불꽃 머리가 y 224 에서 직선으로
   잘렸다), `half`(몸보다 훨씬 큰 효과를 반 크기로, 짝수 res 에서는 원해상도로 직접 그려 BLACK HOLE·implosion 의 선이
   2px 로 가늘다). 래퍼는 pixelfx painter 의 `frame` 필드와 createFx 안의 createFx 에 기대고, `hiresPaint.ts` 는 Painter
-  메서드 목록, fire/_lib 의 solid·soft, explosions/_lib 의 cs/sn 항등 검사, shadow/_lib 의 cellX·`p.L` 에 기댄다.
+  메서드 목록, fire/_lib 의 solid·soft, explosions/_lib 의 cs/sn 항등 검사, shadow/_lib 의 cellX·`p.L`, weather/_lib
+  의 pass()·rows() 빠른 길과 clip() 에 기댄다. 회전은 클로저에 두고 painter 의 cs/sn 은 NaN 이라 항등 검사로 빠른 길을
+  타는 코드는 일반 경로를 탄다. `rawCells`(날씨 전용) 일 때만 sn 0 으로 빠른 길이 칸 단위 그림자 버퍼에 쓰고, 다음
+  그리기 전에 텍셀로 합친다(칸 안에 이미 다른 텍셀이 있으면 같은 블렌드를 역산해 다시 적용하는 근사).
   pixelfx 를 올리면 시트를 전·후 픽셀 비교로, 2배 밀도는 res 1 대 2 의 프레임별 ink 비·무게중심 이동(전에 0.86~1.31)으로
   다시 본다.
 - 전투 시트는 `trimFrames` 로 프레임마다 그린 상자만 잘라 묶는다(GAP 1, Phaser 의 trimmed frame 이라 크기·origin 이

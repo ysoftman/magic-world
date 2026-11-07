@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { createFx, type Fx, type FxFrame, type FxModule } from "pixelfx";
 import { GAME_WIDTH, PIXEL } from "../config";
+import { finish, hires } from "../hiresPaint";
 
 // A pixelfx weather loop (pixelfx/fx/weather/*, MIT, by Patch and Hugo
 // Duprez; its notice is the /*! line in fx.ts) played live behind the
@@ -8,13 +9,24 @@ import { GAME_WIDTH, PIXEL } from "../config";
 // of its pixels is one backdrop cell (PIXEL). A 12s loop baked at 15fps would
 // be 180 frames of 230KB, so it is drawn as it plays instead: the effect is a
 // pure function of its time, redrawn STEP_MS apart into a CanvasTexture the
-// size of the cells it reaches.
+// size of the cells it reaches, RES texels to a cell (hiresPaint.ts).
+//
+// At RES 2 a texel is 2px, the field's own cell: a drop or a gust's streak
+// stays a cell thick (4px, the weight the effect gives it, and the field's
+// rain and streaks are 4px wide) but its stair steps by 2px, and the bolt's
+// rounds and every flake's place step by 2px too. Drops a texel wide read
+// finer but carried half the rain. Its whole-sky passes (weather/_lib pass()
+// and rows(): haze, veils, mist, blown sheets) are worked out a cell at a
+// time by the effect itself, so they stay 4px (rawCells: at their own
+// speed). A battle frame with the weather on took a 95th percentile 1.3-3.5ms
+// at a texel to a cell and 2.6-2.8ms at two (headless Chrome).
 
 // Redrawn this often, half the 30fps the loops are authored at: a redraw
 // costs 1-2ms, spread over two or three frames (below).
 const STEPS = 15;
 const STEP_MS = 1000 / STEPS;
 const COLS = GAME_WIDTH / PIXEL;
+const RES = 2;
 const TEXTURE = "battle-weather";
 
 export interface PixelWeatherLook {
@@ -56,24 +68,35 @@ export interface PixelWeatherLook {
  */
 export function addPixelWeather(scene: Phaser.Scene, look: PixelWeatherLook, floor: number, rows: number): Phaser.GameObjects.Image {
   if (scene.textures.exists(TEXTURE)) scene.textures.remove(TEXTURE);
-  const texture = scene.textures.createCanvas(TEXTURE, COLS, rows);
-  const image = scene.add.image(0, 0, TEXTURE).setOrigin(0).setScale(PIXEL);
+  const [W, H] = [COLS * RES, rows * RES];
+  const texture = scene.textures.createCanvas(TEXTURE, W, H);
+  const image = scene.add
+    .image(0, 0, TEXTURE)
+    .setOrigin(0)
+    .setScale(PIXEL / RES);
   if (!texture) return image;
   const ctx = texture.getContext();
-  const img = ctx.createImageData(COLS, rows);
+  const img = ctx.createImageData(W, H);
   const out = new Uint32Array(img.data.buffer);
-  const color = new Uint32Array(COLS * rows);
-  const light = new Uint32Array(COLS * rows);
+  const color = new Uint32Array(W * H);
+  const light = new Uint32Array(W * H);
   // the front draws into every row; the back only into those above its floor
-  const front: FxFrame = { w: COLS, h: rows, ox: 0, oy: 0, color, light };
-  const rowsOf = (y0: number, y1: number): FxFrame => ({
-    w: COLS,
-    h: y1 - y0,
-    ox: 0,
-    oy: y0,
-    color: color.subarray(y0 * COLS, y1 * COLS),
-    light: light.subarray(y0 * COLS, y1 * COLS),
-  });
+  // (rows in cells, the frames in texels)
+  const opts = { rawCells: true };
+  const front: FxFrame = hires({ w: W, h: H, ox: 0, oy: 0, color, light }, RES, opts);
+  const rowsOf = (y0: number, y1: number): FxFrame =>
+    hires(
+      {
+        w: W,
+        h: (y1 - y0) * RES,
+        ox: 0,
+        oy: y0 * RES,
+        color: color.subarray(y0 * RES * W, y1 * RES * W),
+        light: light.subarray(y0 * RES * W, y1 * RES * W),
+      },
+      RES,
+      opts,
+    );
   const n = look.bands ?? 1;
   const bands = Array.from({ length: n }, (_, i) => rowsOf(Math.round((floor * i) / n), Math.round((floor * (i + 1)) / n)));
 
@@ -118,10 +141,12 @@ export function addPixelWeather(scene: Phaser.Scene, look: PixelWeatherLook, flo
     }
     if (next < bands.length) {
       fx.draw(bands[next], "back");
+      finish(bands[next]);
       next++;
       return;
     }
     fx.draw(front, "front");
+    finish(front);
     composite(color, light, out, look.haze);
     ctx.putImageData(img, 0, 0);
     texture.refresh();
