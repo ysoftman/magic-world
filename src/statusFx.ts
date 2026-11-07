@@ -20,7 +20,7 @@ import * as stunned from "pixelfx/fx/status/stunned";
 import { battleSource } from "./battleHd";
 import { bakePixelSheet, type PixelSheet, warmSheets } from "./fx";
 import { GameState } from "./gameState";
-import { densityOf } from "./hiresPaint";
+import { densityOf, finish } from "./hiresPaint";
 import { ART_PX, texelsOf } from "./pixelart";
 
 // The battle's status and recovery effects: pixelfx effects that act on a
@@ -705,6 +705,10 @@ export function hdBody(fx: FxModule, subs: Actor[]): FxModule {
           drawLayers(main, painter, t, own);
           const frame = painter.frame;
           if ((!kept && reads === 0) || densityOf(frame) !== HD_RES) return;
+          // what the hi-res painter holds to the frame's end (a fire's
+          // puffs, a black star's unlit cells) put in before the merge reads
+          // and rewrites the frame; sheetBaker's own finish then has nothing left
+          finish(frame);
           const [w, h, ox, oy] = [frame.w / HD_RES, frame.h / HD_RES, frame.ox / HD_RES, frame.oy / HD_RES];
           if (low[0]?.w !== w || low[0].h !== h || low[0].ox !== ox || low[0].oy !== oy) low = subs.map(() => createFrame(w, h, ox, oy));
           quarters.forEach((q, i) => {
