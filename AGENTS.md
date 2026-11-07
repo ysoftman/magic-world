@@ -522,7 +522,8 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 길 variation 2장이 위상이 접혀 바이트 단위로 중복된 것. 셋 다 아무것도
 throw 하지 않고 그림만 조용히 틀리는 종류다.
 
-그림은 영역별 파일에 있다: `tiles.ts`(지형 격자·팔레트, 32칸, 생성기로 만든 리터럴), `tilesets.ts`(tiles16/shore16/road16 와
+그림은 영역별 파일에 있다: `tiles.ts`(지형 격자·팔레트, 32칸. 바닥·물·용암·물가/길 전환 51장은 `scripts/gen-terrain.ts` 가 만든 리터럴이라
+그 스크립트를 고치고 `bun run gen:terrain` 으로 다시 쓰며 `--check` 로 맞는지 본다. 나무·바위는 손으로 고친다), `tilesets.ts`(tiles16/shore16/road16 와
 스킨 굽기, `*_SKIN`·`seasonSkin`·`battleBgKey`·`TILE_VARIANTS`), `hero.ts`, `npcs.ts`, `monsters.ts`,
 `props.ts`, `icons.ts`, `landmarks.ts`, `forged.ts`(대장간 단련 장비, `Blacksmith` 는 굽기만 맡긴다), 전투용
 HD 격자 `hdHero.ts`·`hdMonsters.ts`·`hdBosses.ts`. 격자·팔레트와 그것을 굽는 `bake*` 함수가 같은 파일에 있고
@@ -604,7 +605,8 @@ TDZ 로 부팅이 죽는다. 지금 이 둘을 쓰는 격자는 `npcs.ts` 의 �
 가장자리에서 0 인 출렁임을 더해, 이웃 타일이 공유하는 가장자리를 같은 자리에서 자른다. 채움은 기본 타일 무늬를
 그대로 이어 간다(그래서 `SHORE` 에 물의 `d`, `ROAD` 에 길의 `h` 가 있다). 실제 사례: 4px 무늬를 지키던 바닥이
 화면 대부분을 차지해 그 위의 2px 캐릭터·건물보다 뭉툭했고, 예전 길 오버레이는 기본 길과 다른 어두운 4px 점을
-깔아 한 칸 폭 길이 점박이로 보였다.
+깔아 한 칸 폭 길이 점박이로 보였다. 바닥·물·용암·전환 격자는 `tiles.ts` 에서 직접 고치지 않는다. 다음
+`bun run gen:terrain` 이 덮어쓰므로 `scripts/gen-terrain.ts` 를 고친다.
 32칸(보스·거인은 48칸)으로 다시 그린 그리드는 `makeTexture(..., ART_PX)` 로 Scale2x 없이
 굽고, check:art 가 32x32 또는 48x48 정사각인지 본다(입자 둘만 예외로 이름을 적어 둔다: spark 16칸·firefly
 24칸, check-art 의 `SMALL_AT_ART_PX`). 소품·작물(`props.ts`, 밭의 호박·월광화 포함)도 이렇게 32칸을 ART_PX 로

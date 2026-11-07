@@ -11,6 +11,11 @@
 // 2px shape of the same four cells; the trees and the boulder are their
 // Scale2x bake with the outline thinned to one cell and the canopy's tone
 // bands broken into leaves; the transitions are generated (see SHORE_PALETTE).
+//
+// The floors, the water, the lava and the transitions are made by
+// scripts/gen-terrain.ts: `bun run gen:terrain` writes their blocks here
+// again, `bun run gen:terrain --check` says whether they still match it. Change
+// one there, not here. The trees and the boulder are drawn here by hand.
 
 // Terrain is a regular diagonal pattern, two tones, deliberately low contrast.
 //
@@ -778,14 +783,15 @@ export const PATH_TILE_4 = [
 ];
 
 // Autotile transition overlays: grass<->water (shore) and grass<->path (road).
-// Generated, not hand-drawn. The boundary is the 0.5 contour of the corners'
-// bilinear blend, taken on smoothstepped coordinates so a lone corner rounds
-// off like a quarter circle instead of pinching in, and bent by a warp a cell
-// or two long. The warp is nought across each edge (sin(pi p u) for du, the
-// same in v) and repeats every tile along it, so two tiles that share an edge
-// cut it at the same place. The saddles (6, 9) are the union of their two
-// corner wedges, which is the same blend on every edge. A majority pass inside
-// each tile, never on its border, clears spits a cell or two wide.
+// Generated (scripts/gen-terrain.ts), not hand-drawn. The boundary is the 0.5
+// contour of the corners' bilinear blend, taken on smoothstepped coordinates
+// so a lone corner rounds off like a quarter circle instead of pinching in,
+// and bent by a warp a cell or two long. The warp is nought across each edge
+// (sin(pi p u) for du, the same in v) and repeats every tile along it, so two
+// tiles that share an edge cut it at the same place. The saddles (6, 9) are
+// the union of their two corner wedges, which is the same blend on every
+// edge. A majority pass inside each tile, never on its border, clears spits
+// a cell or two wide.
 //
 // The fills run on into the base tiles: the grass side is GRASS_TILE's blades
 // (q), the path side PATH_TILE (so ROAD has PATH_PALETTE's h) and the water
