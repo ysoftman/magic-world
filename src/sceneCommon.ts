@@ -897,7 +897,7 @@ export interface Roamer<K extends string = string> {
 /**
  * A roamer of `kind`, drawn as `texture`, somewhere in the middle 60% of
  * `zone`, in `group` (the hero's overlap with it is the scene's) and
- * squashing as it goes; a `boss` is slower. A boss is half as big again by
+ * hopping as it goes (hop); a `boss` is slower. A boss is half as big again by
  * its texture (48 cells, 96px, src/art/monsters.ts), drawn at 1x in the
  * field's 2px cells as every roamer is: it was 64px art at 1.5x, 3px cells.
  * The scene keeps it in its roamers, for wanderRoamers and for the fight it
@@ -931,16 +931,40 @@ export function addRoamer<K extends string>(
     speed: (boss ? 40 : 56) + Math.random() * 40,
     kind,
   };
-  scene.tweens.add({
-    targets: sprite,
-    scaleX: 1.12,
-    scaleY: 0.88,
-    duration: 280,
-    yoyo: true,
-    repeat: -1,
-    ease: "Sine.easeInOut",
-  });
+  hop(scene, sprite);
   return roamer;
+}
+
+// A roamer's hop: up ROAMER_HOP_PX and down again every ROAMER_HOP_MS, in
+// whole 2px cells, each from its own moment so a pack does not bob as one.
+// It squashed before (1.12 x 0.88), which drew its 2px cells 2.2px wide and
+// 1.8px tall, unevenly.
+const ROAMER_HOP_PX = 4;
+const ROAMER_HOP_MS = 560;
+
+// The picture is lifted, not the sprite: its display origin goes down the
+// texture by the lift and its body's offset with it, so the hit box the
+// hero meets stays where it was (Arcade places a body at y + offset -
+// displayOrigin).
+function hop(scene: Phaser.Scene, sprite: Phaser.Physics.Arcade.Sprite): void {
+  const body = sprite.body as Phaser.Physics.Arcade.Body | null;
+  const [originY, offsetY] = [sprite.displayOriginY, body?.offset.y ?? 0];
+  let lift = 0;
+  const tween = scene.tweens.addCounter({
+    from: 0,
+    to: 1,
+    duration: ROAMER_HOP_MS,
+    delay: Math.random() * ROAMER_HOP_MS,
+    repeat: -1,
+    onUpdate: (tw) => {
+      const up = Math.round((Math.sin(Math.PI * (tw.getValue() ?? 0)) * ROAMER_HOP_PX) / ART_PX) * ART_PX;
+      if (up === lift) return;
+      lift = up;
+      sprite.setDisplayOrigin(sprite.displayOriginX, originY + up);
+      body?.setOffset(body.offset.x, offsetY + up);
+    },
+  });
+  sprite.once(Phaser.GameObjects.Events.DESTROY, () => tween.remove());
 }
 
 /**
