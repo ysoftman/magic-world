@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { retroStyle } from "../pixelart";
+import { ART_PX, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 
 // Virtual gamepad for coarse-pointer (touch) devices. Buttons replay real key
@@ -58,6 +58,29 @@ const MENU_TIGHT_R = 21;
 // map still shows. Pressed, it lightens as before.
 const DISC_ALPHA = 0.5;
 const DISC_PRESSED_ALPHA = 0.2;
+// The disc's rim, one 2px cell of white at the old stroke's alpha.
+const RIM_ALPHA = 0.45;
+
+// A disc of radius `r` round (x, y) drawn into `g` (placed at x, y) in rows of
+// ART_PX, each row's ends on whole ART_PX steps, as the art's 2px cells are:
+// a black inside at `fill` and a rim a cell thick. A circle with a 2px stroke
+// had 1px edges. Its rows sit on even px when x and the disc's top (y - r) are
+// even, as every button's are: the d-pad, Z and ESC on even centres and radii,
+// the menu column at x 1246 with r 24 from y 150 or r 21 from y 131.
+function drawDisc(g: Phaser.GameObjects.Graphics, r: number, fill: number): void {
+  const span = (radius: number, top: number): number => {
+    const mid = (top + ART_PX / 2) / radius;
+    return Math.abs(mid) >= 1 ? 0 : Math.round((radius * Math.sqrt(1 - mid * mid)) / ART_PX) * ART_PX;
+  };
+  g.clear();
+  for (let top = -r; top < r; top += ART_PX) {
+    const [outer, inner] = [span(r, top), span(r - ART_PX, top)];
+    g.fillStyle(0xffffff, RIM_ALPHA)
+      .fillRect(-outer, top, outer - inner, ART_PX)
+      .fillRect(inner, top, outer - inner, ART_PX);
+    if (inner > 0) g.fillStyle(0x000000, fill).fillRect(-inner, top, inner * 2, ART_PX);
+  }
+}
 
 export function isTouchDevice(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -79,7 +102,7 @@ export function hideTouchButtons(scene: Phaser.Scene, groups: TouchGroup[]): voi
 }
 
 interface TouchButton {
-  ring: Phaser.GameObjects.Arc;
+  ring: Phaser.GameObjects.Graphics;
   text: PixelText;
   groups: TouchGroup[];
   release: () => void;
@@ -186,20 +209,22 @@ export class TouchControls {
     size = label.length > 1 ? 6 : 12,
     groups: TouchGroup[] = [],
   ): TouchButton {
-    const ring = scene.add.circle(x, y, r, 0x000000, DISC_ALPHA).setStrokeStyle(2, 0xffffff, 0.45).setScrollFactor(0).setDepth(250);
+    const ring = scene.add.graphics({ x, y }).setScrollFactor(0).setDepth(250);
+    drawDisc(ring, r, DISC_ALPHA);
     const text = scene.add.pixelText(x, y, label, retroStyle(size, "#ffffff")).setOrigin(0.5).setScrollFactor(0).setDepth(251);
-    ring.setInteractive(new Phaser.Geom.Circle(r, r, r), Phaser.Geom.Circle.Contains);
+    // the hit circle in the graphics' own space, centred on (x, y)
+    ring.setInteractive(new Phaser.Geom.Circle(0, 0, r), Phaser.Geom.Circle.Contains);
     let held = false;
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
       held = true;
-      ring.setFillStyle(0x000000, DISC_PRESSED_ALPHA);
+      drawDisc(ring, r, DISC_PRESSED_ALPHA);
       sendKey("keydown", code);
     });
     // only a press gets a keyup, so hide() can call this on every button
     const release = (): void => {
       if (!held) return;
       held = false;
-      ring.setFillStyle(0x000000, DISC_ALPHA);
+      drawDisc(ring, r, DISC_ALPHA);
       sendKey("keyup", code);
     };
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, release);
