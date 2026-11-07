@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GameState } from "../gameState";
 import { guidePoints } from "../objective";
-import { makeTexture } from "../pixelart";
+import { ART_PX, makeTexture } from "../pixelart";
 import type { Region } from "../weather";
 import { STATUS_HUD_HEIGHT } from "./StatusHud";
 
@@ -11,30 +11,51 @@ const KEY = "guide-arrow";
 const PALETTE = { o: 0x1a1028, f: 0xff4fd8 };
 // Pointing east and south-east; the other six frames are these turned a
 // quarter at a time, so the pixel grid never sees an arbitrary rotation.
-// Square, so a quarter turn keeps each shape centred where it was.
+// Square, so a quarter turn keeps each shape centred where it was. On 2px
+// cells (ART_PX) as they are, 36px as the 9-cell grids through Scale2x were,
+// with a one-cell outline: through Scale2x the outline stayed 4px thick
+// beside the hero's 2px one.
 // biome-ignore format: kept one row per line so the art reads as a grid
 const EAST = [
-  "..o......",
-  "..oo.....",
-  "..ofo....",
-  "..offo...",
-  "..offfo..",
-  "..offo...",
-  "..ofo....",
-  "..oo.....",
-  "..o......",
+  "....oo............",
+  "....ofo...........",
+  "....offo..........",
+  "....offfo.........",
+  "....offffo........",
+  "....offfffo.......",
+  "....offffffo......",
+  "....offfffffo.....",
+  "....offffffffo....",
+  "....offffffffo....",
+  "....offfffffo.....",
+  "....offffffo......",
+  "....offfffo.......",
+  "....offffo........",
+  "....offfo.........",
+  "....offo..........",
+  "....ofo...........",
+  "....oo............",
 ];
 // biome-ignore format: as above
 const SOUTH_EAST = [
-  ".........",
-  ".......o.",
-  "......oo.",
-  ".....ofo.",
-  "....offo.",
-  "...offfo.",
-  "..offffo.",
-  ".ooooooo.",
-  ".........",
+  "..................",
+  "..................",
+  "...............o..",
+  "..............oo..",
+  ".............ofo..",
+  "............offo..",
+  "...........offfo..",
+  "..........offffo..",
+  ".........offfffo..",
+  "........offffffo..",
+  ".......offfffffo..",
+  "......offffffffo..",
+  ".....offfffffffo..",
+  "....offffffffffo..",
+  "...offfffffffffo..",
+  "..oooooooooooooo..",
+  "..................",
+  "..................",
 ];
 // from the hero's centre: the east frame's inner edge sits 14px clear of the
 // 64px hero sprite
@@ -64,8 +85,8 @@ function bake(scene: Phaser.Scene): void {
   let axis = EAST;
   let diagonal = SOUTH_EAST;
   for (let i = 0; i < 8; i += 2) {
-    makeTexture(scene, `${KEY}-${i}`, axis, PALETTE);
-    makeTexture(scene, `${KEY}-${i + 1}`, diagonal, PALETTE);
+    makeTexture(scene, `${KEY}-${i}`, axis, PALETTE, ART_PX);
+    makeTexture(scene, `${KEY}-${i + 1}`, diagonal, PALETTE, ART_PX);
     axis = turn(axis);
     diagonal = turn(diagonal);
   }

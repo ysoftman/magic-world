@@ -3,7 +3,6 @@ import { abyssResume } from "./abyss";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "./achievements";
 import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
-import { PIXEL } from "./config";
 import { GameState, onSaved } from "./gameState";
 import {
   type MonsterZone,
@@ -19,7 +18,7 @@ import {
   T_WATER_B,
   TILE,
 } from "./levels";
-import { FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
+import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { PixelText } from "./pixelText";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import type { CompanionSprite } from "./ui/CompanionSprite";
@@ -293,18 +292,20 @@ function buildTerrainOverlays(
 // volcano's scorch. Each gets a frayed edge (buildFrayedEdges).
 const ZONE_MARKERS: ReadonlySet<number> = new Set([T_TALL, T_SCORCH]);
 const LAVA_IDS: ReadonlySet<number> = new Set([T_LAVA_A, T_LAVA_B]);
-// Heights in art pixels, one per column along a tile edge, low at both ends
-// so the two sides of a corner don't run into each other. Blades for grass,
-// rounder lumps for the ash crusting over lava.
+// Heights in 2px cells (ART_PX), one per 2px column along a tile edge, up to
+// six (12px) and low at both ends so the two sides of a corner don't run into
+// each other. Pointed blades for grass; rounder lumps for the ash crusting
+// over lava (the 4px lumps they were, halved and smoothed between columns).
+// On 4px columns every blade was a square-topped 4px bar.
 const FRINGE_BLADES = [
-  [0, 2, 1, 3, 2, 0, 1, 3, 2, 1, 3, 1, 0, 2, 1, 0],
-  [1, 0, 2, 3, 1, 2, 0, 2, 3, 1, 2, 3, 1, 0, 2, 0],
-  [0, 1, 3, 1, 0, 2, 3, 2, 1, 0, 3, 2, 1, 3, 1, 0],
+  [0, 1, 3, 1, 0, 2, 5, 3, 1, 2, 4, 6, 3, 1, 0, 1, 3, 5, 2, 0, 2, 4, 1, 3, 6, 4, 1, 0, 2, 3, 1, 0],
+  [0, 2, 1, 0, 3, 6, 4, 2, 0, 1, 3, 2, 5, 3, 1, 4, 6, 3, 1, 0, 2, 4, 3, 1, 2, 5, 4, 2, 1, 3, 1, 0],
+  [0, 1, 2, 5, 3, 1, 0, 2, 4, 6, 2, 1, 3, 1, 0, 2, 5, 4, 1, 3, 6, 3, 1, 0, 1, 4, 2, 1, 3, 2, 1, 0],
 ];
 const CRUST_LUMPS = [
-  [0, 1, 2, 2, 3, 3, 2, 1, 1, 2, 3, 3, 2, 2, 1, 0],
-  [0, 2, 2, 1, 1, 2, 3, 3, 3, 2, 1, 1, 2, 2, 1, 0],
-  [1, 1, 2, 3, 3, 2, 2, 1, 2, 2, 3, 2, 1, 1, 1, 0],
+  [0, 1, 2, 3, 4, 4, 4, 5, 6, 6, 6, 6, 5, 4, 3, 2, 2, 3, 4, 5, 6, 6, 6, 6, 5, 4, 4, 4, 3, 2, 1, 0],
+  [0, 1, 3, 4, 4, 4, 3, 2, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 5, 4, 3, 2, 2, 3, 4, 4, 4, 4, 3, 2, 1, 0],
+  [1, 2, 2, 3, 4, 5, 6, 6, 6, 6, 5, 4, 4, 4, 3, 3, 4, 4, 4, 5, 6, 6, 5, 4, 3, 2, 2, 2, 2, 2, 1, 0],
 ];
 
 // A tile cut down to the shape `heights` rises from its bottom edge, taken
@@ -318,7 +319,7 @@ function fringeTexture(scene: Phaser.Scene, tilesKey: string, tile: number, heig
   const ctx = tex.getContext();
   ctx.drawImage(src, tile * TILE, 0, TILE, TILE, 0, 0, TILE, TILE);
   heights.forEach((h, col) => {
-    ctx.clearRect(col * PIXEL, 0, PIXEL, TILE - h * PIXEL);
+    ctx.clearRect(col * ART_PX, 0, ART_PX, TILE - h * ART_PX);
   });
   tex.refresh();
   return key;
@@ -663,20 +664,34 @@ export function addTownExitSign(scene: Phaser.Scene, hero: { x: number; y: numbe
 
 const EXIT_ARROW_KEY = "exit-arrow";
 const EXIT_ARROW_PALETTE = { o: 0x3b2a1a, f: 0xfff3c4 };
-// pointing east; turned with setAngle a quarter at a time, so square
+// pointing east; turned with setAngle a quarter at a time, so square. On 2px
+// cells (ART_PX) as it is, 44px as the 11-cell grid through Scale2x was, its
+// outline one cell: through Scale2x it stayed 4px thick, two thirds of the
+// arm.
 // biome-ignore format: one row per line so the art reads as a grid
 const EXIT_ARROW = [
-  "...........",
-  "..oo.......",
-  "..ofo......",
-  "..offo.....",
-  "...offo....",
-  "....offo...",
-  "...offo....",
-  "..offo.....",
-  "..ofo......",
-  "..oo.......",
-  "...........",
+  "......................",
+  "......................",
+  "....oooo..............",
+  "....offfo.............",
+  "....offffo............",
+  "....offfffo...........",
+  "....offffffo..........",
+  ".....offffffo.........",
+  "......offffffo........",
+  ".......offffffo.......",
+  "........offffffo......",
+  "........offffffo......",
+  ".......offffffo.......",
+  "......offffffo........",
+  ".....offffffo.........",
+  "....offffffo..........",
+  "....offfffo...........",
+  "....offffo............",
+  "....offfo.............",
+  "....oooo..............",
+  "......................",
+  "......................",
 ];
 // full strength within a tile of the exit, gone by two and a half
 const EXIT_ARROW_NEAR = TILE;
@@ -698,7 +713,7 @@ export function addExitArrow(
   y: number,
   angle: number,
 ): Phaser.GameObjects.Image {
-  if (!scene.textures.exists(EXIT_ARROW_KEY)) makeTexture(scene, EXIT_ARROW_KEY, EXIT_ARROW, EXIT_ARROW_PALETTE);
+  if (!scene.textures.exists(EXIT_ARROW_KEY)) makeTexture(scene, EXIT_ARROW_KEY, EXIT_ARROW, EXIT_ARROW_PALETTE, ART_PX);
   const arrow = scene.add.image(x, y, EXIT_ARROW_KEY).setAngle(angle).setDepth(9).setAlpha(0);
   const onUpdate = (): void => {
     const d = Phaser.Math.Distance.Between(hero.x, hero.y, arrow.x, arrow.y);

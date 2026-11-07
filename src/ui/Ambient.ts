@@ -113,13 +113,15 @@ const SPRITES: Record<string, { rows: string[]; palette: PixelMap }> = {
   "print-v": { rows: ["dd", "dd", "dd"], palette: { d: 0x7f93a6 } },
   "print-h": { rows: ["ddd", "ddd"], palette: { d: 0x7f93a6 } },
   // and the puffs a step kicks up: dirt on a path (lighter than the town's and
-  // the forest's path tiles, and two pixels wide, a kicked clod: one pixel
-  // was gone before the eye found it), ash in the crater, stone dust in the cave
-  "puff-dirt": { rows: ["dd"], palette: { d: 0xa08a6a } },
-  "puff-dirt-dark": { rows: ["dd"], palette: { d: 0x8a6e4c } },
-  "puff-ash": { rows: ["a"], palette: { a: 0x8a8480 } },
-  "puff-ash-dark": { rows: ["a"], palette: { a: 0x5e5856 } },
-  "puff-stone": { rows: ["s"], palette: { s: 0x6a645d } },
+  // the forest's path tiles, and a kicked clod 8px wide: a 4px one was gone
+  // before the eye found it), ash in the crater, stone dust in the cave. Drawn
+  // on 2px cells as they are (bakeGrid): a rounded clod and a round mote of
+  // the area the 8x4 and 4x4 blocks had.
+  "puff-dirt": { rows: [".dd.", "dddd", ".dd."], palette: { d: 0xa08a6a } },
+  "puff-dirt-dark": { rows: [".dd.", "dddd", ".dd."], palette: { d: 0x8a6e4c } },
+  "puff-ash": { rows: [".a.", "aaa", ".a."], palette: { a: 0x8a8480 } },
+  "puff-ash-dark": { rows: [".a.", "aaa", ".a."], palette: { a: 0x5e5856 } },
+  "puff-stone": { rows: [".s.", "sss", ".s."], palette: { s: 0x6a645d } },
 };
 
 // How much of each weather look is showing, 0..1. Eased toward today's target
@@ -979,16 +981,17 @@ function wrapOnScreen(p: Particle): void {
 // and is redrawn through Scale2x, so only its edges get finer: halved, the
 // rain shrank to 4x12px streaks that all but vanished over the grass (a
 // third of the pixels it changed) and a firefly to a 10px fleck. Footsteps.ts's
-// prints and puffs keep the full 4px — they lie on the ground at the hero's
-// own scale.
+// prints go through Scale2x like the rain: still 8x12 and 12x8, only their
+// corners rounded, so they read as a boot rather than a block cut out of the
+// snow. Its puffs, which had kept 4px with the prints, fly with the rest of
+// these and are drawn on 2px cells as they are.
 const FINE_PX = PIXEL / 2;
 const POINTS = new Set(["flake-s", "flake-m", "streak", "mote-a", "mote-b", "ember-a", "ember-b", "ember-c", "ash-a", "ash-b", "ash-c"]);
 
 // the grid each sprite is drawn from, and its cell size (pixelart's scale2x,
 // off the grid transparent, so a sprite never grows past its outline)
 function bakeGrid(name: string, rows: string[]): { rows: readonly string[]; px: number } {
-  if (name.startsWith("print-") || name.startsWith("puff-")) return { rows, px: PIXEL };
-  return POINTS.has(name) ? { rows, px: FINE_PX } : { rows: scale2x(rows), px: FINE_PX };
+  return POINTS.has(name) || name.startsWith("puff-") ? { rows, px: FINE_PX } : { rows: scale2x(rows), px: FINE_PX };
 }
 
 // Bakes every ambient sprite into one strip with a named frame each.

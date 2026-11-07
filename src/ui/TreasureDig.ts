@@ -2,7 +2,6 @@ import Phaser from "phaser";
 import * as chestOpen from "pixelfx/fx/pickups/chest-open";
 import * as poof from "pixelfx/fx/spawn/poof";
 import { Sfx } from "../audio";
-import { PIXEL } from "../config";
 import { GameState } from "../gameState";
 import { SOLID, T_LAVA_A, T_LAVA_B, T_PATH, T_SOIL, T_WATER_A, T_WATER_B, TILE } from "../levels";
 import { ART_PX, makeTexture, showToast } from "../pixelart";
@@ -19,8 +18,25 @@ import {
 import { type FieldFx, playFieldFxOnce, warmFieldFx } from "./fieldFx";
 
 const GLINT_KEY = "treasure-glint";
-// a small four-point twinkle, pale gold, drawn blocky (no Scale2x)
-const GLINT = ["...w...", "...w...", "..wyw..", "wwyyyww", "..wyw..", "...w...", "...w..."];
+// a small four-point twinkle, pale gold: a gold diamond in a pale rim, thin
+// pale rays, on 2px cells (ART_PX) as drawn, 26px across. It was the same
+// cross on 4px cells, its rays 4px thick, a plus sign more than a glint.
+// biome-ignore format: one row per line so the art reads as a grid
+const GLINT = [
+  "......w......",
+  "......w......",
+  "......w......",
+  "......w......",
+  ".....wyw.....",
+  "....wyyyw....",
+  "wwwwyyyyywwww",
+  "....wyyyw....",
+  ".....wyw.....",
+  "......w......",
+  "......w......",
+  "......w......",
+  "......w......",
+];
 const GLINT_PALETTE = { w: 0xfffbe6, y: 0xfde68a };
 // faint even up close, and breathing slowly rather than blinking
 const GLINT_ALPHA = 0.75;
@@ -110,7 +126,7 @@ export class TreasureDigger {
     // restarts the scene): move any X it no longer allows, in every region,
     // so the item window's charts agree too
     resettleTreasureMaps(GameState.treasureMaps);
-    if (!scene.textures.exists(GLINT_KEY)) makeTexture(scene, GLINT_KEY, GLINT, GLINT_PALETTE, PIXEL);
+    if (!scene.textures.exists(GLINT_KEY)) makeTexture(scene, GLINT_KEY, GLINT, GLINT_PALETTE, ART_PX);
     for (let i = 0; i < MAX_MAPS; i++) this.glints.push(scene.add.image(0, 0, GLINT_KEY).setDepth(GLINT_DEPTH).setVisible(false));
     // The dig's sheets, a slice a frame from here on, long before the hero
     // can walk to an X; one not in by the dig is baked there. Maps come from
