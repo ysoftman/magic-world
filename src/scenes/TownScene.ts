@@ -1212,9 +1212,12 @@ export class TownScene extends Phaser.Scene {
     }
   }
 
-  // Growth is shown on the field itself: a sprout first, then the ripe plant
-  // tinted green until it can be harvested. Cheap enough to redo every frame —
-  // four sprites, and Phaser skips a setTexture to the texture already set.
+  // Growth is shown on the field itself: a sprout first, then the young plant
+  // (green, smaller), then the ripe one, each its own texture drawn at the
+  // size it shows at 1x (art/props.ts), so a cell stays 2px; the town once
+  // scaled one texture to 0.7 and 0.85 and tinted it. Cheap enough to redo
+  // every frame — four sprites, and Phaser skips a setTexture to the texture
+  // already set.
   private updateCrops(): void {
     for (let i = 0; i < FARM_PLOTS; i++) {
       const plot = GameState.farm[i];
@@ -1225,13 +1228,7 @@ export class TownScene extends Phaser.Scene {
       }
       const grown = cropProgress(plot);
       sprite.setVisible(true);
-      if (grown < 0.4) {
-        sprite.setTexture("crop-sprout").setScale(0.7).clearTint();
-      } else if (grown < 1) {
-        sprite.setTexture(`crop-${plot.crop}`).setScale(0.85).setTint(0x86efac);
-      } else {
-        sprite.setTexture(`crop-${plot.crop}`).setScale(1).clearTint();
-      }
+      sprite.setTexture(grown < 0.4 ? "crop-sprout" : grown < 1 ? `crop-${plot.crop}-young` : `crop-${plot.crop}`);
     }
   }
 

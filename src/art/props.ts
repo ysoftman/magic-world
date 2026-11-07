@@ -142,10 +142,15 @@ const FIREFLY_TILE = [
   "........................",
 ];
 
-// Farm crops, drawn on the plots in the overworld (TownScene updateCrops): one
-// shared sprout for the early stage, then a ripe texture per crop (tinted
-// green while unripe), `crop-${key}` for every CropKey (ui/Farm.ts). Leaves
-// lit on the side toward the top left and edged dark.
+// Farm crops, drawn on the plots in the overworld at 1x (TownScene
+// updateCrops): one shared sprout for the early stage, then per crop a young
+// plant and the ripe one, `crop-${key}-young` and `crop-${key}` for every
+// CropKey (ui/Farm.ts). The stages read by size as they did when the town
+// scaled one texture (sprout 0.7, young 0.85): the sprout and the young
+// plants are drawn at that size about the texture's middle, so each sits
+// where it did, at a whole 2px cell. The young ones are drawn unripe (green)
+// where the town once tinted the ripe one. Leaves lit on the side toward the
+// top left and edged dark.
 const SPROUT_PALETTE = { D: 0x14532d, d: 0x15803d, l: 0x22c55e, g: 0x4ade80, h: 0x86efac };
 const SPROUT_TILE = [
   "................................",
@@ -162,22 +167,22 @@ const SPROUT_TILE = [
   "................................",
   "................................",
   "................................",
-  ".......dddd.....................",
-  ".......dlhhdd........dddddd.....",
-  "........llghdd......ddhhhl......",
-  "........dlllhdd...ddhgllld......",
-  "........ddlllhd...dhgllld.......",
-  ".........ddlllhgldhlllldd.......",
-  "..........ddlllgllllldd.........",
-  "............dddglddddd..........",
-  "...............gl...............",
+  "................................",
+  "..........dgdd.....dddd.........",
+  "..........dlhhd...ddhhl.........",
+  "..........dllhdd.dhhlld.........",
+  "...........dlllglgllld..........",
+  "............dddgllddd...........",
   "...............gl...............",
   "...............gl...............",
   "...............gl...............",
   "..............dgld..............",
-  ".............dDglDd.............",
-  "............DDDggDDD............",
-  "............DDDDDDDD............",
+  ".............DDggDD.............",
+  ".............DDDDDD.............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
   "................................",
   "................................",
 ];
@@ -218,6 +223,41 @@ const CORN_TILE = [
   "................................",
   "................................",
 ];
+// young: the cob still shut in its green husk, silk at its tip
+const CORN_YOUNG_TILE = [
+  "................................",
+  "................................",
+  "................................",
+  ".............dd.................",
+  ".............dsd................",
+  ".............dsds...............",
+  "...............gs...............",
+  "............dddddddd............",
+  "..........ddhsdgsdshdd..........",
+  ".........dhhsddgsddshhd.........",
+  "........dhssdd.gs.ddsshd........",
+  ".......dgssdd.Ygo..ddssgd.......",
+  ".......dddd....Yy....dddd.......",
+  "..............dgsd..............",
+  ".............dhgsgd.............",
+  "............dhhgsggd............",
+  "............dhhgsggd............",
+  "............dhhgsggd............",
+  "............dhhgsggd............",
+  "............dhhgsggd............",
+  ".............hhgsgg.............",
+  ".............dhgsgd.............",
+  "..............dddd..............",
+  "...........ddddgsdddd...........",
+  ".........ddhgsddddsghdd.........",
+  "........dshssddgsddsshsd........",
+  ".......dddddd..gs..dddddd.......",
+  "...............gs...............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
 
 // a vine with leaves, a pod of three beans hanging either side
 const BEAN_PALETTE = { D: 0x14532d, d: 0x15803d, g: 0x4ade80, h: 0x86efac, P: 0x65a30d, p: 0x84cc16, L: 0xbef264 };
@@ -255,9 +295,56 @@ const BEAN_TILE = [
   "................................",
   "................................",
 ];
+// young: a pod of two small beans either side
+const BEAN_YOUNG_TILE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "..............dgd...............",
+  ".............dhdgd..............",
+  "..........ddddhdgddddd..........",
+  "..........ddhhddddhhdd..........",
+  "..........dgddddddddgd..........",
+  "..........ddgggddgggdd..........",
+  "...........ddd.dD.ddd...........",
+  "...............dD...............",
+  "..........ddddd.Dddddd..........",
+  ".........Pd.....dD...dP.........",
+  "........LpP.....dD...PLP........",
+  "........PpP.....dD...PpP........",
+  "........LP......dD....LP........",
+  ".......PppP.....dD...PppP.......",
+  "........PPP.....dD...PPP........",
+  "................dD..............",
+  ".............d..dD..............",
+  "...........dghd.DD..............",
+  "...........dgggdD...............",
+  "............ddddD...............",
+  "...............dD...............",
+  "...............dD...............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
 
 // five lobes, the ribs bending with the body, a curling stem between two leaves
-const PUMPKIN_PALETTE = { d: 0x14532d, s: 0x15803d, g: 0x4ade80, h: 0x86efac, r: 0x9a3412, o: 0xea580c, O: 0xf97316, y: 0xfdba74 };
+const PUMPKIN_PALETTE = {
+  d: 0x14532d,
+  s: 0x15803d,
+  g: 0x4ade80,
+  h: 0x86efac,
+  r: 0x9a3412,
+  o: 0xea580c,
+  O: 0xf97316,
+  y: 0xfdba74,
+  V: 0xa3b83a,
+  v: 0x6f8a26,
+  k: 0x44561a,
+};
 const PUMPKIN_TILE = [
   "................................",
   "................................",
@@ -287,6 +374,41 @@ const PUMPKIN_TILE = [
   "........rOoOOOoOOrOOOror........",
   ".........rrrOOoOOrOOrrr.........",
   "............rrrrrrrr............",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+];
+// young: the same pumpkin unripe, its lit body V, shaded lobe v, shaded ribs and rim k
+const PUMPKIN_YOUNG_TILE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  ".........ssss...sd.sssss........",
+  ".........ssshs.sd.shssss........",
+  ".........ssgsgssdsgsggs.........",
+  "..........ssssssdsssss..........",
+  "...........vvvVsdVvvk...........",
+  ".........vvvVVvVVkVVkkk.........",
+  "........vVvhVVvVVkVVkkvk........",
+  ".......vVVhVVvvVVkkVVkvvk.......",
+  "......vvVvhVVvvVVkkVVkkvkk......",
+  "......vVVvvVVvvVVkkVVkkvvk......",
+  "......kVVvvVVvvVVkkVVkkvvk......",
+  "......kVVvvVVvvVVkkVVkkvvk......",
+  ".......kVvvVVvvVVkkVVkkvk.......",
+  ".......kVVvVVvvVVkkVVkvvk.......",
+  "........kVvvVVvVVkVVkkvk........",
+  "..........kvvVvVVkVkkk..........",
+  "............kkkkkkkk............",
+  "................................",
+  "................................",
   "................................",
   "................................",
   "................................",
@@ -335,6 +457,41 @@ const MOONFLOWER_TILE = [
   "...............gs...............",
   ".............sggsd..............",
   "............ddsggdd.............",
+  "................................",
+  "................................",
+  "................................",
+];
+// young: a closed bud of pale petals, green sepals under it
+const MOONFLOWER_YOUNG_TILE = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "...............b................",
+  "..............bbB...............",
+  ".............bwbwB..............",
+  "............bwwbwbB.............",
+  "............bwwbwbB.............",
+  "............bwwbwbB.............",
+  ".............bwbwB..............",
+  "..............sgs...............",
+  "...............ss...............",
+  "...............gs...............",
+  "...............gs...............",
+  "...............gs...............",
+  "........sssss..gs..sssss........",
+  ".......sgshhhs.gs.shhhsgs.......",
+  "........sgssshsgsshsssgs........",
+  ".........sgggsgssgsgggs.........",
+  "..........ssss.gs.ssss..........",
+  "...............gs...............",
+  "...............gs...............",
+  "...............gs...............",
+  "..............dggd..............",
+  "................................",
+  "................................",
+  "................................",
   "................................",
   "................................",
   "................................",
@@ -587,6 +744,10 @@ export function bakeProps(this: Phaser.Scene): void {
   makeTexture(this, "crop-bean", BEAN_TILE, BEAN_PALETTE, ART_PX);
   makeTexture(this, "crop-pumpkin", PUMPKIN_TILE, PUMPKIN_PALETTE, ART_PX);
   makeTexture(this, "crop-moonflower", MOONFLOWER_TILE, MOONFLOWER_PALETTE, ART_PX);
+  makeTexture(this, "crop-corn-young", CORN_YOUNG_TILE, CORN_PALETTE, ART_PX);
+  makeTexture(this, "crop-bean-young", BEAN_YOUNG_TILE, BEAN_PALETTE, ART_PX);
+  makeTexture(this, "crop-pumpkin-young", PUMPKIN_YOUNG_TILE, PUMPKIN_PALETTE, ART_PX);
+  makeTexture(this, "crop-moonflower-young", MOONFLOWER_YOUNG_TILE, MOONFLOWER_PALETTE, ART_PX);
   makeTexture(this, "chest", CHEST_TILE, CHEST_PALETTE, ART_PX);
   makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE, ART_PX);
   makeTexture(this, "produce-crate", PRODUCE_CRATE_TILE, PRODUCE_CRATE_PALETTE, ART_PX);
