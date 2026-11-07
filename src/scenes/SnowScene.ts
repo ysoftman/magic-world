@@ -164,10 +164,11 @@ export class SnowScene extends Phaser.Scene {
     addFootsteps(this, this.player, level, "snow");
     addGuideArrow(this, this.player, "snow", () => this.quitting || this.uiBlocking());
 
+    // gone by their alpha alone: shrunk 1 to 0.4 as well, their 2px cells
+    // drew 0.8-2px, a smudge
     this.fireflies = this.add.particles(0, 0, "firefly", {
       speed: { min: 12, max: 40 },
       lifespan: { min: 2500, max: 4500 },
-      scale: { start: 1, end: 0.4 },
       alpha: { start: 0.7, end: 0 },
       frequency: 700,
       emitting: false,
