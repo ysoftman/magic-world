@@ -3,6 +3,8 @@ import { abyssResume } from "./abyss";
 import { ACHIEVEMENTS, announceLooks, claimAchievements } from "./achievements";
 import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
+import { SKILLS, type Skill } from "./battleRules";
+import { warmFx } from "./fx";
 import { GameState, onSaved } from "./gameState";
 import {
   type MonsterZone,
@@ -21,6 +23,8 @@ import {
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, retroStyle, showToast } from "./pixelart";
 import { PixelText } from "./pixelText";
 import { TILE_VARIANTS } from "./scenes/BootScene";
+import { SKILL_SHEET_KEYS } from "./skillFx";
+import { TECH_SHEET_KEYS } from "./techFx";
 import type { CompanionSprite } from "./ui/CompanionSprite";
 import type { DialogueBox } from "./ui/DialogueBox";
 import { helpOpen } from "./ui/HelpPopup";
@@ -1124,6 +1128,9 @@ export interface KeyedPanel extends FieldPanel {
  * box first, so a talk's answer that opens the shop has the shop running that
  * same frame. Built in create() on the scene's FieldKeys, which queue the
  * keys; the scene's SHUTDOWN handler calls destroy().
+ *
+ * Built in every map scene, they also start the hero's moves' battle sheets
+ * baking a while after it opens (warmMoves).
  */
 export class FieldPanels {
   private readonly panels: FieldPanel[] = [];
@@ -1134,6 +1141,7 @@ export class FieldPanels {
   constructor(scene: Phaser.Scene, keys: FieldKeys) {
     this.scene = scene;
     this.keys = keys;
+    scene.time.delayedCall(MOVES_WARM_MS, () => warmMoves(scene));
   }
 
   /** `panel`, with the key that opens it if it has one; returned for the scene to keep. */
@@ -1182,6 +1190,26 @@ export class FieldPanels {
   destroy(): void {
     for (const panel of this.panels) panel.destroy();
   }
+}
+
+// How long a map scene runs before it starts on the moves' sheets
+// (warmMoves): past its first frames, the town's first already its longest
+// (its create), and the sheets its own create queued.
+const MOVES_WARM_MS = 1500;
+
+/**
+ * The battle sheets of every move the hero knows (skillFx.ts, techFx.ts),
+ * queued on `scene`'s warm (fx.ts warmFx: a slice of each frame) the most
+ * recently learned first, as a battle queues them. At two texels to a cell a
+ * move's sheet a battle has not got to is baked as it is cast, 20-116ms (Bun),
+ * and a Lv30 hero's 34 took a battle some 4.4s: baked on the map before the
+ * first fight, a battle finds them in. They outlast the scene (textures are
+ * the game's); one it leaves unbaked, the next scene or the battle bakes.
+ */
+export function warmMoves(scene: Phaser.Scene): void {
+  const sheetsOf = (s: Skill): string[] => (s.style === "blow" ? SKILL_SHEET_KEYS[s.name] : TECH_SHEET_KEYS[s.name]);
+  const known = SKILLS.filter((s) => GameState.player.level >= s.learnLevel).sort((a, b) => b.learnLevel - a.learnLevel);
+  if (known.length) warmFx(scene, known.flatMap(sheetsOf));
 }
 
 // how often a map scene claims what it has earned (FieldToasts.update)
