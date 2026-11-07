@@ -181,6 +181,8 @@ const FREEZE_TINT = 0x67e8f9;
 // warmStatuses bakes their poison sheets in ahead
 const PSN_TINT = 0xc084fc;
 const ENRAGE_TINT = 0xff7070;
+// WARD's bubble round the hero (wardRing): its radius, half the 128px hero, as it ever was
+const WARD_R = 64;
 // each attack spell's projectile and the burst where it lands (fx.ts sheets)
 const SPELL_FX: Record<string, readonly [string, string]> = {
   FIRE: ["fx-fireball", "fx-fire"],
@@ -599,7 +601,7 @@ export class BattleScene extends Phaser.Scene {
   private rested = false;
   private rageText!: PixelText;
   // a pale bubble around the hero for as long as WARD holds
-  private wardRing!: Phaser.GameObjects.Arc;
+  private wardRing!: Phaser.GameObjects.Graphics;
 
   // the status and recovery effects, baked for this battle's fighters (statusFx.ts)
   private statusFx!: StatusFx;
@@ -884,11 +886,24 @@ export class BattleScene extends Phaser.Scene {
     // tag "GRILL 5" (140px) starts at 336
     if (this.meal)
       this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0).setDepth(STAT_DEPTH);
-    this.wardRing = this.add
-      .circle(this.playerSprite.x, this.playerSprite.y, 64, WARD_COLOR, 0.12)
-      .setStrokeStyle(3, WARD_COLOR, 0.8)
-      .setVisible(false);
-    this.tweens.add({ targets: this.wardRing, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    // WARD's bubble round the hero in the battle's 2px cells: a faint disc
+    // and its rim a cell thick, in rows (a circle and a 3px stroke, swelling
+    // 1.06x, were 1px edges on a 2px picture); it breathes in its alpha
+    const even = (v: number): number => Math.round(v / ART_PX) * ART_PX;
+    this.wardRing = this.add.graphics({ x: even(this.playerSprite.x), y: even(this.playerSprite.y) }).setVisible(false);
+    const span = (r: number, top: number): number => {
+      const mid = (top + ART_PX / 2) / r;
+      return Math.abs(mid) >= 1 ? 0 : Math.round((r * Math.sqrt(1 - mid * mid)) / ART_PX) * ART_PX;
+    };
+    for (let top = -WARD_R; top < WARD_R; top += ART_PX) {
+      const [outer, inner] = [span(WARD_R, top), span(WARD_R - ART_PX, top)];
+      this.wardRing
+        .fillStyle(WARD_COLOR, 0.8)
+        .fillRect(-outer, top, outer - inner, ART_PX)
+        .fillRect(inner, top, outer - inner, ART_PX);
+      if (inner > 0) this.wardRing.fillStyle(WARD_COLOR, 0.12).fillRect(-inner, top, inner * 2, ART_PX);
+    }
+    this.tweens.add({ targets: this.wardRing, alpha: 0.7, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
     this.rageText = this.add
       .pixelText(ENEMY_STATUS_RIGHT, 90, "RAGE", retroStyle(5, "#ff5555"))
       .setOrigin(1, 0)
