@@ -132,6 +132,17 @@ const FLY_SHADOW_W = 0.6;
 const SHADOW_FADE_LIFT = 64;
 // where the companion stands, and where a caught monster flies to (catchFx)
 const COMPANION_X = 180;
+// The companion is its field art (32 cells at ART_PX) at 1x, a cell 2px as
+// every battler's is (battleHd.ts) and half the hero's 128px: a pet, not a
+// second hero (ui/CompanionSprite.ts). At 1.5x of the art drawn at twice the
+// cells its texels were 1.5px, 1px and 2px columns by turns; at 2x, the size
+// of the hero and the foes, it read as a second hero, and the TROLL KING
+// (192px, x 84..276) reached the hero's shield (from x 260).
+const COMPANION_SCALE = 1;
+// where its dash (companionLunge) ends, short of the foe's middle: a 64px
+// SLIME's front then meets a WOLF's (90, right for its 96px at 1.5x, left
+// 16px between them)
+const COMPANION_DASH_GAP = 76;
 // the CANDY icon's light pink (art/icons.ts ICON_CANDY_PALETTE): a catch's glow
 const CANDY_PINK = 0xf9a8d4;
 // the OS's reduced-motion setting, as fx.ts reads it: no breathing, no hops
@@ -245,8 +256,9 @@ const SKILL_FX: Record<string, SkillFx> = {
   "WEB SNARE": { key: "fx-web", ms: 1200, back: "fx-web-back", fade: 0.25 },
 };
 // FIREBALL's shot (companionCast): where it sets off, right of and over the
-// FIRE IMP's middle, and its flight to the foe, 780px at 1x
-const COMPANION_SHOT_X = 32;
+// FIRE IMP's middle (its right wing, at COMPANION_SCALE), and its flight to
+// the foe, 780px at 1x
+const COMPANION_SHOT_X = 22;
 const COMPANION_SHOT_MS = 300;
 // PILFER's coins (pilferCoins): their flight to the goblin's place, the hop
 // of the first (each next one higher) and the beat between them
@@ -811,9 +823,7 @@ export class BattleScene extends Phaser.Scene {
     const companionDef = Object.values(ENEMIES).find((e) => e.name === GameState.companion);
     // assigned either way: the scene instance outlives a battle (see init),
     // and a companion dismissed since the last one would leave its sprite here
-    this.companionSprite = companionDef
-      ? this.add.sprite(COMPANION_X, 0, battleTexture(this, companionDef.texture)).setScale(1.5)
-      : undefined;
+    this.companionSprite = companionDef ? this.add.sprite(COMPANION_X, 0, companionDef.texture).setScale(COMPANION_SCALE) : undefined;
     this.companionStance = this.companionSprite && this.stand(this.companionSprite, COMPANION_GROUND_Y, !!companionDef?.flying);
 
     this.heroIdle = this.idleBob(this.playerSprite, 1400, 0);
@@ -2215,7 +2225,7 @@ export class BattleScene extends Phaser.Scene {
     // lifted off the ground as it goes, so its shadow goes with the glow
     this.tweens.add({ targets: this.enemyStance, fade: 0, duration: this.anim(200) });
     const flying = !!this.enemy.flying;
-    const toY = this.restY(this.enemy.texture, 1.5, COMPANION_GROUND_Y, flying);
+    const toY = this.restY(this.enemy.texture, COMPANION_SCALE, COMPANION_GROUND_Y, flying);
     const hop = 140 - (flying ? FLY_LIFT : 0);
     const { x: fromX, y: fromY, scale: fromScale } = sprite;
     let last = 0;
@@ -2241,14 +2251,14 @@ export class BattleScene extends Phaser.Scene {
     this.catchBurst.explode(16, COMPANION_X, toY);
     // an old companion's breathing ran over its own texture's footing
     this.companionIdle?.stop();
-    const caught = battleTexture(this, this.enemy.texture);
+    const caught = this.enemy.texture;
     if (this.companionSprite) this.companionSprite.setTexture(caught);
     else this.companionSprite = this.add.sprite(COMPANION_X, toY, caught);
-    this.companionSprite.setScale(1.5);
+    this.companionSprite.setScale(COMPANION_SCALE);
     this.companionStance = this.stand(this.companionSprite, COMPANION_GROUND_Y, flying, this.companionStance);
     this.companionIdle = this.idleBob(this.companionSprite, 1200, 0, flying);
     this.companionSprite.setScale(0.5);
-    await this.tweenPromise(this.companionSprite, { scale: 1.5, ease: "Back.easeOut" }, this.anim(180));
+    await this.tweenPromise(this.companionSprite, { scale: COMPANION_SCALE, ease: "Back.easeOut" }, this.anim(180));
   }
 
   // "It broke free!": the foe shakes its head, a dying wiggle on x (the
@@ -2363,7 +2373,7 @@ export class BattleScene extends Phaser.Scene {
   // tweened property, and when this tween also moved y (up to the foe, which
   // then stood higher) the strike landed twice — two rolls of damage behind a
   // message that reported one. The breathing holds meanwhile, so the dash
-  // keeps one height.
+  // keeps one height. It ends COMPANION_DASH_GAP short of the foe's middle.
   private companionLunge(onHit: () => void): Promise<void> {
     const sprite = this.companionSprite;
     if (!sprite) return Promise.resolve();
@@ -2372,7 +2382,7 @@ export class BattleScene extends Phaser.Scene {
     return new Promise<void>((resolve) => {
       this.tweens.add({
         targets: sprite,
-        x: this.enemySprite.x - 90,
+        x: this.enemySprite.x - COMPANION_DASH_GAP,
         duration: this.anim(130),
         yoyo: true,
         hold: this.anim(50),
@@ -2431,8 +2441,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // FIREBALL: the FIRE IMP throws one from where it stands, with a hop
-  // toward the foe, in place of a dash: FIRE's own shot at the imp's 3px
-  // cell (its 1.5x). onHit as it lands (its burst, companionSkill).
+  // toward the foe, in place of a dash: FIRE's own shot at 1.5x, a 3px cell
+  // (the imp's own when it stood at 1.5x). onHit as it lands (its burst,
+  // companionSkill).
   private async companionCast(onHit: () => void): Promise<void> {
     const sprite = this.companionSprite;
     if (!sprite) return;
@@ -2447,9 +2458,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // PILFER: three coins (fx.ts fx-coin) spin off the foe in arcs, a beat
-  // apart, to the goblin's place as it dashes back, at its 3px cell. Each
-  // next one hops higher; the highest (PILFER_HOP + 48) tops out at y 206
-  // over a flier, the windows' bottom 200.
+  // apart, to the goblin's place as it dashes back, at 1.5x (a 3px cell, the
+  // goblin's own when it stood at 1.5x). Each next one hops higher; the
+  // highest (PILFER_HOP + 48) tops out at y 206 over a flier, the windows'
+  // bottom 200.
   private pilferCoins(): void {
     const goblin = this.companionSprite;
     if (!goblin) return;
