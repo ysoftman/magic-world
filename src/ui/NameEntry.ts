@@ -1,7 +1,7 @@
 import type Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 
@@ -269,7 +269,8 @@ export class NameEntry {
     const picked = AT[this.row][this.col];
     CELLS.forEach((cell, i) => {
       const on = cell === picked;
-      this.cellBoxes[i].setStrokeStyle(on ? 3 : 1, on ? 0xffd166 : 0xffffff, on ? 1 : 0.25);
+      // 2px on the screen's grid (were 3px picked, 1px not): the gold and the dim white tell them apart
+      gridOutline(this.cellBoxes[i], on ? 0xffd166 : 0xffffff, on ? 1 : 0.25);
       this.cellTexts[i].setColor(on ? PICKED : cell.act === "ok" ? "#4ade80" : "#f5f5f5");
     });
   }

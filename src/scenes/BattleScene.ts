@@ -65,7 +65,7 @@ import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
-import { ART_PX, bodyStyle, DIM_TEXT, retroStyle, showToast, texelsOf } from "../pixelart";
+import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
@@ -917,7 +917,7 @@ export class BattleScene extends Phaser.Scene {
     // the message box (y 604..716) reads like the dialogue box, in its
     // bodyStyle(33) with its 5px leading: 54 glyphs a row, and a second row's
     // descenders end at y=697
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92).setStrokeStyle(1, 0xffffff);
+    gridOutline(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92), 0xffffff);
     this.msgText = new TypedText(this, 64, GAME_HEIGHT - 104, bodyStyle(33, "#f5f5f5"), {
       wrapWidth: GAME_WIDTH - 128,
       lineSpacing: 5,
@@ -1306,7 +1306,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private window(x: number, y: number, w: number, h: number): void {
-    this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0).setStrokeStyle(1, 0xffffff).setDepth(STAT_DEPTH);
+    gridOutline(this.add.rectangle(x, y, w, h, 0x0b0b2b, 0.85).setOrigin(0, 0), 0xffffff).setDepth(STAT_DEPTH);
   }
 
   // At Lv1 the 6 buttons (41 glyphs, 820px + 24) fit one row with 68px

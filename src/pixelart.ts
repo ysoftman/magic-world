@@ -484,3 +484,24 @@ export function addGroundShadow(
   const { w = 40, h = 16, yOffset = 28, depth = 5, alpha = 0.4 } = opts;
   return scene.add.ellipse(target.x, target.y + yOffset, w, h, 0x000000, alpha).setDepth(depth);
 }
+
+/**
+ * Outlines `rect` `width` px thick on the screen's 2px grid, as the art's
+ * cells are. Phaser strokes a rectangle along its edges, half in and half
+ * out, so a 2px line on an even edge covered odd..odd px, and a 1px line (the
+ * battle's windows, the HUD) was half an art cell. An edge whose line would
+ * be off the grid moves out a px. In the rectangle's own coordinates: one in
+ * a container wants the container on even px.
+ */
+export function gridOutline<T extends Phaser.GameObjects.Rectangle>(rect: T, color: number, alpha = 1, width = ART_PX): T {
+  rect.setStrokeStyle(width, color, alpha);
+  // how far an edge is past the grid, its line `width / 2` either side of it
+  const off = (edge: number): number => (((Math.round(edge - width / 2) % ART_PX) + ART_PX) % ART_PX) as number;
+  const left = rect.x - rect.originX * rect.width;
+  const top = rect.y - rect.originY * rect.height;
+  const [l, r, t, b] = [off(left), off(left + rect.width), off(top), off(top + rect.height)];
+  if (!l && !r && !t && !b) return rect;
+  const [w, h] = [rect.width + l + r, rect.height + t + b];
+  rect.setSize(w, h);
+  return rect.setPosition(left - l + rect.originX * w, top - t + rect.originY * h);
+}

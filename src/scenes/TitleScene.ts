@@ -12,7 +12,7 @@ import {
   readSaveSummary,
   SAVE_SLOTS,
 } from "../gameState";
-import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { DIM_TEXT, gridOutline, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { warmBattleWeather } from "../ui/BattleWeather";
 import { CRITTER_SHEETS } from "../ui/Critters";
@@ -248,7 +248,8 @@ export class TitleScene extends Phaser.Scene {
         figure.setVisible(!!save).setTexture(`hero-look-${save && HERO_LOOKS[save.look] ? save.look : 0}`);
         shield.setVisible(!!save?.armor).setTexture(save?.armor ?? "equip-shield");
         sword.setVisible(!!save?.weapon).setTexture(save?.weapon ?? "equip-sword");
-        bg.setStrokeStyle(picked ? 3 : 2, picked ? 0xffd166 : 0xffffff, picked ? 1 : 0.4).setFillStyle(0x0b0b2b, picked ? 0.92 : 0.7);
+        // 2px on the screen's grid either way (the picked one was 3px): its gold says it
+        gridOutline(bg, picked ? 0xffd166 : 0xffffff, picked ? 1 : 0.4).setFillStyle(0x0b0b2b, picked ? 0.92 : 0.7);
       });
     };
 

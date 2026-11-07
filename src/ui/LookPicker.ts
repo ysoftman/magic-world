@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { earnedCount, lookNeeds, lookUnlocked } from "../achievements";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { HERO_LOOKS } from "../scenes/BootScene";
 import { bindKeyHint, keyHint } from "./Gamepad";
@@ -180,7 +180,8 @@ export class LookPicker {
     this.frames.forEach((f, i) => {
       const picked = i === this.index;
       const open = lookUnlocked(i);
-      f.setStrokeStyle(picked ? 3 : 2, picked ? 0xffd166 : 0xffffff, picked ? 1 : 0.3);
+      // 2px on the screen's grid (the picked one was 3px): its gold says it
+      gridOutline(f, picked ? 0xffd166 : 0xffffff, picked ? 1 : 0.3);
       if (open) this.heroes[i].clearTint();
       else this.heroes[i].setTint(SILHOUETTE).setTintMode(Phaser.TintModes.FILL);
       this.needs[i].setVisible(!open);

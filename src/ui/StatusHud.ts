@@ -3,7 +3,7 @@ import { GAME_WIDTH } from "../config";
 import { MEALS } from "../cooking";
 import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
 import { currentObjective } from "../objective";
-import { makeTexture, type PixelMap, retroStyle } from "../pixelart";
+import { ART_PX, gridOutline, makeTexture, type PixelMap, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { type Region, type Weather, weatherToday } from "../weather";
 
@@ -227,13 +227,17 @@ export class StatusHud {
     this.region = SCENE_REGION[scene.scene.key] ?? null;
     // opaque: at 0.6 the map's name tags under it ("HOME", "FARM",
     // "FISHING") read as part of the HUD — "QA HOME" beside the hero's name —
-    // and even at 0.92 they still showed through
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, STATUS_HUD_HEIGHT / 2, GAME_WIDTH - 2, STATUS_HUD_HEIGHT, 0x0b0b2b, 1)
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setStrokeStyle(1, 0xffffff)
-      .setDepth(110);
+    // and even at 0.92 they still showed through. Its outline 2px on the
+    // screen's 2px grid as the art's cells (was 1px): the band still y 0..88,
+    // its edges at x 1, 1279 and y -1, 87, the line along the foot y 86..88
+    this.panel = gridOutline(
+      scene.add
+        .rectangle(GAME_WIDTH / 2, STATUS_HUD_HEIGHT / 2 - 1, GAME_WIDTH - 2, STATUS_HUD_HEIGHT, 0x0b0b2b, 1)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(110),
+      0xffffff,
+    );
     this.accent = scene.add.rectangle(0, 0, GAME_WIDTH, 4, 0xfbbf24, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(111);
 
     this.makeDayNightTextures();
@@ -260,8 +264,9 @@ export class StatusHud {
     this.addSegment(452, 58, 5, COLORS.exp);
     this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.meal, 1);
 
-    this.hpBar = scene.add.rectangle(444, 46, 192, 5, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
-    this.mpBar = scene.add.rectangle(684, 46, 192, 5, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    // y 44..50, 6px: a 5px bar was half an art cell off the 2px grid
+    this.hpBar = scene.add.rectangle(444, 47, 192, 6, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.mpBar = scene.add.rectangle(684, 47, 192, 6, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
     this.expBar = scene.add.rectangle(EXP_BAR_X, 68, EXP_BAR_W, 8, 0x22c55e, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
 
     this.setVisible(GameState.hudVisible);
@@ -341,10 +346,12 @@ export class StatusHud {
       this.dayNightIcon.setTexture(icon);
     }
 
-    this.hpBar.setScale(Math.max(0, hpRatio), 1);
-    this.mpBar.setScale(Math.max(0, mpRatio), 1);
+    // each bar's end on the 2px grid: a share of it in whole art cells
+    const cells = (share: number, w: number, of = w): number => (Math.round((Math.max(0, share) * w) / ART_PX) * ART_PX) / of;
+    this.hpBar.setScale(cells(hpRatio, 192), 1);
+    this.mpBar.setScale(cells(mpRatio, 192), 1);
     const barW = meal ? EXP_BAR_W_MEAL : EXP_BAR_W;
-    this.expBar.setScale((Math.min(1, Math.max(0, p.exp / expToNext(p.level))) * barW) / EXP_BAR_W, 1);
+    this.expBar.setScale(cells(Math.min(1, p.exp / expToNext(p.level)), barW, EXP_BAR_W), 1);
   }
 
   private setSegment(index: number, text: string, color: string): void {
