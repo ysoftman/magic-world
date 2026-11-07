@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { bakeForgedGear } from "../art/forged";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import {
@@ -14,7 +15,7 @@ import {
 } from "../drops";
 import { EQUIP_BONUS, EQUIP_SLOT, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
-import { ART_PX, bodyStyle, DIM_TEXT, makeTexture, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { PanelFx, SPARKS } from "./fieldFx";
@@ -22,90 +23,11 @@ import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
 import { PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
-// Worn-gear art for the two forged pieces that show up as overlays (the
-// charms are accessories and never drawn). Same 32-cell framing at ART_PX as
-// art/hero.ts's EQUIP_SWORD_32 / EQUIP_SHIELD_32, the grip at the centre cell,
-// so they sit in the hand where the shop gear does: the drake blade's red
-// edge lit (R), flame marks (o) up it and a gold tip (y); the GLACIER MAIL,
-// worn in the shield's place, as a round ice buckler with a lit rim (h).
-const DRAKE_BLADE_PALETTE = { r: 0xdc2626, o: 0xf97316, y: 0xfde047, g: 0xfbbf24, b: 0x7c2d12, R: 0xf87171 };
-const DRAKE_BLADE_32 = [
-  "................................",
-  "................................",
-  "................................",
-  "............................y...",
-  "...........................Ry...",
-  "..........................Rrr...",
-  ".........................Rrr....",
-  "........................Ror.....",
-  ".......................Rrr......",
-  "......................Rrr.......",
-  ".....................Ror........",
-  "....................Rrr.........",
-  "...................Rrr..........",
-  "...............g..Ror...........",
-  "................gRrr............",
-  ".................g..............",
-  "...............bb.g.............",
-  "..............bb...g............",
-  ".............bb.................",
-  "............gg..................",
-  "............gg..................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-];
-const GLACIER_MAIL_PALETTE = { i: 0xbae6fd, I: 0x7dd3fc, d: 0x0369a1, w: 0xffffff, h: 0xe0f2fe };
-const GLACIER_MAIL_32 = [
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "..............iiii..............",
-  ".............ihhIIi.............",
-  "............ihIIwIIi............",
-  "............iIIddIIi............",
-  "............iIwddIIi............",
-  "............iIIIIIdi............",
-  ".............iIIIdi.............",
-  "..............iiii..............",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-  "................................",
-];
-
-// The forged gear's overlays, once per game: BootScene bakes them so the
-// title's save cards can draw a hero wearing them before any Town exists,
-// and the panel asks again in case it ever runs first. Baking an existing
-// key again would draw over it.
+// The forged gear's overlays (art/forged.ts), once per game: BootScene bakes
+// them so the title's save cards can draw a hero wearing them before any Town
+// exists, and the panel asks again in case it ever runs first.
 export function bakeCraftedGear(scene: Phaser.Scene): void {
-  if (!scene.textures.exists("equip-drake-blade")) makeTexture(scene, "equip-drake-blade", DRAKE_BLADE_32, DRAKE_BLADE_PALETTE, ART_PX);
-  if (!scene.textures.exists("equip-glacier-mail")) makeTexture(scene, "equip-glacier-mail", GLACIER_MAIL_32, GLACIER_MAIL_PALETTE, ART_PX);
+  bakeForgedGear.call(scene);
 }
 
 // Laid out top to bottom, Press Start 2P at retroStyle(n) = n*4 px a glyph

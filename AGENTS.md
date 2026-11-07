@@ -524,7 +524,8 @@ throw 하지 않고 그림만 조용히 틀리는 종류다.
 
 그림은 영역별 파일에 있다: `tiles.ts`(지형 격자·팔레트), `tilesets.ts`(tiles16/shore16/road16 와
 스킨 굽기, `*_SKIN`·`seasonSkin`·`battleBgKey`·`TILE_VARIANTS`), `hero.ts`, `npcs.ts`, `monsters.ts`,
-`props.ts`, `icons.ts`, `landmarks.ts`. 격자·팔레트와 그것을 굽는 `bake*` 함수가 같은 파일에 있고
+`props.ts`, `icons.ts`, `landmarks.ts`, `forged.ts`(대장간 단련 장비, `Blacksmith` 는 굽기만 맡긴다), 전투용
+HD 격자 `hdHero.ts`·`hdMonsters.ts`·`hdBosses.ts`. 격자·팔레트와 그것을 굽는 `bake*` 함수가 같은 파일에 있고
 BootScene 은 순서대로 부르기만 한다. 씬이 쓰는 이름은 BootScene 이 다시 export 한다. 새 굽기는 그
 파일의 `bake*` 안에 `makeTexture(this, "키", 격자, 팔레트)` 로 쓴다 — check:art 는 `this` 로 시작하는
 호출만 읽어 격자와 팔레트 짝을 본다. 계산된 팔레트·변형 격자는 `scene` 인자로 구워 검사에서
