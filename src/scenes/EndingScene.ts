@@ -6,7 +6,7 @@ import { OVERWORLD_THEME, Sfx, TITLE_THEME } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, VERSION_TAG } from "../config";
 import { dayIndex, GameState } from "../gameState";
 import { CATCHABLE } from "../monsters";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, retroStyle } from "../pixelart";
 import { bindKeyHint, keyNames, usingPad } from "../ui/Gamepad";
 import { addLightCanvas, redrawLive } from "../ui/lightCanvas";
 import { FIREWORK_LIFE_S, FIREWORK_RISE_MS, FIREWORK_STEP_MS, SOFT_LIGHT, shellRamp } from "../ui/NightSky";
@@ -151,17 +151,19 @@ export class EndingScene extends Phaser.Scene {
     // the town theme for the epilogue: the run ends where it started
     Sfx.playBgm(epilogue ? OVERWORLD_THEME : TITLE_THEME);
 
-    // night sky: scattered twinkling stars over the game background colour
+    // night sky: scattered twinkling stars over the game background colour,
+    // each one 2px cell on the screen's 2px grid
     for (let i = 0; i < 70; i++) {
       const star = this.add
         .rectangle(
-          Phaser.Math.Between(8, GAME_WIDTH - 8),
-          Phaser.Math.Between(8, GAME_HEIGHT - 8),
-          2,
-          2,
+          Phaser.Math.Between(4, GAME_WIDTH / ART_PX - 4) * ART_PX,
+          Phaser.Math.Between(4, GAME_HEIGHT / ART_PX - 4) * ART_PX,
+          ART_PX,
+          ART_PX,
           0xffffff,
           Phaser.Math.FloatBetween(0.2, 0.9),
         )
+        .setOrigin(0)
         .setAlpha(0);
       this.tweens.add({
         targets: star,
@@ -287,18 +289,29 @@ export class EndingScene extends Phaser.Scene {
   // 694..710 — the one band left free, 10px under the prompt and 10px off the
   // bottom (the version tag is top right, out of the way).
   private showEpilogue(): void {
-    // embers drifting up and going out behind the text
+    // embers drifting up and going out behind the text: two 2px cells
+    // square (bigger than a star, as their 3px were), rising a cell at a time
+    // on the screen's 2px grid
     for (let i = 0; i < 36; i++) {
       const ember = this.add
-        .rectangle(Phaser.Math.Between(16, GAME_WIDTH - 16), GAME_HEIGHT + 8, 3, 3, Phaser.Math.RND.pick([0xf97316, 0xfb923c, 0xef4444]))
+        .rectangle(
+          Phaser.Math.Between(8, GAME_WIDTH / ART_PX - 8) * ART_PX,
+          GAME_HEIGHT + 8,
+          ART_PX * 2,
+          ART_PX * 2,
+          Phaser.Math.RND.pick([0xf97316, 0xfb923c, 0xef4444]),
+        )
+        .setOrigin(0)
         .setAlpha(0);
+      const rise = { y: ember.y, alpha: 0.9 };
       this.tweens.add({
-        targets: ember,
-        y: Phaser.Math.Between(120, 480),
+        targets: rise,
+        y: Phaser.Math.Between(60, 240) * ART_PX,
         alpha: { from: 0.9, to: 0 },
         duration: Phaser.Math.Between(3000, 6000),
         delay: Phaser.Math.Between(0, 5000),
         repeat: -1,
+        onUpdate: () => ember.setY(Math.round(rise.y / ART_PX) * ART_PX).setAlpha(rise.alpha),
       });
     }
 
