@@ -521,16 +521,76 @@ export function stepEllipse(ellipse: Phaser.GameObjects.Ellipse): Phaser.GameObj
   return rows.call(ellipse);
 }
 
+// what gridOutline draws round a rectangle, by rectangle: rendered by the
+// rectangle's own fill (outlineBands), so a later call changes it
+const outlines = new WeakMap<Phaser.GameObjects.Rectangle, { color: number; alpha: number; width: number }>();
+
+// Phaser's FillRect render node, as RectangleWebGLRenderer runs it
+interface FillRectNode {
+  run(
+    drawingContext: unknown,
+    matrix: unknown,
+    submitter: unknown,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    tl: number,
+    tr: number,
+    bl: number,
+    br: number,
+    lighting: unknown,
+  ): void;
+}
+
+// The rectangle's fill, and its outline after it as four bands the outline's
+// width across, each texel once: the top and bottom the whole width out to
+// the corners, the sides between them. Phaser's stroke drew the four sides
+// edge to edge, which left the square at each outer corner, half the width
+// across, empty: a 1px notch at every corner of a 2px outline.
+function outlineBands(rect: Phaser.GameObjects.Rectangle): FillRectNode {
+  const nodes = rect as unknown as { defaultRenderNodes: { FillRect: FillRectNode } };
+  return {
+    run(dc, matrix, submitter, x, y, w, h, tl, tr, bl, br, lighting): void {
+      const fill = nodes.defaultRenderNodes.FillRect;
+      fill.run(dc, matrix, submitter, x, y, w, h, tl, tr, bl, br, lighting);
+      const o = outlines.get(rect);
+      if (!o) return;
+      // as Phaser packs a tint: the outline's alpha by the rectangle's
+      const tint = (((((o.alpha * rect.alpha * 255) | 0) & 0xff) << 24) | o.color) >>> 0;
+      const s = o.width / 2;
+      const bands: [number, number, number, number][] = [
+        [-s, -s, w + o.width, o.width],
+        [-s, h - s, w + o.width, o.width],
+        [-s, s, o.width, h - o.width],
+        [w - s, s, o.width, h - o.width],
+      ];
+      for (const [bx, by, bw, bh] of bands)
+        if (bw > 0 && bh > 0) fill.run(dc, matrix, submitter, x + bx, y + by, bw, bh, tint, tint, tint, tint, lighting);
+    },
+  };
+}
+
 /**
  * Outlines `rect` `width` px thick on the screen's 2px grid, as the art's
  * cells are. Phaser strokes a rectangle along its edges, half in and half
  * out, so a 2px line on an even edge covered odd..odd px, and a 1px line (the
  * battle's windows, the HUD) was half an art cell. An edge whose line would
  * be off the grid moves out a px. In the rectangle's own coordinates: one in
- * a container wants the container on even px.
+ * a container wants the container on even px. Under WebGL the outline is
+ * drawn with the rectangle's fill as solid bands (outlineBands), full at the
+ * corners, in place of Phaser's stroke, which is turned off; a rectangle with
+ * no fill is given an empty one to carry it. On the canvas renderer, or for a
+ * rounded rectangle, it is Phaser's stroke as before.
  */
 export function gridOutline<T extends Phaser.GameObjects.Rectangle>(rect: T, color: number, alpha = 1, width = ART_PX): T {
-  rect.setStrokeStyle(width, color, alpha);
+  const custom = (rect as unknown as { customRenderNodes?: { FillRect?: FillRectNode } }).customRenderNodes;
+  if (custom && "gl" in rect.scene.sys.renderer && !rect.isRounded) {
+    outlines.set(rect, { color, alpha, width });
+    custom.FillRect ??= outlineBands(rect);
+    rect.setStrokeStyle();
+    if (!rect.isFilled) rect.setFillStyle(0x000000, 0);
+  } else rect.setStrokeStyle(width, color, alpha);
   // how far an edge is past the grid, its line `width / 2` either side of it
   const off = (edge: number): number => (((Math.round(edge - width / 2) % ART_PX) + ART_PX) % ART_PX) as number;
   const left = rect.x - rect.originX * rect.width;

@@ -649,7 +649,9 @@ bakeHero 가 외형이 바뀔 때마다 같이), 일반 몬스터(`hdMonsters.ts
 그림 밖에서 코드로 그리는 도형도 2px 격자를 따른다. 테두리는 `gridOutline(rect, 색)`(pixelart.ts, 2px, 선이
 격자에서 벗어나는 가장자리를 1px 밖으로 옮김)으로 긋는다. 실제 사례: Phaser 는 사각형 테두리를 가장자리 가운데에
 그려서, 짝수 가장자리의 2px 선이 홀수~홀수 px 에 걸쳤고 전투 창·HUD 의 1px 선은 아트 칸의 절반이었다(감사 결과 마을
-화면의 홀수 px 타일 76→0). 일회용 감사기(/tmp/pwcheck/px2/)는 화면 스냅샷의 색 경계 run 최대공약수와 위상을 16px
+화면의 홀수 px 타일 76→0). WebGL 에서는 외곽선을 채우기 노드의 네 띠로 그려 바깥 모서리가 꽉 찬다(Phaser 의 사각형
+외곽선은 네 변을 따로 그어 모서리마다 1x1px 이 비었다). Phaser 의 `RectangleWebGLRenderer` 가 `customRenderNodes.FillRect` 를
+먼저 찾는 것에 기대므로 Phaser 를 올리면 모서리 확대를 다시 본다. 같은 사각형에 `setStrokeStyle` 을 직접 다시 걸지 않는다. 일회용 감사기(/tmp/pwcheck/px2/)는 화면 스냅샷의 색 경계 run 최대공약수와 위상을 16px
 타일마다 잰다. 필드 바닥 그림자(`addGroundShadow`, 필드 동료)는 `stepEllipse` 가 Ellipse 의 경로를 2px
 줄로 바꿔 그린다(전투 그림자 BattleScene `stand()` 와 같은 계단). Ellipse 를 받는 곳(sceneCommon·Villagers)은 그대로다. 도감 아이콘은 몬스터
 텍스처를 0.5배(1px 칸, 아이템 아이콘과 같은 밀도, 보스 48px)로 그린다. 실제 사례: 0.63배는 칸이 1.26px 라 1·2px
