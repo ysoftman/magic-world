@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { lookUnlocked } from "../achievements";
 import { ART_PX, buildRamp, makeTexture } from "../pixelart";
+import { EQUIP_SHIELD_64, EQUIP_SWORD_64, HERO_HEAD_64, HERO_LEGS_STRIDE_A_64, HERO_TORSO_64 } from "./hdHero";
 
 // The hero: its 32-cell frames, the looks it can wear (HERO_LOOKS, bakeHero)
 // and the gear in its hands. The villagers (npcs.ts) walk on its legs.
@@ -11,6 +12,11 @@ import { ART_PX, buildRamp, makeTexture } from "../pixelart";
 // below, which bakeHero applies to every look; these literals are BLUE's,
 // and check:art holds them to it). Then the skin's shadow (S), the boots'
 // shine (O), the eyes' glint (w) and the belt buckle (y), the same in every look.
+// Past them, the shades only the battle's 64-cell hero draws (art/hdHero.ts):
+// the hair's glint (I) and shade (K), the tunic's deepest shade (U) and
+// brightest light (V), the belt's shade (B) and the trousers' light (Q), off
+// the look's colours as the others are; then the iris (i), the mouth (m), the
+// buckle's shade (Y) and the boots' soles (z).
 const HERO_PALETTE = {
   h: 0x6b4226,
   s: 0xf8c896,
@@ -28,6 +34,16 @@ const HERO_PALETTE = {
   O: 0x71532b,
   w: 0xffffff,
   y: 0xffd166,
+  I: 0xae9053,
+  K: 0x4f2c1c,
+  U: 0x212399,
+  V: 0xaed1ed,
+  B: 0x5d3620,
+  Q: 0x435a7a,
+  i: 0x2a3566,
+  m: 0xa0584a,
+  Y: 0xc98a2a,
+  z: 0x2b1a0e,
 };
 
 // The hero on a 32-cell grid, drawn at ART_PX (2px), so its texture is the
@@ -203,10 +219,23 @@ export const HERO_LOOKS = [
   { name: "GOLD", h: 0xfde68a, t: 0xf2b705, b: 0x7f1d1d, p: 0x3b2410, d: 0x4a2e0a },
 ] as const;
 
-// a look's hair, tunic and trouser shading, off its own colours
-const heroShades = ({ h, t, p }: { h: number; t: number; p: number }) => {
-  const [hair, tunic, trousers] = [buildRamp(h), buildRamp(t), buildRamp(p)];
-  return { H: hair[3], d: hair[1], T: tunic[3], u: tunic[1], P: trousers[1] };
+// a look's hair, tunic, belt and trouser shading, off its own colours (K a
+// step between the hair and its outline, from a finer ramp)
+const heroShades = ({ h, t, b, p }: { h: number; t: number; b: number; p: number }) => {
+  const [hair, tunic, belt, trousers] = [buildRamp(h), buildRamp(t), buildRamp(b), buildRamp(p)];
+  return {
+    H: hair[3],
+    d: hair[1],
+    T: tunic[3],
+    u: tunic[1],
+    P: trousers[1],
+    I: hair[4],
+    K: buildRamp(h, 7)[2],
+    U: tunic[0],
+    V: tunic[4],
+    B: belt[1],
+    Q: trousers[3],
+  };
 };
 
 // a look's own slots last, so one that names a shade (VIOLET's d) keeps it
@@ -235,6 +264,9 @@ function drawHero(this: Phaser.Scene): void {
   makeTexture(this, "hero-idle-up", [...HERO_UP_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
   makeTexture(this, "hero-idle-right", [...HERO_SIDE_HEAD_32, ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
   makeTexture(this, "hero-idle-left", [...flipRows(HERO_SIDE_HEAD_32), ...HERO_TORSO_BACK_32, ...HERO_LEGS_IDLE_32], HERO_PALETTE, ART_PX);
+
+  // the frame the battle shows, at twice the cells (battleHd.ts), in the same look
+  makeTexture(this, "hero-down-0@hd", [...HERO_HEAD_64, ...HERO_TORSO_64, ...HERO_LEGS_STRIDE_A_64], HERO_PALETTE, 1);
 }
 
 // One idle frame per look for the pickers (ui/LookPicker.ts), under keys of
@@ -253,11 +285,12 @@ let bakedLook = 0;
 /**
  * Redraws the hero-* textures in `look` (an index into HERO_LOOKS; anything
  * else is BLUE), under the same keys, so every scene, the walk animations
- * and the battle sprite pick it up with no change of their own. Phaser's
- * generateTexture draws onto an existing canvas texture without clearing it,
- * so each one is cleared first; the Texture and Frame objects stay the same,
- * which keeps the walk animations' frame references valid. The villagers
- * share the leg rows but have textures of their own, so they're untouched.
+ * and the battle sprite (hero-down-0@hd, drawn here too) pick it up with no
+ * change of their own. Phaser's generateTexture draws onto an existing canvas
+ * texture without clearing it, so each one is cleared first; the Texture and
+ * Frame objects stay the same, which keeps the walk animations' frame
+ * references valid. The villagers share the leg rows but have textures of
+ * their own, so they're untouched.
  * A no-op when that look is already baked. A look the save's achievements
  * haven't earned (lookUnlocked) is BLUE too, though the count never drops.
  */
@@ -281,7 +314,9 @@ export function bakeHero(scene: Phaser.Scene, look: number): void {
 // past a cross-guard, with the pommel below the grip; the shield is a small
 // heater (8x10 cells, about a third of the hero's width) with a lit rim (h)
 // and a glint on the boss (w), hung from the hand beside the body.
-const EQUIP_SWORD_PALETTE = { w: 0xd1d5db, d: 0x64748b, g: 0xf59e0b, b: 0x6b4226, W: 0xf8fafc, v: 0xa3aab5 };
+// (G the guard's shade and B the grip's wrap, the battle's 64-cell blade's
+// own, art/hdHero.ts; d its back edge)
+const EQUIP_SWORD_PALETTE = { w: 0xd1d5db, d: 0x64748b, g: 0xf59e0b, b: 0x6b4226, W: 0xf8fafc, v: 0xa3aab5, G: 0xb45309, B: 0x9a6a3a };
 const EQUIP_SWORD_32 = [
   "................................",
   "................................",
@@ -317,8 +352,9 @@ const EQUIP_SWORD_32 = [
   "................................",
 ];
 
-// the starting shield is wood: a dark rim, a knot for a boss
-const EQUIP_SHIELD_PALETTE = { s: 0x5c3a1e, S: 0x9a6a3a, d: 0x6b4423, h: 0xc08a52, w: 0xd6cbb5 };
+// the starting shield is wood: a dark rim, a knot for a boss (g the grain
+// on the battle's 64-cell shield, art/hdHero.ts)
+const EQUIP_SHIELD_PALETTE = { s: 0x5c3a1e, S: 0x9a6a3a, d: 0x6b4423, h: 0xc08a52, w: 0xd6cbb5, g: 0x86592f };
 const EQUIP_SHIELD_32 = [
   "................................",
   "................................",
@@ -358,14 +394,25 @@ const EQUIP_SHIELD_32 = [
 // guard, then IRON in a low-saturation blue-grey steel (a bright rim round a
 // dark face), then MYTHRIL in bright cyan. IRON was once blue too and sat
 // beside MYTHRIL, and the grey starting shield sat beside IRON.
-const EQUIP_IRON_SWORD_PALETTE = { w: 0xb3c0cf, d: 0x334155, g: 0x8a9ab0, b: 0x3a4150, W: 0xe8edf3, v: 0x7a899d };
-const EQUIP_IRON_SHIELD_PALETTE = { s: 0xb4c1d0, S: 0x4b6080, d: 0x2e3b4e, h: 0xdbe3ec, w: 0xf4f7fa };
-const EQUIP_MYTHRIL_SWORD_PALETTE = { w: 0xe0f2fe, d: 0x38bdf8, g: 0xa5f3fc, b: 0x1e3a8a, W: 0xffffff, v: 0xa9d8f2 };
-const EQUIP_MYTHRIL_SHIELD_PALETTE = { s: 0x7dd3fc, S: 0x38bdf8, d: 0x0ea5e9, h: 0xbae6fd, w: 0xf0f9ff };
+const EQUIP_IRON_SWORD_PALETTE = { w: 0xb3c0cf, d: 0x334155, g: 0x8a9ab0, b: 0x3a4150, W: 0xe8edf3, v: 0x7a899d, G: 0x5b687c, B: 0x5a6476 };
+const EQUIP_IRON_SHIELD_PALETTE = { s: 0xb4c1d0, S: 0x4b6080, d: 0x2e3b4e, h: 0xdbe3ec, w: 0xf4f7fa, g: 0x42566f };
+const EQUIP_MYTHRIL_SWORD_PALETTE = {
+  w: 0xe0f2fe,
+  d: 0x38bdf8,
+  g: 0xa5f3fc,
+  b: 0x1e3a8a,
+  W: 0xffffff,
+  v: 0xa9d8f2,
+  G: 0x22a5c9,
+  B: 0x3b62c4,
+};
+const EQUIP_MYTHRIL_SHIELD_PALETTE = { s: 0x7dd3fc, S: 0x38bdf8, d: 0x0ea5e9, h: 0xbae6fd, w: 0xf0f9ff, g: 0x2eb0ee };
 
 // BootScene's bake: the hero in BLUE, the look pickers' previews and the
-// gear in the hero's hands, wood to MYTHRIL (the forged pieces are
-// ui/Blacksmith's). Called with the scene as `this`, as drawHero is.
+// gear in the hero's hands, wood to MYTHRIL, each with the battle's 64-cell
+// copy (art/hdHero.ts; the forged pieces are ui/Blacksmith's, and the battle
+// smooths their outline instead, battleHd.ts). Called with the scene as
+// `this`, as drawHero is.
 export function bakeHeroArt(this: Phaser.Scene): void {
   drawHero.call(this);
   drawLookPreviews(this);
@@ -376,4 +423,11 @@ export function bakeHeroArt(this: Phaser.Scene): void {
   makeTexture(this, "equip-iron-shield", EQUIP_SHIELD_32, EQUIP_IRON_SHIELD_PALETTE, ART_PX);
   makeTexture(this, "equip-mythril-sword", EQUIP_SWORD_32, EQUIP_MYTHRIL_SWORD_PALETTE, ART_PX);
   makeTexture(this, "equip-mythril-shield", EQUIP_SHIELD_32, EQUIP_MYTHRIL_SHIELD_PALETTE, ART_PX);
+
+  makeTexture(this, "equip-sword@hd", EQUIP_SWORD_64, EQUIP_SWORD_PALETTE, 1);
+  makeTexture(this, "equip-shield@hd", EQUIP_SHIELD_64, EQUIP_SHIELD_PALETTE, 1);
+  makeTexture(this, "equip-iron-sword@hd", EQUIP_SWORD_64, EQUIP_IRON_SWORD_PALETTE, 1);
+  makeTexture(this, "equip-iron-shield@hd", EQUIP_SHIELD_64, EQUIP_IRON_SHIELD_PALETTE, 1);
+  makeTexture(this, "equip-mythril-sword@hd", EQUIP_SWORD_64, EQUIP_MYTHRIL_SWORD_PALETTE, 1);
+  makeTexture(this, "equip-mythril-shield@hd", EQUIP_SHIELD_64, EQUIP_MYTHRIL_SHIELD_PALETTE, 1);
 }

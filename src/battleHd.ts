@@ -1,37 +1,44 @@
 import Phaser from "phaser";
 import { ART_PX, scale2x, texelsOf } from "./pixelart";
 
-// The battle draws its fighters at 2x (a boss or giant at 3x), so an art cell
-// of theirs is 4px (6px) on screen and every step of their outline a 4px
-// stair. battleTexture() gives the battle a copy of a fighter's texture
-// (hero, gear, foe, companion) whose outline alone goes through Scale2x once
-// more: where a cell meets the empty space round the body its corner is cut
-// or filled, so the outline steps by half a cell, 2px on screen. Inside the
-// outline every cell stays a whole block: Scale2x limited to the boundary
-// between the body and the empty space, as smoothBoundaryOnly() limits it to
-// a terrain's edge. A full Scale2x of the body turned the hero's flat eyes
-// into almonds, the SLIME's mouth into a curve, the GOBLIN's eyes into slants
-// and the BAT's two unlike eyes into a squint; an eye, a mouth or a pattern
-// inside the body never touches the empty space, so it keeps its blocks.
+// The battle draws its fighters at 2x, so a cell of their 32-cell art (48 for
+// a boss or giant), ART_PX in the texture, is 4px on screen where the field
+// draws it at 2px. battleTexture() gives the battle a texture of its own for
+// a fighter (hero, gear, foe, companion), the same size as the art's so a
+// sprite swapped onto it keeps its size, origin and feet, its cells a texel
+// each, 2px on screen:
 //
-// The copy is the same size as the texture, its cells a texel each where the
-// texture's are ART_PX, so a sprite swapped onto it keeps its size, origin
-// and feet. Any grid baked at ART_PX works, 32 cells or 48 (the bosses).
+// - drawn at boot, under the art's key and HD, from a grid of twice the cells
+//   (64, or 96 for a boss or giant: art/hdHero.ts, art/hdMonsters.ts,
+//   art/hdBosses.ts), the art redrawn at the field's density. Its layout is
+//   the art's own doubled, a cell (x, y) of the art the cells (2x..2x+1,
+//   2y..2y+1), so the feet, the hands and the head are where the art has
+//   them; or else
+// - a copy of the art made here the first time it is asked for, whose outline
+//   alone goes through Scale2x once more: where a cell meets the empty space
+//   round the body its corner is cut or filled, so the outline steps by half a
+//   cell, 2px on screen. Inside the outline every cell stays a whole block:
+//   Scale2x limited to the boundary between the body and the empty space, as
+//   smoothBoundaryOnly() limits it to a terrain's edge. A full Scale2x of the
+//   body turned the hero's flat eyes into almonds, the SLIME's mouth into a
+//   curve, the GOBLIN's eyes into slants and the BAT's two unlike eyes into a
+//   squint; an eye, a mouth or a pattern inside the body never touches the
+//   empty space, so it keeps its blocks.
+//
+// What reads the art itself (a fighter's footing, statusFx.ts's body cell by
+// cell) reads the art under its own key (battleSource), not either of these.
 
 const HD = "@hd";
 // what empty is to scale2x(): its edges and the boundary the corners keep to
 const EMPTY = ".";
 
-// the texture each copy was made from, for what has to read the art itself
-// (statusFx.ts reads a body cell by cell)
-const sources = new Map<string, string>();
-
-// What a copy was drawn from: the source Texture, how many times it had been
-// redrawn then, and its texels' hash. The hero's textures are drawn again in
-// place when its look changes (art/hero.ts bakeHero), so a copy is drawn
-// again once its source has been. Reading the texels back to find that out
-// held every call to some 0.8ms (getImageData, headless), five a battle, so a
-// redraw is counted instead (redrawsOf) and the texels are read only then.
+// What a copy made here was drawn from: the source Texture, how many times it
+// had been redrawn then, and its texels' hash. The hero's textures are drawn
+// again in place when its look changes (art/hero.ts bakeHero), so a copy is
+// drawn again once its source has been. Reading the texels back to find that
+// out held every call to some 0.8ms (getImageData, headless), five a battle,
+// so a redraw is counted instead (redrawsOf) and the texels are read only
+// then.
 interface Drawn {
   source: Phaser.Textures.Texture;
   redraws: number | undefined;
@@ -106,17 +113,21 @@ function cellRows(px: Uint32Array, w: number, h: number): { rows: string[]; colo
 }
 
 /**
- * The key of `key`'s battle copy, its outline smoothed (see above), drawn the
- * first time it is asked for and again whenever `key` has been drawn again
- * since; `key` itself when it is missing or not on the ART_PX grid.
+ * The key of `key`'s battle texture (see above): the one drawn at boot where
+ * there is one, else the copy with its outline smoothed, made the first time
+ * it is asked for and again whenever `key` has been drawn again since; `key`
+ * itself when it is missing or not on the ART_PX grid.
  */
 export function battleTexture(scene: Phaser.Scene, key: string): string {
   if (!scene.textures.exists(key)) return key;
-  const texture = scene.textures.get(key);
   const hd = key + HD;
-  const n = redrawsOf(texture);
   const seen = drawnFrom.get(hd);
   const exists = scene.textures.exists(hd);
+  // drawn at boot (a copy made here is always in drawnFrom); the hero's is
+  // drawn again with the hero's own (art/hero.ts bakeHero)
+  if (exists && !seen) return hd;
+  const texture = scene.textures.get(key);
+  const n = redrawsOf(texture);
   if (exists && seen?.source === texture && n !== undefined && seen.redraws === n) return hd;
   const source = texture.getSourceImage();
   if (!(source instanceof HTMLCanvasElement || source instanceof HTMLImageElement)) return key;
@@ -146,12 +157,11 @@ export function battleTexture(scene: Phaser.Scene, key: string): string {
   if (tex.width !== w || tex.height !== h) tex.setSize(w, h);
   tex.context.putImageData(new ImageData(new Uint8ClampedArray(out.buffer), w, h), 0, 0);
   tex.refresh();
-  sources.set(hd, key);
   drawnFrom.set(hd, { source: texture, redraws: n, hash });
   return hd;
 }
 
-/** The texture a battle copy was made from; any other key as it is. */
+/** The art a battle texture stands for; any other key as it is. */
 export function battleSource(key: string): string {
-  return sources.get(key) ?? key;
+  return key.endsWith(HD) ? key.slice(0, -HD.length) : key;
 }

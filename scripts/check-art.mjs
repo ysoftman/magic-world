@@ -95,14 +95,17 @@ const expand = (expr) => {
   return names.flatMap((n) => ALIAS[n] ?? [n]);
 };
 // (an optional last argument is the cell size of a grid drawn as it stands;
-// ART_PX marks a 32- or 48-cell grid, checked for its size further down)
+// ART_PX marks a 32- or 48-cell grid, 1 the battle's own grid of a fighter
+// at twice the cells, 64 or 96 (battleHd.ts), each checked further down)
 const artPx = [];
+const hdPx = [];
 for (const m of src.matchAll(
   /makeTexture\(\s*this,\s*[`"]([^`"]*)[`"],\s*(\[[\s\S]*?\]|[A-Za-z_][\w.]*),\s*([A-Z0-9_]+)\s*(?:,\s*([\w.]+)\s*)?\)/g,
 )) {
   if (m[2].trim().startsWith("[") && m[2].includes('"') && !m[2].includes("...")) continue; // inline literal, e.g. ["dd","dd"]
   for (const g of expand(m[2])) use(g, m[3]);
-  if (m[4] === "ART_PX") artPx.push([m[1], m[2]]);
+  if (m[4] === "ART_PX") artPx.push([m[1], m[2], m[3]]);
+  if (m[4] === "1") hdPx.push([m[1], m[2], m[3]]);
 }
 for (const m of src.matchAll(/\{\s*rows:\s*([A-Z0-9_]+),\s*palette:\s*([A-Z0-9_]+)\s*\}/g)) use(m[1], m[2]);
 
@@ -492,34 +495,89 @@ for (const [label, cfg] of Object.entries(CALM_LIMITS)) {
 }
 console.log("baked terrain stays within its calm limits");
 
-// ---- grids drawn at ART_PX as they stand: square, 32 cells or 48 ----
+// ---- grids drawn as they stand: square, 32 cells or 48 at ART_PX ----
 // (32 cells x 2px is the 64px every other sprite bakes to; the bosses and
-// the giant are 48 cells, a 96px texture, src/art/monsters.ts)
-const ART_PX_SIZES = [32, 48];
-const bySize = new Map(ART_PX_SIZES.map((n) => [n, 0]));
-for (const [key, expr] of artPx) {
-  const parts = [...expr.matchAll(/\.\.\.(?:flipRows\()?([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => ALIAS[m[1]]?.[0] ?? m[1]);
-  if (!parts.length) parts.push(expr.trim().replace(/^flipRows\(|\)$/g, ""));
-  const size = grids.get(parts[0])?.[0]?.length;
-  if (!ART_PX_SIZES.includes(size)) {
-    fail(`${key} is drawn at ART_PX but ${parts[0]} is ${size} cells wide, not ${ART_PX_SIZES.join(" or ")}`);
+// the giant are 48 cells, a 96px texture, src/art/monsters.ts), 64 or 96 at
+// 1px, the same textures at twice the cells
+const squareSizes = (bakes, sizes, label) => {
+  const bySize = new Map(sizes.map((n) => [n, 0]));
+  const sizeOf = new Map();
+  for (const [key, expr] of bakes) {
+    const parts = [...expr.matchAll(/\.\.\.(?:flipRows\()?([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => ALIAS[m[1]]?.[0] ?? m[1]);
+    if (!parts.length) parts.push(expr.trim().replace(/^flipRows\(|\)$/g, ""));
+    const size = grids.get(parts[0])?.[0]?.length;
+    if (!sizes.includes(size)) {
+      fail(`${key} is drawn at ${label} but ${parts[0]} is ${size} cells wide, not ${sizes.join(" or ")}`);
+      continue;
+    }
+    const odd = parts.filter((n) => grids.get(n)?.[0]?.length !== size);
+    if (odd.length) fail(`${key} stacks grids of different widths: ${odd.join(", ")} is not ${size} cells wide like ${parts[0]}`);
+    const tall = parts.reduce((n, name) => n + (grids.get(name)?.length ?? 0), 0);
+    if (tall !== size) fail(`${key} stacks its ${size}-cell grid to ${tall} rows, not ${size}`);
+    bySize.set(size, bySize.get(size) + 1);
+    sizeOf.set(key, size);
+  }
+  console.log(`textures drawn at ${label}: ${sizes.map((n) => `${bySize.get(n)} at ${n}x${n}`).join(", ")}`);
+  return sizeOf;
+};
+const artSize = squareSizes(artPx, [32, 48], "ART_PX");
+const hdSize = squareSizes(hdPx, [64, 96], "1px (the battle's own)");
+
+// ---- the battle's own grids: "<key>@hd", twice the cells of <key>'s art, its palette ----
+// battleTexture() (battleHd.ts) takes "<key>@hd" for <key> where it is baked,
+// and the sprite keeps <key>'s size, origin and feet only if the texture is
+// the same size: twice the cells at half the cell size. The palette is the
+// art's own, so a look or a variant colours both alike. A key made in a loop
+// (`hero-down-${i}`) stands for every key it can make.
+const keyPattern = (key) =>
+  new RegExp(
+    `^${key
+      .split(/\$\{[^}]*\}/)
+      .map((part) => part.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&"))
+      .join(".+")}$`,
+  );
+const artBakes = artPx.map(([key, , palette]) => ({ match: keyPattern(key), key, palette }));
+for (const [key, , palette] of hdPx) {
+  if (!key.endsWith("@hd")) {
+    fail(`${key} is drawn at 1px but is not named "<key>@hd" -- the battle would never pick it up`);
     continue;
   }
-  const odd = parts.filter((n) => grids.get(n)?.[0]?.length !== size);
-  if (odd.length) fail(`${key} stacks grids of different widths: ${odd.join(", ")} is not ${size} cells wide like ${parts[0]}`);
-  const tall = parts.reduce((n, name) => n + (grids.get(name)?.length ?? 0), 0);
-  if (tall !== size) fail(`${key} stacks its ${size}-cell grid to ${tall} rows, not ${size}`);
-  bySize.set(size, bySize.get(size) + 1);
+  const base = key.slice(0, -"@hd".length);
+  const arts = artBakes.filter((a) => a.match.test(base));
+  if (!arts.length) {
+    console.log(`note  ${key}: no makeTexture(this, ...) at ART_PX draws ${base}, so its size and palette go unchecked`);
+    continue;
+  }
+  for (const art of arts) {
+    const want = (artSize.get(art.key) ?? 0) * 2;
+    if (hdSize.has(key) && artSize.has(art.key) && hdSize.get(key) !== want)
+      fail(`${key} is ${hdSize.get(key)} cells, but ${art.key} is ${artSize.get(art.key)}: it must be twice that, ${want}`);
+  }
+  if (!arts.some((a) => a.palette === palette))
+    fail(
+      `${key} is drawn with ${palette}, but ${base} with ${[...new Set(arts.map((a) => a.palette))].join(", ")} -- use the art's palette`,
+    );
 }
-console.log(`textures drawn at ART_PX: ${ART_PX_SIZES.map((n) => `${bySize.get(n)} at ${n}x${n}`).join(", ")}`);
 
 // BLUE's light and shade in HERO_PALETTE must be what heroShades() derives
 // from BLUE's own colours, or picking BLUE again would redraw it differently
 // from the hero BootScene bakes
 {
   const hero = paletteColours("HERO_PALETTE");
-  const [hair, tunic, trousers] = [buildRamp(hero.h), buildRamp(hero.t), buildRamp(hero.p)];
-  const want = { H: hair[3], d: hair[1], T: tunic[3], u: tunic[1], P: trousers[1] };
+  const [hair, tunic, belt, trousers] = [buildRamp(hero.h), buildRamp(hero.t), buildRamp(hero.b), buildRamp(hero.p)];
+  const want = {
+    H: hair[3],
+    d: hair[1],
+    T: tunic[3],
+    u: tunic[1],
+    P: trousers[1],
+    I: hair[4],
+    K: buildRamp(hero.h, 7)[2],
+    U: tunic[0],
+    V: tunic[4],
+    B: belt[1],
+    Q: trousers[3],
+  };
   for (const [k, v] of Object.entries(want))
     if (hero[k] !== v) fail(`HERO_PALETTE.${k} is ${hero[k]?.toString(16)}, but heroShades gives BLUE ${v.toString(16)}`);
 }
