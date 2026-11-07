@@ -4,7 +4,7 @@ import { ART_PX, buildRamp, makeTexture } from "../pixelart";
 import { EQUIP_SHIELD_64, EQUIP_SWORD_64, HERO_HEAD_64, HERO_LEGS_STRIDE_A_64, HERO_TORSO_64 } from "./hdHero";
 
 // The hero: its 32-cell frames, the looks it can wear (HERO_LOOKS, bakeHero)
-// and the gear in its hands. The villagers (npcs.ts) walk on its legs.
+// and the gear in its hands. The villagers (npcs.ts) have bodies of their own.
 
 // The base colours, then the light and shade the 32-cell hero is drawn with:
 // hair shine (H) and contour (d), the tunic's lit (T) and shaded (u) sides,
@@ -205,41 +205,6 @@ const HERO_IDLE_32 = [
   "................................",
 ];
 
-// the villagers' legs (npcs.ts), the hero's old 8-row walk cycle; the hero's own
-// longer legs are HERO_STRIDE_A_32 and the rest above
-export const HERO_LEGS_STRIDE_A_32 = [
-  "....ss....pppP....pppP....ss....",
-  "....sss..pppP......pppP..sss....",
-  ".....sssppppP......ppppPsss.....",
-  "......sspppP........pppPss......",
-  "........OOOOOO....OOOOOO........",
-  ".........ooooo....ooooo.........",
-  "................................",
-  "................................",
-];
-
-export const HERO_LEGS_PASS_A_32 = [
-  "....ss....pppppppppppP....ss....",
-  "....sss..pppppppppppppP..sss....",
-  ".....ssspppppppppppppppPsss.....",
-  "......sspppppppppppppppPss......",
-  "........OOOOOOOOOOOOOOOO........",
-  ".........oooooooooooooo.........",
-  "................................",
-  "................................",
-];
-
-export const HERO_LEGS_IDLE_32 = [
-  "....ss....pppppppppppP....ss....",
-  "....ss....pppppppppppP....ss....",
-  "....ss....pppppppppppP....ss....",
-  "....ss....pppppppppppP....ss....",
-  "....OOOO..OOOOOOOOOOOO..OOOO....",
-  ".....ooo...oooooooooo...ooo.....",
-  "................................",
-  "................................",
-];
-
 // The looks a hero can wear: hair (h), tunic (t), belt (b) and trousers (p)
 // over the same skin, eyes and boots. BLUE restates HERO_PALETTE's own slots,
 // so picking it again restores the original. Each tunic keeps at least the
@@ -340,8 +305,8 @@ let bakedLook = 0;
  * change of their own. Phaser's generateTexture draws onto an existing canvas
  * texture without clearing it, so each one is cleared first; the Texture and
  * Frame objects stay the same, which keeps the walk animations' frame
- * references valid. The villagers share the leg rows but have textures of
- * their own, so they're untouched.
+ * references valid. The villagers have textures of their own, so they're
+ * untouched.
  * A no-op when that look is already baked. A look the save's achievements
  * haven't earned (lookUnlocked) is BLUE too, though the count never drops.
  */
