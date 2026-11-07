@@ -482,7 +482,43 @@ export function addGroundShadow(
   opts: { w?: number; h?: number; yOffset?: number; depth?: number; alpha?: number } = {},
 ): Phaser.GameObjects.Ellipse {
   const { w = 40, h = 16, yOffset = 28, depth = 5, alpha = 0.4 } = opts;
-  return scene.add.ellipse(target.x, target.y + yOffset, w, h, 0x000000, alpha).setDepth(depth);
+  return stepEllipse(scene.add.ellipse(target.x, target.y + yOffset, w, h, 0x000000, alpha).setDepth(depth));
+}
+
+/**
+ * Draws `ellipse` in rows of ART_PX, each row's ends on whole ART_PX steps,
+ * as the art's 2px cells are (the battle's shadows, BattleScene stand()):
+ * a filled ellipse was a 1px curve under 2px art. Still an Ellipse (its
+ * size, place and alpha as ever), so what keeps one keeps this; its path is
+ * the rows' outline, and a row a pair of triangles. A fill only.
+ */
+export function stepEllipse(ellipse: Phaser.GameObjects.Ellipse): Phaser.GameObjects.Ellipse {
+  const rows = function (this: Phaser.GameObjects.Ellipse): Phaser.GameObjects.Ellipse {
+    const { width: w, height: h } = this.geom as Phaser.Geom.Ellipse;
+    const spans: [number, number][] = [];
+    for (let top = 0; top < h; top += ART_PX) {
+      const mid = (top + ART_PX / 2 - h / 2) / (h / 2);
+      const half = Math.abs(mid) >= 1 ? 0 : Math.round(((w / 2) * Math.sqrt(1 - mid * mid)) / ART_PX) * ART_PX;
+      if (half > 0) spans.push([top, half]);
+    }
+    // down the right ends, then up the left: row i's right ends are points
+    // 2i, 2i+1 and its left ends 2n + 2(n-1-i) (bottom), +1 (top)
+    const path: number[] = [];
+    for (const [top, half] of spans) path.push(w / 2 + half, top, w / 2 + half, Math.min(h, top + ART_PX));
+    for (const [top, half] of [...spans].reverse()) path.push(w / 2 - half, Math.min(h, top + ART_PX), w / 2 - half, top);
+    const n = spans.length;
+    const triangles: number[] = [];
+    spans.forEach((_, i) => {
+      const [rt, rb, lb, lt] = [2 * i, 2 * i + 1, 2 * n + 2 * (n - 1 - i), 2 * n + 2 * (n - 1 - i) + 1];
+      triangles.push(rt, rb, lb, rt, lb, lt);
+    });
+    // Phaser types them read-only; the renderers read them each frame
+    Object.assign(this, { pathData: path, pathIndexes: triangles });
+    return this;
+  };
+  // setSize and setSmoothness call updateData: they redraw it in rows too
+  Object.assign(ellipse, { updateData: rows });
+  return rows.call(ellipse);
 }
 
 /**

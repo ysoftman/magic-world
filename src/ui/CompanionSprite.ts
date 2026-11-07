@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GameState } from "../gameState";
 import { TILE } from "../levels";
 import { ENEMIES } from "../monsters";
+import { stepEllipse } from "../pixelart";
 
 // How far behind the hero, along the path the hero actually walked, the
 // companion keeps (gapFor): half the hero's body (its 40px), half the
@@ -69,7 +70,8 @@ export class CompanionSprite {
   constructor(scene: Phaser.Scene, startX: number, startY: number) {
     this.scene = scene;
     this.hero = { x: startX, y: startY };
-    this.shadow = scene.add.ellipse(startX, startY, SHADOW_W, SHADOW_H, 0x000000, 0.35).setDepth(5).setVisible(false);
+    // in rows of 2px as the hero's (pixelart.ts stepEllipse)
+    this.shadow = stepEllipse(scene.add.ellipse(startX, startY, SHADOW_W, SHADOW_H, 0x000000, 0.35).setDepth(5).setVisible(false));
     this.sprite = scene.add.sprite(startX, startY, "slime").setScale(SCALE).setVisible(false);
     this.placeBeside();
     this.last = { ...this.trail[0] };
