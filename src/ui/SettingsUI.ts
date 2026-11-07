@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { BATTLE_SPEEDS, GameState, TEXT_SPEEDS, TIME_SPEEDS } from "../gameState";
-import { DIM_TEXT, retroStyle, showToast } from "../pixelart";
+import { DIM_TEXT, gridOutline, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
@@ -103,11 +103,9 @@ export class SettingsUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, TITLE_Y, "SETTINGS", retroStyle(8, "#ffd166"))
@@ -143,7 +141,7 @@ export class SettingsUI {
     const chipText = scene.add.pixelText(0, 0, "CLOSE", retroStyle(5, "#8ecbff")).setOrigin(0.5);
     const chipW = chipText.width + CHIP_PAD * 2;
     const chipH = chipText.height + CHIP_PAD * 2;
-    const chipBox = scene.add.rectangle(0, 0, chipW, chipH, 0x0b0b2b).setStrokeStyle(2, 0x8ecbff);
+    const chipBox = gridOutline(scene.add.rectangle(0, 0, chipW, chipH, 0x0b0b2b), 0x8ecbff);
     this.closeChip = scene.add
       .container(CHIP_RIGHT - chipW / 2, TITLE_Y, [chipBox, chipText])
       .setScrollFactor(0)
@@ -160,7 +158,7 @@ export class SettingsUI {
       const quitText = scene.add.pixelText(0, 0, "SURE?", retroStyle(5, "#ff8a8a")).setOrigin(0.5);
       const quitW = quitText.width + CHIP_PAD * 2;
       const quitH = quitText.height + CHIP_PAD * 2;
-      const quitBox = scene.add.rectangle(0, 0, quitW, quitH, 0x0b0b2b).setStrokeStyle(2, 0xff8a8a);
+      const quitBox = gridOutline(scene.add.rectangle(0, 0, quitW, quitH, 0x0b0b2b), 0xff8a8a);
       this.quitText = quitText.setText("QUIT");
       this.quitChip = scene.add
         .container(CHIP_LEFT + quitW / 2, TITLE_Y, [quitBox, quitText])

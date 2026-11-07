@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { canCook, cook, INGREDIENTS, type IngredientKey, MEAL_KEYS, MEALS, type MealKey, needsOf } from "../cooking";
 import { GameState } from "../gameState";
 import { mealBattles } from "../home";
-import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { PanelFx, WARM_BURST } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
@@ -108,7 +108,7 @@ export class KitchenUI {
     this.dim = fixed(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5), 150);
     // opaque: on a touch screen it hangs from y 28, over the HUD, whose lines showed through at 0.95
     this.panel = fixed(
-      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
+      gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
       151,
     );
     this.title = fixed(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 38, "KITCHEN", retroStyle(8, "#fdba74")).setOrigin(0.5));

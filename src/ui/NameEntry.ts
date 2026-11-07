@@ -109,10 +109,10 @@ export class NameEntry {
     // swallows taps meant for the title under it; a tap on it backs out
     const dim = scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5).setInteractive();
     dim.on("pointerdown", () => this.queue.push({ kind: "back" }));
-    const panel = scene.add
-      .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive();
+    const panel = gridOutline(
+      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95),
+      0xffffff,
+    ).setInteractive();
     // an underscore only under a slot still empty: under every glyph it read
     // as part of it (a T over one looked like an I, a space like a "_")
     this.slots = scene.add.pixelText(NAME_X, NAME_Y, "", retroStyle(8, DIM_TEXT)).setOrigin(0, 0.5);

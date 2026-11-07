@@ -4,7 +4,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { isEventToday } from "../events";
 import { GameState } from "../gameState";
-import { ART_PX, DIM_TEXT, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
@@ -133,11 +133,9 @@ export class LuckyWheel {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, PANEL_TOP + 36, "LUCKY WHEEL", retroStyle(8, "#f472b6"))

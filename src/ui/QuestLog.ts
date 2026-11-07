@@ -5,7 +5,7 @@ import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
 import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
-import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
@@ -250,7 +250,7 @@ export class QuestLog {
       .container(0, 0, [
         scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5),
         // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
-        scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1).setStrokeStyle(2, 0xffffff),
+        gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
         this.title,
         text(ACTIVE_X, HEADER_Y, 6, HINT_COLOR, "IN PROGRESS"),
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),

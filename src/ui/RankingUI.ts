@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { GameState } from "../gameState";
-import { DIM_TEXT, retroStyle } from "../pixelart";
+import { DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { getRanks, MAX_RANKS } from "../ranking";
 import { bindKeyHint, keyHint } from "./Gamepad";
@@ -61,11 +61,9 @@ export class RankingUI {
       .setDepth(150)
       .setVisible(false);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "RANKING", retroStyle(8, "#ffd166"))

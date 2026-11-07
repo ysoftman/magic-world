@@ -5,7 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
 import { type EquipmentKey, GameState, refinedName } from "../gameState";
 import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
-import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
 import { type FieldFx, PanelFx } from "./fieldFx";
@@ -319,11 +319,9 @@ export class InventoryUI {
       .setDepth(150)
       .setVisible(false);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "ITEMS", retroStyle(8, "#ffd166"))

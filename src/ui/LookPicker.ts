@@ -68,10 +68,10 @@ export class LookPicker {
     dim.on("pointerdown", () => {
       this.cancelQueued = true;
     });
-    const panel = scene.add
-      .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive();
+    const panel = gridOutline(
+      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95),
+      0xffffff,
+    ).setInteractive();
     this.detail = scene.add.pixelText(GAME_WIDTH / 2, DETAIL_Y, "", retroStyle(4, PICKED)).setOrigin(0.5);
     const children: Array<Phaser.GameObjects.Rectangle | PixelText | Phaser.GameObjects.Image> = [
       dim,

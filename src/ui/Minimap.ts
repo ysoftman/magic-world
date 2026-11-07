@@ -17,6 +17,7 @@ import {
   TILE,
 } from "../levels";
 import { guidePoints } from "../objective";
+import { gridOutline } from "../pixelart";
 import { type Season, seasonToday } from "../season";
 import type { Region } from "../weather";
 import { isTouchDevice } from "./TouchControls";
@@ -182,10 +183,7 @@ export class Minimap {
 
     this.playerDot = scene.add.rectangle(0, 0, DOT, DOT, 0xf5f5f5).setOrigin(0.5);
 
-    const border = scene.add
-      .rectangle(0, 0, w + PAD * 2, h + PAD * 2, 0x0b0b2b)
-      .setOrigin(0)
-      .setStrokeStyle(2, 0xffffff);
+    const border = gridOutline(scene.add.rectangle(0, 0, w + PAD * 2, h + PAD * 2, 0x0b0b2b).setOrigin(0), 0xffffff);
 
     const bottom = isTouchDevice() ? TOUCH_BOTTOM : GAME_HEIGHT - BOTTOM_MARGIN;
     this.container = scene.add

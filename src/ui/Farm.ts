@@ -5,7 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { addIngredient, INGREDIENTS } from "../cooking";
 import { HARVEST_MULT, isEventToday } from "../events";
 import { CROPS, type CropDef, type CropKey, cropClock, cropLeft, cropReadyAt, FARM_PLOTS, type FarmPlot, GameState } from "../gameState";
-import { ART_PX, DIM_TEXT, retroStyle } from "../pixelart";
+import { ART_PX, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { isWet, weatherToday } from "../weather";
 import { type FieldFx, GOLD_BURST, GREEN_BURST, PanelFx } from "./fieldFx";
@@ -117,11 +117,9 @@ export class FarmUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "FARM", retroStyle(8, "#a3e635"))

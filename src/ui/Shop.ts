@@ -6,7 +6,7 @@ import { isRefinable, REFINE_STEP } from "../drops";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
 import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
 import { itemInfo } from "../itemInfo";
-import { bodyStyle, DIM_TEXT, retroStyle } from "../pixelart";
+import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
@@ -171,11 +171,9 @@ export class ShopUI {
       .setDepth(150)
       .setVisible(false);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
-    this.panel = scene.add
-      .rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
-      .setStrokeStyle(2, 0xffffff)
       .setVisible(false);
     this.title = scene.add
       .pixelText(GAME_WIDTH / 2, PANEL_TOP + 40, "SHOP", retroStyle(8, "#ffd166"))
