@@ -845,7 +845,14 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
 
-    this.playerHpBar = this.add.rectangle(64, 124, 176, 16, 0x22c55e).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
+    // scaled to the HP the hero brings in, as updatePlayerStats() keeps it
+    // after every change: a fight entered hurt used to open on a full bar
+    // over its true "HP 21/30" until the first blow redrew it
+    this.playerHpBar = this.add
+      .rectangle(64, 124, 176, 16, 0x22c55e)
+      .setOrigin(0, 0.5)
+      .setDepth(STAT_DEPTH)
+      .setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
 
     this.add
       .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555"))
