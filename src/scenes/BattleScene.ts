@@ -1348,7 +1348,8 @@ export class BattleScene extends Phaser.Scene {
   // with a pad its label is empty and the layout leaves it out.
   private layoutMenu(): void {
     this.menuButtons.forEach((b, i) => {
-      this.menuTexts[i].setText(keyHint(b.label, b.label, { table: "battle" }));
+      // a touch screen has no keys: the buttons are tapped by their words
+      this.menuTexts[i].setText(keyHint(b.label, b.label.replace(/^[^:]+:/, ""), { table: "battle" }));
     });
     const shown = (t: PixelText): boolean => t.width > 0;
     const texts = this.menuTexts.filter(shown);
