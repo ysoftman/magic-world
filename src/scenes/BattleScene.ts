@@ -1686,6 +1686,7 @@ export class BattleScene extends Phaser.Scene {
       Sfx.strike();
       if (crit) Sfx.critical();
       this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
+      this.updateEnemyHp();
       this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       this.fxOn(this.enemySprite, "fx-slash", HIT_FX_MS);
       if (crit) this.fxOn(this.enemySprite, "fx-crit", HIT_FX_MS);
@@ -1698,7 +1699,6 @@ export class BattleScene extends Phaser.Scene {
     const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
     await this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
     this.restoreEnemyTint();
-    this.updateEnemyHp();
   }
 
   // a struck fighter's knock-back along the ground (dir 1 pushes it right)
@@ -1781,6 +1781,7 @@ export class BattleScene extends Phaser.Scene {
     if (spell.ultimate) await this.castNova(spell);
     else await this.castProjectile(spell);
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
+    this.updateEnemyHp();
     this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
     // CHAIN (battleRules COMBO_PCT): a weakness hit is one more in the combo
@@ -1799,7 +1800,6 @@ export class BattleScene extends Phaser.Scene {
     const finish = this.weakFinish ? " WEAK FINISH!" : "";
     await this.say(`${weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`}${tail}${chain}${finish}`);
     this.restoreEnemyTint();
-    this.updateEnemyHp();
   }
 
   // A move off the SKILL list (battleRules SKILLS): its effects (skillFx.ts
@@ -2158,11 +2158,11 @@ export class BattleScene extends Phaser.Scene {
     shake(this.cameras.main, 220, 0.014);
     const dmg = BOMB_DAMAGE;
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
+    this.updateEnemyHp();
     this.enemySprite.setTint(0xffa500).setTintMode(Phaser.TintModes.FILL);
     this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
     await this.say(`BOOM! ${dmg} damage!`);
     this.restoreEnemyTint();
-    this.updateEnemyHp();
   }
 
   // The BOMB, its own icon, lobbed from the hero's hand in an arc to the
