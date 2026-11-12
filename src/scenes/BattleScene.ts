@@ -2693,6 +2693,7 @@ export class BattleScene extends Phaser.Scene {
     const { dmg, note, braced } = this.guardHit(hit.dmg);
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
+    this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
     if (braced) this.blockOn();
@@ -2703,7 +2704,6 @@ export class BattleScene extends Phaser.Scene {
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, crit);
     await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
     this.setPlayerTint(undefined);
-    this.updatePlayerStats();
     if (GameState.player.hp <= 0) return;
 
     // a resist accessory still takes the hit but stops the status, and says
@@ -2805,6 +2805,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.critical();
     const { dmg, note, braced } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
+    this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
     this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
     if (braced) this.blockOn();
@@ -2815,7 +2816,6 @@ export class BattleScene extends Phaser.Scene {
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
     await this.say(`${tell.strike}! ${dmg} damage!${note}`);
     this.setPlayerTint(undefined);
-    this.updatePlayerStats();
     if (GameState.player.hp <= 0 || !canFreeze) return;
     if (GameState.resists("freeze")) {
       await this.say("EMBER RING blocks freezing!");
