@@ -28,17 +28,25 @@ import type { KeeperBout } from "./seals";
 // - The arena, the ABYSS and the yard never start one, and nothing of it is
 //   read in them.
 //
-// Numbers (the cave's; sim:battle with the bout's multipliers put on the
-// species first, WOLF + SWORD and SHIELD, no potions): max HP lost a fight at
-// Lv3, where a hero has the ELITE_MIN_BATTLES wins that open it, is 13%, 34%
-// and 51%, 98% in all less the 25% two wins mend: a hero who drinks nothing
-// ends near a quarter of its HP on average and falls about one run in five
-// (taking each fight's spread as half its mean). At Lv2 it is 21/49/77% and
-// mostly lost, at Lv4 7/22/29% and safe: the cave's nest is the cave's.
-// Gold: the three fights pay 20 + 22 + 20 as elites, the purse 40 on top, a
-// day's 100 G against the ~380 G the cave's hunt makes in a day's 24 minutes
-// (ui/Runner.ts's table), and the three BAT WINGs are the prize.
-export type NestRegion = "dungeon";
+// Numbers (sim:battle with the bout's multipliers put on the species first,
+// WOLF and the region's intended gear, no potions): the share of max HP a
+// fight takes at the level a hero comes to the field with, and the levels
+// either side. A run is the three in a row less what two wins mend (+5 HP
+// each), so a hero who drinks nothing ends near a quarter of its HP on
+// average and falls about one run in five (taking each fight's spread as
+// half its mean; the sim fights one fight at a time, so this is a sum, not a
+// run). A level under, most runs are lost; a level over, it is safe.
+//            level, gear              1st  2nd  3rd   sum - mended
+//   cave      Lv3, SWORD + SHIELD     13%  34%  51%   98 - 25 = 73%   (Lv2 147, Lv4 58)
+//   forest    Lv8, SWORD + IRON SH.   10%  36%  45%   91 - 15 = 76%   (Lv7 129, Lv9 67)
+//   snow     Lv13, IRON + IRON        20%  28%  41%   89 - 11 = 78%   (Lv12 105, Lv14 61)
+//   volcano  Lv19, MYTHRIL + MYTHRIL   7%  23%  56%   86 -  8 = 78%   (Lv18 103, Lv20 76)
+// The cave's opens with the ELITE_MIN_BATTLES wins a Lv2-3 hero has.
+// Gold: the three fights pay as elites (x2.5 their species': 62, 175, 340 and
+// 485 G), the purse on top (40, 120, 300, 340), together about a quarter of
+// what the field's hunt makes in a day's 24 minutes (ui/Runner.ts's table:
+// 380, 1200, 2590, 3290 G), and the three pieces are the prize.
+export type NestRegion = "dungeon" | "forest" | "snow" | "volcano";
 
 type Cell = readonly [number, number];
 
@@ -62,22 +70,44 @@ export const NEST_PIECES = 3;
 // the fights are elites: not before a hero would meet one (elite.ts)
 export const NEST_MIN_BATTLES = ELITE_MIN_BATTLES;
 
-// The cave's stands at the foot of the map past the king's room, on the way
-// to nothing else: open floor more than a tile clear of every zone, 180px or
-// more from the way in, the chests, the stair, the shrine, the seal's stone
-// and plates, the PEDDLER and the star shards, and under no touch disc from
-// any cell the hero can stand on. Only two elite kinds, so one run is not
-// the ELITE HUNTER trophy.
+// Each stands off its field's road, far from the way in: open floor more
+// than a tile clear of every zone, 180px or more from the way in, the chests,
+// the shrine, the seal's stone and plates, the PEDDLER and the star shards,
+// and under no touch disc from any cell the hero can stand on. The cave's is
+// at the foot of the map past the king's room, the forest's on the south wall
+// under the orcs' camp, the snow field's on the south wall under the golem's
+// basin (more than both talks' reach from the shrine, as the seal is), the
+// volcano's in the pocket on the west wall. Only two elite kinds in each, so
+// one run is not the ELITE HUNTER trophy.
+const fights = (first: [string, number, number], second: [string, number, number], third: [string, number, number]): NestDef["fights"] => [
+  { enemy: first[0], bout: { name: "NEST SENTRY", elite: "fierce", hp: first[1], atk: first[2] } },
+  { enemy: second[0], bout: { name: "NEST GUARD", elite: "fierce", hp: second[1], atk: second[2] } },
+  { enemy: third[0], bout: { name: "NEST MOTHER", elite: "sturdy", hp: third[1], atk: third[2] } },
+];
 export const NESTS: Record<NestRegion, NestDef> = {
   dungeon: {
     at: [13, 14],
-    fights: [
-      { enemy: "bat", bout: { name: "NEST SENTRY", elite: "fierce", hp: 1.3, atk: 1.2 } },
-      { enemy: "goblin", bout: { name: "NEST GUARD", elite: "fierce", hp: 1.5, atk: 1.3 } },
-      { enemy: "bat", bout: { name: "NEST MOTHER", elite: "sturdy", hp: 2.5, atk: 1.5 } },
-    ],
+    fights: fights(["bat", 1.3, 1.2], ["goblin", 1.5, 1.3], ["bat", 2.5, 1.5]),
     purse: [10, 25, 40],
     material: "batWing",
+  },
+  forest: {
+    at: [12, 16],
+    fights: fights(["wasp", 1.3, 1.2], ["orc", 1.2, 1.1], ["spider", 2, 1.3]),
+    purse: [30, 75, 120],
+    material: "spiderSilk",
+  },
+  snow: {
+    at: [12, 14],
+    fights: fights(["frostMoth", 1.3, 1.2], ["yeti", 1, 1], ["frostMoth", 2, 1.4]),
+    purse: [75, 180, 300],
+    material: "frostScale",
+  },
+  volcano: {
+    at: [1, 4],
+    fights: fights(["magmaSlime", 1.3, 1.2], ["fireImp", 1.5, 1.3], ["salamander", 2.5, 1.4]),
+    purse: [85, 210, 340],
+    material: "magmaCore",
   },
 };
 

@@ -169,7 +169,7 @@ export class Nest {
   }
 
   // The run over: paid by its wins (nest.ts payNest), said in a toast.
-  // "NEST CLEARED! +40 G, 3 SPIDER SILK" is 34 glyphs, 680px.
+  // "NEST CLEARED! +300 G, 3 FROST SCALE" is 35 glyphs, 700px.
   private end(wins: number): void {
     const def = NESTS[this.region];
     const paid = payNest(GameState, this.region, wins);
@@ -202,9 +202,9 @@ export class Nest {
       return true;
     }
     Sfx.buy();
-    // Three rows of the touch box's 42 glyphs with the longest material
-    // ("Win all three for 40 G and 3 SPIDER SILK." 41), the question its own
-    // page there
+    // The longest second line ("Win all three for 300 G and 3 FROST SCALE.")
+    // is 42 glyphs, the touch box's row; the lines wrap together into four
+    // rows there, the question its own page
     this.dialogue.ask(
       [
         `A nest: ${NEST_FIGHTS} fights in a row, no rest between.`,

@@ -23,7 +23,7 @@ import {
   TILE,
 } from "./levels";
 import { ENEMIES } from "./monsters";
-import { NESTS, type NestRegion, nestOpen } from "./nest";
+import { nestOpen } from "./nest";
 import { meet, overrunLines, settleOverrun } from "./overrun";
 import { peddlerRegion, peddlerSold } from "./peddler";
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
@@ -1014,7 +1014,7 @@ export function areaLeft(region: ShardRegion): string {
     if (GameState.seals[region] !== "done") parts.push("SEAL");
   }
   if (!shrineSpent(GameState, region, day)) parts.push("SHRINE");
-  if (region in NESTS && nestOpen(GameState, region as NestRegion, day)) parts.push("NEST");
+  if (nestOpen(GameState, region, day)) parts.push("NEST");
   const peddlerHere = told("peddler") && peddlerRegion(day, GameState.quest) === region;
   if (peddlerHere && !(peddlerSold(GameState, day, 0) && peddlerSold(GameState, day, 1))) parts.push("PEDDLER");
   return parts.join("   ");

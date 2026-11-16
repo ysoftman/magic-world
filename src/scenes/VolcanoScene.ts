@@ -19,6 +19,7 @@ import {
   VOLCANO_ZONES,
 } from "../levels";
 import { ENEMIES } from "../monsters";
+import { NESTS } from "../nest";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
@@ -56,6 +57,7 @@ import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
+import { Nest } from "../ui/Nest";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { addProp, LAVA_BUBBLES } from "../ui/propFx";
@@ -210,7 +212,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
       region: "volcano",
       back: !!back,
-      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS, cellCentre(SEALS.volcano.at)],
+      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS, cellCentre(SEALS.volcano.at), cellCentre(NESTS.volcano.at)],
       exits: [VOLCANO_ENTRY],
       zones: VOLCANO_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -274,6 +276,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.minimap = new Minimap(this, level, this.player, [
       { x: VOLCANO_ENTRY.x, y: VOLCANO_ENTRY.y, color: 0xffd166 },
       { ...VOLCANO_SHRINE_POS, color: 0x7dd3fc },
+      { ...cellCentre(NESTS.volcano.at), color: 0xfbbf24 },
       ...VOLCANO_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
         x: t.x,
         y: t.y,
@@ -307,6 +310,17 @@ export class VolcanoScene extends Phaser.Scene {
       fight: () => {
         this.encounterCooldown = 0;
         this.startBattle(SEALS.volcano.enemy as VolcanoKind, SEALS.volcano.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
+    });
+    // the field's nest (nest.ts): three fights back to back, once a day
+    new Nest(this, "volcano", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, as the seal's keeper is
+      fight: (f) => {
+        this.encounterCooldown = 0;
+        this.startBattle(f.enemy as VolcanoKind, f.bout);
       },
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       found: () => this.holdFights(),

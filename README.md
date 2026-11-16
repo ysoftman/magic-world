@@ -210,13 +210,14 @@
   | 숲   | ZIRR THE SWIFT (SWIFT SILVER WASP)    | HP x2.5, ATK x1.3           | 300  |
   | 설원 | YSKA THE PALE (STURDY AURORA MOTH)    | HP x2, ATK x1.25            | 600  |
   | 화산 | MOLG THE GILDED (FIERCE GILDED IMP)   | HP x1.5, ATK x1.15          | 900  |
-- 둥지(NEST): 동굴 남쪽 끝의 굴에서 Z 로 3연전에 들어간다(5승 뒤부터, 하루 한 번, 들어가는 순간 그날을 쓴다). 사이에 쉬는 틈 없이 이길 때마다 계속할지(ON) 물러날지(LEAVE)만 묻는다. 셋 다 이기면 40G 와 BAT WING 3개, 물러나거나 도망치면 그때까지의 골드만(1승 10G, 2승 25G), 쓰러지면 평소 패배다. 세 적은 이름 붙은 정예라 정예 골드·EXP 를 주고 정예 처치로도 센다
+- 둥지(NEST): 동굴·숲·설원·화산에 하나씩 있는 굴에서 Z 로 3연전에 들어간다(5승 뒤부터, 둥지마다 하루 한 번, 들어가는 순간 그날을 쓴다). 사이에 쉬는 틈 없이 이길 때마다 계속할지(ON) 물러날지(LEAVE)만 묻는다. 셋 다 이기면 골드와 그 지역 소재 3개, 물러나거나 도망치면 그때까지의 골드만, 쓰러지면 평소 패배다. 세 적(NEST SENTRY → NEST GUARD → NEST MOTHER)은 이름 붙은 정예라 정예 골드·EXP 를 주고 정예 처치로도 센다. 전투로 꺼지던 봉인 발판과 달리 연전은 도중에 필드를 나가면 끝난다
 
-  | 순서 | 적                           | 종의 수치에 곱하는 값(정예 배율 앞) |
-  | ---- | ---------------------------- | ----------------------------------- |
-  | 1    | NEST SENTRY (FIERCE BAT)     | HP x1.3, ATK x1.2                   |
-  | 2    | NEST GUARD (FIERCE GOBLIN)   | HP x1.5, ATK x1.3                   |
-  | 3    | NEST MOTHER (STURDY BAT)     | HP x2.5, ATK x1.5                   |
+  | 지역 | 세 적(종의 HP·ATK 에 곱하는 값, 정예 배율 앞)                                              | 1승·2승에 물러남 | 완주                 |
+  | ---- | ------------------------------------------------------------------------------------------ | ---------------- | -------------------- |
+  | 동굴 | FIERCE BAT x1.3·x1.2 → FIERCE GOBLIN x1.5·x1.3 → STURDY BAT x2.5·x1.5                      | 10G · 25G        | 40G + BAT WING 3     |
+  | 숲   | FIERCE WASP x1.3·x1.2 → FIERCE ORC x1.2·x1.1 → STURDY SPIDER x2·x1.3                       | 30G · 75G        | 120G + SPIDER SILK 3 |
+  | 설원 | FIERCE FROST MOTH x1.3·x1.2 → FIERCE YETI x1·x1 → STURDY FROST MOTH x2·x1.4                | 75G · 180G       | 300G + FROST SCALE 3 |
+  | 화산 | FIERCE MAGMA SLIME x1.3·x1.2 → FIERCE FIRE IMP x1.5·x1.3 → STURDY SALAMANDER x2.5·x1.4     | 85G · 210G       | 340G + MAGMA CORE 3  |
 - 바운티 종류: BOUNTY BOARD 의 일일 바운티는 절반은 처치 의뢰(3~6마리), 절반은 아래 일곱 중 하나다(하루 하나, 게시판을 읽은 뒤에 한 것만 센다. 전투에서 세는 것은 훈련장에서는 안 센다). 보상은 열린 지역 몬스터의 평균 골드 x 1.5 에 표의 배수를 곱한 값(처치 의뢰는 평균 4.5마리분). CATCH A RUNNER 가 걸려 있는 동안은 필드에 들어설 때 러너가 서 있을 확률이 12% 대신 50%다
 
   | 바운티         | 할 일                                   | 배수 |

@@ -17,6 +17,7 @@ import {
   TILE,
 } from "../levels";
 import { ENEMIES } from "../monsters";
+import { NESTS } from "../nest";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
@@ -55,6 +56,7 @@ import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
+import { Nest } from "../ui/Nest";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
@@ -209,7 +211,7 @@ export class SnowScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
       region: "snow",
       back: !!back,
-      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS, cellCentre(SEALS.snow.at)],
+      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS, cellCentre(SEALS.snow.at), cellCentre(NESTS.snow.at)],
       exits: [SNOW_ENTRY],
       zones: SNOW_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -292,6 +294,7 @@ export class SnowScene extends Phaser.Scene {
         { x: SNOW_ENTRY.x, y: SNOW_ENTRY.y, color: 0xffd166 },
         { x: SNOW_FISH_POS.x, y: SNOW_FISH_POS.y, color: 0x38bdf8 },
         { ...SNOW_SHRINE_POS, color: 0x7dd3fc },
+        { ...cellCentre(NESTS.snow.at), color: 0xfbbf24 },
         ...SNOW_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -321,6 +324,17 @@ export class SnowScene extends Phaser.Scene {
       fight: () => {
         this.encounterCooldown = 0;
         this.startBattle(SEALS.snow.enemy as SnowKind, SEALS.snow.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
+    });
+    // the field's nest (nest.ts): three fights back to back, once a day
+    new Nest(this, "snow", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, as the seal's keeper is
+      fight: (f) => {
+        this.encounterCooldown = 0;
+        this.startBattle(f.enemy as SnowKind, f.bout);
       },
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       found: () => this.holdFights(),

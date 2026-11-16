@@ -16,6 +16,7 @@ import {
   TILE,
 } from "../levels";
 import { ENEMIES } from "../monsters";
+import { NESTS } from "../nest";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
@@ -55,6 +56,7 @@ import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { FOREST_TILE_COLORS, Minimap } from "../ui/Minimap";
+import { Nest } from "../ui/Nest";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
@@ -203,7 +205,7 @@ export class ForestScene extends Phaser.Scene {
       : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
           region: "forest",
           back: !!back,
-          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS, cellCentre(SEALS.forest.at)],
+          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS, cellCentre(SEALS.forest.at), cellCentre(NESTS.forest.at)],
           exits: [FOREST_ENTRY],
           zones: FOREST_ZONES,
           paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -271,6 +273,7 @@ export class ForestScene extends Phaser.Scene {
       [
         { x: FOREST_ENTRY.x, y: FOREST_ENTRY.y, color: 0xffd166 },
         { ...FOREST_SHRINE_POS, color: 0x7dd3fc },
+        { ...cellCentre(NESTS.forest.at), color: 0xfbbf24 },
         ...FOREST_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -305,6 +308,17 @@ export class ForestScene extends Phaser.Scene {
       fight: () => {
         this.encounterCooldown = 0;
         this.startBattle(SEALS.forest.enemy as ForestKind, SEALS.forest.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
+    });
+    // the field's nest (nest.ts): three fights back to back, once a day
+    new Nest(this, "forest", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, as the seal's keeper is
+      fight: (f) => {
+        this.encounterCooldown = 0;
+        this.startBattle(f.enemy as ForestKind, f.bout);
       },
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       found: () => this.holdFights(),
