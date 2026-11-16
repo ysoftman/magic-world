@@ -379,8 +379,8 @@ export class TownScene extends Phaser.Scene {
     // first SHUTDOWN listener (FieldToasts). SAVED is held back over a panel
     // as in the fields — its line here (y 100..124) met the shop, the bag and
     // the forge, which hang from y 28 on touch screens and have their titles
-    // at y 85..139 on a keyboard — but not over a talk: the dialogue box (y
-    // 456..688) is clear of it, so a save made while talking (a bounty paid, a
+    // at y 85..139 on a keyboard — but not over a talk: the dialogue box (from
+    // y 452 with its name tab, 496 on a keyboard) is clear of it, so a save made while talking (a bounty paid, a
     // favor taken) still shows.
     this.toasts = new FieldToasts(this, {
       toastY: STATUS_HUD_TOAST_Y,
