@@ -56,6 +56,7 @@ const PLATE_DEPTH = 3.6;
 // stepped on within this of its middle (the hero's feet on the slab), and
 // not again until the hero has left it
 const STEP_RADIUS = 30;
+const REFUSE_MS = 280;
 
 // The keeper's fight under way: which seal, and the wins and catches as it
 // began. The field is built again when the fight returns, and reads it back
@@ -179,10 +180,15 @@ export class Seal {
       p.on = on;
       if (!stepped) return;
       const before = this.lit;
+      const wasLit = SEALS[this.region].order.indexOf(i) < before;
       this.lit = stepPlate(SEALS[this.region], this.lit, i);
-      if (this.lit === before) return;
+      // a plate already lit says nothing; a wrong one says so even as the
+      // first, when there is nothing lit to go dark (it used to be silent,
+      // and read as a plate that did nothing)
+      if (wasLit) return;
       if (this.lit === 0) {
         Sfx.error();
+        this.refuse(p.image);
       } else if (this.lit < this.plates.length) {
         Sfx.pickup();
       } else {
@@ -194,6 +200,12 @@ export class Seal {
       }
       this.show();
     });
+  }
+
+  // the wrong plate, red for a moment as it is stepped on
+  private refuse(plate: Phaser.GameObjects.Image): void {
+    plate.setTint(0xff5a5a);
+    this.scene.time.delayedCall(REFUSE_MS, () => plate.clearTint());
   }
 
   /** Starts the stone's talk if the hero stands by it; false when not. */
