@@ -1,9 +1,20 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
+import { MATERIALS } from "../drops";
 import { GameState } from "../gameState";
-import { TILE } from "../levels";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, showToast } from "../pixelart";
-import { SHARD_ATK, SHARD_DEF, SHARD_REGION_NAMES, SHARDS_PER_REGION, type ShardRegion, shardSpots, takeShard } from "../shards";
+import {
+  SHARD_REGION_NAMES,
+  SHARDS_PER_REGION,
+  type ShardRegion,
+  STAR_MATERIAL,
+  STAR_MATERIALS,
+  STAR_MAX_HP,
+  STARFALL_ATK,
+  STARFALL_DEF,
+  shardSpots,
+  takeShard,
+} from "../shards";
 
 const SHARD_KEY = "star-shard";
 // a shard of a fallen star: a slanted splinter, white at its core through
@@ -26,8 +37,6 @@ const SHARD = [
   "..kkkk.....",
 ];
 const SHARD_PALETTE = { k: 0x1e2a5e, w: 0xffffff, c: 0xd6f0ff, b: 0x8ecbff, d: 0x4f7fd6 };
-// Hidden until the hero is close: nothing past SEEN, full a tile inside it
-const SEEN = 2.5 * TILE;
 // taken by walking onto its cell
 const TAKE_RADIUS = 36;
 // on the ground with the treasure maps' glints: over the meadow's flowers
@@ -37,9 +46,10 @@ const BREATH_MS = 1600;
 
 /**
  * A field's star shards (shards.ts): each one not yet taken lies on its cell,
- * unseen until the hero is within SEEN, breathing in its alpha; walking onto
- * it takes it, with a toast of how many of the field's three are held, and
- * the third's toast says what the whole star gave. `found` runs after one is
+ * breathing in its alpha (it was hidden past 2.5 tiles at first: a thing to
+ * collect nobody knew was there); walking onto it takes it, with a toast of
+ * how many of the field's three are held, the third's toast says what the
+ * whole star gave, and the twelfth's adds the STARFALL. `found` runs after one is
  * taken, for the scene to hold off its fights while the toast is read.
  */
 export class StarShards {
@@ -48,7 +58,7 @@ export class StarShards {
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const left = shardSpots(region)
       .filter((s) => !GameState.shards.includes(s.id))
-      .map((s) => ({ ...s, image: scene.add.image(s.x, s.y, SHARD_KEY).setDepth(SHARD_DEPTH).setVisible(false) }));
+      .map((s) => ({ ...s, image: scene.add.image(s.x, s.y, SHARD_KEY).setDepth(SHARD_DEPTH) }));
     if (left.length === 0) return;
     const onUpdate = (time: number): void => {
       const breath = calm ? 1 : 0.7 + 0.3 * Math.sin((time / BREATH_MS) * Math.PI * 2);
@@ -62,20 +72,22 @@ export class StarShards {
           if (!got) continue;
           Sfx.pickup();
           // news (the "!"); before the save, so its "SAVED" queues behind
+          // the longest, "VOLCANO STAR WHOLE! MAX HP +5, 2 MAGMA CORE, CANDY", is
+          // 49 glyphs, 980px of the toast's 1200
           showToast(
             scene,
             got.whole
-              ? `${SHARD_REGION_NAMES[region]} STAR WHOLE! ATK +${SHARD_ATK} DEF +${SHARD_DEF}`
+              ? `${SHARD_REGION_NAMES[region]} STAR WHOLE! MAX HP +${STAR_MAX_HP}, ${STAR_MATERIALS} ${MATERIALS[STAR_MATERIAL[region]].name}, CANDY`
               : `STAR SHARD ${got.have}/${SHARDS_PER_REGION}!`,
             FIELD_TOAST_Y,
           );
+          if (got.all) showToast(scene, `STARFALL! ALL 12 SHARDS: ATK +${STARFALL_ATK} DEF +${STARFALL_DEF}`, FIELD_TOAST_Y);
           if (got.whole) Sfx.levelup();
           GameState.save();
           opts.found?.();
           continue;
         }
-        const near = Phaser.Math.Clamp((SEEN - d) / TILE, 0, 1);
-        s.image.setVisible(near > 0).setAlpha(near * breath);
+        s.image.setAlpha(breath);
       }
     };
     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, onUpdate);

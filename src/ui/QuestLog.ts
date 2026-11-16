@@ -8,6 +8,7 @@ import { type QuestStep, type QuestStepId, questSteps } from "../objective";
 import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { SHARDS_TOTAL } from "../shards";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
 
@@ -225,6 +226,7 @@ export class QuestLog {
   private root: Phaser.GameObjects.Container;
   private title: PixelText;
   private perks: PixelText;
+  private stars: PixelText;
   private activeRows: ActiveRow[] = [];
   private doneRows: PixelText[] = [];
   private closeQueued = false;
@@ -254,6 +256,11 @@ export class QuestLog {
     // the longest seven, is 46 x 16 = 736px, x 272..1008.
     this.perks = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 74, "", retroStyle(4, "#c4b5fd")).setOrigin(0.5);
 
+    // The star shards found (shards.ts), right of the title on its line:
+    // "STARS 12/12" at retroStyle(4) is 176px, x 1020..1196, 60px clear of
+    // the replay title's right end (960) and 24 inside the panel's edge
+    this.stars = scene.add.pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 44, "", retroStyle(4, "#8ecbff")).setOrigin(1, 0.5);
+
     this.root = scene.add
       .container(0, 0, [
         scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5),
@@ -261,6 +268,7 @@ export class QuestLog {
         gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
         this.title,
         this.perks,
+        this.stars,
         text(ACTIVE_X, HEADER_Y, 6, HINT_COLOR, "IN PROGRESS"),
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
@@ -315,6 +323,7 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
+    this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}`);
     const taken = GameState.perks;
     this.perks
       .setText(

@@ -1,15 +1,23 @@
+import { MAX_HP } from "./config";
+import type { MaterialKey } from "./drops";
 import { TILE } from "./levels";
 
-// Star shards: three lie hidden in each field (the cave, the forest, the
-// snow field, the volcano), in its far corners and dead ends, off the minimap.
-// One shows only as a faint glint once the hero is within two tiles
-// (ui/StarShards.ts) and is taken by walking over it. A field's third makes
-// its star whole: +1 ATK and +1 DEF for good, the same size as one step of
-// the bestiary's completion bonus. All four fields are +4 and +4, about one
-// armour tier, for walking every map's edges once.
+// Star shards: three lie in each field (the cave, the forest, the snow field,
+// the volcano), in its far corners and dead ends, off the minimap but plain
+// on the ground (ui/StarShards.ts), each taken by walking over it. A field's
+// third makes its star whole: +5 max HP for good, two of the field's material
+// and a CANDY. All twelve are the STARFALL: +2 ATK and +2 DEF for good. In
+// all +20 max HP, +2 and +2 — two steps of the bestiary's completion bonus
+// and a level's HP — for walking every map's edges once. The quest journal
+// counts them (ui/QuestLog.ts) and the twelfth is a trophy (achievements.ts).
+//
+// The first version (one commit long) gave +1 ATK and +1 DEF a field; a save
+// that made a star whole then keeps those and gets nothing more for it.
 //
 // Cells, each open floor the hero can walk to, more than a tile clear of
 // every monster zone and away from the way in, the chests and the shrine.
+// The fields are not the map editor's (F2 edits the town alone), so none can
+// be walled in after the fact.
 
 export type ShardRegion = "dungeon" | "forest" | "snow" | "volcano";
 
@@ -42,8 +50,19 @@ export const SHARD_CELLS: Record<ShardRegion, readonly [Cell, Cell, Cell]> = {
 export const SHARD_REGION_NAMES: Record<ShardRegion, string> = { dungeon: "CAVE", forest: "FOREST", snow: "SNOW", volcano: "VOLCANO" };
 
 export const SHARDS_PER_REGION = 3;
-export const SHARD_ATK = 1;
-export const SHARD_DEF = 1;
+export const SHARDS_TOTAL = 12;
+// a field's star whole
+export const STAR_MAX_HP = 5;
+export const STAR_MATERIALS = 2;
+export const STAR_MATERIAL: Record<ShardRegion, MaterialKey> = {
+  dungeon: "batWing",
+  forest: "spiderSilk",
+  snow: "frostScale",
+  volcano: "magmaCore",
+};
+// ...and all four
+export const STARFALL_ATK = 2;
+export const STARFALL_DEF = 2;
 
 export const shardId = (region: ShardRegion, i: number): string => `${region}-${i}`;
 
@@ -63,20 +82,29 @@ export const shardsFound = (found: readonly string[], region: ShardRegion): numb
 
 interface ShardState {
   shards: string[];
-  player: { atk: number; def: number };
+  player: { atk: number; def: number; hp: number; maxHp: number };
+  inventory: Record<MaterialKey, number> & { candy: number };
 }
 
-// The hero takes shard `id`: how many of its field's are now held, and
-// whether that made the star whole (the stats are raised here). Null when it
-// was held already.
-export function takeShard(state: ShardState, region: ShardRegion, id: string): { have: number; whole: boolean } | null {
+// The hero takes shard `id`: how many of its field's are now held, whether
+// that made the star whole and whether it was the last of all (the rewards
+// are given here). Null when it was held already.
+export function takeShard(state: ShardState, region: ShardRegion, id: string): { have: number; whole: boolean; all: boolean } | null {
   if (state.shards.includes(id) || !ALL_IDS.includes(id)) return null;
   state.shards.push(id);
   const have = shardsFound(state.shards, region);
   const whole = have === SHARDS_PER_REGION;
+  const all = state.shards.length === SHARDS_TOTAL;
   if (whole) {
-    state.player.atk += SHARD_ATK;
-    state.player.def += SHARD_DEF;
+    const add = Math.min(MAX_HP, state.player.maxHp + STAR_MAX_HP) - state.player.maxHp;
+    state.player.maxHp += add;
+    state.player.hp += add;
+    state.inventory[STAR_MATERIAL[region]] += STAR_MATERIALS;
+    state.inventory.candy += 1;
   }
-  return { have, whole };
+  if (all) {
+    state.player.atk += STARFALL_ATK;
+    state.player.def += STARFALL_DEF;
+  }
+  return { have, whole, all };
 }

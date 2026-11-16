@@ -10,6 +10,7 @@ import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS, VOLCANO_TREASURE_
 import { CATCHABLE } from "./monsters";
 import { PERK_TIERS } from "./perks";
 import { showToast } from "./pixelart";
+import { SHARDS_TOTAL } from "./shards";
 import { SHRINES } from "./shrine";
 
 // Every chest across the dungeon, forest, snow field and volcano — a new map
@@ -379,6 +380,13 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: "WELL ROUNDED",
     desc: `Take all ${PERK_TIERS.length} perks from the ELDER`,
     ...atLeast(() => GameState.perks.length, PERK_TIERS.length),
+  },
+  {
+    // every field's three star shards (shards.ts), the STARFALL
+    id: "stargazer",
+    name: "STARGAZER",
+    desc: `Find all ${SHARDS_TOTAL} star shards`,
+    ...atLeast(() => GameState.shards.length, SHARDS_TOTAL),
   },
 ];
 
