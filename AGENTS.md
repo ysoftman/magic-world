@@ -530,7 +530,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 ## 별 조각 (`src/shards.ts`, `src/ui/StarShards.ts`)
 
 동굴·숲·설원·화산에 3개씩 놓인 수집물이다. 칸은 `shards.ts` 의 `SHARD_CELLS`, 주운 것은 `GameState.shards`(id 목록,
-옛 세이브는 빈 목록)다. 바닥에서 늘 보이고 칸을 밟으면 줍는다(Z 없음). 보상은 `takeShard` 가 준다: 한 지역의 셋째에서
+옛 세이브는 빈 목록)다. 영웅이 `SEEN`(3타일) 안에 와야 보이고 칸을 밟으면 줍는다(Z 없음). 보상은 `takeShard` 가 준다: 한 지역의 셋째에서
 최대 HP +5·그 지역 소재 2개·CANDY 1개, 열두째에서 ATK +2·DEF +2(STARFALL). 능력치는 `player` 에 바로 더해 영구이고,
 HARD MODE 에서 조각은 `reset()` 으로 다시 놓인다.
 
@@ -538,11 +538,12 @@ HARD MODE 에서 조각은 `reset()` 으로 다시 놓인다.
   180px 넘게 떨어졌는지 다시 본다(`/tmp/pwcheck/` 의 일회용 스크립트로 `build*()` 격자를 BFS). 실제 사례: 처음 고른
   설원 (1,6)은 상자에서 두 칸, 화산 (22,11)은 상자에서 143px 이었다. 필드 맵은 F2 편집기로 못 고쳐서(마을만) 보물
   지도 같은 옮기기 처리는 없다. 마을에 조각을 두게 되면 그 처리(`resettleTreasureMaps` 방식)가 필요하다.
-- 미니맵 표식·이름표는 일부러 없다(찾는 재미). 처음에는 2.5타일 안에서만 보였는데, 있는 줄도 모르는 수집물이 되어 늘
-  보이게 바꿨다. 그림은 `StarShards.ts` 안의 격자를 `scene` 인자로 굽는다(보물 지도 glint 와 같은 방식, check:art 대상
+- 미니맵 표식·이름표는 일부러 없다(찾는 재미). 늘 보이게 한 적이 있는데(커밋 하나 동안) 구석에 있어 맵 건너편에서도
+  보여 찾을 것이 없었다. 그래서 가까이서만 보이고, 어느 지역에 몇 개 남았는지는 일지가 알려 준다. 설원은 옅은 조각이
+  눈 위에서 테두리만 보여, 같은 격자의 짙은 파랑 팔레트(`star-shard-snow`)를 쓴다(겨울 숲은 아직 기본 팔레트). 그림은 `StarShards.ts` 안의 격자를 `scene` 인자로 굽는다(보물 지도 glint 와 같은 방식, check:art 대상
   아님). 보물 지도의 금색 십자("여기를 파라")와 헷갈리지 않게 파란 조각 모양이다. 깊이 4.5(glint 와 같음).
-- 진행은 퀘스트 일지 제목 줄 오른쪽 `STARS 12/12`(`QuestLog`, retroStyle(4) 176px, x 1020..1196, 회차 제목 끝 960 에서
-  60px)이고, 전부 모으면 업적 STARGAZER(`achievements.ts`)다.
+- 진행은 퀘스트 일지 제목 줄 오른쪽 두 줄 `STARS 12/12`·`C3 F3 S3 V3`(`QuestLog`, retroStyle(4) 각 176px, x 1020..1196,
+  회차 제목 끝 960 에서 60px, y 26..62)이고, 전부 모으면 업적 STARGAZER(`achievements.ts`)다.
 - 토스트는 소식(`!`)이다: `STAR SHARD 2/3!`, 셋째는 `VOLCANO STAR WHOLE! MAX HP +5, 2 MAGMA CORE, CANDY`(49글자,
   980px), 열두째는 그 뒤에 `STARFALL! ALL 12 SHARDS: ATK +2 DEF +2`. 지역 이름(`SHARD_REGION_NAMES`)은 7글자까지.
 - 첫 판(커밋 하나 동안)은 지역마다 ATK +1·DEF +1 이었다. 그때 별을 완성한 세이브는 그 능력치를 그대로 갖고 새 보상은

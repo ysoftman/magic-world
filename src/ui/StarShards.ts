@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { MATERIALS } from "../drops";
 import { GameState } from "../gameState";
+import { TILE } from "../levels";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, showToast } from "../pixelart";
 import {
   SHARD_REGION_NAMES,
@@ -37,6 +38,14 @@ const SHARD = [
   "..kkkk.....",
 ];
 const SHARD_PALETTE = { k: 0x1e2a5e, w: 0xffffff, c: 0xd6f0ff, b: 0x8ecbff, d: 0x4f7fd6 };
+// On the snow field's pale ground that splinter was white on white, only its
+// rim to read it by: there it is the same shape three steps darker, a deep
+// blue glass with one pale edge.
+const SNOW_SHARD_KEY = "star-shard-snow";
+const SNOW_SHARD_PALETTE = { k: 0x0b1440, w: 0xb8dcff, c: 0x5b8fe0, b: 0x2f55b0, d: 0x1e3a8a };
+// Found by walking near: nothing past SEEN, full a tile inside it. (Shown
+// always, for one commit, the corners gave them away from across the map.)
+const SEEN = 3 * TILE;
 // taken by walking onto its cell
 const TAKE_RADIUS = 36;
 // on the ground with the treasure maps' glints: over the meadow's flowers
@@ -46,19 +55,23 @@ const BREATH_MS = 1600;
 
 /**
  * A field's star shards (shards.ts): each one not yet taken lies on its cell,
- * breathing in its alpha (it was hidden past 2.5 tiles at first: a thing to
- * collect nobody knew was there); walking onto it takes it, with a toast of
+ * unseen until the hero is within SEEN and breathing in its alpha (the quest
+ * journal says how many each field still holds); walking onto it takes it, with a toast of
  * how many of the field's three are held, the third's toast says what the
  * whole star gave, and the twelfth's adds the STARFALL. `found` runs after one is
  * taken, for the scene to hold off its fights while the toast is read.
  */
 export class StarShards {
   constructor(scene: Phaser.Scene, region: ShardRegion, hero: { x: number; y: number }, opts: { found?: () => void } = {}) {
-    if (!scene.textures.exists(SHARD_KEY)) makeTexture(scene, SHARD_KEY, SHARD, SHARD_PALETTE, ART_PX);
+    if (!scene.textures.exists(SHARD_KEY)) {
+      makeTexture(scene, SHARD_KEY, SHARD, SHARD_PALETTE, ART_PX);
+      makeTexture(scene, SNOW_SHARD_KEY, SHARD, SNOW_SHARD_PALETTE, ART_PX);
+    }
+    const key = region === "snow" ? SNOW_SHARD_KEY : SHARD_KEY;
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const left = shardSpots(region)
       .filter((s) => !GameState.shards.includes(s.id))
-      .map((s) => ({ ...s, image: scene.add.image(s.x, s.y, SHARD_KEY).setDepth(SHARD_DEPTH) }));
+      .map((s) => ({ ...s, image: scene.add.image(s.x, s.y, key).setDepth(SHARD_DEPTH).setVisible(false) }));
     if (left.length === 0) return;
     const onUpdate = (time: number): void => {
       const breath = calm ? 1 : 0.7 + 0.3 * Math.sin((time / BREATH_MS) * Math.PI * 2);
@@ -87,7 +100,8 @@ export class StarShards {
           opts.found?.();
           continue;
         }
-        s.image.setAlpha(breath);
+        const near = Phaser.Math.Clamp((SEEN - d) / TILE, 0, 1);
+        s.image.setVisible(near > 0).setAlpha(near * breath);
       }
     };
     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, onUpdate);

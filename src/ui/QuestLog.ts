@@ -9,7 +9,7 @@ import { PEDDLER_REGION_NAMES, peddlerRegion } from "../peddler";
 import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
-import { SHARDS_TOTAL } from "../shards";
+import { SHARDS_TOTAL, type ShardRegion, shardsFound } from "../shards";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
 
@@ -258,10 +258,16 @@ export class QuestLog {
     // the longest seven, is 46 x 16 = 736px, x 272..1008.
     this.perks = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 74, "", retroStyle(4, "#c4b5fd")).setOrigin(0.5);
 
-    // The star shards found (shards.ts), right of the title on its line:
-    // "STARS 12/12" at retroStyle(4) is 176px, x 1020..1196, 60px clear of
-    // the replay title's right end (960) and 24 inside the panel's edge
-    this.stars = scene.add.pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 44, "", retroStyle(4, "#8ecbff")).setOrigin(1, 0.5);
+    // The star shards found (shards.ts), right of the title on its line, two
+    // rows of retroStyle(4) as the PEDDLER's are on the left: "STARS 12/12"
+    // over each field's count, "C3 F3 S3 V3" (cave, forest, snow, volcano),
+    // both 176px, x 1020..1196, 60px clear of the replay title's right end
+    // (960) and 24 inside the panel's edge; y 26..42 and 46..62
+    this.stars = scene.add
+      .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 26, "", retroStyle(4, "#8ecbff"))
+      .setOrigin(1, 0)
+      .setAlign("right")
+      .setLineSpacing(4);
 
     // Where the PEDDLER is today (peddler.ts), left of the title on its
     // line, two rows of retroStyle(4): "PEDDLER TODAY" 208px (x 84..292, 28px
@@ -332,7 +338,10 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
-    this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}`);
+    const found = (r: ShardRegion): number => shardsFound(GameState.shards, r);
+    this.stars.setText(
+      `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nC${found("dungeon")} F${found("forest")} S${found("snow")} V${found("volcano")}`,
+    );
     this.peddler.setText(`PEDDLER TODAY\n${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
     const taken = GameState.perks;
     this.perks
