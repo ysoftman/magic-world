@@ -65,25 +65,35 @@ AUDIT_JS = """() => {
     // a scene whose camera follows nothing and sits at 0,0 (Battle, Title, Ending) is all screen-fixed,
     // whatever its texts' scrollFactor: counted by scrollFactor alone, a battle's texts were never compared
     const still = !cam._follow && cam.scrollX === 0 && cam.scrollY === 0;
-    const walk = (list, vis) => {
+    // opaque panels and covers (a filled alpha-1 rectangle, 100x20 or more): a text wholly inside one and under its depth is hidden by it
+    const panels = [];
+    const walk = (list, vis, up) => {
       for (const o of list) {
         const v = vis && o.visible !== false && (o.alpha === undefined || o.alpha > 0.05);
+        // a container's children draw at the container's depth
+        const depth = up ?? o.depth;
         if (v && o.texture && o.texture.key === "__MISSING") out.missing.push(`${s.scene.key}:${o.type}`);
-        if (o.list) walk(o.list, v);
+        if (o.list) walk(o.list, v, depth);
+        if (v && o.type === "Rectangle" && o.isFilled && o.fillAlpha >= 1 && o.alpha >= 1 && o.displayWidth >= 100 && o.displayHeight >= 20) {
+          const b = o.getBounds();
+          const pf = still || (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
+          if (pf) panels.push({ x: b.x, y: b.y, w: b.width, h: b.height, depth });
+        }
         // Text, or PixelText (a BitmapText; its text is what was set, unwrapped)
         if ((o.type !== "Text" && o.type !== "BitmapText") || !v || !o.text || !o.text.trim()) continue;
         const b = o.getBounds();
         const fixed = still || (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
         items.push({ t: o.text.replace(/\\n/g, "|").slice(0, 48), x: fixed ? b.x : b.x - cam.scrollX, y: fixed ? b.y : b.y - cam.scrollY,
-          w: b.width, h: b.height, fixed, depth: o.depth });
+          w: b.width, h: b.height, fixed, depth });
       }
     };
     walk(s.children.list, true);
+    const hidden = (it) => panels.some((p) => p.depth > it.depth && it.x >= p.x - 1 && it.y >= p.y - 1 && it.x + it.w <= p.x + p.w + 1 && it.y + it.h <= p.y + p.h + 1);
     const r = (n) => Math.round(n);
     for (const it of items)
       if (it.fixed && (it.x < -1 || it.y < -1 || it.x + it.w > 1281 || it.y + it.h > 721))
         out.offscreen.push(`${s.scene.key} "${it.t}" x ${r(it.x)}..${r(it.x + it.w)} y ${r(it.y)}..${r(it.y + it.h)}`);
-    const fx = items.filter((i) => i.fixed && i.depth < 250);
+    const fx = items.filter((i) => i.fixed && i.depth < 250 && !hidden(i));
     for (let i = 0; i < fx.length; i++)
       for (let j = i + 1; j < fx.length; j++) {
         const a = fx[i], b = fx[j];
@@ -215,7 +225,7 @@ class Game:
     def audit(self) -> dict:
         """screen-fixed text (Text or PixelText; all of it in a scene whose camera stays at 0,0, as a battle's) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text
         (touch: fixed text; touchMap: the map's tags at this camera position; sprites such as a shrine's stone are not looked at).
-        An opaque panel over the HUD band still lists the HUD texts under it as overlaps: check the screenshot."""
+        A text wholly under an opaque panel (an alpha-1 rectangle at a higher depth) is left out; one a panel covers only in part, or a see-through panel, still lists: check the screenshot."""
         return self.ev(AUDIT_JS)
 
     # --- game flows ---------------------------------------------------------
