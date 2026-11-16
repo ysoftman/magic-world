@@ -162,7 +162,11 @@ export class Nest {
       "NEST",
       ["ON", "LEAVE"],
       (i) => {
-        if (i === 0) this.fightOn(wins);
+        // an answer given while the fight's last lines were still being
+        // paged (the same Z, pressed on) is not one: asked again. It took ON
+        // and started the next fight unasked.
+        if (justBackFromFight(this.scene)) this.asking = wins;
+        else if (i === 0) this.fightOn(wins);
         else this.end(wins);
       },
     );

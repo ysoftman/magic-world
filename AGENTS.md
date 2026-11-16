@@ -674,6 +674,8 @@ NEST 는 필드의 굴에서 세 전투를 연달아 하는 곳이다(동굴·�
 같은 꼴, 옛 세이브는 빈 값, HARD MODE 의 `reset()` 이 비운다)이고 들어가는 순간 그날을 쓴 것으로 저장해 도중에
 새로고침하면 그날은 끝이다. 정예와 같은 5승(`NEST_MIN_BATTLES`) 뒤부터 열린다.
 
+- 연전 질문의 답은 복귀 뒤 1.2초(`justBackFromFight`) 동안 답으로 치지 않고 같은 질문을 다시 띄운다. 실제 사례: 결산을
+  넘기던 Z 가 타이핑을 넘기고 다음 Z 가 ON 을 눌러 원치 않는 다음 전투가 시작됐다.
 - BattleScene 에는 훅이 없다. 전투 하나하나가 봉인 강적과 같은 `KeeperBout`(종에 HP·ATK 배율을 먼저 곱한 정예, 첫 줄
   `NEST MOTHER rises!`)이고 씬의 `startBattle(enemy, keeper)` 로 시작한다. 그래서 세 전투 모두 정예 골드·EXP(x2.5)를 주고
   `feats.eliteWins` 에 들어간다(바운티 FELL AN ELITE 를 여기서 채울 수 있다: 값은 연전 한 번). 한 둥지에는 정예 종류를
