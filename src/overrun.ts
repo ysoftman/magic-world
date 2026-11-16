@@ -34,13 +34,18 @@
 // - the +5 HP / +2 MP a won fight rests, MEND, CALM, the LIMIT gauge, the
 //   companion's bond: nothing, no fight was fought.
 //
-// The share: a field hunt is ~132 fights an hour (ui/Runner.ts), 27s each,
-// of which a one-blow fight is ~4.5s (the fades in and out, FIGHT, two
-// lines) and an overrun ~0.6s. So ~155 overruns an hour, x0.8 = 0.94 of the
-// hour's gold and EXP by walking the grass; chasing roamers (a meeting every
-// ~12s) it is 1.19. Around 1, a little over for who hunts on purpose: the
-// time saved is the prize, not the purse. And a foe that can be overrun is
-// far under the hero (the table in AGENTS.md), so its purse is small change.
+// The share, measured (2026-11, the harness's bot): a one-blow fight takes
+// 1.8-2.6s from the meeting to the field again with its 3-4 keys pressed
+// the moment they can be (about 3s played), then 1.2s of grace; an overrun
+// stops nothing (the hero walks on) and leaves 0.6s of cooldown. The grass
+// rolls a meeting 6% a second walked, one every ~17s: 0.8 x (17 + 1.2 + 3) /
+// (17 + 0.6) = 0.96 of the hour's gold and EXP, 0.92 against the bot. About
+// what fighting paid: the time saved is the prize, not the purse. Roamers
+// are met far faster (a pack stands a second or two apart), which is why an
+// overrun one does not come back until the field is built again (a fight, a
+// way out and in): a zone's pack pays once, 15 kills or so, and then it is
+// the grass's rate. And a foe that can be overrun is far under the hero (the
+// levels in README), so its purse is small change either way.
 import { CRIT_MULT, MIN_DAMAGE_SHARE, SKILLS, SPELLS, scaleEnemy } from "./battleRules";
 import { MEALS, type MealDef } from "./cooking";
 import { type EliteKind, rollElite } from "./elite";
