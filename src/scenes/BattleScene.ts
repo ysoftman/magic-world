@@ -24,6 +24,7 @@ import {
   FREEZE_GRACE_TURNS,
   guardedDamage,
   POISON_TURNS,
+  parriedDamage,
   poisonTickDamage,
   regenAmount,
   rollDamage,
@@ -70,9 +71,9 @@ import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texels
 import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
-import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
 import { type BlessingDef, takeBlessingCharge } from "../shrine";
+import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
 import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
@@ -109,6 +110,24 @@ const CRIT_STOP_MS = 90;
 const RECOIL_PX = 10;
 const CRIT_RECOIL_PX = 18;
 const RECOIL_MS = 90;
+// PARRY: a key or tap as the foe's blow lands. The foe stands still for a
+// random beat (so no rhythm can be learnt), draws back (the cue, in real ms
+// whatever the BATTLE SPEED, so the cue-to-blow time never drops under a
+// reaction), then lunges. Only the first press counts and it must fall in the
+// last PARRY_WINDOW_MS before contact: mashing is always early. A parried
+// blow does battleRules PARRY_MULT of its damage (after WARD/GUARD/DEFEND)
+// and carries no poison or freeze. The hero can't on the round it thaws.
+// The cue comes 350ms before the blow (305ms at BATTLE SPEED 2) and the
+// window opens 150ms (105ms) after it: a press on seeing the foe draw back
+// (a 200-330ms reaction) lands inside. At 180ms of draw-back the blow came
+// 270ms after the cue, sooner than most reactions. The beat is 150ms at
+// least, so a press 150ms after the one that advanced the last line (mashing)
+// is still 100ms early. A press up to PARRY_LATE_MS after the blow is told so.
+const PARRY_HOLD_MS: [number, number] = [150, 450];
+const PARRY_BACK_MS = 260;
+const PARRY_BACK_PX = 24;
+const PARRY_WINDOW_MS = 200;
+const PARRY_LATE_MS = 250;
 // breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
 const IDLE_BOB_PX = 4;
 // a flier's breathing is a hover: higher and quicker, wings at work
@@ -539,6 +558,13 @@ export class BattleScene extends Phaser.Scene {
   private enemyStance!: Stance;
   private companionStance?: Stance;
   private hintText!: PixelText;
+  // while a foe's blow is on its way: null until the first press, then when
+  // it came (performance.now); undefined outside a blow
+  private parryPress: number | null | undefined;
+  // until when (performance.now) a press is a late one, after an unparried blow
+  private parryLate = 0;
+  // the round a frozen hero thaws on: no PARRY against that round's blow
+  private thawing = false;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
@@ -642,6 +668,8 @@ export class BattleScene extends Phaser.Scene {
     this.stolen = false;
     this.poisonTurns = 0;
     this.frozen = false;
+    this.thawing = false;
+    this.parryPress = undefined;
     this.freezeGrace = 0;
     this.enraged = false;
     this.charging = false;
@@ -1136,7 +1164,9 @@ export class BattleScene extends Phaser.Scene {
   // keydown events, not JustDown polling: Key.onUp resets _justDown, so a
   // press whose down/up land in the same frame queue is silently dropped
   private onKey(e: KeyboardEvent): void {
-    if (e.repeat || !this.waitingAction) return;
+    if (e.repeat) return;
+    if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) this.parryInput();
+    if (!this.waitingAction) return;
 
     if (this.inSkills) {
       const next = this.skillMove(e.code);
@@ -1267,10 +1297,30 @@ export class BattleScene extends Phaser.Scene {
     waiter.resolve(action);
   }
 
+  // a key or tap that may be the PARRY (enemyLunge): the first one while a
+  // blow is on its way, or one just after a blow nothing met
+  private parryInput(): void {
+    const now = performance.now();
+    if (this.parryPress === null) this.parryPress = now;
+    else if (now < this.parryLate) {
+      this.parryLate = 0;
+      this.parryNote("LATE");
+    }
+  }
+
+  // PARRY!, or how the press missed. Up and to the foe's side of the hero:
+  // over the hero it lay across the blow's damage number (a crit's "516!" is
+  // 224px wide about the hero, to x 432; PARRY! is 192px from x 434).
+  private parryNote(label: "PARRY!" | "EARLY" | "LATE"): void {
+    const hit = label === "PARRY!";
+    this.flashStatus(label, hit ? "#fde047" : DIM_TEXT, this.playerSprite.x + 210, this.playerSprite.y - 90, hit ? 8 : 6);
+  }
+
   // Mouse support for the action menu and item list: a global pointerdown
   // hit-tests the visible entries' bounds (like awaitAdvance) rather than
   // setInteractive() per item, so the keyboard flow stays untouched.
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    this.parryInput();
     if (!this.waitingAction) return;
 
     if (this.inSkills) {
@@ -1697,6 +1747,7 @@ export class BattleScene extends Phaser.Scene {
         await this.enemyTurn();
       }
       this.defending = false;
+      this.thawing = false;
       await this.tickWard();
     }
   }
@@ -2728,12 +2779,14 @@ export class BattleScene extends Phaser.Scene {
     if (this.freezeGrace > 0) this.freezeGrace -= 1;
     if (special === "regen") return this.regenerate();
 
-    await this.enemyLunge();
+    const parried = await this.enemyLunge();
     // impact thud lands with the damage, not at the wind-up
-    Sfx.hit();
+    if (!parried) Sfx.hit();
     const hit = rollDamage(this.enemy.atk, this.heroDef());
     const crit = hit.crit;
-    const { dmg, note, braced } = this.guardHit(hit.dmg);
+    const guard = this.guardHit(hit.dmg);
+    const { note, braced } = guard;
+    const dmg = parried ? parriedDamage(guard.dmg) : guard.dmg;
     if (crit) Sfx.critical();
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.updatePlayerStats();
@@ -2747,7 +2800,8 @@ export class BattleScene extends Phaser.Scene {
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, crit);
     await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
     this.setPlayerTint(undefined);
-    if (GameState.player.hp <= 0) return;
+    // a parried blow carries no poison or freeze
+    if (GameState.player.hp <= 0 || parried) return;
 
     // a resist accessory still takes the hit but stops the status, and says
     // so — otherwise the gear would look like it did nothing
@@ -2848,10 +2902,14 @@ export class BattleScene extends Phaser.Scene {
     if (breath) {
       this.breathOn(breath);
       await this.wait(this.anim(BREATH_LAND_MS));
-    } else await this.enemyLunge();
-    Sfx.hit();
+    }
+    // a breath can't be parried, a blow can
+    const parried = !breath && (await this.enemyLunge());
+    if (!parried) Sfx.hit();
     Sfx.critical();
-    const { dmg, note, braced } = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
+    const guard = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
+    const { note, braced } = guard;
+    const dmg = parried ? parriedDamage(guard.dmg) : guard.dmg;
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
@@ -2864,7 +2922,7 @@ export class BattleScene extends Phaser.Scene {
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
     await this.say(`${tell.strike}! ${dmg} damage!${note}`);
     this.setPlayerTint(undefined);
-    if (GameState.player.hp <= 0 || !canFreeze) return;
+    if (GameState.player.hp <= 0 || !canFreeze || parried) return;
     if (GameState.resists("freeze")) {
       await this.say("EMBER RING blocks freezing!");
       return;
@@ -2969,6 +3027,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async thaw(): Promise<void> {
     this.frozen = false;
+    this.thawing = true;
     this.freezeGrace = FREEZE_GRACE_TURNS;
     shake(this.cameras.main, 80, 0.004);
     await this.say("Frozen solid! You lose this turn.");
@@ -2990,8 +3049,8 @@ export class BattleScene extends Phaser.Scene {
   // status label pops over the hero when it lands, on top of the HP-row tag
   // (a spell's side effect on the foe passes its own spot); like the damage
   // numbers it stops under the stat windows (POPUP_TOP, see popNumber)
-  private flashStatus(label: string, color: string, x = this.playerSprite.x, y = this.playerSprite.y - 80): void {
-    const t = this.add.pixelText(x, y, label, retroStyle(10, color)).setOrigin(0.5).setStroke("#000000", 2);
+  private flashStatus(label: string, color: string, x = this.playerSprite.x, y = this.playerSprite.y - 80, size = 10): void {
+    const t = this.add.pixelText(x, y, label, retroStyle(size, color)).setOrigin(0.5).setStroke("#000000", 2);
     const endY = Math.max(t.y - 60, POPUP_TOP + t.height / 2);
     this.tweens.add({ targets: t, y: endY, alpha: 0, duration: this.anim(900, STATUS_POP_MIN_MS), onComplete: () => t.destroy() });
   }
@@ -3060,12 +3119,36 @@ export class BattleScene extends Phaser.Scene {
     };
   }
 
-  private async enemyLunge(): Promise<void> {
-    const startX = this.enemySprite.x;
+  // The foe's blow, resolved as it connects (it walks home on its own): a
+  // still beat, the draw-back that cues the PARRY, the lunge. True if the
+  // first press since the beat began fell in the window before contact.
+  private async enemyLunge(): Promise<boolean> {
+    const foe = this.enemySprite;
+    const startX = foe.x;
     const targetX = this.playerSprite.x + 80;
-    const trail = this.ghostTrail(this.enemySprite);
-    await this.tweenPromise(this.enemySprite, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
-    await this.tweenPromise(this.enemySprite, { x: startX }, this.anim(LUNGE_BACK_MS));
+    const trail = this.ghostTrail(foe);
+    this.parryLate = 0;
+    if (!this.thawing) {
+      bindKeyHint(this.hintText, () => keyHint("ANY KEY:PARRY", "TAP:PARRY", { table: "battle", pad: "Z:PARRY" }));
+      this.parryPress = null;
+    } else this.hintText.setText("");
+    await this.wait(Phaser.Math.Between(...PARRY_HOLD_MS));
+    await this.tweenPromise(foe, { x: startX + PARRY_BACK_PX }, PARRY_BACK_MS);
+    await this.tweenPromise(foe, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
+    const press = this.parryPress;
+    this.parryPress = undefined;
+    this.hintText.setText("");
+    this.tweens.add({ targets: foe, x: startX, duration: this.anim(LUNGE_BACK_MS) });
+    const now = performance.now();
+    const parried = press != null && now - press <= PARRY_WINDOW_MS;
+    if (press === null) this.parryLate = now + PARRY_LATE_MS;
+    if (parried) {
+      Sfx.emit("parry");
+      this.glowBurst.setPosition(this.playerSprite.x + 40, this.playerSprite.y);
+      this.glowBurst.explode(12);
+      this.parryNote("PARRY!");
+    } else if (press != null) this.parryNote("EARLY");
+    return parried;
   }
 
   // FIGHT's strike: strikeIn (draw back, dash, `onContact` as it connects),

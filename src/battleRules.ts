@@ -786,6 +786,10 @@ export const guardedDamage = (raw: number, halved: boolean): number => (halved ?
 
 // a hit on a DEFENDing hero, never below 1
 export const defendedDamage = (raw: number): number => Math.max(1, Math.ceil(raw * DEFEND_MULT));
+// a parried hit (BattleScene enemyLunge: a press timed to the blow), on top
+// of WARD/GUARD/DEFEND, never below 1. Player skill, so sim-battle leaves it out.
+export const PARRY_MULT = 0.7;
+export const parriedDamage = (dmg: number): number => Math.max(1, Math.ceil(dmg * PARRY_MULT));
 
 // a round's poison tick on the hero, which never takes the last HP
 export const poisonTickDamage = (maxHp: number, hp: number): number => Math.min(Math.max(1, Math.floor(maxHp * POISON_PCT)), hp - 1);

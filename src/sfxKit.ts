@@ -598,6 +598,17 @@ const GAME_KIT: Record<string, SfxProgram> = {
     ],
   },
   // ---- battle: blows taken and status ----
+  parry: {
+    id: "parry",
+    kind: "se",
+    target: "parry: a bright metal clink (25ms) and a 12.5% pulse ting ringing on E7 over a B6 triangle, in place of the hurt thud",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.025, wave: "metal", freq: 90000, vol: 0.1 },
+      { at: 0.005, dur: 0.16, wave: "pulse12", freq: N("E7"), vol: 0.06, hold: 0.02, vib: { rate: 30, cents: 20 } },
+      { at: 0.005, dur: 0.09, wave: "triangle", freq: N("B6"), vol: 0.05 },
+    ],
+  },
   hit: {
     id: "hit",
     kind: "se",
