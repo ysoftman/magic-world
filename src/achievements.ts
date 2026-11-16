@@ -10,6 +10,7 @@ import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS, VOLCANO_TREASURE_
 import { CATCHABLE } from "./monsters";
 import { PERK_TIERS } from "./perks";
 import { showToast } from "./pixelart";
+import { sealsDone } from "./seals";
 import { SHARDS_TOTAL } from "./shards";
 import { SHRINES } from "./shrine";
 
@@ -387,6 +388,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: "STARGAZER",
     desc: `Find all ${SHARDS_TOTAL} star shards`,
     ...atLeast(() => GameState.shards.length, SHARDS_TOTAL),
+  },
+  {
+    // a field's rune plates walked in order and the keeper behind its seal
+    // felled or caught (seals.ts)
+    id: "sealbreaker",
+    name: "SEALBREAKER",
+    desc: "Break a seal and fell its keeper",
+    check: () => sealsDone(GameState.seals) >= 1,
   },
 ];
 

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { abyssOpen } from "../abyss";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
+import type { EliteKind } from "../elite";
 import { encounterOut } from "../fx";
 import { GameState, isNight } from "../gameState";
 import {
@@ -49,6 +50,7 @@ import {
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
+import { cellCentre, SEALS } from "../seals";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { addAbyssRift, STAIR_RIFT } from "../ui/abyssRift";
@@ -65,6 +67,7 @@ import { Peddler } from "../ui/Peddler";
 import { addProp, TORCH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
+import { Seal } from "../ui/Seal";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { StarShards } from "../ui/StarShards";
@@ -213,7 +216,7 @@ export class DungeonScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
       region: "dungeon",
       back: !!back,
-      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS],
+      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at)],
       exits: [DUNGEON_ENTRY],
       zones: DUNGEON_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -344,6 +347,13 @@ export class DungeonScene extends Phaser.Scene {
       ownKey: true,
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
+    });
+    // the cave's seal (seals.ts): its stone, its three rune plates, its keeper
+    new Seal(this, "dungeon", this.player, this.dialogue, {
+      back: !!back,
+      fight: () => this.startBattle(SEALS.dungeon.enemy as CaveKind, SEALS.dungeon.elite),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
     });
     // the PEDDLER, on the days this field is his (peddler.ts)
     if (Peddler.here("dungeon")) {
@@ -589,7 +599,7 @@ export class DungeonScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: CaveKind): void {
+  private startBattle(enemy?: CaveKind, elite?: EliteKind): void {
     // A fade out either way is a scene change: a battle rolled while the exit
     // or the ABYSS stair fades (no safe radius round the stair), or that stair
     // reached while a battle fades, started both scenes at once.
@@ -601,7 +611,7 @@ export class DungeonScene extends Phaser.Scene {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.35 ? "slime" : roll < 0.7 ? "goblin" : "bat");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("dungeon") });
-      this.scene.start("Battle", { enemy: kind, from: "Dungeon" });
+      this.scene.start("Battle", { enemy: kind, from: "Dungeon", elite });
     });
   }
 }

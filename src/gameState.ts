@@ -8,6 +8,7 @@ import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { loadPeddler, type PeddlerState } from "./peddler";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
+import { loadSeals, type SealState } from "./seals";
 import { loadShards } from "./shards";
 import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays } from "./shrine";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
@@ -700,6 +701,8 @@ export const GameState = {
   // companionBondBonus
   companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
+  // each field's seal: broken ("open") or its keeper felled ("done") (seals.ts)
+  seals: {} as SealState,
   // what was bought of the PEDDLER's two offers, and on which day (peddler.ts)
   peddler: null as PeddlerState | null,
   // the star shards picked up in the fields, by id (shards.ts)
@@ -1138,6 +1141,7 @@ export const GameState = {
     this.companionBond = {};
     this.openedTreasures = [];
     this.shards = [];
+    this.seals = {};
     this.peddler = null;
     this.quest = {
       slimes: 0,
@@ -1241,6 +1245,7 @@ export const GameState = {
           companionBond: this.companionBond,
           openedTreasures: this.openedTreasures,
           shards: this.shards,
+          seals: this.seals,
           peddler: this.peddler,
           quest: this.quest,
           bounty: this.bounty,
@@ -1371,6 +1376,8 @@ export const GameState = {
       this.openedTreasures = data.openedTreasures ?? [];
       // none on saves from before the star shards
       this.shards = loadShards(data.shards);
+      // every seal shut on saves from before them
+      this.seals = loadSeals(data.seals);
       // nothing bought on saves from before the PEDDLER
       this.peddler = loadPeddler(data.peddler);
       Object.assign(this.quest, data.quest);

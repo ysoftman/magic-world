@@ -504,6 +504,9 @@ const MOONFLOWER_YOUNG_TILE = [
 // still hear today's offering and is a dark groove once it has (the SPENT
 // palette, the same grid).
 const SHRINE_PALETTE = { K: 0x1a1028, s: 0xc3c7d6, m: 0x8f94a8, d: 0x5c6078, r: 0x7dd3fc, R: 0xf0f9ff, g: 0x5f8f4a };
+// ...and a SEAL (seals.ts, ui/Seal.ts) is the same stone in a dark basalt,
+// its rune blood-red: shut in, not asked of
+const SEAL_PALETTE = { K: 0x1a1028, s: 0x8b7f8f, m: 0x5e5466, d: 0x3b3345, r: 0xef4444, R: 0xfecaca, g: 0x4a3b52 };
 // written out, not spread: check:art reads each palette literal on its own
 const SHRINE_SPENT_PALETTE = { K: 0x1a1028, s: 0xc3c7d6, m: 0x8f94a8, d: 0x5c6078, r: 0x444a60, R: 0x5c6078, g: 0x5f8f4a };
 // biome-ignore format: one row per line so the art reads as a grid
@@ -813,6 +816,7 @@ export function bakeProps(this: Phaser.Scene): void {
   makeTexture(this, "chest-open", CHEST_OPEN_TILE, CHEST_PALETTE, ART_PX);
   makeTexture(this, "shrine", SHRINE_TILE, SHRINE_PALETTE, ART_PX);
   makeTexture(this, "shrine-spent", SHRINE_TILE, SHRINE_SPENT_PALETTE, ART_PX);
+  makeTexture(this, "seal", SHRINE_TILE, SEAL_PALETTE, ART_PX);
   makeTexture(this, "produce-crate", PRODUCE_CRATE_TILE, PRODUCE_CRATE_PALETTE, ART_PX);
   makeTexture(this, "anvil", ANVIL_TILE, ANVIL_PALETTE, ART_PX);
   makeTexture(this, "flowers", FLOWERS_TILE, FLOWERS_PALETTE, ART_PX);
