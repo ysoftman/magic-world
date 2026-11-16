@@ -167,7 +167,7 @@ export class DungeonScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
-      fadeAreaTitle(this, title);
+      fadeAreaTitle(this, title, "dungeon");
     }
 
     addGroundShadow(this, DUNGEON_ENTRY, { w: 104, h: 24, yOffset: 56 });

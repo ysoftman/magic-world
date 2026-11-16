@@ -4,8 +4,9 @@ import { ACHIEVEMENTS, announceLooks, claimAchievements } from "./achievements";
 import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { SKILLS, type Skill } from "./battleRules";
+import { GAME_WIDTH } from "./config";
 import { warmFx } from "./fx";
-import { GameState, onSaved } from "./gameState";
+import { econDay, GameState, onSaved } from "./gameState";
 import {
   type MonsterZone,
   OBJECT_TILES,
@@ -20,9 +21,12 @@ import {
   T_WATER_B,
   TILE,
 } from "./levels";
+import { peddlerRegion, peddlerSold } from "./peddler";
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
 import { PixelText } from "./pixelText";
 import { TILE_VARIANTS } from "./scenes/BootScene";
+import { SHARDS_PER_REGION, type ShardRegion, shardsFound } from "./shards";
+import { shrineSpent } from "./shrine";
 import { SKILL_SHEET_KEYS } from "./skillFx";
 import { TECH_SHEET_KEYS } from "./techFx";
 import type { CompanionSprite } from "./ui/CompanionSprite";
@@ -941,9 +945,73 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number, touc
  * caption: it lies straight on the map's top rows, and the bare green of THE
  * FOREST sank into the forest's canopy at night.
  */
-export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText): void {
+export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText, region?: ShardRegion): void {
   title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+  const left = region ? areaLeft(region) : "";
+  if (!left) return;
+  const line = scene.add
+    .pixelText(GAME_WIDTH / 2, AREA_LEFT_Y, left, retroStyle(4, "#dbe7f3"))
+    .setOrigin(0.5)
+    .setStroke("#1a1028", 4)
+    .setScrollFactor(0)
+    .setDepth(95);
+  // a toast is news and may wrap down onto this row: the line gives way
+  const yieldToToast = (): void => {
+    line.setVisible(!toastOver(scene, AREA_LEFT_Y - 12));
+  };
+  const done = (): void => {
+    scene.events.off(Phaser.Scenes.Events.UPDATE, yieldToToast);
+  };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, yieldToToast);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, done);
+  scene.tweens.add({
+    targets: line,
+    alpha: 0,
+    delay: AREA_TITLE_HOLD_MS,
+    duration: AREA_TITLE_FADE_MS,
+    onComplete: () => {
+      done();
+      scene.events.off(Phaser.Scenes.Events.SHUTDOWN, done);
+      line.destroy();
+    },
+  });
+}
+
+// Under the title, its weather caption (y 144..164) and the toast line (y
+// 176..196, lower when it wraps): what this field still holds today, so a walk in says what there
+// is to do besides fight. Its widest, every part left, is 35 glyphs: 560px
+// at retroStyle(4), x 360..920.
+const AREA_LEFT_Y = STATUS_HUD_HEIGHT + 128;
+
+// the scene's toast (pixelart.ts showToast, "__toast") is up and reaches down to `y`
+function toastOver(scene: Phaser.Scene, y: number): boolean {
+  const toast = scene.children.getByName("__toast") as PixelText | null;
+  return !!toast && toast.alpha > 0 && toast.y + toast.height > y;
+}
+
+/**
+ * What `region` still has for the hero today, as the line under its title:
+ * "STARS 1/3   SEAL   SHRINE   PEDDLER", each part only while it is left (a
+ * shard unfound, the seal's keeper unbeaten, the shrine not prayed at today,
+ * the PEDDLER here with something unsold), "" when nothing is. The shards,
+ * the seal and the PEDDLER are named only once the town's tip has told of
+ * them (unlockTips.ts "fields" and "peddler"; a save from before the tips
+ * knows them all); the shrine stands in plain sight.
+ */
+export function areaLeft(region: ShardRegion): string {
+  const told = (tip: string): boolean => GameState.seenTips?.includes(tip) ?? true;
+  const day = econDay();
+  const parts: string[] = [];
+  if (told("fields")) {
+    const stars = shardsFound(GameState.shards, region);
+    if (stars < SHARDS_PER_REGION) parts.push(`STARS ${stars}/${SHARDS_PER_REGION}`);
+    if (GameState.seals[region] !== "done") parts.push("SEAL");
+  }
+  if (!shrineSpent(GameState, region, day)) parts.push("SHRINE");
+  const peddlerHere = told("peddler") && peddlerRegion(day, GameState.quest) === region;
+  if (peddlerHere && !(peddlerSold(GameState, day, 0) && peddlerSold(GameState, day, 1))) parts.push("PEDDLER");
+  return parts.join("   ");
 }
 
 // Where a field's last fight began, and the sky over it: the battle comes back

@@ -157,7 +157,7 @@ export class SnowScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
-      fadeAreaTitle(this, title);
+      fadeAreaTitle(this, title, "snow");
     }
 
     const at = back ?? { x: SNOW_ENTRY.x, y: SNOW_ENTRY.y + TILE * 2 };

@@ -166,7 +166,7 @@ export class VolcanoScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
-      fadeAreaTitle(this, title);
+      fadeAreaTitle(this, title, "volcano");
     }
 
     const at = back ?? { x: VOLCANO_ENTRY.x, y: VOLCANO_ENTRY.y + TILE * 2 };

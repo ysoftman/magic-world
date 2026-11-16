@@ -154,7 +154,7 @@ export class ForestScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0)
         .setDepth(95);
-      fadeAreaTitle(this, title);
+      fadeAreaTitle(this, title, "forest");
     }
 
     const at = turn?.at ?? back ?? { x: FOREST_ENTRY.x, y: FOREST_ENTRY.y + TILE * 2 };
