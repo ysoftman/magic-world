@@ -751,6 +751,12 @@ export class BattleScene extends Phaser.Scene {
   // web or a BOLT's shock costing its next turn, CHILL/PILFER spent
   private enemyDot: { label: "PSN" | "BRN"; turns: number } | null = null;
   private stuck: "web" | "shock" | null = null;
+  // a wind-up's strike PARRIED (bossStrike): the foe, boss or not, reels and
+  // loses its next turn as a stuck one does, the stars round its head the
+  // while. The CHG blow was the one answer to it, DEFEND's x0.5 and COUNTER;
+  // timing it now pays as well (sim: what a boss fight takes off the hero
+  // falls 1-5 points of max HP at --parry 0.4, 2-7 at 0.8)
+  private staggered = false;
   // the stars round a stuck foe's head (statusFx's stun loop): what fades them out
   private stunStars?: () => void;
   private chilled = false;
@@ -844,6 +850,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.rested) this.wardTurns = RESTED_WARD_TURNS;
     this.enemyDot = null;
     this.stuck = null;
+    this.staggered = false;
     // the last battle's, gone with its scene
     this.stunStars = undefined;
     this.chilled = false;
@@ -2045,10 +2052,10 @@ export class BattleScene extends Phaser.Scene {
 
       // a SWIFT elite (elite.ts) may act again: not out of a turn it lost
       // (stuck), nor to loose the strike it has just wound up
-      const again = !this.stuck && actsAgain(this.elite);
+      const again = !this.stuck && !this.staggered && actsAgain(this.elite);
       await this.tip("parry");
       await this.enemyTurn();
-      if (again && this.running && !this.charging && GameState.player.hp > 0 && this.enemy.curHp > 0) {
+      if (again && this.running && !this.charging && !this.staggered && GameState.player.hp > 0 && this.enemy.curHp > 0) {
         // no line of its own (it was a key between the two blows): the tag
         // pops as it gathers itself (a row over where a move's ATK+ or DEF+
         // would, and from x 684: at 664 it shared 14px with the second blow's
@@ -3268,6 +3275,14 @@ export class BattleScene extends Phaser.Scene {
       this.hideStun();
       return;
     }
+    // ...as does a parried wind-up's strike (bossStrike); an announced move
+    // keeps too. "GLACIER GOLEM is off balance!" would be 29 glyphs
+    if (this.staggered) {
+      this.staggered = false;
+      await this.say(`${this.enemy.name} is off balance!`);
+      this.hideStun();
+      return;
+    }
     // its announced move, an ordinary foe's in place of everything below (a
     // turn lost above keeps it for the next)
     if (this.intent && this.enemy.move) {
@@ -3597,7 +3612,11 @@ export class BattleScene extends Phaser.Scene {
     shake(this.cameras.main, 320, 0.018);
     flash(this.cameras.main, 160, (tell.color >> 16) & 0xff, (tell.color >> 8) & 0xff, tell.color & 0xff);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
-    await this.say(`${tell.strike}! ${dmg} damage!${note}`);
+    // parried, it reels (staggered): "CLUB SMASH! 9999 damage! (DEFEND) It
+    // reels!" is 43 glyphs
+    this.staggered = parried && GameState.player.hp > 0;
+    if (this.staggered) this.showStun();
+    await this.say(`${tell.strike}! ${dmg} damage!${note}${this.staggered ? " It reels!" : ""}`);
     this.setPlayerTint(undefined);
     if (GameState.player.hp > 0 && canFreeze && !parried) {
       if (GameState.resists("freeze")) await this.say("EMBER RING blocks freezing!");
@@ -4070,9 +4089,11 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.move && (this.enemy.move.kind === "flurry" ? this.enemy.move.at && CLUB_FX : MOVE_FX[this.enemy.move.name]?.key);
     if (moveFx) warmFx(this, [moveFx]);
     if (big) warm(foe, "rage", ENRAGE_TINT);
-    // BOLT's shock and WEB SNARE skip bosses and giants
+    // BOLT's shock and WEB SNARE skip bosses and giants; a parried wind-up's
+    // strike (staggered) doesn't, but a breath can't be parried
+    const reels = !!BOSS_TELLS[name] && !BREATHS[name];
     if (!big && casts("shock")) warm(foe, "shock");
-    if (!big && (casts("shock") || pal?.kind === "snare")) warm(foe, "stun");
+    if (reels || (!big && (casts("shock") || pal?.kind === "snare"))) warm(foe, "stun");
     if ((casts("burn") && !BURN_PROOF.includes(name)) || pal?.dot === "BRN") warm(foe, "burn");
     if ((casts("chill") && !CHILL_PROOF.includes(name)) || pal?.kind === "chill") warm(foe, "chill");
     // VENOM STING's or THORNS' poison, landing (landSkillEffect) and ticking

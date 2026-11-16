@@ -450,8 +450,15 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   독·빙결을 건너뛴다. 적의 새 공격이 몸으로 치는 것이면 `enemyLunge` 의 반환값을 받아 같은 식으로 쓰고, 숨결·원거리는
   부르지 않는다. 큐에서 타격까지는 반응 시간(200~330ms)보다 길게 둔다. 실제 사례: 뒤로 빼기 180ms 는 큐 270ms 뒤에
   닿아 큐를 보고 누르면 늦었다(지금 260ms, 큐 350ms 뒤·속도 2 에서 305ms). 멈춤의 최소값은 연타 간격(약 120ms)보다
-  길게 둬 연타의 첫 입력이 늘 창보다 이르게 한다. 플레이어 실력이라 `sim-battle.ts` 에는 없다. 하네스로 잴 때
-  `s.msgText.text` 는 PixelText 객체라 evaluate 가 멈춘다(`s.msgText.wrapped` 를 읽는다).
+  길게 둬 연타의 첫 입력이 늘 창보다 이르게 한다. 플레이어 실력이라 `sim-battle.ts` 에서는 성공 비율(`--parry P`)로 넣는다.
+  하네스로 잴 때 `s.msgText.text` 는 PixelText 객체라 evaluate 가 멈춘다(`s.msgText.wrapped` 를 읽는다).
+- CHG 뒤 강타(`bossStrike`)를 PARRY 하면 적이 비틀거려(`staggered`) 다음 턴을 잃는다. 보스도 그렇고(WEB·BOLT 의 `stuck` 은 보스에
+  안 걸린다), 묶인 적처럼 머리 위 별(`showStun`)이 돌다가 잃는 턴의 줄(`MOSS GOLEM is off balance!`)에서 꺼지며, 그 턴에 예고된
+  기술은 다음 턴으로 남는다. 강타 줄 끝에 ` It reels!`(최장 `CLUB SMASH! 9999 damage! (DEFEND) It reels!` 43글자)가 붙는다. 숨결
+  (`BREATHS`)은 PARRY 가 안 되니 GLACIER GOLEM·FLAME DRAKE·SALAMANDER 는 비틀거리지 않는다. SWIFT 정예의 두 번째 행동도 막는다.
+  묶인 적과 달리 FIGHT 가 치명타가 되지는 않는다. 실제 사례: 전에는 예고된 큰 한 방의 답이 DEFEND(x0.5·COUNTER) 하나라 PARRY 는
+  x0.7 일 뿐이었다. sim(의도 레벨·의도 장비·`--perfect` 같은 값·`--limit 50`·`--perks might[,vigor]`, 8000판, 잃는 HP): KING·TROLL·
+  MOSS 솔로가 `--parry 0.4` 에서 43/39/43% → 41/37/39%, 0.8 에서 39/35/40% → 35/32/34%, 승률 100% 그대로다.
 - PERFECT 는 같은 입력(`timedPress`·`timedInput`)을 FIGHT 에 쓴 것이다(BattleScene `playerAttack`): 영웅이 자세를 잡은 채
   기다려(`strikeIn` 의 `hold`) FIGHT 뒤 `PERFECT_RUN_MS`(실제 ms)에 닿고, 조준 틀(`strikeCue`, 2px 격자의 모서리 꺾쇠)이 그보다
   `PERFECT_GRACE_MS` 먼저 닫힌다. 닿기 전 `PERFECT_WINDOW_MS` 안의 첫 입력이면 `battleRules.perfectDamage`. 실패는 손해가

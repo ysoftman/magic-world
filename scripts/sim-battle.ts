@@ -160,7 +160,10 @@ type Elem = Spell["element"];
 // 95% and 85/90/88/96/90%; blasts braced too (--brace) 100/98/100/100/99%
 // and 70/91/82/96/78%. With --parry 0.4 --perfect 0.4 --limit 50 and the
 // level's perks, 48/41/44/52/54% (48/38/38/42/31% with no second pattern;
-// GLACIER and DRAKE 44/50% while the sim still parried their breaths).
+// GLACIER and DRAKE 44/50% while the sim still parried their breaths). A
+// parried wind-up's strike then cost the foe its next turn (staggered):
+// with might, might+vigor at KING/TROLL/MOSS, alone, 43/39/43% became
+// 41/37/39% at --parry 0.4 and 39/35/40% became 35/32/34% at 0.8.
 // A boss falling before
 // its intended level is seen, not tuned: those comments aim at a threat, not
 // a win rate, and HARD MODE is the challenge. An unarmed Lv8 hero beats the
@@ -453,6 +456,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     chillLost = before - foe.atk;
   };
   let stuck = false;
+  // BattleScene staggered: a parried wind-up strike costs the foe its next turn
+  let staggered = false;
   let chilled = false;
   // the foe's move (BattleScene rollIntent(), enemyMove()): no gold in the
   // sim, so SNATCH is its half blow and is only kept from repeating
@@ -705,6 +710,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       stuck = false;
       return;
     }
+    if (staggered) {
+      staggered = false;
+      return;
+    }
     if (intent && foe.move) {
       intent = false;
       moved = true;
@@ -751,6 +760,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       let parried = false;
       if (breath) hurt(guard(raw, true));
       else parried = blow(raw, true);
+      if (parried && hp > 0) staggered = true;
       if (hp > 0 && canFreeze && !parried && !hero.resists.freeze) frozen = true;
       riposte(frozen);
       return;
@@ -828,9 +838,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (foe.curHp <= 0) return done(true);
     }
     // BattleScene runBattle(): a SWIFT elite may act again
-    const again = !stuck && actsAgain(eliteKind);
+    const again = !stuck && !staggered && actsAgain(eliteKind);
     foeTurn();
-    if (again && !charging && hp > 0 && foe.curHp > 0) foeTurn();
+    if (again && !charging && !staggered && hp > 0 && foe.curHp > 0) foeTurn();
     // felled by a COUNTER
     if (foe.curHp <= 0 && hp > 0) return done(true);
     defending = false;
