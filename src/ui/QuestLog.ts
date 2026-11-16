@@ -12,7 +12,7 @@ import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SEAL_REGIONS, sealsDone } from "../seals";
-import { SHARDS_TOTAL, type ShardRegion, shardsFound } from "../shards";
+import { SHARDS_TOTAL } from "../shards";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hudRow2Cover, showHudRow2Cover } from "./StatusHud";
 import { hideTouchButtons } from "./TouchControls";
@@ -259,7 +259,7 @@ export class QuestLog {
     for (let i = 0; i < DONE_ROWS; i++) {
       this.doneRows.push(text(DONE_X, ROW_Y + i * DONE_GAP, 5, "#7fbf7f"));
     }
-    // "QUEST JOURNAL  HARD 99" on a replay: 20 x 32 = 640px, x=320..960
+    // "QUEST JOURNAL  HARD 9" on a replay: 21 x 32 = 672px, x=304..976
     this.title = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
 
     // The perks taken (perks.ts), or that one is waiting, on a line between
@@ -268,29 +268,28 @@ export class QuestLog {
     // the longest seven, is 46 x 16 = 736px, x 272..1008.
     this.perks = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 74, "", retroStyle(4, "#c4b5fd")).setOrigin(0.5);
 
-    // The star shards found (shards.ts), right of the title on its line, two
-    // rows of retroStyle(4) as the PEDDLER's are on the left: "STARS 12/12"
-    // over each field's count, "C3 F3 S3 V3" (cave, forest, snow, volcano),
-    // both 176px, x 1020..1196, 60px clear of the replay title's right end
-    // (960) and 24 inside the panel's edge. A third row under them counts the
-    // seals whose keepers are gone (seals.ts), "SEALS 4/4". Three rows from
-    // y 16: 16..32, 36..52, 56..72, right of the perks' line (to x 1008) and
-    // over the column headers (from 88)
+    // Either side of the title, two rows of retroStyle(4) 26px apart (y
+    // 10..26 and 36..52; the title's glyphs run 28..60, the perks' line
+    // 66..82). Three rows a side at a 20px pitch (a "PEDDLER TODAY" heading
+    // over the field's name, and each field's shards as "C3 F3 S3 V3"
+    // between the two counts) read as one small block each.
+    // Right: the star shards found (shards.ts), "STARS 12/12" (176px, x
+    // 1020..1196, 24 inside the panel's edge and clear of the replay
+    // title's right end), over the seals whose keepers are gone (seals.ts),
+    // "SEALS 4/4".
     this.stars = scene.add
-      .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 16, "", retroStyle(4, "#8ecbff"))
+      .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 10, "", retroStyle(4, "#8ecbff"))
       .setOrigin(1, 0)
       .setAlign("right")
-      .setLineSpacing(4);
+      .setLineSpacing(10);
 
-    // Where the PEDDLER is today (peddler.ts), left of the title on its
-    // line, two rows of retroStyle(4): "PEDDLER TODAY" 208px (x 84..292, 28px
-    // short of the replay title's left end, 320) over the field's name, y
-    // 10..26 and 30..46, and under them the day's omen and its field (omen.ts),
-    // "GOLD: VOLCANO" 13 glyphs, y 50..66: all three over the perks' line
-    // (from 66, which reaches x 272 at its longest). At 26 the two rows ended
-    // at 62 and a third would have sat in the perks' row.
-    this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 10, "", retroStyle(4, "#4fd1c0")).setLineSpacing(4);
-    this.omen = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 50, "", retroStyle(4, "#fbbf24"));
+    // Left: where the PEDDLER is today (peddler.ts), "PEDDLER: VOLCANO" (16 x
+    // 16 = 256px, x 84..340: over the title's row, which starts at y 28, so
+    // it may pass the replay title's left end), over the day's omen and its
+    // field (omen.ts), "GOLD: VOLCANO" (208px, x 84..292: beside the title,
+    // 12px short of "QUEST JOURNAL  HARD 9", x 304..976).
+    this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 10, "", retroStyle(4, "#4fd1c0"));
+    this.omen = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 36, "", retroStyle(4, "#fbbf24"));
 
     this.hudCover = hudRow2Cover(scene).setVisible(true);
     this.root = scene.add
@@ -359,12 +358,9 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
-    const found = (r: ShardRegion): number => shardsFound(GameState.shards, r);
-    this.stars.setText(
-      `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nC${found("dungeon")} F${found("forest")} S${found("snow")} V${found("volcano")}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`,
-    );
+    this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`);
     const omen = omenOn(econDay(), GameState.quest);
-    this.peddler.setText(`PEDDLER TODAY\n${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
+    this.peddler.setText(`PEDDLER: ${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
     this.omen.setText(`${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}`);
     const taken = GameState.perks;
     this.perks
