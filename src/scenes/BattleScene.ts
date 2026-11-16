@@ -292,6 +292,9 @@ const MOVE_FX: Record<string, { key: string; ms: number; hit: number; sfx: strin
 const CLUB_FX = "fx-bs-club";
 // a HOWL's throb and red flush before the bite it leads into
 const HOWL_MS = 480;
+// the beats that stand in for a line: DEFEND's pop, a frozen turn's
+const DEFEND_MS = 350;
+const THAW_MS = 450;
 
 // A companion skill's own sheet (fx.ts COMPANION_SHEETS) as its blow lands
 // (skillFxOn), in place of the plain strike's fx-hit: its ms at 1x, on the
@@ -748,6 +751,8 @@ export class BattleScene extends Phaser.Scene {
   private reacted = false;
   // a FIGHT has been struck this battle (QUICK's is the first)
   private opened = false;
+  // the poison's cure has been said this battle (afflict)
+  private poisonTold = false;
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
@@ -836,6 +841,7 @@ export class BattleScene extends Phaser.Scene {
     this.chillLost = 0;
     this.reacted = false;
     this.opened = false;
+    this.poisonTold = false;
     this.pilfered = false;
     this.guarded = false;
     this.defending = false;
@@ -2847,7 +2853,9 @@ export class BattleScene extends Phaser.Scene {
     this.defending = true;
     Sfx.ward();
     this.flashStatus("DEFEND", "#e2e8f0");
-    await this.say("You brace for the blow!");
+    // no line: "You brace for the blow!" said what the pop does, for a key
+    // every DEFEND (eight in a FLAME DRAKE fight). A beat for the pop to read.
+    await this.wait(this.anim(DEFEND_MS));
   }
 
   // one chance per battle to lift bonus gold instead of fighting; costs the
@@ -3296,7 +3304,10 @@ export class BattleScene extends Phaser.Scene {
       this.updateStatus();
       this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashStatus("PSN", "#c084fc");
-      await this.say("POISONED! HEAL or POTION cures it.");
+      // what cures it is said the first time in a fight; after that the pop
+      // and the tag are the news (a long fight poisons again and again)
+      if (!this.poisonTold) await this.say("POISONED! HEAL or POTION cures it.");
+      this.poisonTold = true;
     } else await this.freezeHero();
   }
 
@@ -3679,7 +3690,11 @@ export class BattleScene extends Phaser.Scene {
     this.thawing = true;
     this.freezeGrace = FREEZE_GRACE_TURNS;
     shake(this.cameras.main, 80, 0.004);
-    await this.say("Frozen solid! You lose this turn.");
+    // no line: the turn before said "FROZEN! You'll lose your next turn."
+    // and this one's "Frozen solid! You lose this turn." was its echo, a key
+    // more. The pop and a beat mark the turn lost.
+    this.flashStatus("FROZEN", "#67e8f9");
+    await this.wait(this.anim(THAW_MS));
     this.setPlayerTint(undefined);
     this.heroIdle?.resume();
     this.updateStatus();
