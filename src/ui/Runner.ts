@@ -88,8 +88,8 @@ export interface RunnerOpts {
   zones: readonly MonsterZone[];
   // a panel, a talk or a scene change: it stands
   paused: () => boolean;
-  // the hero has run it down
-  caught: () => void;
+  // the hero has run it down: the scene starts its fight, true if it began
+  caught: () => boolean;
 }
 
 export class FieldRunner {
@@ -168,12 +168,13 @@ export class FieldRunner {
     scene.physics.add.overlap(hero, this.sprite, () => {
       if (this.gone || this.paused()) return;
       // run down: the BOUNTY BOARD's CATCH A RUNNER counts it (bounties.ts),
-      // once, whatever becomes of the fight
-      if (!this.tagged) {
-        this.tagged = true;
-        GameState.runnersCaught += 1;
-      }
-      opts.caught();
+      // once, whatever becomes of the fight, but only when the fight began.
+      // The scene may refuse (it is already fading out): counted first, a
+      // touch in the grace after a chest or a prayer filled the bounty with
+      // no fight, and the runner ran on.
+      if (!opts.caught() || this.tagged) return;
+      this.tagged = true;
+      GameState.runnersCaught += 1;
     });
     const onUpdate = (_time: number, delta: number): void => this.step(delta);
     scene.events.on(Phaser.Scenes.Events.UPDATE, onUpdate);

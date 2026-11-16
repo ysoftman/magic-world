@@ -556,8 +556,9 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   시작되고 러너는 사라진다(결정: 지름길의 위험).
 - 새 필드 씬에 넣을 때: `spawnMonsters()` 뒤에 `this.runner = FieldRunner.roll(this, this.player, level, 텍스처, { region, back,
   walls, exits, zones, paused, caught })`, `checkEncounter` 의 `if (!moving) return;` 뒤에 `if (this.runner?.fleeing())
-  return;`. `paused` 는 `uiBlocking() || quitting || fieldKeys.leaving()`, `caught` 는 `startBattle` 이다(입장 쿨다운·
-  나가는 중 가드는 `startBattle` 이 본다).
+  return;`. `paused` 는 `uiBlocking() || quitting || fieldKeys.leaving()`, `caught` 는 `() => { this.encounterCooldown = 0; return
+  this.startBattle(희귀 몬스터); }` 다(닿으면 유예와 상관없이 전투가 난다. 나가는 중이면 `startBattle` 이 false 를
+  돌려주고 러너는 세지 않는다).
 - 빈도와 벌이는 지역마다 맞춘다: 러너를 다 잡아도 그 지역 사냥 골드(연승 보너스 없이 시간당 약 132전투)의 15% 쯤,
   절반 잡으면 7~8% 가 되게 `back` 을 둔다(동굴 0.8%·숲 1.8%·설원 1.3%·화산 1.5%, 계산표는 `Runner.ts` 머리 주석,
   밸런스 sim 은 안 돌림). 실제 사례: 모든 지역 2.5% 일 때 동굴은 37%, GILDED IMP 가 792G 일 때 화산은 30% 였다.
@@ -717,7 +718,10 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
   높고(6), 기도는 제단 골드만 들면 되어 가장 낮다(3). PERFECT HITS(5~8번, 4)는 FIGHT 마다 시도할 수 있고 실패에
   손해가 없어 PARRY(3~5번, 4)보다 횟수가 많고, REACTIONS(2~3번, 5)는 상태를 먼저 걸고 주문 둘의 MP 를 써야 해 셋 중
   가장 높고, LIMIT FINISH(1번, 3)는 가득 찬 게이지가 필드의 일반 적을 한 방에 쓰러뜨려 게이지 값(3~4전투)만 든다. 러너 확률(`Runner.ts`)이나 정예 확률을 바꾸면 다시 본다.
-- 러너 과제는 닿은 순간 센다(전투 결과와 무관, 러너당 한 번). 저장 전에 일지를 열면 `have` 가 한 박자 늦을 수 있다.
+- 러너 과제는 닿아서 전투가 실제로 시작될 때 센다(전투 결과와 무관, 러너당 한 번). 러너의 `caught` 콜백은 봉인처럼
+  `encounterCooldown` 을 0 으로 한 뒤 `startBattle` 의 반환값(시작했으면 true)을 돌려주고, `Runner.ts` 는 true 일 때만
+  `tagged`·`runnersCaught` 를 올린다. 실제 사례: 상자·기도 뒤의 유예(`holdFights`, 1.2초) 중에 닿으면 `startBattle` 이
+  조용히 거절해 전투 없이 카운터만 올랐고 러너는 달아났다. 저장 전에 일지를 열면 `have` 가 한 박자 늦을 수 있다.
 - 별 조각·봉인·상인의 존재는 `unlockTips.ts` 의 두 줄(3승·8승 뒤 마을 토스트)로 알린다. ELDER·HUNTER 대사는 건드리지
   않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).
 

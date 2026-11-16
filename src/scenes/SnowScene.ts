@@ -212,7 +212,12 @@ export class SnowScene extends Phaser.Scene {
       exits: [SNOW_ENTRY],
       zones: SNOW_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
-      caught: () => this.startBattle("auroraMoth"),
+      // run down, so no grace holds it off (a find's, a fight's return): the
+      // touch is the fight, as the seal's call is
+      caught: () => {
+        this.encounterCooldown = 0;
+        return this.startBattle("auroraMoth");
+      },
     });
 
     this.spawnTreasures();
@@ -532,11 +537,13 @@ export class SnowScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: SnowKind, keeper?: KeeperBout): void {
+  // True when the fight begins; false when a fade is already under way or the
+  // grace after a find or a fight still holds (then nothing happens).
+  private startBattle(enemy?: SnowKind, keeper?: KeeperBout): boolean {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
-    if (this.encounterCooldown > 0 || this.exitingSnow) return; // already fading into a battle
+    if (this.encounterCooldown > 0 || this.exitingSnow) return false; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingSnow = true;
@@ -547,5 +554,6 @@ export class SnowScene extends Phaser.Scene {
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("snow") });
       this.scene.start("Battle", { enemy: kind, from: "Snow", keeper });
     });
+    return true;
   }
 }

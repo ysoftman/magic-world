@@ -213,7 +213,12 @@ export class VolcanoScene extends Phaser.Scene {
       exits: [VOLCANO_ENTRY],
       zones: VOLCANO_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
-      caught: () => this.startBattle("gildedImp"),
+      // run down, so no grace holds it off (a find's, a fight's return): the
+      // touch is the fight, as the seal's call is
+      caught: () => {
+        this.encounterCooldown = 0;
+        return this.startBattle("gildedImp");
+      },
     });
 
     this.spawnTreasures();
@@ -494,11 +499,13 @@ export class VolcanoScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: VolcanoKind, keeper?: KeeperBout): void {
+  // True when the fight begins; false when a fade is already under way or the
+  // grace after a find or a fight still holds (then nothing happens).
+  private startBattle(enemy?: VolcanoKind, keeper?: KeeperBout): boolean {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
-    if (this.encounterCooldown > 0 || this.exitingVolcano) return; // already fading into a battle
+    if (this.encounterCooldown > 0 || this.exitingVolcano) return false; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingVolcano = true;
@@ -508,5 +515,6 @@ export class VolcanoScene extends Phaser.Scene {
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
       this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper });
     });
+    return true;
   }
 }
