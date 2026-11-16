@@ -98,6 +98,7 @@ const RELIC_TAG_X = 24;
 const RELIC_TAG_Y = 134;
 const RELIC_TAG_DEPTH = 96;
 const SEALED_COLOR = "#ff5555";
+const CURSED_TINT = 0xb388ff;
 // the cave's minimap colours, with the zones' darker floor
 const ABYSS_TILE_COLORS: Record<number, number> = { ...CAVE_TILE_COLORS, [T_TALL]: 0x2f2b28 };
 // A chest's gold before the depth's loot scaling, and what may come with it.
@@ -231,7 +232,8 @@ interface AbyssRun {
   // Where the hero stood when the fight began, who it was with, and the win
   // count then: a guardian is only down if GameState.battles grew (it can't
   // be caught, and a flight leaves the count alone), so one fled from stays.
-  fight: { x: number; y: number; roamer: string | null; guardian: boolean; battles: number } | null;
+  // `cursed` is the cursed chest's fight: won, by the same count, it opens.
+  fight: { x: number; y: number; roamer: string | null; guardian: boolean; cursed: boolean; battles: number } | null;
 }
 
 let run: AbyssRun | null = null;
@@ -263,6 +265,9 @@ export class AbyssScene extends Phaser.Scene {
   // the stair up has asked since the hero last stepped onto it: a STAY holds
   // the question back until the hero steps off and on again
   private stairAsked = false;
+  // likewise the cursed chest's question
+  private chestAsked = false;
+  private cursedChest?: Phaser.GameObjects.Zone;
   private dialogue!: DialogueBox;
   private encounterCooldown = 0;
   private leaving = false;
@@ -321,6 +326,8 @@ export class AbyssScene extends Phaser.Scene {
     // back from a fight the hero stands where it began, which can be the
     // stair up: no question until a step off it
     this.stairAsked = fromBattle;
+    this.chestAsked = fromBattle;
+    this.cursedChest = undefined;
 
     // SAVED and the achievements; the first SHUTDOWN listener (FieldToasts)
     this.toasts = new FieldToasts(this, { blocked: () => this.uiBlocking() });
@@ -333,8 +340,13 @@ export class AbyssScene extends Phaser.Scene {
     const back = fromBattle ? r.fight : null;
     r.fight = null;
     let unsealed = false;
+    let curseLifted = false;
     if (back?.guardian && GameState.battles > back.battles) unsealed = r.guardianDown = true;
-    else if (back?.roamer) r.met.add(back.roamer);
+    else if (back?.cursed && GameState.battles > back.battles) {
+      // the cursed chest's foe fell: the chest is open, a relic its find
+      curseLifted = r.chestOpened = true;
+      r.offer ??= rollRelicOffer();
+    } else if (back?.roamer) r.met.add(back.roamer);
     // A fallen GUARDIAN makes the floor below a checkpoint: a later dive can
     // start there (the cave's stair asks) rather than at B1, with whatever
     // HP and MP the hero walks in with — no refill. Only the deepest counts.
@@ -499,6 +511,8 @@ export class AbyssScene extends Phaser.Scene {
       }),
       { x: down.x, y: down.y, radius: 128, color: 0x8b5cf6, strength: 0.4, pulseMs: 2400, air: true },
       ...pillarFires.map((c) => ({ ...PILLAR_GLOW, x: c.x, y: c.y + PILLAR_FIRE_DY - 24 })),
+      // a cursed chest glows as the guardian's fires do, until it is opened
+      ...(floor.chest && floor.cursed && !r.chestOpened ? [{ ...PILLAR_GLOW, ...cellCenter(floor.chest) }] : []),
     ]);
 
     this.panels = new FieldPanels(this, this.fieldKeys);
@@ -554,6 +568,10 @@ export class AbyssScene extends Phaser.Scene {
     } else if (floor.guardian && !r.guardianDown && !fromBattle) {
       showToast(this, "A GUARDIAN SEALS THE STAIRS!", FIELD_TOAST_Y);
     }
+    if (curseLifted) {
+      Sfx.chest();
+      showToast(this, "THE CURSE LIFTS!", FIELD_TOAST_Y);
+    }
   }
 
   update(_time: number, delta: number): void {
@@ -597,6 +615,7 @@ export class AbyssScene extends Phaser.Scene {
 
     // stepped off the stair up: the next step onto it asks again
     if (this.stairAsked && !this.physics.overlap(this.player, this.upStair)) this.stairAsked = false;
+    if (this.chestAsked && this.cursedChest && !this.physics.overlap(this.player, this.cursedChest)) this.chestAsked = false;
 
     if (this.panels.takeOpenKey()) return;
 
@@ -809,7 +828,29 @@ export class AbyssScene extends Phaser.Scene {
     if (run.chestOpened) return;
     const zone = this.add.zone(at.x, at.y, TILE, TILE);
     this.physics.add.existing(zone);
-    this.physics.add.overlap(this.player, zone, () => this.openChest(chest));
+    if (this.floor.cursed) {
+      // violet, under the glow create() gives it
+      chest.setTint(CURSED_TINT);
+      this.cursedChest = zone;
+      this.physics.add.overlap(this.player, zone, () => this.askCursed());
+    } else this.physics.add.overlap(this.player, zone, () => this.openChest(chest));
+  }
+
+  // A cursed chest asks first (abyss.ts): OPEN is a fight with one of the
+  // floor's foes scaled CURSED_DEPTH floors deeper, LEAVE (and ESC) walks
+  // away. Asked once a visit to the chest, as the stair up asks. "A CURSED
+  // CHEST. OPEN IT?" is 24 glyphs, one row of a touch question.
+  private askCursed(): void {
+    if (this.leaving || this.chestAsked || this.uiBlocking() || this.quitting || this.fieldKeys.leaving() || !run) return;
+    this.chestAsked = true;
+    this.walk.halt();
+    const r = run;
+    this.dialogue.ask(["A CURSED CHEST. OPEN IT?"], "CHEST", ["OPEN", "LEAVE"], (i) => {
+      if (i !== 0) return;
+      // the question's own wait is not a fight's cooldown
+      this.encounterCooldown = 0;
+      this.startBattle(abyssKind(r.floor), null, true);
+    });
   }
 
   // gold by depth (abyss.ts's loot scaling) and, more often than not, a
@@ -852,7 +893,7 @@ export class AbyssScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(kind: string, roamer: AbyssRoamer | null): void {
+  private startBattle(kind: string, roamer: AbyssRoamer | null, cursed = false): void {
     if (this.encounterCooldown > 0 || this.leaving || !run) return; // already fading into a battle
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
@@ -861,8 +902,8 @@ export class AbyssScene extends Phaser.Scene {
     // leaving the battle and a floor running at once
     this.leaving = true;
     const guardian = !!roamer && roamer.id === null;
-    run.fight = { x: this.player.x, y: this.player.y, roamer: roamer?.id ?? null, guardian, battles: GameState.battles };
-    const bout: AbyssBout = { floor: run.floor, guardian };
+    run.fight = { x: this.player.x, y: this.player.y, roamer: roamer?.id ?? null, guardian, cursed, battles: GameState.battles };
+    const bout: AbyssBout = { floor: run.floor, guardian, cursed };
     encounterOut(this.cameras.main, 300, () => {
       this.scene.start("Battle", { enemy: kind, from: "Abyss", abyss: bout });
     });

@@ -1,4 +1,4 @@
-import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale } from "./abyss";
+import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale, boutDepth } from "./abyss";
 import { ARENA_GOLD_SHARE } from "./arena";
 import type { GameState } from "./gameState";
 import { type Element, ENEMIES, type EnemyDef } from "./monsters";
@@ -815,7 +815,7 @@ export function scaleEnemy(
     if (!opts.rematch) enemy.gold = Math.round(def.gold * NIGHT_LOOT_MULT);
     enemy.exp = Math.round(def.exp * NIGHT_LOOT_MULT);
   }
-  const ng = opts.abyss ? abyssScale(opts.abyss.floor, opts.ng) : opts.ng;
+  const ng = opts.abyss ? abyssScale(boutDepth(opts.abyss), opts.ng) : opts.ng;
   enemy.hp = Math.min(ENEMY_HP_MAX, Math.round(enemy.hp * ng.stat));
   enemy.curHp = enemy.hp;
   enemy.atk = Math.round(enemy.atk * ng.stat);
