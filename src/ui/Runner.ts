@@ -103,8 +103,9 @@ export interface RunnerOpts {
   zones: readonly MonsterZone[];
   // a panel, a talk or a scene change: it stands
   paused: () => boolean;
-  // the hero has run it down: the scene starts its fight, true if it began
-  caught: () => boolean;
+  // the hero has run it down: the scene starts its fight, true if it began.
+  // `fleeing`: it had seen the hero and was running (an AMBUSH's opening)
+  caught: (fleeing: boolean) => boolean;
 }
 
 export class FieldRunner {
@@ -190,7 +191,10 @@ export class FieldRunner {
       // The scene may refuse (it is already fading out): counted first, a
       // touch in the grace after a chest or a prayer filled the bounty with
       // no fight, and the runner ran on.
-      if (!opts.caught() || this.tagged) return;
+      // One caught as it flees is caught from behind: the fight opens on the
+      // hero's FIRST STRIKE (sceneCommon firstStrike's AMBUSH), the chase's
+      // own prize. One walked into before it has noticed is met as any foe.
+      if (!opts.caught(this.alarmed) || this.tagged) return;
       this.tagged = true;
       GameState.runnersCaught += 1;
     });

@@ -227,9 +227,9 @@ export class DungeonScene extends Phaser.Scene {
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
       // run down, so no grace holds it off (a find's, a fight's return): the
       // touch is the fight, as the seal's call is
-      caught: () => {
+      caught: (fleeing) => {
         this.encounterCooldown = 0;
-        return this.startBattle("cursedGoblin");
+        return this.startBattle("cursedGoblin", undefined, fleeing ? "hero" : null);
       },
     });
 
