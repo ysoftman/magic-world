@@ -382,7 +382,9 @@ export class InventoryUI {
     // one. A single right-aligned "HP n/n\nMP n/n" text left the shorter MP
     // label hanging inward. 8px of leading, as Press Start 2P has none (the
     // two lines sat 3px apart): 56px, y 10..66 under the panel's top, 10px
-    // inside its edge and 8px over the pager on the header row (from 74)
+    // inside its edge and 8px over the pager on the header row (from 74).
+    // The values are white, the labels the headers' blue: all in that blue,
+    // ATK/DEF ran on into the column header 8px under them as a third line.
     this.statusLabels = scene.add
       .pixelText(STATUS_RIGHT_X - STATUS_VALUE_W, PANEL_TOP + STATUS_Y, "HP\nMP", retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0.5)
@@ -391,7 +393,7 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.statusValues = scene.add
-      .pixelText(STATUS_RIGHT_X, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
+      .pixelText(STATUS_RIGHT_X, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(1, 0.5)
       .setAlign("right")
       .setLineSpacing(8)
@@ -406,7 +408,7 @@ export class InventoryUI {
       .setDepth(152)
       .setVisible(false);
     this.atkDefValues = scene.add
-      .pixelText(NAME_X + ATK_DEF_W, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#8ecbff"))
+      .pixelText(NAME_X + ATK_DEF_W, PANEL_TOP + STATUS_Y, "", retroStyle(6, "#f5f5f5"))
       .setOrigin(1, 0.5)
       .setAlign("right")
       .setLineSpacing(8)
