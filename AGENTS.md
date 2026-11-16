@@ -587,9 +587,16 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 
 - 순서 힌트는 돌 자신이 말한다(`riddle`: 발판이 놓인 곳으로 가리킴). 발판이 셋이라 순서는 6가지뿐이고 틀리면 전부
   꺼질 뿐이라 힌트 없이도 풀린다. 발판 진행은 저장하지 않는다(씬을 다시 만들면 꺼짐: 도중에 전투가 나면 처음부터).
-- 강적은 새 몬스터가 아니다. 그 지역 희귀종을 정예(`elite.ts`)로 강제한 것이고, 이름(`keeper`)은 필드 대화와 토스트에만
-  나온다(전투 창은 종 이름 + 정예 태그). BattleScene 훅은 시작 data 의 `elite` 하나다(`this.elite = data?.elite ??
+  네 지역 모두 같은 순서 퍼즐이다(지역별 변형은 넣지 않음).
+- 강적은 새 몬스터가 아니다. 그 지역 희귀종을 정예(`elite.ts`)로 강제하고 종의 HP·ATK 에 배율을 먼저 곱한 것이고
+  (`KeeperBout`, `keeperDef`), 이름(`keeper`)은 필드 대화와 토스트에만 나온다(전투 창은 종 이름 + 정예 태그).
+  BattleScene 훅은 시작 data 의 `keeper` 하나다(`const def = keeperDef(...)`, `this.elite = data?.keeper?.elite ??
   rollElite(...)`). 희귀종은 원래 정예가 되지 않으므로 이 조합은 봉인에서만 나온다.
+- 배율은 `sim:battle` 의 "90% 이기는 첫 레벨"(WOLF/SOLO)이 그 지역의 가장 센 일반 정예와 보스 사이에 오게 잡았다:
+  동굴 1/1 < GRUK 3/5 < KING 5/6, 숲 3/4 < ZIRR 5/6 < MOSS 7/8, 설원 7/8 < YSKA 10/14 < GLACIER 12/15, 화산 11/14 <
+  MOLG 14/17 < DRAKE 18/23. 실제 사례: 배율 없이 정예로만 두면 넷 다 일반 정예와 같거나 그 아래였다(1/2, 2/3, 6/8,
+  10/13). sim 에는 keeper 옵션이 없어 `ENEMIES` 의 HP·ATK 를 곱한 뒤 `--foe KEY --elite KIND` 로 돌리는 일회용
+  스크립트(`/tmp/pwcheck/`)로 쟀다. 희귀종·정예 수치를 바꾸면 다시 잰다.
 - 승리 판정은 전투 뒤 씬이 다시 만들어질 때 한다: 부르기 전의 `GameState.battles`·`caught.length` 를 모듈 변수에 적어
   두고 돌아왔을 때 늘었으면 이긴 것이다(심연 수호자와 같은 방식). 그래서 BattleScene 의 `victory()` 에는 훅이 없다.
   전투 중 새로고침하면 봉인은 풀린 채로 남는다. 씬의 `fight` 콜백은 `encounterCooldown` 을 0 으로 한 뒤 `startBattle`
