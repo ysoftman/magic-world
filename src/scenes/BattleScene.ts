@@ -72,6 +72,7 @@ import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texels
 import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
+import { perkOpened } from "../perks";
 import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
 import { type BlessingDef, takeBlessingCharge } from "../shrine";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
@@ -1703,7 +1704,7 @@ export class BattleScene extends Phaser.Scene {
           // the second ESC:QUIT, once the first has asked (above)
           if (this.arena) return this.quitArena(this.arena);
           this.resetCombo();
-          if (Math.random() < 0.5) {
+          if (Math.random() < 0.5 + GameState.perk("fleet")) {
             Sfx.run();
             await Promise.all([this.runOff(), this.say("You escaped!")]);
             if (GameState.streak >= STREAK_MIN) {
@@ -2338,7 +2339,7 @@ export class BattleScene extends Phaser.Scene {
     }
     Sfx.capture();
     GameState.inventory.candy -= 1;
-    if (Math.random() < captureChance(this.enemy.curHp, this.enemy.hp)) {
+    if (Math.random() < captureChance(this.enemy.curHp, this.enemy.hp) + GameState.perk("tamer")) {
       GameState.caught.push(this.enemy.name);
       GameState.companion = this.enemy.name;
       await this.catchFx();
@@ -2486,7 +2487,7 @@ export class BattleScene extends Phaser.Scene {
     const partnerBonus = GameState.partnerBonus();
     GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
     const bond = GameState.companionBondBonus(name);
-    const atk = companionAtk(def, GameState.player.level, bond);
+    const atk = Math.round(companionAtk(def, GameState.player.level, bond) * (1 + GameState.perk("pack")));
     const skill = COMPANION_SKILLS[name];
     if (skill && this.companionSkillUseful(skill) && Math.random() < companionSkillChance(bond)) {
       await this.companionSkill(name, skill, atk);
@@ -3569,7 +3570,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private comboBonus(): number {
-    return comboBonus(this.combo);
+    return comboBonus(this.combo) * (1 + GameState.perk("flow"));
   }
 
   private updateCombo(): void {
@@ -3644,7 +3645,7 @@ export class BattleScene extends Phaser.Scene {
     const taken = Math.max(0, this.limitSeen.hero - GameState.player.hp);
     this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
     const was = limitFull(this.limit);
-    const gain = limitDealt(dealt, this.enemy.hp) + limitTaken(taken, GameState.effMaxHp()) + bonus;
+    const gain = (limitDealt(dealt, this.enemy.hp) + limitTaken(taken, GameState.effMaxHp()) + bonus) * (1 + GameState.perk("surge"));
     this.limit = this.practice ? LIMIT_MAX : chargeLimit(this.limit, gain);
     if (!this.practice) GameState.limit = this.limit;
     if (!was && limitFull(this.limit)) Sfx.emit("parry");
@@ -3655,7 +3656,7 @@ export class BattleScene extends Phaser.Scene {
   // and sparks for one blow of ATK x3 (limit.ts limitDamage). The gauge is
   // emptied as the blow lands, its own damage not counted back into it.
   private async limitBreak(): Promise<void> {
-    const total = limitDamage(this.heroAtk(), this.enemy.def);
+    const total = Math.round(limitDamage(this.heroAtk(), this.enemy.def) * (1 + GameState.perk("break")));
     Sfx.attack();
     this.glowBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.glowBurst.explode(16);
@@ -3727,14 +3728,18 @@ export class BattleScene extends Phaser.Scene {
       const streakPct = GameState.streak >= STREAK_MIN && !this.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
       const streakBonus = Math.floor(this.enemy.gold * streakPct);
       // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
-      const mealGold = this.rematch ? 0 : (this.meal?.def.effect.gold ?? 0) + (this.blessing?.def.effect.gold ?? 0);
+      const mealGold = this.rematch
+        ? 0
+        : (this.meal?.def.effect.gold ?? 0) + (this.blessing?.def.effect.gold ?? 0) + GameState.perk("trade");
       const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + mealGold)));
       GameState.battles += 1;
       // nothing fought in the ABYSS counts toward a quest, the bounty or a
       // boss's flag (abyss.ts)
       if (!this.abyss) this.tallyQuestKill();
-      GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + 5 + relicWinHeal(this.abyss, GameState.effMaxHp()));
-      GameState.player.mp = Math.min(GameState.player.maxMp, GameState.player.mp + 2);
+      // the usual +5 HP and +2 MP, with a relic's share (relics.ts) and MEND's and CALM's (perks.ts)
+      const winHeal = 5 + relicWinHeal(this.abyss, GameState.effMaxHp()) + Math.ceil(GameState.effMaxHp() * GameState.perk("mend"));
+      GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + winHeal);
+      GameState.player.mp = Math.min(GameState.player.maxMp, GameState.player.mp + 2 + GameState.perk("calm"));
       // FISH STEW (cooking.ts): a share of max HP back after each win
       const mealHeal = Math.min(
         GameState.effMaxHp() - GameState.player.hp,
@@ -3765,7 +3770,8 @@ export class BattleScene extends Phaser.Scene {
       if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
       if (drop) GameState.inventory[drop.material] += drop.count;
       const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);
-      const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0) + (this.blessing?.def.effect.exp ?? 0)));
+      const expBonus = (this.meal?.def.effect.exp ?? 0) + (this.blessing?.def.effect.exp ?? 0) + GameState.perk("study");
+      const exp = Math.round(this.enemy.exp * (1 + expBonus));
       GameState.player.exp += exp;
       Sfx.victory();
       // its gold drops on the ground under it (fx.ts) as it goes: out of a
@@ -3823,6 +3829,8 @@ export class BattleScene extends Phaser.Scene {
         // only once the hero is back in the field
         this.updatePlayerStats();
         await this.say(`LEVEL UP! LV ${GameState.player.level}${newRank > 0 ? `  RANK #${newRank}!` : ""}${this.learnedLine(fromLevel)}`);
+        // a perk tier opened (perks.ts): its own line, 41 glyphs of a row's 54
+        if (perkOpened(fromLevel, GameState.player.level)) await this.say("A PERK awaits you: see the ELDER in town.");
       }
       // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
       // pay model has no room for it; its own line, news the payout's page

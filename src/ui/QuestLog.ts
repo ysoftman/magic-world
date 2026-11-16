@@ -5,6 +5,7 @@ import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
 import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
+import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
@@ -223,6 +224,7 @@ export class QuestLog {
   private active = false;
   private root: Phaser.GameObjects.Container;
   private title: PixelText;
+  private perks: PixelText;
   private activeRows: ActiveRow[] = [];
   private doneRows: PixelText[] = [];
   private closeQueued = false;
@@ -246,12 +248,19 @@ export class QuestLog {
     // "QUEST JOURNAL  HARD 99" on a replay: 20 x 32 = 640px, x=320..960
     this.title = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
 
+    // The perks taken (perks.ts), or that one is waiting, on a line between
+    // the title (to PANEL_TOP+60) and the column headers (from +88): y 66..82
+    // at retroStyle(4). "PERKS: MIGHT VIGOR TRADE SURGE FLEET TAMER BREAK",
+    // the longest seven, is 46 x 16 = 736px, x 272..1008.
+    this.perks = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 74, "", retroStyle(4, "#c4b5fd")).setOrigin(0.5);
+
     this.root = scene.add
       .container(0, 0, [
         scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5),
         // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
         gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
         this.title,
+        this.perks,
         text(ACTIVE_X, HEADER_Y, 6, HINT_COLOR, "IN PROGRESS"),
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
@@ -306,6 +315,12 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
+    const taken = GameState.perks;
+    this.perks
+      .setText(
+        perkDue(taken, GameState.player.level) ? "A PERK AWAITS: SEE THE ELDER" : taken.length > 0 ? `PERKS: ${perkLine(taken)}` : "",
+      )
+      .setColor(perkDue(taken, GameState.player.level) ? PROGRESS_COLOR : "#c4b5fd");
     const all = objectives();
     const open = all.filter((o) => !o.done);
     const done = all.filter((o) => o.done);

@@ -32,6 +32,12 @@
 // average (uncapped, what the blow itself dealt left out, no PARRY: that is
 // the player's timing). Without it the hero has no LIMIT, as before.
 //
+// --perks a,b,... gives the hero those perks (perks.ts keys, whatever its
+// level): MIGHT, WALL, VIGOR and FOCUS through GameState as the game applies
+// them, FLOW, SURGE, BREAK and PACK where the battle reads them. The rest
+// (gold, EXP, the heal and MP after a win, RUN, CATCH) change nothing a
+// single fight's table shows.
+//
 // --skills lets the hero use the SKILL list too, greedily: each turn it has
 // nothing to heal or brace for, the attack spell or skill with the most
 // expected damage this turn that it can pay for, poison or burn it would
@@ -99,6 +105,7 @@ const { HI_POTION_HP, POTION_HP } = await import("../src/itemInfo");
 const { ENEMIES } = await import("../src/monsters");
 const { abyssGuardian } = await import("../src/abyss");
 const { actsAgain, ELITES } = await import("../src/elite");
+const { PERKS } = await import("../src/perks");
 const { LIMIT_MAX, limitDamage, limitDealt, limitTaken } = await import("../src/limit");
 
 type Foe = ReturnType<typeof scaleEnemy>;
@@ -145,12 +152,13 @@ const HP_LOW_SHARE = 0.35;
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`bun run sim:battle [--boss KING|TROLL|MOSS|GLACIER|DRAKE] [--level 8 | --level 6,12,18] [--n 2000] [--potions 3] [--bond N]
-                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift] [--limit N]
+                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift] [--limit N] [--perks a,b]
                     [--skills | --greedy] [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
        bun run sim:battle --skill-table
   --boss       one boss instead of all five
   --foe        any ENEMIES key instead (slime, orc, yeti...), its row's intended level the first --level
   --gear       that fight's GEAR columns, EQUIPMENT keys "weapon,armor" (default sword,shield)
+  --perks      perks taken, a comma list of perks.ts keys (might,vigor,flow...)
   --limit      the LIMIT gauge each fight starts with, 0..100, spent when full; cells add the gauge a fight fills
   --elite      the foe as that elite (elite.ts); with no --foe, the bosses as if they could be
   --level      one level or a comma list instead of 1..${MAX_LEVEL}
@@ -208,6 +216,8 @@ if (bosses.length === 0) {
 }
 const levelArg = opt("level");
 const levels = levelArg ? levelArg.split(",").map(Number) : Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
+const PERK_LIST = (opt("perks") ?? "").split(",").filter(Boolean);
+const perk = (key: string): number => (PERK_LIST.includes(key) ? PERKS[key as keyof typeof PERKS].value : 0);
 const LIMIT = opt("limit") === undefined ? null : Number(opt("limit"));
 const ELITE = opt("elite");
 if (ELITE !== undefined && !Object.keys(ELITES).includes(ELITE)) {
@@ -258,6 +268,7 @@ function makeHero(level: number, gear: BossCase["gear"] | null): Hero {
     GameState.player.atk += 1;
     GameState.player.def += 1;
   }
+  for (const key of PERK_LIST) GameState.takePerk(key as keyof typeof PERKS);
   GameState.equipped.weapon = gear?.weapon ?? null;
   GameState.equipped.armor = gear?.armor ?? null;
   GameState.equipped.accessory = TALISMAN ? "talisman" : null;
@@ -368,7 +379,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let limitSpent = false;
   // what the fight has filled so far: the foe's HP gone (regrowth not
   // counted twice here, as BattleScene's syncLimit would) and the hero's
-  const gauge = (): number => limitDealt(foe.hp - Math.max(0, foe.curHp) - limitDmg, foe.hp) + limitTaken(taken, hero.maxHp);
+  const gauge = (): number =>
+    (limitDealt(foe.hp - Math.max(0, foe.curHp) - limitDmg, foe.hp) + limitTaken(taken, hero.maxHp)) * (1 + perk("surge"));
   const done = (won: boolean): Outcome => ({ won, rounds, taken, gauge: gauge() });
 
   const hurt = (dmg: number): void => {
@@ -406,7 +418,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   };
   const greedy = (): Action => {
     let best: Action = { kind: "fight" };
-    let most = fightMean(hero.atk, foe.def) * (1 + comboBonus(combo + 1));
+    let most = fightMean(hero.atk, foe.def) * (1 + comboBonus(combo + 1) * (1 + perk("flow")));
     for (const spell of hero.spells) {
       if (spell.kind !== "attack" || mp < spell.cost) continue;
       const weak = spell.element !== undefined && spell.element === foe.weakness;
@@ -426,7 +438,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   const playerAttack = (): void => {
     combo += 1;
     const { dmg } = rollDamage(hero.atk, foe.def);
-    foe.curHp = Math.max(0, foe.curHp - Math.max(1, Math.floor(dmg * (1 + comboBonus(combo)))));
+    foe.curHp = Math.max(0, foe.curHp - Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow"))))));
   };
 
   // BattleScene castSpell() + spellEffectCanLand() + landSpellEffect()
@@ -500,7 +512,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
 
   // BattleScene companionAttack() + companionSkill("double"): a WOLF only
   const companion = (): void => {
-    const atk = companionAtk(WOLF, hero.level, bond);
+    const atk = Math.round(companionAtk(WOLF, hero.level, bond) * (1 + perk("pack")));
     if (COMPANION_SKILLS[WOLF.name].kind !== "double") throw new Error("the sim only knows the WOLF's DOUBLE BITE");
     if (Math.random() < companionSkillChance(bond)) {
       for (let bite = 0; bite < 2 && foe.curHp > 0; bite++) {
@@ -586,7 +598,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       else if (action.kind === "limit") {
         // BattleScene limitBreak(): the combo is left as it is
         limitSpent = true;
-        const dmg = Math.min(foe.curHp, limitDamage(hero.atk, foe.def));
+        const dmg = Math.min(foe.curHp, Math.round(limitDamage(hero.atk, foe.def) * (1 + perk("break"))));
         limitDmg += dmg;
         foe.curHp -= dmg;
       } else if (action.kind === "defend") {

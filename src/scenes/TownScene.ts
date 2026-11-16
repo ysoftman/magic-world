@@ -46,6 +46,7 @@ import {
 } from "../levels";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { objectiveLine } from "../objective";
+import { PERKS, type PerkKey, perkDue } from "../perks";
 import { addGroundShadow, retroStyle, showToast, toastShowing } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { practiceEnemy, startPracticeRun } from "../practice";
@@ -229,6 +230,9 @@ const rectOf = (obj: { getBounds(): Phaser.Geom.Rectangle }): Rect => {
 };
 
 type TownKind = "slime" | "troll" | "wolf" | "goldSlime" | "wisp";
+
+// the perk tier the town last announced (create), this page load
+let perkToldAt = 0;
 
 export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -873,6 +877,14 @@ export class TownScene extends Phaser.Scene {
     }
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
+
+    // a perk tier owed (perks.ts): said once a tier, not on every return
+    // from a fight in the fields. 29 glyphs at the toast's 20px, 580px.
+    const owed = perkDue(GameState.perks, GameState.player.level);
+    if (owed && owed.level !== perkToldAt) {
+      perkToldAt = owed.level;
+      showToast(this, "A PERK AWAITS: SEE THE ELDER!", STATUS_HUD_TOAST_Y);
+    }
 
     // where the hero stands, for the save the shutdown makes next
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -1780,7 +1792,34 @@ export class TownScene extends Phaser.Scene {
     });
   }
 
+  // A perk tier the hero is owed (perks.ts), asked before anything else the
+  // ELDER has to say: the pair on one row ("TAMER: CATCH +15%. PACK: ALLY
+  // ATK+20%." is 38 of a touch question's 42 glyphs), then a YES/NO on the
+  // one picked, since it is for good and ESC takes a question's last choice
+  // ("TAKE VIGOR FOR GOOD?" is 20). More than one owed (an old save, a hero
+  // who stayed away) are asked one after another.
+  private offerPerk(): boolean {
+    const tier = perkDue(GameState.perks, GameState.player.level);
+    if (!tier) return false;
+    const [a, b] = tier.pair.map((k) => PERKS[k]);
+    const intro = "You have grown, hero. Choose your path.";
+    this.dialogue.ask([intro, `${a.name}: ${a.effect}. ${b.name}: ${b.effect}.`], "ELDER", [a.name, b.name], (i) => {
+      const key: PerkKey = tier.pair[i === 0 ? 0 : 1];
+      this.dialogue.ask([`TAKE ${PERKS[key].name} FOR GOOD?`], "ELDER", ["YES", "NO"], (yes) => {
+        if (yes !== 0) return;
+        GameState.takePerk(key);
+        this.toasts.quietSave();
+        Sfx.levelup();
+        // "PERK: VIGOR!" is 12 glyphs
+        showToast(this, `PERK: ${PERKS[key].name}!`, STATUS_HUD_TOAST_Y);
+        this.offerPerk();
+      });
+    });
+    return true;
+  }
+
   private startElderDialogue(): void {
+    if (this.offerPerk()) return;
     const q = GameState.quest;
     if (!q.slimeReward && q.slimes >= 5) {
       q.slimeReward = true;

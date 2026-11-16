@@ -4,6 +4,7 @@ import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
 import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
+import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
 import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays } from "./shrine";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
@@ -646,6 +647,8 @@ export const GameState = {
   rested: false,
   // the LIMIT gauge, 0..100 (limit.ts), carried from fight to fight
   limit: 0,
+  // the perks taken, a tier each in order (perks.ts)
+  perks: [] as PerkKey[],
   // the season (season.ts, counted from day 0) the town last announced,
   // -1 for none yet, so a reload doesn't announce it again
   seasonSeen: -1,
@@ -898,21 +901,40 @@ export const GameState = {
       claimed: false,
     };
   },
+  // MIGHT and WALL (perks.ts) are a share of the worn total
   effAtk(): number {
     const weapon = this.equipped.weapon;
-    return (
+    const worn =
       this.player.atk +
       (weapon ? EQUIP_BONUS[weapon] : 0) +
       this.refineOf(weapon) * REFINE_STEP +
       this.bestiaryBonus() +
-      this.partnerBonus()
-    );
+      this.partnerBonus();
+    return Math.round(worn * (1 + this.perk("might")));
   },
   effDef(): number {
     const armor = this.equipped.armor;
-    return (
-      this.player.def + (armor ? EQUIP_BONUS[armor] : 0) + this.refineOf(armor) * REFINE_STEP + this.bestiaryBonus() + this.partnerBonus()
-    );
+    const worn =
+      this.player.def + (armor ? EQUIP_BONUS[armor] : 0) + this.refineOf(armor) * REFINE_STEP + this.bestiaryBonus() + this.partnerBonus();
+    return Math.round(worn * (1 + this.perk("wall")));
+  },
+  // a perk's figure, 0 while it isn't taken (perks.ts)
+  perk(key: PerkKey): number {
+    return perkValue(this.perks, key);
+  },
+  // Takes `key` for good: VIGOR and FOCUS go straight onto the hero's own
+  // maximum (and fill what they add), the rest are read where they apply.
+  takePerk(key: PerkKey): void {
+    this.perks.push(key);
+    if (key === "vigor") {
+      const add = Math.min(MAX_HP, this.player.maxHp + PERKS.vigor.value) - this.player.maxHp;
+      this.player.maxHp += add;
+      this.player.hp += add;
+    } else if (key === "focus") {
+      const add = Math.min(MAX_MP, this.player.maxMp + PERKS.focus.value) - this.player.maxMp;
+      this.player.maxMp += add;
+      this.player.mp += add;
+    }
   },
   weaponTexture(): string {
     return this.equipped.weapon ? EQUIP_TEXTURE[this.equipped.weapon] : "equip-sword";
@@ -1023,6 +1045,9 @@ export const GameState = {
       // a tip told once stays told: the replayed unlocks aren't news
       seenTips: this.seenTips,
       heroLook: this.heroLook,
+      // what the hero is, like the level they came with (and VIGOR's and
+      // FOCUS's share is already in the stats kept above)
+      perks: this.perks,
     };
     // reset() is the new-game state for everything not kept above, so the
     // quest/chest/farm/kit defaults live in one place
@@ -1067,6 +1092,7 @@ export const GameState = {
     this.gardenDay = -1;
     this.rested = false;
     this.limit = 0;
+    this.perks = [];
     this.seasonSeen = -1;
     this.mealsCooked = 0;
     this.bountiesDone = 0;
@@ -1184,6 +1210,7 @@ export const GameState = {
           gardenDay: this.gardenDay,
           rested: this.rested,
           limit: this.limit,
+          perks: this.perks,
           seasonSeen: this.seasonSeen,
           mealsCooked: this.mealsCooked,
           bountiesDone: this.bountiesDone,
@@ -1280,6 +1307,8 @@ export const GameState = {
       this.rested = data.rested === true;
       // empty on saves from before the gauge
       this.limit = Number.isFinite(data.limit) ? Math.min(100, Math.max(0, data.limit)) : 0;
+      // none on saves from before perks: the ELDER offers the tiers owed
+      this.perks = soundPerks(data.perks);
       this.seasonSeen = Number.isInteger(data.seasonSeen) ? data.seasonSeen : -1;
       // none on saves from before these records
       this.mealsCooked = Number.isInteger(data.mealsCooked) && data.mealsCooked > 0 ? data.mealsCooked : 0;
