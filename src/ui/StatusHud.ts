@@ -17,6 +17,28 @@ export const STATUS_HUD_TOAST_Y = STATUS_HUD_HEIGHT + 12;
 export const PANEL_TOP_OVER_HUD = 8;
 export const PANEL_TOP_UNDER_HUD_ROW1 = 40;
 
+/**
+ * For a panel whose top is PANEL_TOP_UNDER_HUD_ROW1 and which is narrower
+ * than the HUD (1160 of its 1232): the HUD's own ground over its second row
+ * (y 40..86, inside its outline), to go under the panel's dim. Without it
+ * the row's two ends stood out beside the panel as cut words, "SL" of
+ * SLIMES 0/5 on the left and the "6" of a blessing's GREED 6 on the right.
+ * Shown and hidden with the panel, by showHudRow2Cover (not while the HUD is
+ * hidden: there is no row to cover, only the map).
+ */
+export function hudRow2Cover(scene: Phaser.Scene): Phaser.GameObjects.Rectangle {
+  const top = PANEL_TOP_UNDER_HUD_ROW1;
+  const h = STATUS_HUD_HEIGHT - 2 - top;
+  return scene.add
+    .rectangle(GAME_WIDTH / 2, top + h / 2, GAME_WIDTH - 4, h, 0x0b0b2b, 1)
+    .setScrollFactor(0)
+    .setDepth(149.9)
+    .setVisible(false);
+}
+export const showHudRow2Cover = (cover: Phaser.GameObjects.Rectangle): void => {
+  cover.setVisible(GameState.hudVisible);
+};
+
 // The single quest slot shows whichever chapter is currently open: the label
 // of objective.ts's current step, the same walk of the chain the minimap's
 // marker follows. Exported for the title screen's save card, which passes the

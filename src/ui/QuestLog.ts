@@ -13,6 +13,7 @@ import type { PixelText } from "../pixelText";
 import { SEAL_REGIONS, sealsDone } from "../seals";
 import { SHARDS_TOTAL, type ShardRegion, shardsFound } from "../shards";
 import { bindKeyHint, keyHint } from "./Gamepad";
+import { hudRow2Cover, showHudRow2Cover } from "./StatusHud";
 import { hideTouchButtons } from "./TouchControls";
 
 // Rows are pooled, sized to the most each column can ever hold at once.
@@ -228,6 +229,8 @@ export class QuestLog {
   private scene: Phaser.Scene;
   private active = false;
   private root: Phaser.GameObjects.Container;
+  // the HUD's second row, whose ends show beside the panel (StatusHud.ts)
+  private hudCover: Phaser.GameObjects.Rectangle;
   private title: PixelText;
   private perks: PixelText;
   private stars: PixelText;
@@ -281,8 +284,10 @@ export class QuestLog {
     // 26..42 and 46..62, clear of the perks' line (from 66)
     this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 26, "", retroStyle(4, "#4fd1c0")).setLineSpacing(4);
 
+    this.hudCover = hudRow2Cover(scene).setVisible(true);
     this.root = scene.add
       .container(0, 0, [
+        this.hudCover,
         scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5),
         // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
         gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
@@ -318,6 +323,7 @@ export class QuestLog {
     // panel — same event also sets closeQueued — doesn't immediately close it
     this.closeQueued = false;
     this.refresh();
+    showHudRow2Cover(this.hudCover);
     this.root.setVisible(true);
     // on touch the d-pad sits on the last IN PROGRESS rows and Z on the tenth
     // COMPLETED one; this panel reads neither, only ESC/U

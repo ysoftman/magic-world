@@ -11,7 +11,7 @@ import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
-import { PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1 } from "./StatusHud";
+import { hudRow2Cover, PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1, showHudRow2Cover } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // half the buy price, floored, never free
@@ -120,6 +120,8 @@ export class ShopUI {
   private day = -1;
 
   private dim: Phaser.GameObjects.Rectangle;
+  // the HUD's second row, whose ends show beside the panel (StatusHud.ts)
+  private hudCover: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
   private title: PixelText;
   private items: PixelText[] = [];
@@ -165,6 +167,7 @@ export class ShopUI {
     this.scene = scene;
     this.fx = new PanelFx(scene, COIN, GOLD_BURST);
 
+    this.hudCover = hudRow2Cover(scene);
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
       .setScrollFactor(0)
@@ -343,6 +346,7 @@ export class ShopUI {
     this.zQueued = false;
     this.tabQueued = false;
     this.escQueued = false;
+    if (PANEL_TOP === PANEL_TOP_UNDER_HUD_ROW1) showHudRow2Cover(this.hudCover);
     this.dim.setVisible(true);
     this.panel.setVisible(true);
     this.title.setVisible(true);
@@ -562,6 +566,7 @@ export class ShopUI {
   private close(): void {
     this.active = false;
     this.fx.clear();
+    this.hudCover.setVisible(false);
     this.dim.setVisible(false);
     this.panel.setVisible(false);
     this.title.setVisible(false);
@@ -582,6 +587,7 @@ export class ShopUI {
 
   destroy(): void {
     this.fx.clear();
+    this.hudCover.destroy();
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();

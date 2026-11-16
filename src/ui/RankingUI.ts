@@ -5,6 +5,7 @@ import { DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { getRanks, MAX_RANKS } from "../ranking";
 import { bindKeyHint, keyHint } from "./Gamepad";
+import { hudRow2Cover, showHudRow2Cover } from "./StatusHud";
 import { hideTouchButtons } from "./TouchControls";
 
 // Cells are retroStyle(6) (24px a glyph), headers retroStyle(5) (20px). The
@@ -37,6 +38,8 @@ export class RankingUI {
   private active = false;
 
   private dim: Phaser.GameObjects.Rectangle;
+  // the HUD's second row, whose ends show beside the panel (StatusHud.ts)
+  private hudCover: Phaser.GameObjects.Rectangle;
   private panel: Phaser.GameObjects.Rectangle;
   private title: PixelText;
   private headers: PixelText[] = [];
@@ -55,6 +58,7 @@ export class RankingUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.hudCover = hudRow2Cover(scene);
     this.dim = scene.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
       .setScrollFactor(0)
@@ -161,6 +165,7 @@ export class RankingUI {
     // cleared here (not in the constructor) so the Z keydown that opens the
     // panel — same event also sets closeQueued — doesn't immediately close it
     this.closeQueued = false;
+    showHudRow2Cover(this.hudCover);
     this.dim.setVisible(true);
     this.panel.setVisible(true);
     this.title.setVisible(true);
@@ -180,6 +185,7 @@ export class RankingUI {
   close(): void {
     this.active = false;
     hideTouchButtons(this.scene, []);
+    this.hudCover.setVisible(false);
     this.dim.setVisible(false);
     this.panel.setVisible(false);
     this.title.setVisible(false);
@@ -231,6 +237,7 @@ export class RankingUI {
   }
 
   destroy(): void {
+    this.hudCover.destroy();
     this.dim.destroy();
     this.panel.destroy();
     this.title.destroy();
