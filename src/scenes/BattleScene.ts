@@ -93,6 +93,7 @@ import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
 import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
+import { BattleHelp } from "../ui/BattleHelp";
 import { addBattleWeather } from "../ui/BattleWeather";
 import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
@@ -632,6 +633,7 @@ export class BattleScene extends Phaser.Scene {
   private enemyStance!: Stance;
   private companionStance?: Stance;
   private hintText!: PixelText;
+  private help!: BattleHelp;
   // while a foe's blow (PARRY) or FIGHT's (PERFECT) is on its way: null
   // until the first press, then when it came (performance.now); undefined
   // outside a blow
@@ -1199,6 +1201,7 @@ export class BattleScene extends Phaser.Scene {
       .setStroke("#0b0b2b", 4)
       .setOrigin(0.5)
       .setDepth(30);
+    this.help = new BattleHelp(this);
 
     // outlined as the menu is: an empty slot's DIM_TEXT sits on the field too
     const itemY = GAME_HEIGHT - 232;
@@ -1325,6 +1328,19 @@ export class BattleScene extends Phaser.Scene {
     if (e.repeat) return;
     if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) this.timedInput();
     if (!this.waitingAction) return;
+    // the help over the menu (the menu's ends would show past its sides, so
+    // the menu goes while it is up): any key shuts it and is not the menu's; "?"
+    // (with or without SHIFT) opens it from the menu itself, not a list
+    if (this.help.open) {
+      this.help.hide();
+      this.renderMenu();
+      return;
+    }
+    if (e.code === "Slash" && !this.inSkills && !this.inItems) {
+      this.hideMenu();
+      this.help.show();
+      return;
+    }
 
     if (this.inSkills) {
       const next = this.skillMove(e.code);
@@ -1457,6 +1473,7 @@ export class BattleScene extends Phaser.Scene {
     const waiter = this.waitingAction!;
     this.waitingAction = null;
     this.hideMenu();
+    this.hintText.setText("");
     waiter.resolve(action);
   }
 
@@ -1527,6 +1544,20 @@ export class BattleScene extends Phaser.Scene {
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     this.timedInput();
     if (!this.waitingAction) return;
+    if (this.help.open) {
+      this.help.hide();
+      this.renderMenu();
+      return;
+    }
+    // the hint line's HELP, a finger's box round it (the word is 64 x 16)
+    if (!this.inSkills && !this.inItems && this.hintText.text) {
+      const b = this.hintText.getBounds();
+      if (Phaser.Geom.Rectangle.Contains(Phaser.Geom.Rectangle.Inflate(b, 24, 14), pointer.x, pointer.y)) {
+        this.hideMenu();
+        this.help.show();
+        return;
+      }
+    }
 
     if (this.inSkills) {
       // the page chip, in the message box: its halves turn back and on
@@ -1683,7 +1714,12 @@ export class BattleScene extends Phaser.Scene {
       // full-HP heal, spent steal)
       this.menuTexts[i].setColor((this.menuButtons[i].enabled?.() ?? true) ? "#ffffff" : DIM_TEXT);
     }
-    this.hintText.setText(""); // every action, spells included, has a button above
+    // Every action has a button above, so the hint line is free for the one
+    // thing that has none: the battle's help (ui/BattleHelp.ts), "?" or a tap
+    // on the word. Not a menu button: a sixth on the lower row is 1044px of
+    // its 1184, but on the single row of Lv2-4 it closed the gaps under
+    // MENU_MIN_GAP and split the menu in two three levels early.
+    bindKeyHint(this.hintText, () => keyHint("?:HELP", "HELP", { table: "battle", pad: "" }));
   }
 
   private hideItems(): void {
@@ -1791,6 +1827,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private openSkills(): void {
+    this.hintText.setText("");
     this.hideMenu();
     this.inSkills = true;
     this.renderSkills();
