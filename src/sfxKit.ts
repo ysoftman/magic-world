@@ -598,6 +598,19 @@ const GAME_KIT: Record<string, SfxProgram> = {
     ],
   },
   // ---- battle: blows taken and status ----
+  perfect: {
+    id: "perfect",
+    kind: "se",
+    // E minor's triad, so it sits on strike's E and inside critical's E6 -> B6
+    // when the three stack (a C7 rubbed critical's held B6 by a semitone)
+    target: "perfect: a 25% pulse sparkle racing up G6 -> B6 -> E7 in 100ms, the top note ringing, over strike's crack",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.04, wave: "pulse25", freq: N("G6"), vol: 0.06, hold: 0.02 },
+      { at: 0.035, dur: 0.04, wave: "pulse25", freq: N("B6"), vol: 0.06, hold: 0.02 },
+      { at: 0.07, dur: 0.16, wave: "pulse25", freq: N("E7"), vol: 0.06, hold: 0.03, vib: { rate: 30, cents: 20 } },
+    ],
+  },
   parry: {
     id: "parry",
     kind: "se",

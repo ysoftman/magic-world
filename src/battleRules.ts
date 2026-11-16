@@ -790,6 +790,10 @@ export const defendedDamage = (raw: number): number => Math.max(1, Math.ceil(raw
 // of WARD/GUARD/DEFEND, never below 1. Player skill, so sim-battle leaves it out.
 export const PARRY_MULT = 0.7;
 export const parriedDamage = (dmg: number): number => Math.max(1, Math.ceil(dmg * PARRY_MULT));
+// FIGHT's blow timed right (BattleScene playerAttack), on top of the combo
+// bonus and a crit, always at least 1 more. Player skill too: not in sim-battle.
+export const PERFECT_MULT = 1.25;
+export const perfectDamage = (dmg: number): number => Math.max(dmg + 1, Math.round(dmg * PERFECT_MULT));
 
 // a round's poison tick on the hero, which never takes the last HP
 export const poisonTickDamage = (maxHp: number, hp: number): number => Math.min(Math.max(1, Math.floor(maxHp * POISON_PCT)), hp - 1);

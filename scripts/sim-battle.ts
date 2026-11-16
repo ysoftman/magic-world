@@ -389,6 +389,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   };
   // BattleScene guardHit(): WARD halves a hit (no ORC here, so no BULWARK),
   // else DEFEND takes its share
+  // (PARRY x0.7 and FIGHT's PERFECT x1.25 are the player's timing, left out: these are the numbers with neither)
   const guard = (raw: number): number => (wardTurns > 0 ? guardedDamage(raw, true) : defending ? defendedDamage(raw) : raw);
 
   const choose = (): Action => {

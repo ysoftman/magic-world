@@ -25,6 +25,7 @@ import {
   guardedDamage,
   POISON_TURNS,
   parriedDamage,
+  perfectDamage,
   poisonTickDamage,
   regenAmount,
   rollDamage,
@@ -130,6 +131,25 @@ const PARRY_BACK_MS = 260;
 const PARRY_BACK_PX = 24;
 const PARRY_WINDOW_MS = 200;
 const PARRY_LATE_MS = 250;
+// PERFECT: FIGHT's blow timed the same way, for battleRules PERFECT_MULT of
+// its damage; a miss costs nothing. A reticle closes on the foe over the
+// run-up (PERFECT_RUN_MS, real ms at any BATTLE SPEED, a different length
+// each time so the eyes time it, not a learnt rhythm) and is shut
+// PERFECT_GRACE_MS before the blade lands: the first press since FIGHT was
+// picked counts if it fell in the last PERFECT_WINDOW_MS before contact,
+// about 80ms either side of the reticle shutting (the wind-up, the hold and
+// the dash each end on a frame, so the blade lands some 30ms after its
+// time). The hero holds the wind-up
+// pose for what the run-up has over the dash's own 190ms (95ms at speed 2),
+// 220ms a FIGHT on average. The window opens 190ms in at the earliest, so a
+// second press 120ms after the one that picked FIGHT (mashing) is early.
+const PERFECT_RUN_MS: [number, number] = [340, 480];
+const PERFECT_WINDOW_MS = 150;
+const PERFECT_GRACE_MS = 40;
+// the reticle: four corner brackets (2 cells thick, 8 long) closing from
+// CUE_FROM to CUE_HALF about the foe's middle, on the 2px grid
+const CUE_FROM = 120;
+const CUE_HALF = 56;
 // breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
 const IDLE_BOB_PX = 4;
 // a flier's breathing is a hover: higher and quicker, wings at work
@@ -566,11 +586,14 @@ export class BattleScene extends Phaser.Scene {
   private enemyStance!: Stance;
   private companionStance?: Stance;
   private hintText!: PixelText;
-  // while a foe's blow is on its way: null until the first press, then when
-  // it came (performance.now); undefined outside a blow
-  private parryPress: number | null | undefined;
-  // until when (performance.now) a press is a late one, after an unparried blow
-  private parryLate = 0;
+  // while a foe's blow (PARRY) or FIGHT's (PERFECT) is on its way: null
+  // until the first press, then when it came (performance.now); undefined
+  // outside a blow
+  private timedPress: number | null | undefined;
+  // until when (performance.now) a press is a late one, after a blow no
+  // press met, and whose blow it was
+  private timedLate = 0;
+  private timedStrike = false;
   // the round a frozen hero thaws on: no PARRY against that round's blow
   private thawing = false;
 
@@ -684,7 +707,7 @@ export class BattleScene extends Phaser.Scene {
     this.poisonTurns = 0;
     this.frozen = false;
     this.thawing = false;
-    this.parryPress = undefined;
+    this.timedPress = undefined;
     this.freezeGrace = 0;
     this.enraged = false;
     this.charging = false;
@@ -1181,7 +1204,7 @@ export class BattleScene extends Phaser.Scene {
   // press whose down/up land in the same frame queue is silently dropped
   private onKey(e: KeyboardEvent): void {
     if (e.repeat) return;
-    if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) this.parryInput();
+    if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) this.timedInput();
     if (!this.waitingAction) return;
 
     if (this.inSkills) {
@@ -1318,30 +1341,71 @@ export class BattleScene extends Phaser.Scene {
     waiter.resolve(action);
   }
 
-  // a key or tap that may be the PARRY (enemyLunge): the first one while a
-  // blow is on its way, or one just after a blow nothing met
-  private parryInput(): void {
+  // a key or tap that may be the PARRY (enemyLunge) or the PERFECT
+  // (playerAttack): the first one while a blow is on its way, or one just
+  // after a blow nothing met
+  private timedInput(): void {
     const now = performance.now();
-    if (this.parryPress === null) this.parryPress = now;
-    else if (now < this.parryLate) {
-      this.parryLate = 0;
-      this.parryNote("LATE");
+    if (this.timedPress === null) this.timedPress = now;
+    else if (now < this.timedLate) {
+      this.timedLate = 0;
+      this.timedNote("LATE", this.timedStrike);
     }
   }
 
-  // PARRY!, or how the press missed. Up and to the foe's side of the hero:
-  // over the hero it lay across the blow's damage number (a crit's "516!" is
-  // 224px wide about the hero, to x 432; PARRY! is 192px from x 434).
-  private parryNote(label: "PARRY!" | "EARLY" | "LATE"): void {
-    const hit = label === "PARRY!";
-    this.flashStatus(label, hit ? "#fde047" : DIM_TEXT, this.playerSprite.x + 210, this.playerSprite.y - 90, hit ? 8 : 6);
+  // PARRY! or PERFECT!, or how the press missed. Up and to the far side of
+  // whoever was struck: over the hero a PARRY! lay across the blow's damage
+  // number (a crit's "516!" is 224px wide about the hero, to x 432; PARRY! is
+  // 192px from x 434). FIGHT's is left of the foe, over the hero's head as it
+  // strikes: PERFECT! is 256px to x 848, a crit's number on the foe from 848.
+  private timedNote(label: "PARRY!" | "PERFECT!" | "EARLY" | "LATE", strike = false): void {
+    const hit = label.endsWith("!");
+    const x = strike ? this.enemySprite.x - 240 : this.playerSprite.x + 210;
+    this.flashStatus(label, hit ? "#fde047" : DIM_TEXT, x, this.playerSprite.y - 90, hit ? 8 : 6);
+  }
+
+  // PERFECT's cue: the reticle closing on the foe in `ms`, gold once shut.
+  // Returns what removes it.
+  private strikeCue(ms: number): () => void {
+    const even = (v: number): number => Math.round(v / ART_PX) * ART_PX;
+    const g = this.add.graphics({ x: even(this.enemySprite.x), y: even(this.enemySprite.y) }).setDepth(5);
+    const corners = (half: number, color: number, alpha: number): void => {
+      g.fillStyle(color, alpha);
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ]) {
+        g.fillRect(sx < 0 ? -half : half - 16, sy < 0 ? -half : half - 4, 16, 4);
+        g.fillRect(sx < 0 ? -half : half - 4, sy < 0 ? -half : half - 16, 4, 16);
+      }
+    };
+    const draw = (half: number, shut: boolean): void => {
+      g.clear();
+      if (!shut) corners(CUE_HALF, 0xffffff, 0.35);
+      corners(half, shut ? 0xfde047 : 0xffffff, 1);
+    };
+    const at = { half: CUE_FROM };
+    draw(CUE_FROM, false);
+    const tween = this.tweens.add({
+      targets: at,
+      half: CUE_HALF,
+      duration: ms,
+      onUpdate: () => draw(even(at.half), false),
+      onComplete: () => draw(CUE_HALF, true),
+    });
+    return () => {
+      tween.remove();
+      g.destroy();
+    };
   }
 
   // Mouse support for the action menu and item list: a global pointerdown
   // hit-tests the visible entries' bounds (like awaitAdvance) rather than
   // setInteractive() per item, so the keyboard flow stays untouched.
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
-    this.parryInput();
+    this.timedInput();
     if (!this.waitingAction) return;
 
     if (this.inSkills) {
@@ -1799,13 +1863,37 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async playerAttack(): Promise<void> {
-    Sfx.attack();
     this.addCombo();
     const comboBonus = this.comboBonus();
     const { dmg, crit } = rollDamage(this.heroAtk(), this.enemy.def);
-    const total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
+    let total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
+    // PERFECT: the wind-up held so the blow lands a run-up after FIGHT, the
+    // reticle shut just before it; the swing's whoosh waits with it
+    const dash = this.anim(WINDUP_MS) + this.anim(LUNGE_OUT_MS);
+    const hold = Math.max(0, Phaser.Math.Between(...PERFECT_RUN_MS) - dash);
+    const endCue = this.strikeCue(hold + dash - PERFECT_GRACE_MS);
+    this.time.delayedCall(hold, () => Sfx.attack());
+    bindKeyHint(this.hintText, () => keyHint("ANY KEY:PERFECT", "TAP:PERFECT", { table: "battle", pad: "Z:PERFECT" }));
+    this.timedLate = 0;
+    this.timedPress = null;
     // the blow lands at the contact, the hero still out at the foe
-    await this.lunge(crit, () => {
+    const onContact = (): void => {
+      const press = this.timedPress;
+      this.timedPress = undefined;
+      this.hintText.setText("");
+      endCue();
+      const now = performance.now();
+      if (press != null && now - press <= PERFECT_WINDOW_MS) {
+        total = perfectDamage(total);
+        Sfx.emit("perfect");
+        this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+        this.glowBurst.explode(12);
+        this.timedNote("PERFECT!", true);
+      } else if (press != null) this.timedNote("EARLY", true);
+      else {
+        this.timedLate = now + PARRY_LATE_MS;
+        this.timedStrike = true;
+      }
       Sfx.strike();
       if (crit) Sfx.critical();
       this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
@@ -1818,7 +1906,8 @@ export class BattleScene extends Phaser.Scene {
       shake(this.cameras.main, crit ? 120 : 60, crit ? 0.012 : 0.004);
       this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, crit);
       this.recoil(this.enemySprite, 1, crit);
-    });
+    };
+    await this.lunge(crit, onContact, hold);
     const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
     await this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
     this.restoreEnemyTint();
@@ -2039,7 +2128,7 @@ export class BattleScene extends Phaser.Scene {
   // draw back into a crouch and raise the weapon, then dash out to the foe
   // stretched and leaning in, the weapon swung down with afterimages, and
   // `onContact` (if given) as it connects
-  private async strikeIn(onContact?: () => void): Promise<void> {
+  private async strikeIn(onContact?: () => void, hold = 0): Promise<void> {
     const hero = this.playerSprite;
     const hasWeapon = !!GameState.equipped.weapon;
     const trail = this.ghostTrail(hero);
@@ -2054,6 +2143,8 @@ export class BattleScene extends Phaser.Scene {
       { x: startX - WINDUP_PX, angle: LEAN_BACK, scaleX: HERO_SCALE * CROUCH[0], scaleY: HERO_SCALE * CROUCH[1] },
       this.anim(WINDUP_MS),
     );
+    // FIGHT holds the pose here, the blade up (playerAttack's PERFECT)
+    if (hold > 0) await this.wait(hold);
     if (hasWeapon) {
       this.tweens.add({ targets: this.weaponOverlay, angle: WEAPON_DOWN, duration: this.anim(LUNGE_OUT_MS), ease: "Sine.easeIn" });
     }
@@ -3156,36 +3247,39 @@ export class BattleScene extends Phaser.Scene {
     const startX = foe.x;
     const targetX = this.playerSprite.x + 80;
     const trail = this.ghostTrail(foe);
-    this.parryLate = 0;
+    this.timedLate = 0;
     if (!this.thawing) {
       bindKeyHint(this.hintText, () => keyHint("ANY KEY:PARRY", "TAP:PARRY", { table: "battle", pad: "Z:PARRY" }));
-      this.parryPress = null;
+      this.timedPress = null;
     } else this.hintText.setText("");
     await this.wait(Phaser.Math.Between(...PARRY_HOLD_MS));
     await this.tweenPromise(foe, { x: startX + PARRY_BACK_PX }, PARRY_BACK_MS);
     await this.tweenPromise(foe, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
-    const press = this.parryPress;
-    this.parryPress = undefined;
+    const press = this.timedPress;
+    this.timedPress = undefined;
     this.hintText.setText("");
     this.tweens.add({ targets: foe, x: startX, duration: this.anim(LUNGE_BACK_MS) });
     const now = performance.now();
     const parried = press != null && now - press <= PARRY_WINDOW_MS;
-    if (press === null) this.parryLate = now + PARRY_LATE_MS;
+    if (press === null) {
+      this.timedLate = now + PARRY_LATE_MS;
+      this.timedStrike = false;
+    }
     if (parried) {
       Sfx.emit("parry");
       this.glowBurst.setPosition(this.playerSprite.x + 40, this.playerSprite.y);
       this.glowBurst.explode(12);
-      this.parryNote("PARRY!");
+      this.timedNote("PARRY!");
       this.syncLimit(LIMIT_PARRY);
-    } else if (press != null) this.parryNote("EARLY");
+    } else if (press != null) this.timedNote("EARLY");
     return parried;
   }
 
   // FIGHT's strike: strikeIn (draw back, dash, `onContact` as it connects),
   // a short freeze, then home
-  private async lunge(crit = false, onContact?: () => void): Promise<void> {
+  private async lunge(crit = false, onContact?: () => void, hold = 0): Promise<void> {
     const startX = this.playerSprite.x;
-    await this.strikeIn(onContact);
+    await this.strikeIn(onContact, hold);
     await this.wait(this.anim(crit ? CRIT_STOP_MS : HIT_STOP_MS));
     await this.poseRest(startX);
   }
