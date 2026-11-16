@@ -12,7 +12,7 @@ import { hop, isWalkableCell } from "../sceneCommon";
 // fight (the scene's own startBattle), the jackpot's ordinary one.
 //
 // The chase. It runs cell to cell over the same walkable grid the hero
-// walks, always to the neighbour farthest from the hero, at RUN_SPEED: faster
+// walks, always to the neighbour farthest from the hero, at its field's speed: faster
 // than the hero along a row or a column (240) and slower than the hero's
 // diagonal (339), so it is not caught by following it but by cutting its
 // corners and by the walls it has to turn along. It knows nothing of dead
@@ -23,23 +23,37 @@ import { hop, isWalkableCell } from "../sceneCommon";
 // checkEncounter): a chase lost to a dice roll was nobody's fault.
 //
 // The speed was set by a bot that only ever walks straight at it, from 5
-// cells off (headless, the three fields in turn): at 200-270 it caught every
-// one within 1.2-4.4s of the "!", at 310 four of nine, at 290 six of eleven
-// in 1.1-4.9s, the rest gone at the 10s. A player who heads it off does
-// better than the bot. The volcano's lava leaves fewer ways to run: the bot
-// caught five of five there.
+// cells off (headless, the cave, the forest and the snow field in turn): at
+// 200-270 it caught every one within 1.2-4.4s of the "!", at 310 four of
+// nine, at 290 six of eleven in 1.1-4.9s, the rest gone at the 10s. A player
+// who heads it off does better than the bot. The volcano's lava leaves fewer
+// ways to run: at 290 the bot caught eleven of twelve there, at 320 six of
+// nine, so the volcano's runs at 320 (RUNNER_FIELDS).
 //
-// How often. RUNNER_CHANCE of a field's builds: on arrival 12%, back from a
-// fight 2.5% — at ~130 fights an hour about three an hour, a field's jackpot
-// each (108G in the cave, 168G in the forest, 456G in the snow field, 792G
-// in the volcano): some 320G, 500G, 1370G and 2380G an hour more if every
-// one is caught (the volcano hunts 8.5-9.0k an hour, cooking.ts), less the chases
-// lost and the ~10s each takes. Not run through the balance sim. The
-// jackpots' own 3.5% among their kind's roamers stays as it was.
-export const RUNNER_CHANCE = { arrival: 0.12, back: 0.025 };
+// How often, and what it pays. On arrival RUNNER_ARRIVAL_CHANCE, the same
+// everywhere (a field is entered a few times an hour); back from a fight the
+// field's own `back`, set so that every runner caught is about 15% on top of
+// the field's hunt, half of them caught 7-8%. At ~132 fights an hour, the
+// grass's average fight (no win streak) and ~0.3 arrivals' runners an hour:
+//   cave     7.3G x 132 =  960G an hour, CURSED GOBLIN 108G, 0.8% -> 1.4 an hour, 150G (15%)
+//   forest  22.8G        = 3010G,         SILVER WASP   168G, 1.8% -> 2.7,          450G (15%)
+//   snow      49G        = 6470G,         AURORA MOTH   456G, 1.3% -> 2.0,          920G (14%)
+//   volcano 62.3G        = 8220G,         GILDED IMP    528G, 1.5% -> 2.3,         1200G (15%)
+// One chance for all (2.5%) paid 37% in the cave and, with the GILDED IMP at
+// the other jackpots' x12 gold (792G), 30% in the volcano. Worked out, not run
+// through the balance sim. The jackpots' own 3.5% among their kind's roamers
+// stays as it was.
+export const RUNNER_ARRIVAL_CHANCE = 0.12;
+export type RunnerRegion = "dungeon" | "forest" | "snow" | "volcano";
+// `back`: the chance on a return from a fight; `speed`: its run, px a second
+export const RUNNER_FIELDS: Record<RunnerRegion, { back: number; speed: number }> = {
+  dungeon: { back: 0.008, speed: 290 },
+  forest: { back: 0.018, speed: 290 },
+  snow: { back: 0.013, speed: 290 },
+  volcano: { back: 0.015, speed: 320 },
+};
 
 const NOTICE = 3 * TILE;
-const RUN_SPEED = 290;
 const IDLE_SPEED = 60;
 const FLEE_MS = 10000;
 // spawned this many cells or more (either axis) from the hero, so it is
@@ -61,7 +75,9 @@ const STEPS: Cell[] = [
 ];
 
 export interface RunnerOpts {
-  // back from a fight rather than arriving (RUNNER_CHANCE)
+  // which field's odds and speed (RUNNER_FIELDS)
+  region: RunnerRegion;
+  // back from a fight rather than arriving
   back: boolean;
   // cells solid without being solid tiles (the shrine)
   walls: readonly Point[];
@@ -84,13 +100,14 @@ export class FieldRunner {
   private open: (tx: number, ty: number) => boolean;
   private calm: (tx: number, ty: number) => boolean;
   private paused: () => boolean;
+  private runSpeed: number;
   private target: Point;
   private wait = 800;
   private alarmed = false;
   private fleeMs = 0;
   private gone = false;
 
-  /** A runner drawn as `texture`, by RUNNER_CHANCE and if the field has a place for one; else null. */
+  /** A runner drawn as `texture`, by its field's odds and if the field has a place for one; else null. */
   static roll(
     scene: Phaser.Scene,
     hero: Phaser.Physics.Arcade.Sprite,
@@ -98,7 +115,7 @@ export class FieldRunner {
     texture: string,
     opts: RunnerOpts,
   ): FieldRunner | null {
-    if (Math.random() >= (opts.back ? RUNNER_CHANCE.back : RUNNER_CHANCE.arrival)) return null;
+    if (Math.random() >= (opts.back ? RUNNER_FIELDS[opts.region].back : RUNNER_ARRIVAL_CHANCE)) return null;
     const blocked = new Set([...opts.walls, ...opts.exits].map((p) => cellOf(p).join(",")));
     const open = (tx: number, ty: number): boolean => isWalkableCell(level, tx, ty) && !blocked.has(`${tx},${ty}`);
     // every cell the hero can walk to
@@ -140,6 +157,7 @@ export class FieldRunner {
     this.open = open;
     this.calm = calm;
     this.paused = opts.paused;
+    this.runSpeed = RUNNER_FIELDS[opts.region].speed;
     this.target = at;
     // a roamer in every way but where it goes: its depth, hit box and hop
     this.sprite = scene.physics.add.sprite(at.x, at.y, texture).setDepth(10);
@@ -176,7 +194,7 @@ export class FieldRunner {
     const dx = this.target.x - s.x;
     const dy = this.target.y - s.y;
     const dist = Math.hypot(dx, dy);
-    const speed = this.alarmed ? RUN_SPEED : IDLE_SPEED;
+    const speed = this.alarmed ? this.runSpeed : IDLE_SPEED;
     if (dist > Math.max(2, (speed * delta) / 1000)) {
       s.setVelocity((dx / dist) * speed, (dy / dist) * speed);
       return;

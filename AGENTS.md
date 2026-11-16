@@ -486,24 +486,27 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 
 ## 도망치는 희귀 몬스터 (`src/ui/Runner.ts`)
 
-동굴·숲·설원을 만들 때(`create`) `FieldRunner.roll` 이 `RUNNER_CHANCE`(들어설 때 12%, 전투에서 돌아올 때 2.5%)로 그
+동굴·숲·설원·화산을 만들 때(`create`) `FieldRunner.roll` 이 들어설 때 `RUNNER_ARRIVAL_CHANCE`(12%), 전투에서 돌아올 때 `RUNNER_FIELDS[지역].back` 으로 그
 지역의 희귀 몬스터를 구역 밖 열린 칸에 세운다. `NOTICE`(3타일) 안에 영웅이 오면 `!` 를 띄우고 `FLEE_MS`(10초) 동안
 달아나다 사라진다. 닿으면 씬의 `startBattle(희귀 몬스터)` 다. 저장하는 상태는 없다(전투 뒤 씬이 다시 만들어지며 사라진다).
 
 - 길 찾기는 없다. 영웅이 걷는 격자(`isWalkableCell`)에서 영웅과 가장 먼 이웃 칸으로 한 칸씩 간다. 막다른 곳을 몰라서
   몰아넣을 수 있고, 그게 잡는 방법이다. 제단처럼 타일이 아닌 벽은 `walls`, 출구는 `exits` 로 넘긴다.
-- `RUN_SPEED`(290)는 영웅의 가로·세로 속도(240)보다 빠르고 대각선(339)보다 느리다. 실제 사례: 곧장 따라가기만 하는
+- 달리는 속도(`RUNNER_FIELDS[지역].speed`, 290, 화산 320)는 영웅의 가로·세로 속도(240)보다 빠르고 대각선(339)보다 느리다. 실제 사례: 곧장 따라가기만 하는
   봇이 200~270 에서는 `!` 뒤 1.2~4.4초에 전부 잡았고(쫓을 것이 없음), 310 에서는 9번 중 4번, 290 에서는 11번 중 6번
   잡았다. 영웅 속도(`sceneCommon` 의 `WALK_SPEED`)를 바꾸면 다시 잰다. 칸에 닿은 프레임에 서지 않고 바로 다음 칸으로
   출발한다(한 프레임씩 서면 속도의 1/15 을 잃었다).
 - 쫓는 동안(`fleeing()`) 씬의 `checkEncounter` 는 무작위 조우를 굴리지 않는다. 구역의 로머는 그대로라 닿으면 그 전투가
   시작되고 러너는 사라진다(결정: 지름길의 위험).
-- 새 필드 씬에 넣을 때: `spawnMonsters()` 뒤에 `this.runner = FieldRunner.roll(this, this.player, level, 텍스처, { back,
+- 새 필드 씬에 넣을 때: `spawnMonsters()` 뒤에 `this.runner = FieldRunner.roll(this, this.player, level, 텍스처, { region, back,
   walls, exits, zones, paused, caught })`, `checkEncounter` 의 `if (!moving) return;` 뒤에 `if (this.runner?.fleeing())
   return;`. `paused` 는 `uiBlocking() || quitting || fieldKeys.leaving()`, `caught` 는 `startBattle` 이다(입장 쿨다운·
   나가는 중 가드는 `startBattle` 이 본다).
-- 빈도와 벌이는 `Runner.ts` 머리 주석에 있다(시간당 약 3번, 다 잡으면 동굴 약 320G·숲 500G·설원 1370G·화산 2380G, 밸런스 sim 은 안 돌림). 확률이나 희귀
-  몬스터의 골드를 바꾸면 같이 고친다.
+- 빈도와 벌이는 지역마다 맞춘다: 러너를 다 잡아도 그 지역 사냥 골드(연승 보너스 없이 시간당 약 132전투)의 15% 쯤,
+  절반 잡으면 7~8% 가 되게 `back` 을 둔다(동굴 0.8%·숲 1.8%·설원 1.3%·화산 1.5%, 계산표는 `Runner.ts` 머리 주석,
+  밸런스 sim 은 안 돌림). 실제 사례: 모든 지역 2.5% 일 때 동굴은 37%, GILDED IMP 가 792G 일 때 화산은 30% 였다.
+  희귀 몬스터의 골드나 지역 몬스터 골드를 바꾸면 이 표를 다시 계산한다.
+- 화산은 용암 때문에 달아날 길이 적어 290 에서 직진 봇이 12번 중 11번 잡았다. 320 에서 9번 중 6번이라 화산만 320 이다.
 - 화산의 GILDED IMP(`src/monsters.ts` 의 `gildedImp`)는 러너로만 만난다(구역 로머·무작위 조우에 없음). FIRE IMP 격자에
   팔레트만 다른 리스킨이라 외곽선 `K` 는 FIRE IMP 와 같은 값이다. 불 종 목록(`battleRules.ts` 의 `BURN_PROOF`,
   BattleScene 의 `BURNAWAY_KIN`)에도 들어 있다. 새 희귀 몬스터를 넣으면 이 두 목록 같은 종별 목록과 `drops.ts`,

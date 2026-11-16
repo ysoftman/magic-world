@@ -196,7 +196,8 @@ export class ForestScene extends Phaser.Scene {
     this.runner = turn
       ? null
       : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
-          back: !!back,
+          region: "forest",
+      back: !!back,
           walls: [FOREST_SHRINE_POS],
           exits: [FOREST_ENTRY],
           zones: FOREST_ZONES,

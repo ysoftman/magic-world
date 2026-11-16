@@ -209,6 +209,7 @@ export class DungeonScene extends Phaser.Scene {
     this.spawnMonsters();
     // now and then the field's jackpot out in the open, to be run down (ui/Runner.ts)
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
+      region: "dungeon",
       back: !!back,
       walls: [DUNGEON_SHRINE_POS],
       exits: [DUNGEON_ENTRY],

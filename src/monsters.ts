@@ -301,7 +301,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     atk: 21,
     def: 4,
     exp: 525,
-    gold: 792,
+    gold: 528,
     rare: true, // volcano jackpot: big payout, not required for collection
     weakness: "ice",
   },

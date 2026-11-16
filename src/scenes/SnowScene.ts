@@ -201,6 +201,7 @@ export class SnowScene extends Phaser.Scene {
     this.spawnMonsters();
     // now and then the field's jackpot out in the open, to be run down (ui/Runner.ts)
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
+      region: "snow",
       back: !!back,
       walls: [SNOW_SHRINE_POS],
       exits: [SNOW_ENTRY],

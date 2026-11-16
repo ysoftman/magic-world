@@ -203,6 +203,7 @@ export class VolcanoScene extends Phaser.Scene {
     // now and then the volcano's jackpot out in the open, to be run down
     // (ui/Runner.ts): the only way a GILDED IMP is met
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
+      region: "volcano",
       back: !!back,
       walls: [VOLCANO_SHRINE_POS],
       exits: [VOLCANO_ENTRY],
