@@ -12,52 +12,48 @@ import { bindKeyHint, keyHint } from "./Gamepad";
 // was. Opened from the menu ("?", or a tap on the hint line's HELP), closed by
 // any key or tap, so it costs a fight nothing unless asked for.
 //
-// Thirteen rows of bodyStyle(22) (14px a glyph, 26px a line): a name padded to
-// NAME_W and its line, the longest row 75 glyphs (touch's LIMIT), 1050px from
-// x 108, in a 1160px panel (x 60..1220, 48px a side). The panel is opaque and
-// runs y 48..596: over the stat windows, both menu rows (to 560) and the hint
-// line (to 586), short of the message box (from 604). Ending at 530 its edge
-// cut through the menu's glyphs. Title at 84, rows 124..462, the close hint
-// at 560. The figures are the rules' own constants, so a retune rewrites its
-// row.
-const PANEL_W = 1160;
-const PANEL_TOP = 48;
-const PANEL_H = 548;
+// Fourteen rows of bodyStyle(22) (14px a glyph) at a 30px pitch (its 26px
+// line and 4 more: set solid, the rows read as one block): a name padded to
+// NAME_W and its line, 60 glyphs a row at most (840px, the dialogue box's
+// measure), from x 220. The panel is opaque and runs x 24..1256, y 16..596:
+// over both stat windows whole (x 32..1248, y 24..200; a narrower one left
+// their borders and the names' tops showing round it), both menu rows (to
+// 560) and the hint line (to 586), short of the message box (from 604).
+// Title at 52, rows 84..504, the close hint at 560. The figures are the
+// rules' own constants, so a retune rewrites its row.
+const PANEL_X = 24;
+const PANEL_TOP = 16;
+const PANEL_W = GAME_WIDTH - PANEL_X * 2;
+const PANEL_H = 580;
 const NAME_W = 10;
+const ROW_GLYPHS = 60;
+const TEXT_X = (GAME_WIDTH - ROW_GLYPHS * 14) / 2;
 const pct = (share: number): string => `${Math.round(share * 100)}%`;
 
 const rows = (): [string, string][] => [
-  [
-    "PARRY",
-    keyHint(
-      `Any key just as a foe's blow lands: it does ${pct(PARRY_MULT)}, no status.`,
-      `Tap just as a foe's blow lands: it does ${pct(PARRY_MULT)}, no status.`,
-    ),
-  ],
+  ["PARRY", keyHint(`Any key as a foe's blow lands: ${pct(PARRY_MULT)} damage.`, `Tap as a foe's blow lands: ${pct(PARRY_MULT)} damage.`)],
   [
     "PERFECT",
     keyHint(
-      `Any key as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)} damage.`,
-      `Tap as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)} damage.`,
+      `Any key as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}.`,
+      `Tap as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}.`,
     ),
   ],
-  ["COMBO", `FIGHTs in a row: +${pct(COMBO_PCT)} each, to +${pct(COMBO_PCT * COMBO_CAP)}. Any other action resets it.`],
+  ["COMBO", `FIGHTs in a row: +${pct(COMBO_PCT)} each, up to +${pct(COMBO_PCT * COMBO_CAP)}.`],
   [
     "LIMIT",
-    keyHint(
-      `The bar under your name. Full, it blinks: L for one x${LIMIT_MULT} blow.`,
-      `The bar under your name. Full, it blinks: tap it for a x${LIMIT_MULT} blow.`,
-    ),
+    keyHint(`The bar under your name. Full: L, a x${LIMIT_MULT} blow.`, `The bar under your name. Full: tap it for x${LIMIT_MULT}.`),
   ],
-  ["DEFEND", `A turn braced: a CHG strike or a blast does ${pct(DEFEND_HEAVY_MULT)} and you COUNTER.`],
-  [">MOVE", "Blinking in the foe's window: the move it uses next turn."],
-  ["CHG", "The foe winds up: its big strike is next turn. DEFEND or WARD."],
-  ["ATK+ DEF+", "The foe's buff. Spells, and a HEAVY sword, go through a DEF+."],
-  ["PSN BRN", "The foe's poison or burn ticks each turn. CHL: its ATK is down."],
-  ["REACTION", "A status reacts and is spent: BRN+ICE, CHL+BOLT, PSN+FIRE."],
-  ["WEAK", "Its weak element (x1.5), shown once you have fought its kind."],
-  ["ELITE", "A coloured name with FIERCE, STURDY or SWIFT: tougher, richer."],
-  ["SWORDS", "Each sword has a nature of its own: read its line in ITEMS."],
+  ["DEFEND", `A CHG strike or a blast does ${pct(DEFEND_HEAVY_MULT)}; you COUNTER.`],
+  [">MOVE", "Blinks in the foe's window: its next move."],
+  ["CHG", "Its big strike is next turn: DEFEND or WARD."],
+  ["ATK+ DEF+", "The foe's buff. Spells go through a DEF+."],
+  ["PSN BRN", "Tick each turn. CHL: the foe's ATK is down."],
+  ["REACTION", "BRN+ICE, CHL+BOLT, PSN+FIRE: the status bursts."],
+  ["WEAK", "Its weak element (x1.5), once you fought one."],
+  ["AMBUSH!", "Touch its back: a free FIGHT. OFF GUARD!: yours."],
+  ["ELITE", "FIERCE, STURDY or SWIFT: tougher, richer loot."],
+  ["SWORDS", "Each has a nature: see its line in ITEMS."],
 ];
 
 export class BattleHelp {
@@ -72,7 +68,7 @@ export class BattleHelp {
       .container(0, 0, [
         gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
         scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 36, "BATTLE HELP", retroStyle(6, "#ffd166")).setOrigin(0.5),
-        bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2 - PANEL_W / 2 + 48, PANEL_TOP + 76, "", bodyStyle(22, "#f5f5f5")), body),
+        bindKeyHint(scene.add.pixelText(TEXT_X, PANEL_TOP + 68, "", bodyStyle(22, "#f5f5f5")).setLineSpacing(4), body),
         bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 36, "", retroStyle(4, "#8ecbff")), () =>
           keyHint("ANY KEY: CLOSE", "TAP: CLOSE"),
         ).setOrigin(0.5),
