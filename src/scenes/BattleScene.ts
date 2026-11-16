@@ -236,6 +236,10 @@ const ORB_START_X = 104;
 // typing alone was 0.75-1.1s of a round's 1.9-2.2s (a 54-glyph row 0.76s).
 const TYPE_MS = 10;
 const TYPE_MIN_MS = 6;
+// the least a line stays before a press moves on, however fast it was shown
+// (say), and what a rushed line of news stays on top of that
+const LINE_MIN_MS = 200;
+const NEWS_HOLD_MS = 350;
 const FREEZE_TINT = 0x67e8f9;
 // a poison tick's purple, filled on the foe and multiplied on the hero, which
 // warmStatuses bakes their poison sheets in ahead
@@ -2069,12 +2073,13 @@ export class BattleScene extends Phaser.Scene {
     if (id === "react" && !this.reacted) return;
     seen.push(id);
     // 52 glyphs
-    if (id === "react") return this.say("TIP: BRN+ice, CHL+bolt, PSN+fire: a status reacts!");
-    if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`);
+    if (id === "react") return this.say("TIP: BRN+ice, CHL+bolt, PSN+fire: a status reacts!", true);
+    if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`, true);
     await this.say(
       id === "parry"
         ? keyHint("TIP: press any key just as a blow lands to PARRY it.", "TIP: tap just as a blow lands to PARRY it.")
         : keyHint("LIMIT is full! L unleashes it now, or save it.", "LIMIT is full! Tap the gauge now, or save it."),
+      true,
     );
   }
 
@@ -3525,7 +3530,7 @@ export class BattleScene extends Phaser.Scene {
     this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
     this.glowBurst.explode(16);
     shake(this.cameras.main, 200, 0.004);
-    await this.say(tell.warn);
+    await this.say(tell.warn, true);
     this.restoreEnemyTint();
   }
 
@@ -3604,7 +3609,7 @@ export class BattleScene extends Phaser.Scene {
     // one heartbeat of rage as it snaps, about the throb's 720ms, its body in
     // the ENRAGE_TINT just put on; the tint and the RAGE tag carry it on
     this.statusOn(this.enemySprite, "rage", 750, STATUS_POP_MIN_MS);
-    await this.say(`${this.enemy.name} is ENRAGED! ATK UP!`);
+    await this.say(`${this.enemy.name} is ENRAGED! ATK UP!`, true);
   }
 
   // A wind-up or enrage throb on the foe, from the size it was made at rather
@@ -4408,7 +4413,7 @@ export class BattleScene extends Phaser.Scene {
         mealHeal > 0 && this.meal && `${this.meal.def.name} +${mealHeal} HP`,
       ];
       const second = finds.filter(Boolean).join("  ");
-      await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`);
+      await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`, true);
       const leveled = settleLevels();
       // a level up keeps a line of its own, the burst and the fanfare with it
       if (leveled) {
@@ -4425,7 +4430,7 @@ export class BattleScene extends Phaser.Scene {
         // a line and a key of its own)
         const perk = perkOpened(leveled.from, leveled.level) ? "  PERK: see the ELDER!" : "";
         const rank = leveled.rank > 0 ? `  RANK #${leveled.rank}!` : "";
-        await this.say(`LEVEL UP! LV ${leveled.level}${rank}${perk}${this.learnedLine(leveled.from)}`);
+        await this.say(`LEVEL UP! LV ${leveled.level}${rank}${perk}${this.learnedLine(leveled.from)}`, true);
       }
       // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
       // pay model has no room for it; its own line, news the payout's page
@@ -4435,9 +4440,9 @@ export class BattleScene extends Phaser.Scene {
       if (!this.abyss && rollTreasureMap(GameState.treasureMaps, GameState.quest)) {
         Sfx.pickup();
         this.fxOn(this.playerSprite, "fx-levelup", 1100);
-        await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.");
+        await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.", true);
       }
-      if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`);
+      if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`, true);
     }
     GameState.save();
     // the forest boss closes the story's first part: the ending's TO BE
@@ -4629,17 +4634,31 @@ export class BattleScene extends Phaser.Scene {
   // A line typed out, then a key or tap to go on (awaitAdvance). One while it
   // still types shows the rest of it at once and is not the one that goes on:
   // a late PARRY or PERFECT press lands here, and must not skip the line of
-  // the blow it missed. The wait for the next starts a frame later, so the
-  // same press can't be it.
-  private say(text: string): Promise<void> {
+  // the blow it missed. But the line then stays as long as its typing would
+  // have taken (LINE_MIN_MS at least) before a press can move on: with the
+  // wait starting a frame after the rush, two presses were a line gone, and
+  // mashed at 130ms a payout was up for 0.22s where its typing had held it
+  // 0.5s. A rushed line of `news` holds NEWS_HOLD_MS more: the payout, a
+  // level, a map, a boss's warning, a tip. A line left to type itself out
+  // moves on at the first press after, as it always did, so who reads loses
+  // no time to this. While it types or holds the hint line is blank, since
+  // no press goes on yet.
+  private say(text: string, news = false): Promise<void> {
     return new Promise((resolve) => {
+      const typed = text.length * this.anim(TYPE_MS, TYPE_MIN_MS);
+      const ready = this.time.now + Math.max(LINE_MIN_MS, typed) + (news ? this.anim(NEWS_HOLD_MS, NEWS_HOLD_MS / 2) : 0);
+      const shown = (rushed = false): void => {
+        stop();
+        const wait = rushed ? ready - this.time.now : 0;
+        if (wait > 1) this.time.delayedCall(wait, () => this.awaitAdvance(resolve));
+        else this.awaitAdvance(resolve);
+      };
       const rush = (): void => {
         if (!this.typing) return;
         this.typing.remove();
         this.typing = undefined;
         this.msgText.reveal(text.length);
-        stop();
-        this.time.delayedCall(1, () => this.awaitAdvance(resolve));
+        shown(true);
       };
       const onKey = (e: KeyboardEvent): void => {
         if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) rush();
@@ -4650,10 +4669,8 @@ export class BattleScene extends Phaser.Scene {
       };
       this.input.keyboard?.on("keydown", onKey);
       this.input.on("pointerdown", rush);
-      this.type(text, () => {
-        stop();
-        this.awaitAdvance(resolve);
-      });
+      this.hintText.setText("");
+      this.type(text, () => shown());
     });
   }
 
