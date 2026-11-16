@@ -59,7 +59,7 @@ INIT_PAD = """(() => {
 })();"""
 
 AUDIT_JS = """() => {
-  const out = { offscreen: [], overlap: [], missing: [], touch: [] };
+  const out = { offscreen: [], overlap: [], missing: [], touch: [], touchMap: [] };
   for (const s of window.__game.scene.getScenes(true)) {
     const cam = s.cameras.main, items = [];
     const walk = (list, vis) => {
@@ -94,6 +94,13 @@ AUDIT_JS = """() => {
           const ix = Math.min(o.x + o.radius, it.x + it.w) - Math.max(o.x - o.radius, it.x);
           const iy = Math.min(o.y + o.radius, it.y + it.h) - Math.max(o.y - o.radius, it.y);
           if (ix > 4 && iy > 4) out.touch.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"`);
+        }
+    // ...and over the map's own tags (not screen-fixed), where the camera is now
+    for (const o of s.children.list)
+      if (o.type === "Arc" && o.depth === 250 && o.visible)
+        for (const it of items.filter((i) => !i.fixed)) {
+          const nx = Math.max(it.x, Math.min(o.x, it.x + it.w)), ny = Math.max(it.y, Math.min(o.y, it.y + it.h));
+          if (Math.hypot(nx - o.x, ny - o.y) < o.radius - 2) out.touchMap.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"`);
         }
   }
   return out;
@@ -203,7 +210,8 @@ class Game:
         return path
 
     def audit(self) -> dict:
-        """screen-fixed text (Text or PixelText) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text.
+        """screen-fixed text (Text or PixelText) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text
+        (touch: fixed text; touchMap: the map's tags at this camera position; sprites such as a shrine's stone are not looked at).
         An opaque panel over the HUD band still lists the HUD texts under it as overlaps: check the screenshot."""
         return self.ev(AUDIT_JS)
 

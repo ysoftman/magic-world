@@ -50,7 +50,7 @@ finally:
 | `scene(key, body)` | `s` = 그 씬(비공개 필드도 그냥 읽힘) |
 | `start(key, data)` | 지금 씬에서 `scene.start`(void, data 기본 `{}`) |
 | `press`·`hold`·`pad(button)`·`teleport` | 키 입력, 가짜 패드 버튼(standard: 0 A, 1 B, 2 X, 3 Y, 8 Select, 9 Start, 12~15 D-pad), 순간이동 |
-| `shot(name)`·`audit()` | 스크린샷, 화면 감사(고정 글자의 화면 이탈·겹침, `__MISSING` 텍스처, 터치 원판과 글자 겹침) |
+| `shot(name)`·`audit()` | 스크린샷, 화면 감사(고정 글자의 화면 이탈·겹침, `__MISSING` 텍스처, 터치 원판과 고정 글자 겹침 `touch`, 지금 카메라 자리에서 원판과 맵 이름표 겹침 `touchMap`). 돌·발판 같은 그림과 다른 카메라 자리는 보지 않는다 |
 | `wait_menu()`·`fight(key)` | 전투 메뉴까지 Z, 메뉴마다 key(기본 A=FIGHT)로 끝까지 |
 | `keydown_counts(scene)` | keydown 3개를 한 번에 보내 씬 리스너가 받은 횟수 — `[1, 1, 1]` 이어야 함 |
 

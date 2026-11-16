@@ -147,13 +147,14 @@ export const SEALS: Record<SealRegion, SealDef> = {
   },
   // The volcano's: the stone above the crater's moat east of the bridge,
   // plate 0 west of the bridge, 1 on the east wall over the vent, 2 between
-  // the western vents.
+  // the western vents (in the crook of the west pool: a cell south-east, at
+  // (4,7), it lay under the touch D-pad on the way in).
   volcano: {
     at: [14, 9],
     plates: [
       [9, 8],
       [22, 5],
-      [4, 7],
+      [3, 6],
     ],
     order: [2, 1, 0],
     riddle: [
