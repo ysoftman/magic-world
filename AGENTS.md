@@ -607,6 +607,25 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 - 돌은 제단 격자(`SHRINE_TILE`)의 붉은 팔레트(`seal`)이고 풀린 뒤에는 `shrine-spent` 다. 발판 그림은 `Seal.ts` 안의
   격자를 `scene` 인자로 굽는다(check:art 대상 아님). 발판 깊이 3.6(바닥 위, glint·별 조각 4.5 아래).
 
+## 바운티의 과제 (`src/bounties.ts`)
+
+BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대신 과제(`DEEDS`: 정예 처치·PARRY·러너 잡기·제단 기도)가
+나온다. `BountyState` 에 `kind`·`snap` 이 붙고(처치 의뢰와 옛 세이브에는 없음) `target` 에는 과제 이름이 들어간다.
+
+- 과제는 이미 있는 카운터로 센다(`GameState.deedCounters()`: `feats.parries`·`feats.eliteWins`, `prayers`,
+  `runnersCaught`). 바운티는 게시될 때의 값(`snap`)을 적고 진행은 그 뒤 늘어난 만큼이다. `have` 는 `syncBounty()` 가
+  저장할 때마다와 게시판이 굴리기 전에 맞춘다. 그래서 `have` 를 읽는 곳(게시판 대화, 일지, 날 넘김 정산, 상한 거부)은
+  처치 의뢰와 같은 코드이고 전투·필드는 바운티를 모른다. 새 과제는 카운터 하나와 `DEEDS` 한 줄이다.
+- 전투 안에서 세야 하는 과제(PERFECT, 원소 반응, LIMIT 마무리)는 아직 없다. 넣으려면 그 카운터를 `feats.ts` 에 두고
+  BattleScene 에서 한 줄로 올린다(PARRY 가 `GameState.feats.parries += 1` 인 것처럼).
+- 글자 폭: 이름은 14글자까지(일지 제목 `BOUNTY: CATCH A RUNNER` 22글자, 한도 23), 일지 힌트는 `힌트 - 9999G` 로 37글자까지
+  (힌트 28글자), 게시판 줄 `BOUNTY: CATCH A RUNNER 0/1` + `REWARD: 9999 GOLD.` 는 터치 한 줄 42글자 안이다.
+- 보상은 `pay` x 바운티 풀 평균 골드 x `BOUNTY_MULT`(처치 의뢰는 평균 4.5마리분)다. 러너는 그날 안 나올 수 있어 가장
+  높고(6), 기도는 제단 골드만 들면 되어 가장 낮다(3). 러너 확률(`Runner.ts`)이나 정예 확률을 바꾸면 다시 본다.
+- 러너 과제는 닿은 순간 센다(전투 결과와 무관, 러너당 한 번). 저장 전에 일지를 열면 `have` 가 한 박자 늦을 수 있다.
+- 별 조각·봉인·상인의 존재는 `unlockTips.ts` 의 두 줄(3승·8승 뒤 마을 토스트)로 알린다. ELDER·HUNTER 대사는 건드리지
+  않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).
+
 ## 작업 완료 후 중간 산출물 정리
 
 - 작업 중 생성한 **중간 산출물**(디버그 스크린샷 png, 검증용 임시 파일, 임시 훅 등)은 작업이 끝나면 반드시 정리한다.

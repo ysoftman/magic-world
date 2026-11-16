@@ -157,6 +157,8 @@ export class Shrine {
     lines.push(`Offer ${cost} G?`);
     this.dialogue.ask(lines, "SHRINE", ["YES", "NO"], (i) => {
       if (i !== 0 || !pray(GameState, this.region, key, econDay())) return;
+      // the BOUNTY BOARD's SHRINE PRAYER counts these (bounties.ts)
+      GameState.prayers += 1;
       Sfx.ward();
       this.light();
       // news (the "!"): it waits for the box to close; before the save, so

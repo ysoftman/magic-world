@@ -70,6 +70,12 @@ export const UNLOCK_TIPS: UnlockTip[] = [
     },
     when: () => !GameState.meal && Object.values(GameState.pantry).some((n) => n > 0),
   },
+  // What the fields hold besides fights, which nothing in town says: told
+  // once the first fights are won, a walk back apart so the two don't come
+  // as one burst. The quest journal counts the shards and the seals and
+  // names the PEDDLER's field (ui/QuestLog.ts). 42 and 43 glyphs.
+  { id: "fields", place: "town", text: "STAR SHARDS AND SEALS HIDE IN EVERY FIELD!", when: () => GameState.battles >= 3 },
+  { id: "peddler", place: "town", text: "A PEDDLER ROAMS THE FIELDS: SEE THE JOURNAL!", when: () => GameState.battles >= 8 },
   { id: "rain", place: "town", text: "RAINY DAY: FISH BITE FASTER, CROPS PAY MORE!", when: () => isWet(weatherToday("town")) },
   { id: "blizzard", place: "snow", text: "BLIZZARD: THE ICE HOLE BITES SLOWER!", when: () => weatherToday("snow") === "blizzard" },
 ];

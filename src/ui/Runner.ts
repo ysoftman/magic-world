@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { GameState } from "../gameState";
 import { type MonsterZone, TILE } from "../levels";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import { hop, isWalkableCell } from "../sceneCommon";
@@ -106,6 +107,7 @@ export class FieldRunner {
   private alarmed = false;
   private fleeMs = 0;
   private gone = false;
+  private tagged = false;
 
   /** A runner drawn as `texture`, by its field's odds and if the field has a place for one; else null. */
   static roll(
@@ -164,7 +166,14 @@ export class FieldRunner {
     this.sprite.body?.setSize(40, 24).setOffset(12, 32);
     hop(scene, this.sprite);
     scene.physics.add.overlap(hero, this.sprite, () => {
-      if (!this.gone && !this.paused()) opts.caught();
+      if (this.gone || this.paused()) return;
+      // run down: the BOUNTY BOARD's CATCH A RUNNER counts it (bounties.ts),
+      // once, whatever becomes of the fight
+      if (!this.tagged) {
+        this.tagged = true;
+        GameState.runnersCaught += 1;
+      }
+      opts.caught();
     });
     const onUpdate = (_time: number, delta: number): void => this.step(delta);
     scene.events.on(Phaser.Scenes.Events.UPDATE, onUpdate);

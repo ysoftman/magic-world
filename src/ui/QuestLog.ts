@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { DEEDS } from "../bounties";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { canDeliver, deliveryReward, materialName, todaysDelivery } from "../delivery";
 import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
@@ -152,7 +153,8 @@ function objectives(): Objective[] {
       ready: b.have >= b.need,
       progress: count(b.have, b.need),
       giver: "BOUNTY BOARD",
-      hint: `REWARD ${b.reward}G - TODAY ONLY`,
+      // a deed's line says how (bounties.ts), a kill bounty's that it is the day's
+      hint: b.kind ? `${DEEDS[b.kind].hint} - ${b.reward}G` : `REWARD ${b.reward}G - TODAY ONLY`,
     });
   }
   // today's request even before the board is read: todaysDelivery() works it

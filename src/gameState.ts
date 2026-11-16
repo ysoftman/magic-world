@@ -1,4 +1,5 @@
 import { ABYSS_FLOOR_MAX } from "./abyss";
+import { type BountyKind, DEEDS, type DeedCounters, deedProgress, isBountyKind, rollDeed } from "./bounties";
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
 import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
@@ -377,6 +378,12 @@ export interface BountyState {
   reward: number;
   day: number; // econDay() at roll time — compared to detect a new day
   claimed: boolean;
+  // a deed rather than kills (bounties.ts): which, and its counter as the
+  // bounty was posted. `target` is then the deed's label and `have` is kept
+  // up from the counter (syncBounty). Absent on a kill bounty, and on every
+  // bounty saved before the deeds.
+  kind?: BountyKind;
+  snap?: number;
 }
 
 // the townsfolk's favor chains (favors.ts): per villager, how many steps are
@@ -701,6 +708,10 @@ export const GameState = {
   // companionBondBonus
   companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
+  // the BOUNTY BOARD's deed counters the game kept nowhere else (bounties.ts):
+  // shrine offerings made and runners run down
+  prayers: 0,
+  runnersCaught: 0,
   // each field's seal: broken ("open") or its keeper felled ("done") (seals.ts)
   seals: {} as SealState,
   // what was bought of the PEDDLER's two offers, and on which day (peddler.ts)
@@ -880,7 +891,25 @@ export const GameState = {
   // visit; no partial credit or streak carries over, same as every other
   // day-based gate in this game (day/night, NIGHT WISP) just reflecting
   // current state
+  // what the deeds count by (bounties.ts)
+  deedCounters(): DeedCounters {
+    return {
+      parries: this.feats.parries,
+      eliteWins: this.feats.eliteWins,
+      prayers: this.prayers,
+      runnersCaught: this.runnersCaught,
+      battles: this.battles,
+    };
+  },
+  // A deed bounty's `have` brought up to its counter. Run by every save and
+  // before the board rolls, so whoever reads `have` (the board, the journal,
+  // the day's turn) reads it as a kill bounty's.
+  syncBounty(): void {
+    const b = this.bounty;
+    if (b && isBountyKind(b.kind) && !b.claimed) b.have = deedProgress(b.kind, b.snap ?? 0, this.deedCounters());
+  },
   rollBountyIfStale(): void {
+    this.syncBounty();
     if (this.bounty && this.bounty.day === econDay()) return;
     // a finished-but-unclaimed bounty still gets paid before it's discarded —
     // "no partial credit" is meant for unfinished progress, not for silently
@@ -902,6 +931,21 @@ export const GameState = {
     // today's claimed one on top, so the trophy lands at the board)
     if (this.bounty && (this.bounty.claimed || this.bounty.have >= this.bounty.need)) this.bountiesDone += 1;
     const pool = this.bountyPool();
+    const deed = rollDeed(this.deedCounters());
+    if (deed) {
+      const avg = pool.reduce((sum, e) => sum + e.gold, 0) / pool.length;
+      this.bounty = {
+        target: DEEDS[deed.kind].label,
+        need: deed.need,
+        have: 0,
+        reward: Math.round(DEEDS[deed.kind].pay * avg * BOUNTY_MULT),
+        day: econDay(),
+        claimed: false,
+        kind: deed.kind,
+        snap: deed.snap,
+      };
+      return;
+    }
     const target = pool[Math.floor(Math.random() * pool.length)];
     const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive
     this.bounty = {
@@ -1142,6 +1186,8 @@ export const GameState = {
     this.openedTreasures = [];
     this.shards = [];
     this.seals = {};
+    this.prayers = 0;
+    this.runnersCaught = 0;
     this.peddler = null;
     this.quest = {
       slimes: 0,
@@ -1201,6 +1247,7 @@ export const GameState = {
   // thrown at the caller — the game carries on from memory and onSaveFailed
   // listeners tell the player; the slot keeps its last good save
   save(): boolean {
+    this.syncBounty();
     try {
       localStorage.setItem(
         slotKey(this.saveSlot),
@@ -1246,6 +1293,8 @@ export const GameState = {
           openedTreasures: this.openedTreasures,
           shards: this.shards,
           seals: this.seals,
+          prayers: this.prayers,
+          runnersCaught: this.runnersCaught,
           peddler: this.peddler,
           quest: this.quest,
           bounty: this.bounty,
@@ -1378,6 +1427,8 @@ export const GameState = {
       this.shards = loadShards(data.shards);
       // every seal shut on saves from before them
       this.seals = loadSeals(data.seals);
+      this.prayers = Number.isInteger(data.prayers) && data.prayers > 0 ? data.prayers : 0;
+      this.runnersCaught = Number.isInteger(data.runnersCaught) && data.runnersCaught > 0 ? data.runnersCaught : 0;
       // nothing bought on saves from before the PEDDLER
       this.peddler = loadPeddler(data.peddler);
       Object.assign(this.quest, data.quest);
@@ -1397,6 +1448,8 @@ export const GameState = {
       this.quest.fireCaughtAtAccept = data.quest?.fireCaughtAtAccept ?? 0;
       this.quest.hunterFireReward = data.quest?.hunterFireReward ?? false;
       this.bounty = data.bounty ?? null;
+      // a deed the game no longer knows is dropped, and the board posts anew
+      if (this.bounty?.kind !== undefined && !isBountyKind(this.bounty.kind)) this.bounty = null;
       // none on saves from before deliveries; anything malformed is dropped
       // and today's is simply rolled again at the board
       const d = data.delivery;

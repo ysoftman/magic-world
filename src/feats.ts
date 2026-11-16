@@ -13,12 +13,14 @@ export interface Feats {
   limitFinishes: number;
   // the elite kinds beaten or caught, each once
   elites: EliteKind[];
+  // ...and every elite beaten or caught (the BOUNTY BOARD's count, bounties.ts)
+  eliteWins: number;
   // the most relic stacks held at once in a dive
   relicBest: number;
   cursedOpened: number;
 }
 
-export const noFeats = (): Feats => ({ parries: 0, limitFinishes: 0, elites: [], relicBest: 0, cursedOpened: 0 });
+export const noFeats = (): Feats => ({ parries: 0, limitFinishes: 0, elites: [], eliteWins: 0, relicBest: 0, cursedOpened: 0 });
 
 const count = (v: unknown): number => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : 0);
 
@@ -29,6 +31,7 @@ export function loadFeats(data: unknown): Feats {
     parries: count(raw.parries),
     limitFinishes: count(raw.limitFinishes),
     elites: kinds.filter((k) => Array.isArray(raw.elites) && raw.elites.includes(k)),
+    eliteWins: count(raw.eliteWins),
     relicBest: count(raw.relicBest),
     cursedOpened: count(raw.cursedOpened),
   };
@@ -37,5 +40,6 @@ export function loadFeats(data: unknown): Feats {
 /** A won (or caught) fight: the elite it was, and a boss or giant a LIMIT BREAK finished. */
 export function noteWin(feats: Feats, elite: EliteKind | null, limitFinish: boolean): void {
   if (elite && !feats.elites.includes(elite)) feats.elites.push(elite);
+  if (elite) feats.eliteWins += 1;
   if (limitFinish) feats.limitFinishes += 1;
 }
