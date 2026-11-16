@@ -2859,11 +2859,13 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  // the turn spent bracing for the enemy's next hit (guardHit), which
-  // answers a wind-up's CHG before WARD; it breaks the combo as any
-  // non-attack does
+  // The turn spent bracing for the enemy's next hit (guardHit), which
+  // answers a wind-up's CHG before WARD. It holds the combo where it is: a
+  // brace is part of the bout's rhythm, FIGHT, FIGHT, brace, COUNTER, and
+  // breaking the combo on it made answering a boss's CHG cost every FIGHT
+  // after it up to 80% of its damage (alone, the fight ran longer for
+  // defending well).
   private async defend(): Promise<void> {
-    this.resetCombo();
     this.defending = true;
     Sfx.ward();
     this.flashStatus("DEFEND", "#e2e8f0");

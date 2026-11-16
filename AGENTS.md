@@ -484,7 +484,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   세 가정(새 요소 없음 / `--parry 0.4 --perfect 0.4 --limit 50` + 그 레벨 특성 / 0.8·100)과 대응 세 단계(`--nobrace` 아무것도
   안 막음 / 기본: CHG 만 막음 / `--brace`: blast 도 막음)를 같이 재고, 기본 가정의 솔로+의도 장비 승률 95% 이상을 지킨다(지금
   95~100%). DEFEND 는 예고된 큰 한 방(`guardHit` 의 `heavy`: CHG 강타와 blast)을 x0.5 로 받고 COUNTER(`counter()`, 턴을 안 쓰는
-  `playerAttack`)로 되받는다. 실제 사례: x0.7 뿐일 때는 예고에 DEFEND 하는 쪽이 잃는 HP 가 더 많았다(KING 솔로 110% 대 85%,
+  `playerAttack`)로 되받는다. DEFEND 는 콤보를 끊지 않는다(`defend()` 에 `resetCombo` 없음, sim 도 같다): 끊던 때는 CHG 를 막을 때마다 그 뒤 FIGHT 가 최대 80% 를 잃어 잘 막을수록 전투가 길어졌다(솔로 KING SLIME 8.6 → 7.5 라운드, 예고를 다 막는 가정의 MOSS GOLEM 9.2 → 7.5). 실제 사례: x0.7 뿐일 때는 예고에 DEFEND 하는 쪽이 잃는 HP 가 더 많았다(KING 솔로 110% 대 85%,
   턴 하나가 일격 하나만큼 전투를 늘린다). "다음 FIGHT x2" 도 시험했지만 MP 가 있는 영웅은 주문 한 번을 포기하는 셈이라
   이득이 없었다. 새 예고 공격을 넣으면 PARRY 가 되는 일격인지(`enemyBlow`), DEFEND 로 받는 큰 한 방인지(`heavy`) 둘 중
   하나로 정한다. COUNTER 가 적을 쓰러뜨릴 수 있어 `runBattle` 은 적 턴 뒤에도 승리를 본다. 보스 기술 이름은 도감 CAN 줄에 넣지

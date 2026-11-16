@@ -799,7 +799,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         limitDmg += dmg;
         foe.curHp -= dmg;
       } else if (action.kind === "defend") {
-        combo = 0;
+        // BattleScene defend(): the combo holds
         defending = true;
       } else if (action.kind === "hiPotion") {
         combo = 0;
