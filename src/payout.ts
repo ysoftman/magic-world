@@ -11,6 +11,7 @@ import { ELITE_DROP_MULT, type EliteKind } from "./elite";
 import { noteWin } from "./feats";
 import { expToNext, GameState } from "./gameState";
 import { ENEMIES, type EnemyDef } from "./monsters";
+import { omenGold } from "./omen";
 import { recordRank } from "./ranking";
 import { relicWinHeal } from "./relics";
 import type { BlessingDef } from "./shrine";
@@ -89,7 +90,10 @@ export function settleWin(win: Win, rand: () => number = Math.random): Payout {
   const streakPct = GameState.streak >= STREAK_MIN && !win.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
   const streakBonus = cut(Math.floor(enemy.gold * streakPct));
   // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
-  const mealGold = win.rematch ? 0 : (meal?.effect.gold ?? 0) + (blessing?.effect.gold ?? 0) + GameState.perk("trade");
+  // ...and so does the field's GOLD RUSH (omen.ts), never the ABYSS's fights
+  const mealGold = win.rematch
+    ? 0
+    : (meal?.effect.gold ?? 0) + (blessing?.effect.gold ?? 0) + GameState.perk("trade") + (win.abyss ? 0 : omenGold());
   const gold = GameState.gainGold(Math.round((cut(enemy.gold) + streakBonus) * (1 + mealGold)));
   GameState.battles += 1;
   // nothing fought in the ABYSS counts toward a quest, the bounty or a

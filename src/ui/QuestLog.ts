@@ -6,6 +6,7 @@ import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
 import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
+import { OMEN_REGION_NAMES, OMENS, omenOn } from "../omen";
 import { PEDDLER_REGION_NAMES, peddlerRegion } from "../peddler";
 import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
@@ -235,6 +236,7 @@ export class QuestLog {
   private perks: PixelText;
   private stars: PixelText;
   private peddler: PixelText;
+  private omen: PixelText;
   private activeRows: ActiveRow[] = [];
   private doneRows: PixelText[] = [];
   private closeQueued = false;
@@ -281,8 +283,12 @@ export class QuestLog {
     // Where the PEDDLER is today (peddler.ts), left of the title on its
     // line, two rows of retroStyle(4): "PEDDLER TODAY" 208px (x 84..292, 28px
     // short of the replay title's left end, 320) over the field's name, y
-    // 26..42 and 46..62, clear of the perks' line (from 66)
-    this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 26, "", retroStyle(4, "#4fd1c0")).setLineSpacing(4);
+    // 10..26 and 30..46, and under them the day's omen and its field (omen.ts),
+    // "GOLD: VOLCANO" 13 glyphs, y 50..66: all three over the perks' line
+    // (from 66, which reaches x 272 at its longest). At 26 the two rows ended
+    // at 62 and a third would have sat in the perks' row.
+    this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 10, "", retroStyle(4, "#4fd1c0")).setLineSpacing(4);
+    this.omen = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 50, "", retroStyle(4, "#fbbf24"));
 
     this.hudCover = hudRow2Cover(scene).setVisible(true);
     this.root = scene.add
@@ -295,6 +301,7 @@ export class QuestLog {
         this.perks,
         this.stars,
         this.peddler,
+        this.omen,
         text(ACTIVE_X, HEADER_Y, 6, HINT_COLOR, "IN PROGRESS"),
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
@@ -354,7 +361,9 @@ export class QuestLog {
     this.stars.setText(
       `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nC${found("dungeon")} F${found("forest")} S${found("snow")} V${found("volcano")}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`,
     );
+    const omen = omenOn(econDay(), GameState.quest);
     this.peddler.setText(`PEDDLER TODAY\n${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
+    this.omen.setText(`${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}`);
     const taken = GameState.perks;
     this.perks
       .setText(

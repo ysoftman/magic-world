@@ -5,7 +5,7 @@ import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { SKILLS, type Skill } from "./battleRules";
 import { GAME_WIDTH } from "./config";
-import type { EliteKind } from "./elite";
+import { type EliteKind, rollElite } from "./elite";
 import { playFx, warmFx } from "./fx";
 import { econDay, GameState, onSaved } from "./gameState";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./levels";
 import { ENEMIES } from "./monsters";
 import { nestOpen } from "./nest";
+import { enterField, leaveFields, OMEN_REGION_NAMES, OMENS, omenEliteExtra, omenHere, omenOn } from "./omen";
 import { meet, overrunLines, settleOverrun } from "./overrun";
 import { peddlerRegion, peddlerSold } from "./peddler";
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
@@ -957,6 +958,10 @@ export function boundCameraToMap(scene: Phaser.Scene, w: number, h: number, touc
 export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText, region?: ShardRegion): void {
   title.setStroke("#1a1028", 4);
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
+  // the field's omen, if today's lies here (omen.ts): held from this walk in,
+  // and said once in a toast as the title shows
+  const omen = region ? enterField(region, econDay(), GameState.quest) : null;
+  if (omen) showToast(scene, `${OMENS[omen].name}: ${OMENS[omen].says}!`, FIELD_TOAST_Y);
   const left = region ? areaLeft(region) : "";
   if (!left) return;
   const line = scene.add
@@ -989,8 +994,8 @@ export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText, region?: Sh
 
 // Under the title, its weather caption (y 144..164) and the toast line (y
 // 176..196, lower when it wraps): what this field still holds today, so a walk in says what there
-// is to do besides fight. Its widest, every part left, is 42 glyphs: 672px
-// at retroStyle(4), x 304..976.
+// is to do besides fight. Its widest, every part left under an omen, is 54
+// glyphs: 864px at retroStyle(4), x 208..1072.
 const AREA_LEFT_Y = STATUS_HUD_HEIGHT + 128;
 
 // the scene's toast (pixelart.ts showToast, "__toast") is up and reaches down to `y`
@@ -1001,7 +1006,8 @@ function toastOver(scene: Phaser.Scene, y: number): boolean {
 
 /**
  * What `region` still has for the hero today, as the line under its title:
- * "STARS 1/3   SEAL   SHRINE   NEST   PEDDLER", each part only while it is
+ * "GOLD RUSH   STARS 1/3   SEAL   SHRINE   NEST   PEDDLER", the day's omen
+ * if it lies here (omen.ts) and then each part only while it is
  * left (a shard unfound, the seal's keeper unbeaten, the shrine not prayed at
  * today, the nest not gone into today and open to this hero, the PEDDLER here
  * with something unsold), "" when nothing is. The shards,
@@ -1012,7 +1018,9 @@ function toastOver(scene: Phaser.Scene, y: number): boolean {
 export function areaLeft(region: ShardRegion): string {
   const told = (tip: string): boolean => GameState.seenTips?.includes(tip) ?? true;
   const day = econDay();
-  const parts: string[] = [];
+  // the omen first, by its name: fadeAreaTitle has just entered the field
+  const omen = omenHere();
+  const parts: string[] = omen ? [OMENS[omen].name] : [];
   if (told("fields")) {
     const stars = shardsFound(GameState.shards, region);
     if (stars < SHARDS_PER_REGION) parts.push(`STARS ${stars}/${SHARDS_PER_REGION}`);
@@ -1502,6 +1510,9 @@ const sinceClaim = new WeakMap<Phaser.Scene, number>();
  * scene's SHUTDOWN save, or that save would toast on a scene tearing down,
  * and SHUTDOWN listeners run in the order they were added.
  */
+// the day whose omen the town has told (FieldToasts), this session
+let omenToldDay = -1;
+
 export class FieldToasts {
   private quiet = false;
   private readonly scene: Phaser.Scene;
@@ -1522,6 +1533,9 @@ export class FieldToasts {
     this.toastY = toastY;
     this.tip = tip;
     this.blocked = blocked;
+    // the town: no field's omen holds here (omen.ts), and the day's is told
+    // once, by update()
+    if (tip === "town") leaveFields();
     const unsubscribe = onSaved(() => {
       if (!this.quiet && !savedHeld()) showToast(scene, "SAVED", toastY);
     });
@@ -1548,6 +1562,13 @@ export class FieldToasts {
     sinceClaim.set(this.scene, 0);
     const earned = claimAchievements();
     const tipped = this.tip !== undefined && showUnlockTip(this.scene, this.tip, this.toastY);
+    // today's omen (omen.ts), once a day's stay in the town and after any tip
+    // of this claim: "TODAY: GOLD RUSH OVER THE VOLCANO!" 34 glyphs
+    if (this.tip === "town" && !tipped && omenToldDay !== econDay()) {
+      omenToldDay = econDay();
+      const omen = omenOn(omenToldDay, GameState.quest);
+      showToast(this.scene, `TODAY: ${OMENS[omen.kind].name} OVER THE ${OMEN_REGION_NAMES[omen.region]}!`, this.toastY);
+    }
     if (tipped || earned.length > 0) this.quietSave();
     // showToast keeps one line per scene, so several earned in the same
     // claim (an 8-hit combo that also fells a boss) go in one toast
@@ -1629,6 +1650,19 @@ export function meetFoe(
   hero: Phaser.Physics.Arcade.Sprite,
   roamers: Roamer[],
 ): EliteKind | null | "overrun" {
+  // WILD HUNT (omen.ts): one roll more for an elite, by rollElite's own
+  // rules but for its chance (the first number it draws is given as 0); an
+  // elite is never overrun, so it goes straight to its fight
+  if (Math.random() < omenEliteExtra()) {
+    const draws = [0];
+    const rand = (): number => draws.pop() ?? Math.random();
+    const forced = rollElite(
+      ENEMIES[kind] ?? ENEMIES.slime,
+      { arena: false, practice: false, abyss: false, battles: GameState.battles },
+      rand,
+    );
+    if (forced) return forced;
+  }
   const met = meet(kind, GameState.overrun);
   if (!met.overrun) return met.elite;
   const result = settleOverrun(met.enemy);

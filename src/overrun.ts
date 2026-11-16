@@ -31,6 +31,11 @@
 // - a TREASURE MAP: at OVERRUN_SHARE of its chance;
 // - the meal's and the blessing's charge: not spent, and their gold, EXP,
 //   drops and heal not paid (their ATK does count toward the test);
+// - a GOLD RUSH over the field (omen.ts): its +30% on the share's gold, as
+//   TRADE's is (settleWin's own sum; the omen is the field's, not a charge);
+//   a WILD HUNT's extra elite roll is made before the meeting is judged
+//   (sceneCommon meetFoe), so that day's elites come three times as often
+//   here too;
 // - the +5 HP / +2 MP a won fight rests, MEND, CALM, the LIMIT gauge, the
 //   companion's bond: nothing, no fight was fought.
 //

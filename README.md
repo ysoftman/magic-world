@@ -218,6 +218,7 @@
   | 숲   | ZIRR THE SWIFT (SWIFT SILVER WASP)    | HP x2.5, ATK x1.3           | 300  |
   | 설원 | YSKA THE PALE (STURDY AURORA MOTH)    | HP x2, ATK x1.25            | 600  |
   | 화산 | MOLG THE GILDED (FIERCE GILDED IMP)   | HP x1.5, ATK x1.15          | 900  |
+- 오늘의 이변: 날마다 열린 필드 한 곳에 이변 하나가 걸린다. GOLD RUSH 는 그 필드 전투의 골드 +30%, WILD HUNT 는 그 필드 일반 전투의 정예 확률 3배(8% → 24%). 마을에 들어서면 토스트로(`TODAY: GOLD RUSH OVER THE VOLCANO!`), 퀘스트 일지(U) 왼쪽 위 셋째 줄(`GOLD: VOLCANO`)과 그 필드의 지역 제목 아래 줄로 알려 준다. 필드에 들어선 날의 이변이 마을에 돌아올 때까지 유지된다
 - 기습: 필드와 마을에서 돌아다니는 몬스터와 어떻게 닿았는지가 전투의 첫 일격을 정한다. 나에게서 멀어지는 몬스터를 뒤에서 따라가 닿으면 `AMBUSH!` 로 FIGHT 한 번을 먼저 넣고(PERFECT 가능), 등을 보인 채(마지막으로 걸은 방향의 반대쪽에서) 닿이면 `OFF GUARD!` 로 적이 한 번 먼저 친다(PARRY 가능). 정면·옆에서 만나거나 서 있는 몬스터, 보스·거인, 풀밭의 무작위 조우, 러너·봉인·둥지는 평소대로다
 - 둥지(NEST): 동굴·숲·설원·화산에 하나씩 있는 굴에서 Z 로 3연전에 들어간다(5승 뒤부터, 둥지마다 하루 한 번, 들어가는 순간 그날을 쓴다). 사이에 쉬는 틈 없이 이길 때마다 계속할지(ON) 물러날지(LEAVE)만 묻는다. 셋 다 이기면 골드와 그 지역 소재 3개, 물러나거나 도망치면 그때까지의 골드만, 쓰러지면 평소 패배다. 세 적(NEST SENTRY → NEST GUARD → NEST MOTHER)은 이름 붙은 정예라 정예 골드·EXP 를 주고 정예 처치로도 센다. 전투로 꺼지던 봉인 발판과 달리 연전은 도중에 필드를 나가면 끝난다
 
@@ -239,7 +240,7 @@
   | REACTIONS      | 원소 반응 2~3번(Lv4 부터 나옴)          | 6    |
   | LIMIT FINISH   | LIMIT BREAK 로 적 1마리 마무리(5승 뒤)  | 4.5  |
 - 3승·8승 뒤 마을에서 한 번씩 토스트로 알려 준다: `STAR SHARDS AND SEALS HIDE IN EVERY FIELD!`, `A PEDDLER ROAMS THE FIELDS: SEE THE JOURNAL!`
-- 동굴·숲·설원·화산에 들어서면 지역 제목 아래에 그 지역에 오늘 남은 것이 한 줄로 뜬다(예: `STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`: 못 찾은 별 조각, 안 푼 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지, 오늘 거기 서 있는 상인). 다 했으면 줄이 없고, 별 조각·봉인·상인은 위 토스트가 나온 뒤부터 나온다
+- 동굴·숲·설원·화산에 들어서면 지역 제목 아래에 그 지역에 오늘 남은 것이 한 줄로 뜬다(예: `GOLD RUSH   STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`: 그날 이변이 걸린 필드면 그 이름, 못 찾은 별 조각, 안 푼 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지, 오늘 거기 서 있는 상인). 다 했으면 줄이 없고, 별 조각·봉인·상인은 위 토스트가 나온 뒤부터 나온다
 - 업적(A), 도감(B): 도감은 본/잡은 몬스터와 약점(WEAK)·능력(CAN: 독·빙결·재생·격노)을 보여 주고, 잡을 수 있는 13종 중 잡은 종 20%마다 ATK/DEF +1(최대 +5). 희귀 몬스터(GOLDEN SLIME·CURSED GOBLIN·NIGHT WISP·SILVER WASP·AURORA MOTH·GILDED IMP)와 보스는 13종에 들지 않아 세지 않는다. 희귀 몬스터는 골드·EXP 가 크고(SILVER WASP·AURORA MOTH 는 숲·설원에서 같은 계열 몬스터 대신 3.5% 로 나오며 그 지역 소재 2개를 꼭 남긴다), CANDY 로 잡을 수는 있지만 도감 완성에는 필요 없다. HUD 의 CAUGHT 도 이 13종 중 잡은 종 수다
 - 업적은 48개다. 새 전투 요소의 업적: QUICK HANDS·UNTOUCHABLE(PARRY 10·100번), FINISHER(보스나 거인을 LIMIT BREAK 로 마무리), ELITE HUNTER(정예 세 종류 모두 처치), PILGRIM(네 제단 모두에 봉헌), RELIC HOARDER(한 다이브에 유물 6개), CURSE BREAKER(저주받은 상자 열기), WELL ROUNDED(특성 7단계 모두). PARRY 와 가득 찬 LIMIT 게이지는 처음 한 번 전투 메시지로 설명한다
 - 업적이 10·20·30·38개가 되면 영웅 외형 TEAL·CRIMSON·NIGHT·GOLD 가 차례로 열린다(토스트 "NEW LOOK UNLOCKED: TRY IT ON AT HOME!", 업적 창 아래에 다음 외형까지의 NEXT LOOK 줄). 업적은 세이브마다 따로라 새 게임은 기본 4종(BLUE·RED·GREEN·VIOLET)부터고, HARD MODE 는 업적과 함께 이어진다
