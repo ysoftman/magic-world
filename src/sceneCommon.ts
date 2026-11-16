@@ -646,6 +646,11 @@ export class HeroWalk implements WarpWalker {
     return moving;
   }
 
+  /** The way the hero looks: the way it last walked. */
+  faces(): LastMove {
+    return this.facing;
+  }
+
   /** Stopped where it stands, its walk cycle frozen: under a panel, a talk or the help. */
   halt(): void {
     this.hero.setVelocity(0, 0);
@@ -1191,6 +1196,45 @@ export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
     s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
     s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
   }
+}
+
+// FIRST STRIKE: who gets a blow in before the battle's first turn, by how a
+// roamer and the hero meet. The fights met most often had nothing to decide
+// before the menu; this is the walk up to them.
+// - "hero": the hero walks into a roamer that is walking away from it. The
+//   battle opens on a free FIGHT.
+// - "foe": the roamer reaches a hero whose back is to it (looking away, as it
+//   last walked: stood still or walking off). The foe opens with one blow.
+// - null: face to face, from the side, or a roamer stood still met head on.
+// A roamer has no drawn facing (most are front-on art, and a flip would not
+// show), so its back is where it is walking from: what the player reads is
+// "it is going away from me". Both tests are a 60-degree cone either side
+// (FIRST_STRIKE_COS), wide enough to be meant and narrow enough that a
+// side-swipe is neither. A boss or a giant is never surprised and never
+// surprises; the grass's random fights, the runners, the seals' keepers and
+// the nests have no walk-up and pass none. An OVERRUN comes first (meetFoe):
+// a foe that falls in the field has no battle to open.
+export type Opening = "hero" | "foe";
+const FIRST_STRIKE_COS = 0.5;
+const FACING: Record<LastMove, readonly [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
+
+/** Who opens the fight `roamer` and the hero are starting (the roamers' overlap), or null. */
+export function firstStrike(walk: HeroWalk, roamer: Roamer): Opening | null {
+  const def = ENEMIES[roamer.kind];
+  if (!def || def.boss || def.giant) return null;
+  const dx = roamer.sprite.x - walk.hero.x;
+  const dy = roamer.sprite.y - walk.hero.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist === 0) return null;
+  const [fx, fy] = FACING[walk.faces()];
+  // 1 when the hero looks straight at the roamer, -1 with its back to it
+  const looking = (fx * dx + fy * dy) / dist;
+  if (looking <= -FIRST_STRIKE_COS) return "foe";
+  const v = roamer.sprite.body?.velocity;
+  const speed = v ? Math.hypot(v.x, v.y) : 0;
+  // 1 when the roamer walks straight away from the hero
+  const leaving = v && speed > 1 ? (v.x * dx + v.y * dy) / (speed * dist) : 0;
+  return looking >= FIRST_STRIKE_COS && leaving >= FIRST_STRIKE_COS ? "hero" : null;
 }
 
 /** The keys every map scene reads alike, besides walking (FieldKeys). */

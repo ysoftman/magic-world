@@ -38,10 +38,12 @@ import {
   FieldPanels,
   FieldToasts,
   fadeAreaTitle,
+  firstStrike,
   HeroWalk,
   isWalkableCell,
   meetFoe,
   noteFightSpot,
+  type Opening,
   type Roamer,
   saveAndQuit,
   saveOnShutdown,
@@ -251,7 +253,8 @@ export class DungeonScene extends Phaser.Scene {
       const r = cursed ?? this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
-      this.startBattle(r?.kind ?? "slime");
+      // who gets the first blow in, by how the two met (sceneCommon firstStrike)
+      this.startBattle(r?.kind ?? "slime", undefined, r ? firstStrike(this.walk, r) : null);
     });
 
     const exit = this.add.zone(DUNGEON_ENTRY.x, DUNGEON_ENTRY.y, TILE * 2, TILE * 2);
@@ -625,7 +628,7 @@ export class DungeonScene extends Phaser.Scene {
 
   // True when the fight begins; false when a fade is already under way or the
   // grace after a find or a fight still holds (then nothing happens).
-  private startBattle(enemy?: CaveKind, keeper?: KeeperBout): boolean {
+  private startBattle(enemy?: CaveKind, keeper?: KeeperBout, opening: Opening | null = null): boolean {
     // A fade out either way is a scene change: a battle rolled while the exit
     // or the ABYSS stair fades (no safe radius round the stair), or that stair
     // reached while a battle fades, started both scenes at once.
@@ -644,7 +647,7 @@ export class DungeonScene extends Phaser.Scene {
     this.exitingDungeon = true;
     encounterOut(this.cameras.main, 300, () => {
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("dungeon") });
-      this.scene.start("Battle", { enemy: kind, from: "Dungeon", keeper, elite: met });
+      this.scene.start("Battle", { enemy: kind, from: "Dungeon", keeper, elite: met, opening });
     });
     return true;
   }

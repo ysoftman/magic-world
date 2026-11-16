@@ -33,10 +33,12 @@ import {
   FieldPanels,
   FieldToasts,
   fadeAreaTitle,
+  firstStrike,
   HeroWalk,
   isWalkableCell,
   meetFoe,
   noteFightSpot,
+  type Opening,
   type Roamer,
   saveAndQuit,
   saveOnShutdown,
@@ -234,7 +236,8 @@ export class VolcanoScene extends Phaser.Scene {
       const r = this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for the boss
       // enemy; playing it here too would sound it twice.
-      this.startBattle(r?.kind ?? "magmaSlime");
+      // who gets the first blow in, by how the two met (sceneCommon firstStrike)
+      this.startBattle(r?.kind ?? "magmaSlime", undefined, r ? firstStrike(this.walk, r) : null);
     });
 
     const exit = this.add.zone(VOLCANO_ENTRY.x, VOLCANO_ENTRY.y, TILE * 2, TILE * 2);
@@ -516,7 +519,7 @@ export class VolcanoScene extends Phaser.Scene {
 
   // True when the fight begins; false when a fade is already under way or the
   // grace after a find or a fight still holds (then nothing happens).
-  private startBattle(enemy?: VolcanoKind, keeper?: KeeperBout): boolean {
+  private startBattle(enemy?: VolcanoKind, keeper?: KeeperBout, opening: Opening | null = null): boolean {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
@@ -535,7 +538,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.exitingVolcano = true;
     encounterOut(this.cameras.main, 300, () => {
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
-      this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper, elite: met });
+      this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper, elite: met, opening });
     });
     return true;
   }

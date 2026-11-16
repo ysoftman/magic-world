@@ -500,6 +500,29 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7)과
   견주고, `--skills` 를 `--greedy` 와 견줘 보스전 라운드를 본다.
 
+## 기습 (FIRST STRIKE, `sceneCommon` 의 `firstStrike`)
+
+로머와 어떻게 만났는지가 전투의 첫 일격을 정한다. 판정은 `sceneCommon` 의 `firstStrike(walk, roamer)` 한 곳이고, 다섯 씬(마을·
+동굴·숲·설원·화산)의 로머 overlap 이 그 결과를 `startBattle(..., opening)` → Battle data 의 `opening: "hero" | "foe"` 로 넘긴다.
+
+- `"hero"`(AMBUSH!): 영웅이 로머를 보고 있고(보는 방향과 로머 방향의 cos 0.5 이상) 로머가 영웅에게서 멀어지는 쪽으로 걷는
+  중(로머 속도와 영웅→로머 방향의 cos 0.5 이상). 전투가 영웅의 FIGHT 한 번으로 시작한다(평소 FIGHT 그대로라 PERFECT 도 된다).
+- `"foe"`(OFF GUARD!): 영웅이 로머에게 등을 보인 채 닿음(보는 방향 cos −0.5 이하. 서 있든 걸어가든 마지막으로 걸은 방향).
+  적이 평범한 일격 한 번으로 시작한다(`enemyBlow`, PARRY 가능, 기술·기 모으기·독 없음).
+- 그 밖(정면, 옆, 서 있는 로머를 정면으로)은 평소대로. 보스·거인 로머, 풀밭 무작위 조우, 러너, 봉인 강적, 둥지는 기습이
+  없다(걸어가 만나는 것이 아니거나 `firstStrike` 가 null). 압도(`meetFoe`)가 먼저라 필드에서 쓰러지는 적은 기습도 없다.
+- 로머에는 그려진 방향이 없다(정면 그림이 대부분이고 flipX 는 안 보인다). 그래서 로머의 "등"은 걷는 방향의 반대쪽이고,
+  플레이어가 읽는 것은 "나에게서 멀어지는 중"이다. 서 있는 로머에게는 영웅의 기습이 없다. 로머에 방향 그림을 넣게 되면
+  이 판정을 그 방향으로 바꾼다.
+- BattleScene 은 `opening` 필드·init 한 줄·`runBattle` 의 인트로 앞 블록·`openingBlow()` 뿐이다. 일격이 끝난 뒤 평소 첫 줄
+  (`X blocks your way!`, 정예 줄 포함)이 메뉴와 함께 뜨므로 첫 줄 폭 계산은 그대로다. 말은 `flashStatus` 로 맞은 쪽 위에
+  뜬다(`AMBUSH!` 는 적 위, `OFF GUARD!` 는 영웅 위). 아레나·심연·훈련장은 `opening` 을 넘기지 않는다.
+- 수치(일회용 래퍼: 적 HP 에서 평균 FIGHT 를 뺀 뒤 sim, 입장 레벨·의도 장비·WOLF·포션 0): 영웅의 기습은 라운드 −0.7~−1.1,
+  잃는 HP −3~−4%p(GOBLIN Lv3 1.9→1.0 라운드·4→0%, ORC Lv8 2.8→2.1·9→6%, YETI Lv13 2.8→2.1·10→7%, SALAMANDER Lv19
+  2.2→1.1·3→0%). 등을 잡히면 일격 하나, 최대 HP 의 6~7% 를 더 잃는다(평범한 전투 한 판의 손실과 비슷). 승률은 모두 100% 그대로.
+  실측(동굴 BAT, Z 연타): 첫 메뉴까지 평소 0.50초, AMBUSH 0.67초, OFF GUARD 0.87초.
+- `sim-battle.ts` 에는 기습이 없다. FIGHT·적 일격의 규칙을 바꾸면 위 표를 다시 잰다.
+
 ## 필드 제단 (`src/shrine.ts`, `src/ui/Shrine.ts`)
 
 동굴·숲·설원·화산에 하나씩 있는 제단은 Z 로 골드를 바치고 두 축복 중 하나를 다음 `BLESSING_BATTLES`(6)전투 동안

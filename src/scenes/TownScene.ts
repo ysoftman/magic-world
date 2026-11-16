@@ -60,10 +60,12 @@ import {
   FieldKeys,
   FieldPanels,
   FieldToasts,
+  firstStrike,
   HeroWalk,
   isWalkableCell,
   meetFoe,
   OBJECT_LAYER_DEPTH,
+  type Opening,
   paintTile,
   type Roamer,
   saveAndQuit,
@@ -646,7 +648,8 @@ export class TownScene extends Phaser.Scene {
             : this.roamers.find((r) => r.sprite === roamer);
       // BattleScene.runBattle() already plays the boss fanfare for boss/giant
       // enemies; playing it here too would sound it twice.
-      this.startBattle(r?.kind ?? "slime");
+      // who gets the first blow in, by how the two met (sceneCommon firstStrike)
+      this.startBattle(r?.kind ?? "slime", r ? firstStrike(this.walk, r) : null);
     });
 
     const cave = this.add.zone(CAVE_POS.x, CAVE_POS.y, TILE, TILE).setDepth(1);
@@ -2303,7 +2306,7 @@ export class TownScene extends Phaser.Scene {
     wisp.sprite.destroy();
   }
 
-  private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime" | "wisp"): void {
+  private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime" | "wisp", opening: Opening | null = null): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
     const roll = Math.random();
     const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
@@ -2317,7 +2320,7 @@ export class TownScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     encounterOut(this.cameras.main, 300, () => {
-      this.scene.start("Battle", { enemy: kind, from: "Town", elite: met });
+      this.scene.start("Battle", { enemy: kind, from: "Town", elite: met, opening });
     });
   }
 }

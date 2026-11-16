@@ -661,6 +661,8 @@ export class BattleScene extends Phaser.Scene {
   private elite: EliteKind | null = null;
   // a seal's keeper (seals.ts): the name the opening line gives it
   private keeperName: string | null = null;
+  // who strikes before the first turn (init's `opening`), if either
+  private opening: "hero" | "foe" | null = null;
   private combo = 0;
   private comboText!: PixelText;
   // one successful steal per battle; failed attempts don't count against it
@@ -751,6 +753,9 @@ export class BattleScene extends Phaser.Scene {
     // the elite roll the field already made for this meeting (overrun.ts
     // meet, which fights an elite and may overrun the rest): not rolled again
     elite?: EliteKind | null;
+    // FIRST STRIKE (sceneCommon firstStrike): who gets a blow in before the
+    // first turn, by how the hero and a roamer met in the field
+    opening?: "hero" | "foe";
   }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
@@ -838,6 +843,7 @@ export class BattleScene extends Phaser.Scene {
     const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
     this.elite = data?.keeper?.elite ?? (data && "elite" in data ? (data.elite ?? null) : rollElite(def, fought));
     this.keeperName = data?.keeper?.name ?? null;
+    this.opening = data?.opening ?? null;
     this.enemy = scaleEnemy(def, {
       night: this.night,
       arena: !!this.arena,
@@ -1836,6 +1842,12 @@ export class BattleScene extends Phaser.Scene {
     // beside the rest's note: "ELITE: much tougher!  Well rested: your WARD
     // is up!" is 51 of a row's 54 glyphs, "STURDY MAGMA SLIME blocks your
     // way!" 35.
+    if (this.opening) {
+      await this.openingBlow(this.opening);
+      if (!this.running) return;
+      if (this.enemy.curHp <= 0) return this.victory();
+      if (GameState.player.hp <= 0) return this.defeat();
+    }
     const elite = this.elite && ELITES[this.elite];
     const notes = [elite && `ELITE: ${elite.note}!`, this.rested && "Well rested: your WARD is up!"].filter(Boolean);
     this.type([elite && !this.keeperName ? `${elite.tag} ${intro}` : intro, ...(notes.length > 0 ? [notes.join("  ")] : [])].join("\n"));
@@ -1954,6 +1966,22 @@ export class BattleScene extends Phaser.Scene {
       if (this.running && this.enemy.curHp <= 0 && GameState.player.hp > 0) return this.victory();
       await this.tickWard();
     }
+  }
+
+  // FIRST STRIKE: the blow before the fight's first turn. The hero's is a
+  // FIGHT as any other (its PERFECT too), the foe's its plain blow (a PARRY
+  // answers it): no move, no wind-up, nothing rolled for its turn. Its word
+  // pops over whoever was caught; the fight's opening line comes after.
+  private async openingBlow(who: "hero" | "foe"): Promise<void> {
+    if (who === "hero") {
+      this.flashStatus("AMBUSH!", "#fde047", this.enemySprite.x, this.enemySprite.y - 80);
+      return this.playerAttack();
+    }
+    this.flashStatus("OFF GUARD!", "#f87171");
+    await this.tip("parry");
+    const { dmg, crit, note } = await this.enemyBlow();
+    await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
+    this.setPlayerTint(undefined);
   }
 
   // A first-time line, said once a save (GameState.seenTips, where the
