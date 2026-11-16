@@ -70,6 +70,7 @@ import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
+import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
 import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
@@ -731,6 +732,8 @@ export class BattleScene extends Phaser.Scene {
 
     const unsubSaved = onSaved(() => showToast(this, "SAVED"));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubSaved);
+    // the dive's relics (relics.ts), nothing outside the ABYSS
+    this.wardTurns = Math.max(this.wardTurns, openRelicBout(this.abyss, this.enemy, GameState.player));
 
     // the town's and the forest's in the season's look, as their maps are; the
     // ABYSS has its own (src/backdrops.ts) and the cave's lack of weather
@@ -2732,11 +2735,11 @@ export class BattleScene extends Phaser.Scene {
 
   // the hero's ATK and DEF as this battle's meal (cooking.ts) leaves them
   private heroAtk(): number {
-    return Math.round(GameState.effAtk() * (1 + (this.meal?.def.effect.atk ?? 0)));
+    return Math.round(GameState.effAtk() * (1 + (this.meal?.def.effect.atk ?? 0)) * relicAtk(this.abyss));
   }
 
   private heroDef(): number {
-    return Math.round(GameState.effDef() * (1 + (this.meal?.def.effect.def ?? 0)));
+    return Math.round(GameState.effDef() * (1 + (this.meal?.def.effect.def ?? 0)) * relicDef(this.abyss));
   }
 
   // WARD (while it lasts) or BULWARK (the next blow) halves a hit, never
@@ -3493,7 +3496,7 @@ export class BattleScene extends Phaser.Scene {
       // nothing fought in the ABYSS counts toward a quest, the bounty or a
       // boss's flag (abyss.ts)
       if (!this.abyss) this.tallyQuestKill();
-      GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + 5);
+      GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + 5 + relicWinHeal(this.abyss, GameState.effMaxHp()));
       GameState.player.mp = Math.min(GameState.player.maxMp, GameState.player.mp + 2);
       // FISH STEW (cooking.ts): a share of max HP back after each win
       const mealHeal = Math.min(

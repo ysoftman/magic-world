@@ -43,6 +43,8 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 //   B1 leaves it waiting, and leaving again keeps the deeper of the two. The
 //   floor is built anew and the hero walks in with HP and MP as they are, as
 //   from a checkpoint; HARD MODE keeps it on the same terms.
+// - RELICS (relics.ts) are what a dive builds: one of two when it starts and
+//   on every second stair down, held for that dive only.
 // - No day or night underground: no night stat/loot shift, no night
 //   encounter rate, a standing gloom instead of the clock's.
 export const ABYSS_W = 22;

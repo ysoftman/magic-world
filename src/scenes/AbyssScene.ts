@@ -20,6 +20,7 @@ import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_ROCK, T_TALL, T_W
 import { ENEMIES } from "../monsters";
 import { ART_PX, addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { RELIC_EVERY, RELICS, type RelicKey, relicAmbush, relicGold, relicLine, resetRelics, rollRelicOffer, takeRelic } from "../relics";
 import {
   addBorderDressing,
   addRoamer,
@@ -87,6 +88,15 @@ const PILLAR_GLOW = { radius: 96, color: 0x9d5cec, strength: 0.3, pulseMs: 1300,
 // a guarded stair says so at most this often while the hero stands on it
 const SEALED_TOAST_MS = 2000;
 const DOWN_COLOR = "#c084fc";
+// What the dive holds (relics.ts relicLine), one line under the HUD: from
+// x=24 at retroStyle(4), 16px a glyph, y 134..150, between the floor's title
+// (y 96..128) and the toasts (y 166..186). Its longest, every relic at its
+// max, is 67 glyphs: 1072px, ending at x=1096, short of the touch menu's
+// column (x >= 1225). Over the map, so outlined; above the gloom (90) and
+// under the HUD (110) and every panel.
+const RELIC_TAG_X = 24;
+const RELIC_TAG_Y = 134;
+const RELIC_TAG_DEPTH = 96;
 const SEALED_COLOR = "#ff5555";
 // the cave's minimap colours, with the zones' darker floor
 const ABYSS_TILE_COLORS: Record<number, number> = { ...CAVE_TILE_COLORS, [T_TALL]: 0x2f2b28 };
@@ -213,6 +223,11 @@ interface AbyssRun {
   met: Set<string>;
   chestOpened: boolean;
   guardianDown: boolean;
+  // stairs taken down this dive, and the two relics on offer (relics.ts):
+  // rolled as the dive starts and on every RELIC_EVERY-th stair, kept here
+  // until one is taken, so a fight that cuts in can't lose the offer
+  descents: number;
+  offer: [RelicKey, RelicKey] | null;
   // Where the hero stood when the fight began, who it was with, and the win
   // count then: a guardian is only down if GameState.battles grew (it can't
   // be caught, and a flight leaves the count alone), so one fled from stays.
@@ -252,6 +267,7 @@ export class AbyssScene extends Phaser.Scene {
   private encounterCooldown = 0;
   private leaving = false;
   private sealedToastAt = 0;
+  private relicTag!: PixelText;
 
   private walk!: HeroWalk;
   private fieldKeys!: FieldKeys;
@@ -283,6 +299,8 @@ export class AbyssScene extends Phaser.Scene {
         GameState.abyssPortal = 0;
         GameState.save();
       }
+      // a new dive holds no relics, and is offered its first on arrival
+      resetRelics();
       run = {
         seed: (Math.random() * 2 ** 32) >>> 0,
         floor: startFloor,
@@ -290,6 +308,8 @@ export class AbyssScene extends Phaser.Scene {
         chestOpened: false,
         guardianDown: false,
         fight: null,
+        descents: 0,
+        offer: rollRelicOffer(),
       };
     }
     const r = run;
@@ -496,6 +516,11 @@ export class AbyssScene extends Phaser.Scene {
     whilePanelUp(this, () => this.uiBlocking());
 
     this.hud = new StatusHud(this);
+    this.relicTag = this.add
+      .pixelText(RELIC_TAG_X, RELIC_TAG_Y, relicLine(), retroStyle(4, DOWN_COLOR))
+      .setStroke("#1a1028", 4)
+      .setScrollFactor(0)
+      .setDepth(RELIC_TAG_DEPTH);
 
     if (isTouchDevice()) this.touch = new TouchControls(this);
 
@@ -534,6 +559,8 @@ export class AbyssScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     GameState.minutes += (delta / 1000) * GameState.timeSpeed;
     this.hud.update();
+    // gone with the HUD (S), and under a panel or a question, as the map's tags
+    this.relicTag.setVisible(this.hud.isVisible() && !this.uiBlocking());
 
     this.toasts.update(delta);
 
@@ -572,6 +599,12 @@ export class AbyssScene extends Phaser.Scene {
     if (this.stairAsked && !this.physics.overlap(this.player, this.upStair)) this.stairAsked = false;
 
     if (this.panels.takeOpenKey()) return;
+
+    // a relic waiting to be picked, once the hero has blinked in
+    if (run?.offer && !this.leaving && !this.fieldKeys.leaving()) {
+      this.offerRelic(run, run.offer);
+      return;
+    }
 
     const moving = this.walk.step(this.leaving);
     wanderRoamers(this.roamers, delta);
@@ -642,6 +675,26 @@ export class AbyssScene extends Phaser.Scene {
     );
   }
 
+  // Two relics, one to keep (relics.ts): the question is one row, "AEGIS:
+  // WARD 1 TURN. HEART: WIN HEAL 4%." its longest at 39 glyphs of a touch
+  // box's 42, and the names its two choices. No way to decline: ESC and N
+  // take the second, both being a gain. The fights hold off after it as
+  // after a chest.
+  private offerRelic(r: AbyssRun, offer: [RelicKey, RelicKey]): void {
+    this.walk.halt();
+    const [a, b] = offer.map((k) => RELICS[k]);
+    this.dialogue.ask([`${a.name}: ${a.effect}. ${b.name}: ${b.effect}.`], "RELIC", [a.name, b.name], (i) => {
+      const key = offer[i === 0 ? 0 : 1];
+      r.offer = null;
+      takeRelic(key);
+      this.relicTag.setText(relicLine());
+      this.holdFights();
+      Sfx.chest();
+      // "RELIC: PLATE!" is 13 glyphs at most
+      showToast(this, `RELIC: ${RELICS[key].name}!`, FIELD_TOAST_Y);
+    });
+  }
+
   // YES to the quit question, or the settings' QUIT chip on touch
   private quit(): void {
     this.quitting = true;
@@ -679,6 +732,8 @@ export class AbyssScene extends Phaser.Scene {
     this.leaving = true;
     warpOut(this, this.walk, () => {
       r.floor += 1;
+      r.descents += 1;
+      if (r.descents % RELIC_EVERY === 0) r.offer ??= rollRelicOffer();
       freshFloor(r);
       this.scene.start("Abyss", { fromStairs: true });
     });
@@ -707,7 +762,7 @@ export class AbyssScene extends Phaser.Scene {
     const up = cellCenter(this.floor.up);
     const nearExit = Math.abs(this.player.x - up.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - up.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
-    if (Math.random() < ENCOUNTER_RATE * (delta / 1000)) this.startBattle(abyssKind(run.floor), null);
+    if (Math.random() < ENCOUNTER_RATE * relicAmbush() * (delta / 1000)) this.startBattle(abyssKind(run.floor), null);
   }
 
   private liveZones(): MonsterZone[] {
@@ -766,7 +821,7 @@ export class AbyssScene extends Phaser.Scene {
     this.holdFights();
     Sfx.chest();
     const loot = abyssScale(run.floor, GameState.enemyScale()).loot;
-    const gold = GameState.gainGold(Math.round((CHEST_GOLD_MIN + Math.floor(Math.random() * CHEST_GOLD_SPREAD)) * loot));
+    const gold = GameState.gainGold(Math.round((CHEST_GOLD_MIN + Math.floor(Math.random() * CHEST_GOLD_SPREAD)) * loot * relicGold()));
     let found = "";
     const roll = Math.random();
     let edge = 0;
@@ -779,7 +834,8 @@ export class AbyssScene extends Phaser.Scene {
       found = ` ${item.name}!`;
       Sfx.pickup();
     }
-    // "+80 GOLD HI-POTION!" (x2 loot at most) is 19 x 24 = 456px; kept on the
+    // "+128 GOLD HI-POTION!" (x2 loot at most, three PURSEs' x1.6 on it) is
+    // 20 x 24 = 480px; kept on the
     // map like the volcano's notes, whatever wall the chest sits against
     const note = this.add
       .pixelText(chest.x, chest.y - 52, `+${gold} GOLD${found}`, retroStyle(6, "#4ade80"))
