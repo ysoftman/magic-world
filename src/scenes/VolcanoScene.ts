@@ -12,6 +12,7 @@ import {
   TILE,
   VOLCANO_ENTRY,
   VOLCANO_H,
+  VOLCANO_PEDDLER_POS,
   VOLCANO_SHRINE_POS,
   VOLCANO_TREASURE_POS,
   VOLCANO_W,
@@ -54,6 +55,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { Peddler } from "../ui/Peddler";
 import { addProp, LAVA_BUBBLES } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
@@ -205,7 +207,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
       region: "volcano",
       back: !!back,
-      walls: [VOLCANO_SHRINE_POS],
+      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS],
       exits: [VOLCANO_ENTRY],
       zones: VOLCANO_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -289,6 +291,14 @@ export class VolcanoScene extends Phaser.Scene {
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
     });
+    // the PEDDLER, on the days this field is his (peddler.ts)
+    if (Peddler.here("volcano")) {
+      new Peddler(this, VOLCANO_PEDDLER_POS, this.player, this.dialogue, {
+        ownKey: true,
+        blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+        bought: () => this.holdFights(),
+      });
+    }
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

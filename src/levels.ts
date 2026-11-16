@@ -349,6 +349,18 @@ export const FOREST_SHRINE_POS = { x: 20 * TILE + TILE / 2, y: 15 * TILE + TILE 
 export const SNOW_SHRINE_POS = { x: 17 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 };
 export const VOLCANO_SHRINE_POS = { x: 18 * TILE + TILE / 2, y: 13 * TILE + TILE / 2 };
 
+// Where the PEDDLER stands on the day a field is his (peddler.ts,
+// ui/Peddler.ts): by the road in each, so he is met on the way in, on open
+// floor clear of the monster zones, the chests, the shrine and the star
+// shards, and solid as the shrine is. The cave's is east of the north pool,
+// the forest's in the bend of its road, the snow field's between the two
+// eastern zones, the volcano's at the east edge of the way down between the
+// lava pools (three tiles wide: he leaves two).
+export const DUNGEON_PEDDLER_POS = { x: 18 * TILE + TILE / 2, y: 3 * TILE + TILE / 2 };
+export const FOREST_PEDDLER_POS = { x: 15 * TILE + TILE / 2, y: 5 * TILE + TILE / 2 };
+export const SNOW_PEDDLER_POS = { x: 16 * TILE + TILE / 2, y: 7 * TILE + TILE / 2 };
+export const VOLCANO_PEDDLER_POS = { x: 13 * TILE + TILE / 2, y: 4 * TILE + TILE / 2 };
+
 // The cave's walls and pillars are T_ROCK, the volcano's boulder: a tree
 // skinned grey still read as a tree. art/tilesets.ts CAVE_SKIN draws it as
 // plain cave rock with no lava crack. Same solidity as the trees it replaced,

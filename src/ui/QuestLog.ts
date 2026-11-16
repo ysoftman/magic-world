@@ -5,6 +5,7 @@ import { FAVOR_GIVERS, favorProgress, favorStatus, favorStep } from "../favors";
 import { econDay, GameState } from "../gameState";
 import { allSpeciesCaught, CATCHABLE } from "../monsters";
 import { type QuestStep, type QuestStepId, questSteps } from "../objective";
+import { PEDDLER_REGION_NAMES, peddlerRegion } from "../peddler";
 import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -227,6 +228,7 @@ export class QuestLog {
   private title: PixelText;
   private perks: PixelText;
   private stars: PixelText;
+  private peddler: PixelText;
   private activeRows: ActiveRow[] = [];
   private doneRows: PixelText[] = [];
   private closeQueued = false;
@@ -261,6 +263,12 @@ export class QuestLog {
     // the replay title's right end (960) and 24 inside the panel's edge
     this.stars = scene.add.pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 44, "", retroStyle(4, "#8ecbff")).setOrigin(1, 0.5);
 
+    // Where the PEDDLER is today (peddler.ts), left of the title on its
+    // line, two rows of retroStyle(4): "PEDDLER TODAY" 208px (x 84..292, 28px
+    // short of the replay title's left end, 320) over the field's name, y
+    // 26..42 and 46..62, clear of the perks' line (from 66)
+    this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 26, "", retroStyle(4, "#4fd1c0")).setLineSpacing(4);
+
     this.root = scene.add
       .container(0, 0, [
         scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5),
@@ -269,6 +277,7 @@ export class QuestLog {
         this.title,
         this.perks,
         this.stars,
+        this.peddler,
         text(ACTIVE_X, HEADER_Y, 6, HINT_COLOR, "IN PROGRESS"),
         text(DONE_X, HEADER_Y, 6, HINT_COLOR, "COMPLETED"),
         ...this.activeRows.flatMap((r) => [r.title, r.progress, r.detail]),
@@ -324,6 +333,7 @@ export class QuestLog {
     // the one thing that tells the two journals apart
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
     this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}`);
+    this.peddler.setText(`PEDDLER TODAY\n${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
     const taken = GameState.perks;
     this.perks
       .setText(

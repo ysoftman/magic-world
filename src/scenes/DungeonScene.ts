@@ -9,6 +9,7 @@ import {
   buildDungeon,
   DUNGEON_ENTRY,
   DUNGEON_H,
+  DUNGEON_PEDDLER_POS,
   DUNGEON_SHRINE_POS,
   DUNGEON_W,
   DUNGEON_ZONES,
@@ -60,6 +61,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { Peddler } from "../ui/Peddler";
 import { addProp, TORCH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
@@ -211,7 +213,7 @@ export class DungeonScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
       region: "dungeon",
       back: !!back,
-      walls: [DUNGEON_SHRINE_POS],
+      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS],
       exits: [DUNGEON_ENTRY],
       zones: DUNGEON_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -343,6 +345,14 @@ export class DungeonScene extends Phaser.Scene {
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
     });
+    // the PEDDLER, on the days this field is his (peddler.ts)
+    if (Peddler.here("dungeon")) {
+      new Peddler(this, DUNGEON_PEDDLER_POS, this.player, this.dialogue, {
+        ownKey: true,
+        blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+        bought: () => this.holdFights(),
+      });
+    }
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

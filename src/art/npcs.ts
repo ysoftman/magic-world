@@ -348,6 +348,29 @@ const NPC_ELDER_32 = [
   "................................",
 ];
 
+// The PEDDLER (peddler.ts) is the shopkeeper's grid in a traveller's colours:
+// grey hair and mustache, a teal shirt, a wine-red apron
+const NPC_PEDDLER_PALETTE = {
+  h: 0x9ca3af,
+  H: 0xd1d5db,
+  d: 0x4b5563,
+  m: 0x6b7280,
+  s: 0xf8c896,
+  S: 0xe3ac80,
+  e: 0x141414,
+  i: 0xffffff,
+  t: 0x1f9e8f,
+  T: 0x4fd1c0,
+  u: 0x17786d,
+  b: 0x8a5a2b,
+  a: 0x9f1239,
+  A: 0x7a0e2c,
+  p: 0x5a4030,
+  o: 0x3b2a1a,
+  P: 0x3e2c20,
+  O: 0x5b3f26,
+  g: 0xfacc15,
+};
 // SHOP: a mustache and a cream apron over a yellow shirt
 const NPC_SHOP_PALETTE = {
   h: 0x7c4a26,
@@ -691,6 +714,7 @@ export function bakeNpcs(this: Phaser.Scene): void {
   makeTexture(this, "npc", NPC_TILE, NPC_PALETTE);
   makeTexture(this, "npc-elder", NPC_ELDER_32, NPC_ELDER_PALETTE, ART_PX);
   makeTexture(this, "npc-shop", NPC_SHOP_32, NPC_SHOP_PALETTE, ART_PX);
+  makeTexture(this, "npc-peddler", NPC_SHOP_32, NPC_PEDDLER_PALETTE, ART_PX);
   makeTexture(this, "npc-guard", NPC_GUARD_32, NPC_GUARD_PALETTE, ART_PX);
   makeTexture(this, "npc-hunter", NPC_HUNTER_32, NPC_HUNTER_PALETTE, ART_PX);
   makeTexture(this, "npc-gambler", NPC_GAMBLER_32, NPC_GAMBLER_PALETTE, ART_PX);

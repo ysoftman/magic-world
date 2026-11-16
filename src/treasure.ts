@@ -9,10 +9,12 @@ import {
   buildVolcano,
   CAVE_POS,
   DUNGEON_ENTRY,
+  DUNGEON_PEDDLER_POS,
   DUNGEON_SHRINE_POS,
   DUNGEON_ZONES,
   EDITABLE_POS,
   FOREST_ENTRY,
+  FOREST_PEDDLER_POS,
   FOREST_POS,
   FOREST_SHRINE_POS,
   FOREST_TREASURE_POS,
@@ -21,6 +23,7 @@ import {
   PLAYER_SPAWN,
   SNOW_ENTRY,
   SNOW_FISH_POS,
+  SNOW_PEDDLER_POS,
   SNOW_POS,
   SNOW_SHRINE_POS,
   SNOW_TREASURE_POS,
@@ -33,6 +36,7 @@ import {
   TILE,
   TREASURE_POS,
   VOLCANO_ENTRY,
+  VOLCANO_PEDDLER_POS,
   VOLCANO_POS,
   VOLCANO_SHRINE_POS,
   VOLCANO_TREASURE_POS,
@@ -87,7 +91,7 @@ interface RegionDef {
   grid: () => number[][];
   // where the hero comes in: every spot must be walkable from here
   start: () => Point;
-  // landmarks, chests and the shrine, kept 2 tiles clear
+  // landmarks, chests, the shrine and the PEDDLER's place, kept 2 tiles clear
   keep: () => Point[];
   // the ways out (and on the town map, the CAVE), kept 3 tiles clear: an
   // exit's signpost and the forest GUARD stand within that
@@ -122,7 +126,7 @@ export const REGIONS: Record<TreasureRegion, RegionDef> = {
     name: "CAVE",
     grid: buildDungeon,
     start: () => ({ x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y + 2 * TILE }),
-    keep: () => [...TREASURE_POS, ABYSS_STAIRS_POS, DUNGEON_SHRINE_POS],
+    keep: () => [...TREASURE_POS, ABYSS_STAIRS_POS, DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS],
     exits: () => [DUNGEON_ENTRY],
     zones: DUNGEON_ZONES,
     noRoads: false,
@@ -134,7 +138,7 @@ export const REGIONS: Record<TreasureRegion, RegionDef> = {
     name: "FOREST",
     grid: buildForest,
     start: () => ({ x: FOREST_ENTRY.x, y: FOREST_ENTRY.y + 2 * TILE }),
-    keep: () => [...FOREST_TREASURE_POS, FOREST_SHRINE_POS],
+    keep: () => [...FOREST_TREASURE_POS, FOREST_SHRINE_POS, FOREST_PEDDLER_POS],
     exits: () => [FOREST_ENTRY],
     zones: FOREST_ZONES,
     noRoads: true,
@@ -146,7 +150,7 @@ export const REGIONS: Record<TreasureRegion, RegionDef> = {
     name: "SNOW FIELD",
     grid: buildSnow,
     start: () => ({ x: SNOW_ENTRY.x, y: SNOW_ENTRY.y + 2 * TILE }),
-    keep: () => [...SNOW_TREASURE_POS, SNOW_FISH_POS, SNOW_SHRINE_POS],
+    keep: () => [...SNOW_TREASURE_POS, SNOW_FISH_POS, SNOW_SHRINE_POS, SNOW_PEDDLER_POS],
     exits: () => [SNOW_ENTRY],
     zones: SNOW_ZONES,
     noRoads: true,
@@ -158,7 +162,7 @@ export const REGIONS: Record<TreasureRegion, RegionDef> = {
     name: "VOLCANO",
     grid: buildVolcano,
     start: () => ({ x: VOLCANO_ENTRY.x, y: VOLCANO_ENTRY.y + 2 * TILE }),
-    keep: () => [...VOLCANO_TREASURE_POS, VOLCANO_SHRINE_POS],
+    keep: () => [...VOLCANO_TREASURE_POS, VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS],
     exits: () => [VOLCANO_ENTRY],
     zones: VOLCANO_ZONES,
     noRoads: true,

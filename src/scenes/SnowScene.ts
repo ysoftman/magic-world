@@ -9,6 +9,7 @@ import {
   SNOW_ENTRY,
   SNOW_FISH_POS,
   SNOW_H,
+  SNOW_PEDDLER_POS,
   SNOW_SHRINE_POS,
   SNOW_TREASURE_POS,
   SNOW_W,
@@ -53,6 +54,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
@@ -84,6 +86,7 @@ export class SnowScene extends Phaser.Scene {
   private companionFollower!: CompanionSprite;
   private treasure!: TreasureDigger;
   private shrine!: Shrine;
+  private peddler: Peddler | null = null;
   private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -203,7 +206,7 @@ export class SnowScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
       region: "snow",
       back: !!back,
-      walls: [SNOW_SHRINE_POS],
+      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS],
       exits: [SNOW_ENTRY],
       zones: SNOW_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -302,6 +305,10 @@ export class SnowScene extends Phaser.Scene {
     this.dialogue = this.panels.add(new DialogueBox(this, []));
     // the field's shrine (shrine.ts): Z beside it (update) offers gold for a blessing
     this.shrine = new Shrine(this, "snow", SNOW_SHRINE_POS, this.player, this.dialogue, { prayed: () => this.holdFights() });
+    // the PEDDLER, on the days this field is his (peddler.ts)
+    this.peddler = Peddler.here("snow")
+      ? new Peddler(this, SNOW_PEDDLER_POS, this.player, this.dialogue, { bought: () => this.holdFights() })
+      : null;
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
     this.panels.add(this.fishing);
@@ -370,6 +377,7 @@ export class SnowScene extends Phaser.Scene {
       if (this.treasure.tryDig()) return;
       // ...and the shrine, at the field's other end
       if (this.shrine.tryPray()) return;
+      if (this.peddler?.tryTalk()) return;
       const dx = this.player.x - SNOW_FISH_POS.x;
       const dy = this.player.y - SNOW_FISH_POS.y;
       if (dx * dx + dy * dy <= 120 * 120) {

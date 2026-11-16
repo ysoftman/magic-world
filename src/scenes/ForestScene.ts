@@ -8,6 +8,7 @@ import {
   escapeFromZones,
   FOREST_ENTRY,
   FOREST_H,
+  FOREST_PEDDLER_POS,
   FOREST_SHRINE_POS,
   FOREST_TREASURE_POS,
   FOREST_W,
@@ -53,6 +54,7 @@ import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { FOREST_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
+import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
@@ -197,8 +199,8 @@ export class ForestScene extends Phaser.Scene {
       ? null
       : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
           region: "forest",
-      back: !!back,
-          walls: [FOREST_SHRINE_POS],
+          back: !!back,
+          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS],
           exits: [FOREST_ENTRY],
           zones: FOREST_ZONES,
           paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -287,6 +289,14 @@ export class ForestScene extends Phaser.Scene {
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
     });
+    // the PEDDLER, on the days this field is his (peddler.ts)
+    if (Peddler.here("forest")) {
+      new Peddler(this, FOREST_PEDDLER_POS, this.player, this.dialogue, {
+        ownKey: true,
+        blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+        bought: () => this.holdFights(),
+      });
+    }
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

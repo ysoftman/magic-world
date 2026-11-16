@@ -5,6 +5,7 @@ import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialK
 import { loadFeats, noFeats } from "./feats";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
+import { loadPeddler, type PeddlerState } from "./peddler";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
 import { loadShards } from "./shards";
@@ -699,6 +700,8 @@ export const GameState = {
   // companionBondBonus
   companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
+  // what was bought of the PEDDLER's two offers, and on which day (peddler.ts)
+  peddler: null as PeddlerState | null,
   // the star shards picked up in the fields, by id (shards.ts)
   shards: [] as string[],
   quest: {
@@ -1135,6 +1138,7 @@ export const GameState = {
     this.companionBond = {};
     this.openedTreasures = [];
     this.shards = [];
+    this.peddler = null;
     this.quest = {
       slimes: 0,
       goldenSlimes: 0,
@@ -1237,6 +1241,7 @@ export const GameState = {
           companionBond: this.companionBond,
           openedTreasures: this.openedTreasures,
           shards: this.shards,
+          peddler: this.peddler,
           quest: this.quest,
           bounty: this.bounty,
           delivery: this.delivery,
@@ -1366,6 +1371,8 @@ export const GameState = {
       this.openedTreasures = data.openedTreasures ?? [];
       // none on saves from before the star shards
       this.shards = loadShards(data.shards);
+      // nothing bought on saves from before the PEDDLER
+      this.peddler = loadPeddler(data.peddler);
       Object.assign(this.quest, data.quest);
       // saves from before the volcano carry neither flag; set them outright so
       // they can't keep a value left over from a save loaded earlier this session

@@ -549,6 +549,24 @@ HARD MODE 에서 조각은 `reset()` 으로 다시 놓인다.
   받지 않는다.
 - 보상을 바꾸면 README 의 별 조각 줄을 같은 커밋에서 고친다.
 
+## 떠돌이 상인 (`src/peddler.ts`, `src/ui/Peddler.ts`)
+
+PEDDLER 는 `econDay` 의 해시로 열린 필드 중 한 곳(`peddlerRegion`)에 서고, 그날의 두 가지(`peddlerStock`: 소재 2개
+PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` = 날짜와 산 것, 옛 세이브는 null). 자리는
+`levels.ts` 의 `*_PEDDLER_POS`, 그림은 상점 주인 격자에 팔레트만 다른 `npc-peddler` 다.
+
+- 값은 되팔아 남지 않게 둔다. PIECES 는 납품 단가(`delivery.ts` 의 `PIECE_GOLD`)의 1.5배라 납품하면 1/3 을 잃고,
+  DEAL 은 상점 정가의 절반(상점 매입가)보다 비싸다. `PIECE_GOLD`·상점 정가(`shopItems.ts`)를 바꾸면 `DEALS` 의 값과
+  주석의 정가를 다시 맞추고 README 의 줄도 고친다.
+- 대화는 제단과 같은 꼴이다(선택지 둘 PIECES/DEAL, ESC 는 `escPick` 2 로 떠남, 고른 뒤 YES/NO). Z 처리도 같다(`ownKey`
+  는 keydown 에서 `blocked()` 가 아닐 때만 담아 POST_UPDATE 에서 열고, 설원은 씬의 Z 에서 `tryPray()` 다음에
+  `tryTalk()`). 새 필드 씬은 제단 다음에 `if (Peddler.here(region)) new Peddler(...)` 를 넣고, 자리를 `treasure.ts` 의
+  `keep` 과 러너의 `walls` 에 넣는다(상인이 없는 날에도 넣어 둔다).
+- 날짜는 씬을 만든 날로 고정한다. 필드 안에서 자정이 지나도 그날 물건을 그대로 판다.
+- 오늘 있는 곳은 퀘스트 일지 제목 줄 왼쪽 두 줄(`PEDDLER TODAY` 208px, x 84..292, 회차 제목 왼쪽 끝 320 에서 28px)에
+  나온다. 지역 이름(`PEDDLER_REGION_NAMES`)은 7글자까지, 물건 라벨은 13글자까지(`2 SPIDER SILK`)다.
+- 터치 MENU 줄·원판과 겹치지 않게 네 자리 모두 맵 가운데 쪽 길가에 뒀다. 옮기면 제단처럼 화면 좌표로 다시 본다.
+
 ## 작업 완료 후 중간 산출물 정리
 
 - 작업 중 생성한 **중간 산출물**(디버그 스크린샷 png, 검증용 임시 파일, 임시 훅 등)은 작업이 끝나면 반드시 정리한다.

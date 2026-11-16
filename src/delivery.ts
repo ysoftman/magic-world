@@ -42,7 +42,7 @@ const OPENS: Record<DeliverableKey, (q: QuestState) => boolean> = {
 // day, it can't outrun hunting. Retune DROP_TABLE, a region's encounter mix
 // or its foes' gold and these are worked out again by hand: no script in the
 // repo keeps them (sim:battle fights only bosses).
-const PIECE_GOLD: Record<DeliverableKey, number> = {
+export const PIECE_GOLD: Record<DeliverableKey, number> = {
   slimeGel: 70,
   batWing: 95,
   wolfFang: 75,

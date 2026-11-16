@@ -186,6 +186,7 @@
 
 - 별 조각(STAR SHARD): 동굴·숲·설원·화산의 구석과 막다른 곳에 3개씩 놓여 있다. 미니맵에는 없지만 바닥에서 파랗게 깜빡이고, 그 칸을 밟으면 줍는다(`STAR SHARD 2/3!`). 한 지역의 3개를 다 모으면 최대 HP +5(영구)와 그 지역 소재 2개(BAT WING·SPIDER SILK·FROST SCALE·MAGMA CORE)·CANDY 1개, 12개를 전부 모으면 STARFALL 로 ATK +2·DEF +2(영구)와 업적 STARGAZER. 모은 수는 퀘스트 일지(U) 제목 줄 오른쪽 `STARS 7/12`. HARD MODE 로 넘어가면 조각은 다시 놓이고 올린 능력치는 남는다
 
+- 떠돌이 상인(PEDDLER): 날마다(게임 달력) 열린 필드(동굴·숲·설원·화산) 중 한 곳의 길가에 서 있다. 오늘 어디 있는지는 퀘스트 일지(U) 왼쪽 위 `PEDDLER TODAY`. 옆에서 Z 로 두 가지를 하루 한 번씩 판다: PIECES(열린 지역의 몬스터 소재 2개, 납품가의 1.5배 — 상점에서는 못 사는 것)와 DEAL(ELIXIR 1개 65G·BOMB 2개 65G·HI-POTION 3개 60G·CANDY 3개 40G 중 하나, 상점가의 약 2/3)
 - 업적(A), 도감(B): 도감은 본/잡은 몬스터와 약점(WEAK)·능력(CAN: 독·빙결·재생·격노)을 보여 주고, 잡을 수 있는 13종 중 잡은 종 20%마다 ATK/DEF +1(최대 +5). 희귀 몬스터(GOLDEN SLIME·CURSED GOBLIN·NIGHT WISP·SILVER WASP·AURORA MOTH·GILDED IMP)와 보스는 13종에 들지 않아 세지 않는다. 희귀 몬스터는 골드·EXP 가 크고(SILVER WASP·AURORA MOTH 는 숲·설원에서 같은 계열 몬스터 대신 3.5% 로 나오며 그 지역 소재 2개를 꼭 남긴다), CANDY 로 잡을 수는 있지만 도감 완성에는 필요 없다. HUD 의 CAUGHT 도 이 13종 중 잡은 종 수다
 - 업적은 47개다. 새 전투 요소의 업적: QUICK HANDS·UNTOUCHABLE(PARRY 10·100번), FINISHER(보스나 거인을 LIMIT BREAK 로 마무리), ELITE HUNTER(정예 세 종류 모두 처치), PILGRIM(네 제단 모두에 봉헌), RELIC HOARDER(한 다이브에 유물 6개), CURSE BREAKER(저주받은 상자 열기), WELL ROUNDED(특성 7단계 모두). PARRY 와 가득 찬 LIMIT 게이지는 처음 한 번 전투 메시지로 설명한다
 - 업적이 10·20·30·38개가 되면 영웅 외형 TEAL·CRIMSON·NIGHT·GOLD 가 차례로 열린다(토스트 "NEW LOOK UNLOCKED: TRY IT ON AT HOME!", 업적 창 아래에 다음 외형까지의 NEXT LOOK 줄). 업적은 세이브마다 따로라 새 게임은 기본 4종(BLUE·RED·GREEN·VIOLET)부터고, HARD MODE 는 업적과 함께 이어진다
