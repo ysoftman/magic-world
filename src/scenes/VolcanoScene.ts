@@ -59,6 +59,7 @@ import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
+import { StarShards } from "../ui/StarShards";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -211,6 +212,8 @@ export class VolcanoScene extends Phaser.Scene {
     });
 
     this.spawnTreasures();
+    // the field's three hidden star shards (shards.ts), taken by walking onto them
+    new StarShards(this, "volcano", this.player, { found: () => this.holdFights() });
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       // nor on the way to the title, which would then race the battle's fade

@@ -65,6 +65,7 @@ import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
+import { StarShards } from "../ui/StarShards";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -217,6 +218,8 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     this.spawnTreasures();
+    // the field's three hidden star shards (shards.ts), taken by walking onto them
+    new StarShards(this, "dungeon", this.player, { found: () => this.holdFights() });
 
     // the stair down to the ABYSS (abyss.ts), once the FLAME DRAKE has fallen
     const abyss = abyssOpen(GameState.quest, GameState.ngPlus);

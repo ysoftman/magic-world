@@ -7,6 +7,7 @@ import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
+import { loadShards } from "./shards";
 import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays } from "./shrine";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
 
@@ -698,6 +699,8 @@ export const GameState = {
   // companionBondBonus
   companionBond: {} as Record<string, number>,
   openedTreasures: [] as string[],
+  // the star shards picked up in the fields, by id (shards.ts)
+  shards: [] as string[],
   quest: {
     slimes: 0,
     goldenSlimes: 0,
@@ -1131,6 +1134,7 @@ export const GameState = {
     this.companion = null;
     this.companionBond = {};
     this.openedTreasures = [];
+    this.shards = [];
     this.quest = {
       slimes: 0,
       goldenSlimes: 0,
@@ -1232,6 +1236,7 @@ export const GameState = {
           companion: this.companion,
           companionBond: this.companionBond,
           openedTreasures: this.openedTreasures,
+          shards: this.shards,
           quest: this.quest,
           bounty: this.bounty,
           delivery: this.delivery,
@@ -1359,6 +1364,8 @@ export const GameState = {
       this.companion = data.companion ?? null;
       this.companionBond = data.companionBond ?? {};
       this.openedTreasures = data.openedTreasures ?? [];
+      // none on saves from before the star shards
+      this.shards = loadShards(data.shards);
       Object.assign(this.quest, data.quest);
       // saves from before the volcano carry neither flag; set them outright so
       // they can't keep a value left over from a save loaded earlier this session
