@@ -10,7 +10,7 @@ import type { PixelText } from "../pixelText";
 import { MAX_MAPS, REGIONS, type TreasureRegion } from "../treasure";
 import { type FieldFx, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
-import { PANEL_TOP_OVER_HUD } from "./StatusHud";
+import { coverHudUnder, PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 import { drawTreasureMap } from "./TreasureDig";
 
@@ -318,6 +318,7 @@ export class InventoryUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
+    if (PANEL_TOP === PANEL_TOP_OVER_HUD) coverHudUnder(scene, this.dim);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
     this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)

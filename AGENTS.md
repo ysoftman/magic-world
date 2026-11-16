@@ -172,6 +172,10 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   패널의 dim 아래에 HUD 바탕색 띠(`StatusHud` 의 `hudRow2Cover`, x 2..1278·y 40..86, HUD 테두리 안쪽)를 깔고 열 때
   `showHudRow2Cover`(HUD 를 숨긴 동안은 안 보임), 닫을 때 숨긴다. 실제 사례: 일지 왼쪽에 `SLIMES 0/5` 의 `SL`, 오른쪽에
   축복 태그 `GREED 6` 의 `6` 만 잘려 보였다. top 40 인 패널을 새로 만들면 같은 띠를 넣는다.
+- top 8 인 패널(업적·도감, 터치의 집·부엌·대장간·가방·상점)도 HUD 보다 좁아 두 행의 양 끝이 패널 밖에 남는다. 그래서
+  `StatusHud` 의 `coverHudUnder(scene, dim)` 이 HUD 두 행 전체(x 2..1278·y 4..86, 위 강조선 아래)를 HUD 바탕색으로 dim 아래(깊이
+  149.9)에 깔고, 매 프레임 dim 이 보이고 HUD 가 켜져 있을 때만 보인다(여닫는 코드는 그대로). 실제 사례: 터치 가방 왼쪽에 이름과
+  `SEE ELDER` 의 `SEE E`, 오른쪽에 시계 끝자리와 해가 잘려 보였다. top 8 인 패널을 새로 만들면 dim 바로 뒤에 이 한 줄을 넣는다.
 - 필드의 지역 제목(`THE FOREST` 등)도 맵 위에 바로 놓이므로 `sceneCommon` 의
   `fadeAreaTitle` 이 외곽선을 달고, 입구의 `TOWN` 이름표는 제목이 사라진 뒤에 들어온다
   (`fadeInAfterAreaTitle`). 실제 사례: 밤 숲에서 외곽선 없는 초록 `THE FOREST` 가 나무 꼭대기에

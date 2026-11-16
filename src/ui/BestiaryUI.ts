@@ -9,7 +9,7 @@ import { DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { type FieldFx, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint } from "./Gamepad";
-import { PANEL_TOP_OVER_HUD } from "./StatusHud";
+import { coverHudUnder, PANEL_TOP_OVER_HUD } from "./StatusHud";
 
 const SPECIES = Object.values(ENEMIES);
 
@@ -207,6 +207,7 @@ export class BestiaryUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
+    coverHudUnder(scene, this.dim);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
     this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)

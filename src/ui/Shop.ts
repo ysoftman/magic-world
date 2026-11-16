@@ -11,7 +11,7 @@ import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { type FieldFx, GOLD_BURST, PanelFx } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
-import { hudRow2Cover, PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1, showHudRow2Cover } from "./StatusHud";
+import { coverHudUnder, hudRow2Cover, PANEL_TOP_OVER_HUD, PANEL_TOP_UNDER_HUD_ROW1, showHudRow2Cover } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // half the buy price, floored, never free
@@ -173,6 +173,7 @@ export class ShopUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
+    if (PANEL_TOP === PANEL_TOP_OVER_HUD) coverHudUnder(scene, this.dim);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
     this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)

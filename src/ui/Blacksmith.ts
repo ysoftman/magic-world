@@ -20,7 +20,7 @@ import type { PixelText } from "../pixelText";
 import { SHOP_ITEMS } from "../shopItems";
 import { PanelFx, SPARKS } from "./fieldFx";
 import { bindKeyHint, keyHint, keyNames } from "./Gamepad";
-import { PANEL_TOP_OVER_HUD } from "./StatusHud";
+import { coverHudUnder, PANEL_TOP_OVER_HUD } from "./StatusHud";
 import { isTouchDevice } from "./TouchControls";
 
 // The forged gear's overlays (art/forged.ts), once per game: BootScene bakes
@@ -171,6 +171,7 @@ export class BlacksmithUI {
       depth = 152,
     ): T => o.setScrollFactor(0).setDepth(depth).setVisible(false);
     this.dim = fixed(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5), 150);
+    if (PANEL_TOP === PANEL_TOP_OVER_HUD) coverHudUnder(scene, this.dim);
     // opaque: on a touch screen it hangs from y 28, over the HUD, whose lines showed through at 0.95
     this.panel = fixed(
       gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),

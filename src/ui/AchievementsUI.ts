@@ -6,7 +6,7 @@ import { GameState } from "../gameState";
 import { BODY_GLYPH_W, bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
-import { PANEL_TOP_OVER_HUD } from "./StatusHud";
+import { coverHudUnder, PANEL_TOP_OVER_HUD } from "./StatusHud";
 
 // Fixed pages of two columns x seven rows. Shrinking the row gap to fit one
 // page stopped working at 23 entries (a name's glyphs touched its own desc),
@@ -89,6 +89,7 @@ export class AchievementsUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
+    coverHudUnder(scene, this.dim);
     // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
     this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)

@@ -39,6 +39,29 @@ export const showHudRow2Cover = (cover: Phaser.GameObjects.Rectangle): void => {
   cover.setVisible(GameState.hudVisible);
 };
 
+/**
+ * For a panel whose top is PANEL_TOP_OVER_HUD and which is narrower than the
+ * HUD: the HUD's own ground over both its rows (y 4..86, under the accent
+ * line), under the panel's `dim` and shown whenever that is. Without it the
+ * rows' ends stood out either side of the panel as cut words: the hero's
+ * name and "SEE E" of SEE ELDER on the left, the clock's last digits and the
+ * sun on the right.
+ */
+export function coverHudUnder(scene: Phaser.Scene, dim: Phaser.GameObjects.Rectangle): void {
+  const top = 4;
+  const h = STATUS_HUD_HEIGHT - 2 - top;
+  const cover = scene.add
+    .rectangle(GAME_WIDTH / 2, top + h / 2, GAME_WIDTH - 4, h, 0x0b0b2b, 1)
+    .setScrollFactor(0)
+    .setDepth(149.9)
+    .setVisible(false);
+  const follow = (): void => {
+    cover.setVisible(dim.visible && GameState.hudVisible);
+  };
+  scene.events.on("postupdate", follow);
+  scene.events.once("shutdown", () => scene.events.off("postupdate", follow));
+}
+
 // The single quest slot shows whichever chapter is currently open: the label
 // of objective.ts's current step, the same walk of the chain the minimap's
 // marker follows. Exported for the title screen's save card, which passes the
