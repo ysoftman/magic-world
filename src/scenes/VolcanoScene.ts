@@ -34,6 +34,7 @@ import {
   fadeAreaTitle,
   HeroWalk,
   isWalkableCell,
+  meetFoe,
   noteFightSpot,
   type Roamer,
   saveAndQuit,
@@ -506,14 +507,21 @@ export class VolcanoScene extends Phaser.Scene {
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
     if (this.encounterCooldown > 0 || this.exitingVolcano) return false; // already fading into a battle
+    const roll = Math.random();
+    const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
+    // far under the hero it falls here, no battle (overrun.ts); else the
+    // elite roll made for the meeting goes to the battle with it
+    const met = keeper ? null : meetFoe(this, this.toasts, kind, this.player, this.roamers);
+    if (met === "overrun") {
+      this.encounterCooldown = ENCOUNTER_COOLDOWN;
+      return true;
+    }
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingVolcano = true;
     encounterOut(this.cameras.main, 300, () => {
-      const roll = Math.random();
-      const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
-      this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper });
+      this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper, elite: met });
     });
     return true;
   }

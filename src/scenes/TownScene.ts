@@ -62,6 +62,7 @@ import {
   FieldToasts,
   HeroWalk,
   isWalkableCell,
+  meetFoe,
   OBJECT_LAYER_DEPTH,
   paintTile,
   type Roamer,
@@ -2304,12 +2305,19 @@ export class TownScene extends Phaser.Scene {
 
   private startBattle(enemy?: "slime" | "goblin" | "troll" | "wolf" | "goldSlime" | "wisp"): void {
     if (this.encounterCooldown > 0) return; // already fading into a battle
+    const roll = Math.random();
+    const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
+    // far under the hero it falls here, no battle (overrun.ts); else the
+    // elite roll made for the meeting goes to the battle with it
+    const met = meetFoe(this, this.toasts, kind, this.player, this.roamers);
+    if (met === "overrun") {
+      this.encounterCooldown = ENCOUNTER_COOLDOWN;
+      return;
+    }
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     encounterOut(this.cameras.main, 300, () => {
-      const roll = Math.random();
-      const kind = enemy ?? (roll < 0.4 ? "slime" : roll < 0.75 ? "goblin" : "wolf");
-      this.scene.start("Battle", { enemy: kind, from: "Town" });
+      this.scene.start("Battle", { enemy: kind, from: "Town", elite: met });
     });
   }
 }

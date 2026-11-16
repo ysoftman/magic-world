@@ -7,8 +7,8 @@ import type { PixelText } from "../pixelText";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
-// Eleven retroStyle(6) rows (24px, Press Start 2P measures 1em) from
-// PANEL_TOP+98 at a 33px pitch. The panel grew upward for the ninth (BATTLE
+// Twelve retroStyle(6) rows (24px, Press Start 2P measures 1em) from
+// PANEL_TOP+98 at a 30px pitch. The panel grew upward for the ninth (BATTLE
 // SPEED) and is pinned by its bottom edge at y=588 rather than centred, so the
 // rows and the touch clearance below them didn't have to shrink: it spans
 // y=92..588 (just under the 88px HUD), the title runs 132..164 — low enough
@@ -18,8 +18,9 @@ import { isTouchDevice } from "./TouchControls";
 // at 544..560 — 12px above the d-pad's right arrow (TouchControls: centre
 // 214,616 r44, top 572). With no room left above (the HUD) or below (the
 // d-pad), the tenth (GUIDE ARROW) came out of the pitch (40 to 36) and the
-// eleventh (FULLSCREEN) did again: 33 keeps 12px above the hint and 8 under
-// the CLOSE chip, and leaves 9 between rows. Widest row
+// eleventh (FULLSCREEN) did again (33) and the twelfth (OVERRUN) once more:
+// 30 keeps the rows where they were (178..532, 12px above the hint and 8 under
+// the CLOSE chip) and leaves 6 between rows, each still a 30px tap. Widest row
 // "> BGM VOLUME: ##########  100%" is 30 x 24 = 720px, x=280..1000, and on
 // touch "< BGM VOLUME: ##########  100% >" is 32 x 24 = 768px, x=256..1024:
 // inside the panel's 160..1120, clear of the touch menu (x>=1222), and far
@@ -29,7 +30,7 @@ const PANEL_H = 496;
 const PANEL_TOP = 588 - PANEL_H;
 const TITLE_Y = PANEL_TOP + 56;
 const ROW_Y = PANEL_TOP + 98;
-const ROW_GAP = 33;
+const ROW_GAP = 30;
 // the rows' tap zone: as wide as the widest touch row, a full pitch per row
 const ROWS_TOP = ROW_Y - ROW_GAP / 2;
 const ROWS_HIT_W = 768;
@@ -47,14 +48,20 @@ const LABELS = [
   "SCREEN SHAKE",
   "FLASHES",
   "GUIDE ARROW",
+  "OVERRUN",
   "FULLSCREEN",
   "EXPORT SAVE",
   "IMPORT SAVE",
 ];
-const TOGGLES: Record<number, "screenShake" | "flashes" | "guideArrow"> = { 5: "screenShake", 6: "flashes", 7: "guideArrow" };
+const TOGGLES: Record<number, "screenShake" | "flashes" | "guideArrow" | "overrun"> = {
+  5: "screenShake",
+  6: "flashes",
+  7: "guideArrow",
+  8: "overrun",
+};
 // The browser's state rather than a saved setting: it shows what the screen
 // is now, and ESC leaving fullscreen flips it back through LEAVE_FULLSCREEN
-const FULLSCREEN_ROW = 8;
+const FULLSCREEN_ROW = 9;
 // iPhone Safari has no element fullscreen (only a <video>'s), and an iframe
 // without allow="fullscreen" turns it off; the row reads N/A there
 const fullscreenSupported = (scale: Phaser.Scale.ScaleManager): boolean =>
@@ -457,6 +464,7 @@ export class SettingsUI {
       GameState.screenShake ? "ON" : "OFF",
       GameState.flashes ? "ON" : "OFF",
       GameState.guideArrow ? "ON" : "OFF",
+      GameState.overrun ? "ON" : "OFF",
       fullscreenOk ? (this.scene.scale.isFullscreen ? "ON" : "OFF") : "N/A",
       "",
       "",

@@ -5,7 +5,8 @@ import { Sfx } from "./audio";
 import { buildTransitionLayer, pickVariant, ROAD_TEXTURE_KEY, SHORE_TEXTURE_KEY, TRANSITION_DEPTH, tileHash } from "./autotile";
 import { SKILLS, type Skill } from "./battleRules";
 import { GAME_WIDTH } from "./config";
-import { warmFx } from "./fx";
+import type { EliteKind } from "./elite";
+import { playFx, warmFx } from "./fx";
 import { econDay, GameState, onSaved } from "./gameState";
 import {
   type MonsterZone,
@@ -21,7 +22,9 @@ import {
   T_WATER_B,
   TILE,
 } from "./levels";
+import { ENEMIES } from "./monsters";
 import { NESTS, type NestRegion, nestOpen } from "./nest";
+import { meet, overrunLines, settleOverrun } from "./overrun";
 import { peddlerRegion, peddlerSold } from "./peddler";
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
 import { PixelText } from "./pixelText";
@@ -1481,6 +1484,11 @@ export class FieldToasts {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribe);
   }
 
+  /** A line on this scene's toast row. */
+  toast(text: string): void {
+    showToast(this.scene, text, this.toastY);
+  }
+
   /** A save with no SAVED toast, for one whose news the scene toasts itself. */
   quietSave(): void {
     this.quiet = true;
@@ -1551,4 +1559,58 @@ export function saveOnShutdown(scene: Phaser.Scene, parts: ReadonlyArray<{ destr
     GameState.save();
     for (const part of parts) part?.destroy();
   });
+}
+
+// an overrun foe's last moment: knocked this far from the hero as it fades, under its puff
+const OVERRUN_KNOCK_PX = 24;
+const OVERRUN_FADE_MS = 180;
+const OVERRUN_PUFF_MS = 600;
+
+/**
+ * A foe of `kind` met in the open (a roamer touched, or the grass's roll):
+ * "overrun" if it fell on the spot (overrun.ts: paid, saved and toasted
+ * here, the scene has only its cooldown to set), else the elite roll made
+ * for the meeting, which goes to the battle as its data's `elite`. Not for a
+ * seal's keeper or a runner, which are always fought.
+ *
+ * The foe falls where it stood: the roamer of that kind the hero touches is
+ * taken out of `roamers` and its sprite is the one knocked back; out of the
+ * grass a picture of it appears a step ahead of the hero for the same end.
+ * The puff is the battle's fx-poof at the field's 2px cells.
+ */
+export function meetFoe(
+  scene: Phaser.Scene,
+  toasts: FieldToasts,
+  kind: string,
+  hero: Phaser.Physics.Arcade.Sprite,
+  roamers: Roamer[],
+): EliteKind | null | "overrun" {
+  const met = meet(kind, GameState.overrun);
+  if (!met.overrun) return met.elite;
+  const result = settleOverrun(met.enemy);
+  toasts.quietSave();
+  const { status, news } = overrunLines(result);
+  toasts.toast(status);
+  for (const line of news) toasts.toast(line);
+  if (result.levels) Sfx.levelup();
+  else {
+    Sfx.strike();
+    scene.time.delayedCall(120, () => Sfx.pickup());
+  }
+  const roamer = roamers.find((r) => r.kind === kind && scene.physics.overlap(hero, r.sprite));
+  if (roamer) roamers.splice(roamers.indexOf(roamer), 1);
+  const body = roamer?.sprite.body as Phaser.Physics.Arcade.Body | undefined;
+  if (body) body.enable = false;
+  const sprite = roamer?.sprite ?? scene.add.image(hero.x + 40, hero.y, (ENEMIES[kind] ?? ENEMIES.slime).texture).setDepth(10);
+  const away = sprite.x >= hero.x ? 1 : -1;
+  scene.tweens.killTweensOf(sprite);
+  scene.tweens.add({
+    targets: sprite,
+    x: sprite.x + away * OVERRUN_KNOCK_PX,
+    alpha: 0,
+    duration: OVERRUN_FADE_MS,
+    onComplete: () => sprite.destroy(),
+  });
+  playFx(scene, "fx-poof", sprite.x, sprite.y + sprite.displayHeight / 2 - 4, OVERRUN_PUFF_MS, 1).setDepth(10.6);
+  return "overrun";
 }

@@ -699,6 +699,37 @@ NEST 는 필드의 굴에서 세 전투를 연달아 하는 곳이다(지금은 
 - 그림은 `Nest.ts` 안의 32x24칸 격자(64x48px)를 `scene` 인자로 굽는다(check:art 대상 아님). 들어갈 수 있을 때는 굴 안에 눈
   둘, 그날을 쓴 뒤에는 눈이 없는 팔레트(`nest-still`)와 흐린 이름표다. 몸은 아래쪽 56x22, 영웅이 뒤에 서면 깊이 10.4.
 
+## 압도 (`src/overrun.ts`, `src/payout.ts`)
+
+한참 약한 적은 필드에서 닿는 순간 전투 없이 쓰러진다(OVERRUN). 규칙·지급은 `overrun.ts`(Phaser 없음), 필드 쪽은 `sceneCommon` 의
+`meetFoe` 하나다. 이긴 전투의 결산은 `payout.ts` 의 `settleWin`·`settleLevels` 한 곳이고 BattleScene `victory()` 와 압도가 같이
+쓴다(압도는 `share` 0.8 을 넘긴다). 결산에 보상·집계를 더하면 그 함수에 넣고, 압도에서도 주거나 셀지(`share < 1` 분기)를 정한다.
+
+- 판정(`outmatched`)은 레벨 차가 아니라 전투 산식이다: 평균 굴림(x1.0)의 FIGHT 가 적 최대 HP(밤·HARD 반영) 이상이고 적의 최대
+  치명타가 영웅 최대 HP 의 10%(`OVERRUN_HURT_SHARE`) 이하. 실제 사례: 최소 굴림(x0.8)으로 재면 SLIME 이 Lv12 부터였고 다섯 종뿐이라
+  평균으로 넓혔다(SLIME 9·BAT 11·GOBLIN 14·WASP 18·WOLF 20, 의도 장비·낮). 그래도 "한 방"이 조건이라 숲 중반부터는 거의 안 된다
+  (Lv30 미스릴 ATK 41, SPIDER HP 40·DEF 2). 영웅 ATK·몬스터 HP 를 바꾸면 `/tmp/pwcheck/` 의 일회용 표(종마다 `outmatched` 가 처음
+  참이 되는 레벨)로 다시 뽑아 README 의 레벨을 고친다.
+- 정예는 `meet` 이 전투와 같은 `rollElite` 를 먼저 굴리고, 정예면 늘 싸우며 그 굴림을 Battle data 의 `elite` 로 넘긴다(BattleScene
+  `init` 은 data 에 `elite` 키가 있으면 다시 굴리지 않는다). 그래서 정예 빈도와 정예 과제·업적이 압도 때문에 줄지 않는다. 필드에서
+  Battle 을 여는 새 길은 `meetFoe` 를 거치거나(일반 조우) `elite` 를 넘기지 않는다(봉인 강적은 `keeper`, 러너는 희귀종이라 `meet` 이
+  그대로 싸움으로 돌려준다).
+- 못 잡은 종도 압도한다. 실제 사례: "CANDY 를 들고 있고 못 잡은 종이면 싸운다"는 첫 규칙은 압도를 거의 다 막았다. 일곱 번에 한 번
+  CANDY 가 떨어져 가방에 늘 있기 때문이다(실게임 검증 중 첫 압도가 CANDY 를 줘서 다음 조우가 전투가 됐다). 잡으려는 사람은 설정에서
+  끈다(README).
+- 보상 비율(`OVERRUN_SHARE` 0.8)의 근거는 `overrun.ts` 머리 주석의 계산이다(시간당 약 132전투, 한 방 전투 약 4.5초 대 압도 약 0.6초
+  로 풀밭 사냥 0.94배·로머 사냥 1.19배. 4.5초·0.6초·12초는 추정이다). 요리·축복은 충전을 쓰지 않고 보너스도 주지 않는다(판정의
+  ATK·DEF 에만 든다). 승리 회복·LIMIT·유대는 없다.
+- 새 필드 씬에 넣을 때: `startBattle` 에서 종을 페이드 전에 고르고, `const met = keeper ? null : meetFoe(this, this.toasts, kind,
+  this.player, this.roamers)` 가 `"overrun"` 이면 `encounterCooldown` 만 걸고 돌아오며, 아니면 `scene.start("Battle", { ..., elite: met })`
+  다. `meetFoe` 가 지급·조용한 저장·토스트·효과음·연출을 다 한다(닿은 로머는 목록에서 빼고 밀리며 사라짐, 풀밭 조우는 영웅 앞에 그
+  몬스터 그림, 발밑에 fx-poof 를 필드 배율 1 로). 씬 전환이 없어 `exiting*` 플래그는 세우지 않는다.
+- 토스트는 상태 줄(`!` 없음)이라 바로 뜨고 다음 압도가 덮는다: `OVERRUN <이름>: +NG +NEXP` 뒤에 얻은 것(52글자를 넘으면
+  `+2 ITEMS`). 레벨업과 보물 지도는 소식 줄(`!`)로 뒤따른다(`overrunLines`, 최장 48글자 = 960px).
+- 설정 `GameState.overrun`(기본 켬, `magic-world-settings` 에 저장)은 SettingsUI 의 열두 번째 줄이다. 그 줄을 넣으며 줄 간격이
+  33 → 30px(줄 사이 6px)이 됐다. 위는 HUD, 아래는 D-pad 라 패널을 더 늘릴 수 없으니 설정을 더 넣으려면 줄을 합치거나 쪽을 나눈다.
+- fx-poof 를 필드 배율로 처음 틀 때 그 자리에서 한 번 굽는다(헤드리스에서 그 프레임 24.6~24.8ms). 더 무거운 연출로 바꾸면 미리 굽는다.
+
 ## 바운티의 과제 (`src/bounties.ts`)
 
 BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대신 과제(`DEEDS`: 정예 처치·PARRY·러너 잡기·제단 기도·PERFECT·원소 반응·LIMIT

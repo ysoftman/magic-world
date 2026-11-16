@@ -746,6 +746,9 @@ export class BattleScene extends Phaser.Scene {
     // a field seal's keeper (seals.ts): the elite it is fought as, not
     // rolled, and its own HP and ATK on top
     keeper?: KeeperBout;
+    // the elite roll the field already made for this meeting (overrun.ts
+    // meet, which fights an elite and may overrun the rest): not rolled again
+    elite?: EliteKind | null;
   }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
@@ -831,7 +834,7 @@ export class BattleScene extends Phaser.Scene {
     this.night = isNight() && !this.abyss;
     this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
     const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
-    this.elite = data?.keeper?.elite ?? rollElite(def, fought);
+    this.elite = data?.keeper?.elite ?? (data && "elite" in data ? (data.elite ?? null) : rollElite(def, fought));
     this.keeperName = data?.keeper?.name ?? null;
     this.enemy = scaleEnemy(def, {
       night: this.night,

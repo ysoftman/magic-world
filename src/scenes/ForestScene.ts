@@ -31,6 +31,7 @@ import {
   fadeAreaTitle,
   HeroWalk,
   isWalkableCell,
+  meetFoe,
   noteFightSpot,
   type Roamer,
   saveAndQuit,
@@ -544,15 +545,22 @@ export class ForestScene extends Phaser.Scene {
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
     if (this.encounterCooldown > 0 || this.exitingForest) return false; // already fading into a battle
+    const roll = Math.random();
+    const rolled = roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc";
+    const kind = enemy ?? (rolled === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : rolled);
+    // far under the hero it falls here, no battle (overrun.ts); else the
+    // elite roll made for the meeting goes to the battle with it
+    const met = keeper ? null : meetFoe(this, this.toasts, kind, this.player, this.roamers);
+    if (met === "overrun") {
+      this.encounterCooldown = ENCOUNTER_COOLDOWN;
+      return true;
+    }
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingForest = true;
     encounterOut(this.cameras.main, 300, () => {
-      const roll = Math.random();
-      const rolled = roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc";
-      const kind = enemy ?? (rolled === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("forest") });
-      this.scene.start("Battle", { enemy: kind, from: "Forest", keeper });
+      this.scene.start("Battle", { enemy: kind, from: "Forest", keeper, elite: met });
     });
     return true;
   }

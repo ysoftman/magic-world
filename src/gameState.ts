@@ -808,6 +808,8 @@ export const GameState = {
   flashes: true,
   // the arrow orbiting the hero towards the quest's goal (ui/GuideArrow.ts)
   guideArrow: true,
+  // a foe far under the hero falls in the field with no battle (overrun.ts)
+  overrun: true,
   // the save slot (1..SAVE_SLOTS) every save/load/export goes to; a setting,
   // so it outlives a page load (see setSaveSlot)
   saveSlot: 1,
@@ -1540,6 +1542,7 @@ export const GameState = {
       this.screenShake = typeof s.screenShake === "boolean" ? s.screenShake : true;
       this.flashes = typeof s.flashes === "boolean" ? s.flashes : true;
       this.guideArrow = typeof s.guideArrow === "boolean" ? s.guideArrow : true;
+      this.overrun = typeof s.overrun === "boolean" ? s.overrun : true;
       this.saveSlot = clampSlot(s.saveSlot);
     } catch {
       /* keep defaults */
@@ -1561,6 +1564,7 @@ export const GameState = {
           screenShake: this.screenShake,
           flashes: this.flashes,
           guideArrow: this.guideArrow,
+          overrun: this.overrun,
           saveSlot: this.saveSlot,
         }),
       );

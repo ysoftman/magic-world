@@ -32,6 +32,7 @@ import {
   fadeAreaTitle,
   HeroWalk,
   isWalkableCell,
+  meetFoe,
   noteFightSpot,
   type Roamer,
   saveAndQuit,
@@ -544,15 +545,22 @@ export class SnowScene extends Phaser.Scene {
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
     if (this.encounterCooldown > 0 || this.exitingSnow) return false; // already fading into a battle
+    const roll = Math.random();
+    const rolled = roll < 0.5 ? "frostMoth" : "yeti";
+    const kind = enemy ?? (rolled === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : rolled);
+    // far under the hero it falls here, no battle (overrun.ts); else the
+    // elite roll made for the meeting goes to the battle with it
+    const met = keeper ? null : meetFoe(this, this.toasts, kind, this.player, this.roamers);
+    if (met === "overrun") {
+      this.encounterCooldown = ENCOUNTER_COOLDOWN;
+      return true;
+    }
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingSnow = true;
     encounterOut(this.cameras.main, 300, () => {
-      const roll = Math.random();
-      const rolled = roll < 0.5 ? "frostMoth" : "yeti";
-      const kind = enemy ?? (rolled === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("snow") });
-      this.scene.start("Battle", { enemy: kind, from: "Snow", keeper });
+      this.scene.start("Battle", { enemy: kind, from: "Snow", keeper, elite: met });
     });
     return true;
   }

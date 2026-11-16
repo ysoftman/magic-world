@@ -40,6 +40,7 @@ import {
   fadeAreaTitle,
   HeroWalk,
   isWalkableCell,
+  meetFoe,
   noteFightSpot,
   type Roamer,
   saveAndQuit,
@@ -629,14 +630,21 @@ export class DungeonScene extends Phaser.Scene {
     // or the ABYSS stair fades (no safe radius round the stair), or that stair
     // reached while a battle fades, started both scenes at once.
     if (this.encounterCooldown > 0 || this.exitingDungeon) return false; // already fading into a battle
+    const roll = Math.random();
+    const kind = enemy ?? (roll < 0.35 ? "slime" : roll < 0.7 ? "goblin" : "bat");
+    // far under the hero it falls here, no battle (overrun.ts); else the
+    // elite roll made for the meeting goes to the battle with it
+    const met = keeper ? null : meetFoe(this, this.toasts, kind, this.player, this.roamers);
+    if (met === "overrun") {
+      this.encounterCooldown = ENCOUNTER_COOLDOWN;
+      return true;
+    }
     this.player.setVelocity(0, 0);
     this.encounterCooldown = ENCOUNTER_COOLDOWN;
     this.exitingDungeon = true;
     encounterOut(this.cameras.main, 300, () => {
-      const roll = Math.random();
-      const kind = enemy ?? (roll < 0.35 ? "slime" : roll < 0.7 ? "goblin" : "bat");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("dungeon") });
-      this.scene.start("Battle", { enemy: kind, from: "Dungeon", keeper });
+      this.scene.start("Battle", { enemy: kind, from: "Dungeon", keeper, elite: met });
     });
     return true;
   }
