@@ -62,6 +62,9 @@ AUDIT_JS = """() => {
   const out = { offscreen: [], overlap: [], missing: [], touch: [], touchMap: [] };
   for (const s of window.__game.scene.getScenes(true)) {
     const cam = s.cameras.main, items = [];
+    // a scene whose camera follows nothing and sits at 0,0 (Battle, Title, Ending) is all screen-fixed,
+    // whatever its texts' scrollFactor: counted by scrollFactor alone, a battle's texts were never compared
+    const still = !cam._follow && cam.scrollX === 0 && cam.scrollY === 0;
     const walk = (list, vis) => {
       for (const o of list) {
         const v = vis && o.visible !== false && (o.alpha === undefined || o.alpha > 0.05);
@@ -70,7 +73,7 @@ AUDIT_JS = """() => {
         // Text, or PixelText (a BitmapText; its text is what was set, unwrapped)
         if ((o.type !== "Text" && o.type !== "BitmapText") || !v || !o.text || !o.text.trim()) continue;
         const b = o.getBounds();
-        const fixed = (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
+        const fixed = still || (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
         items.push({ t: o.text.replace(/\\n/g, "|").slice(0, 48), x: fixed ? b.x : b.x - cam.scrollX, y: fixed ? b.y : b.y - cam.scrollY,
           w: b.width, h: b.height, fixed, depth: o.depth });
       }
@@ -210,7 +213,7 @@ class Game:
         return path
 
     def audit(self) -> dict:
-        """screen-fixed text (Text or PixelText) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text
+        """screen-fixed text (Text or PixelText; all of it in a scene whose camera stays at 0,0, as a battle's) off the 1280x720 screen, fixed texts overlapping, __MISSING textures, touch discs over text
         (touch: fixed text; touchMap: the map's tags at this camera position; sprites such as a shrine's stone are not looked at).
         An opaque panel over the HUD band still lists the HUD texts under it as overlaps: check the screenshot."""
         return self.ev(AUDIT_JS)
