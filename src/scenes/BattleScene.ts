@@ -664,6 +664,7 @@ export class BattleScene extends Phaser.Scene {
   private foeBuff: "ATK+" | "DEF+" | null = null;
   private snatched = 0;
   private intentText!: PixelText;
+  private eliteText!: PixelText;
   private buffText!: PixelText;
   private wardTurns = 0;
   // companion skill state on the enemy (see companionSkills.ts), which the
@@ -965,15 +966,23 @@ export class BattleScene extends Phaser.Scene {
       .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, this.elite ? ELITES[this.elite].color : "#ff5555"))
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
-    // An elite's tag (elite.ts), in its colour as its name is: right-aligned
-    // on the WEAK row, "STURDY" 6 x 20 = 120px from x=1108, y 140..160, clear
-    // of "WEAK:FIRE" (to x=996) and of the status tags, which reach that
-    // third row only with five up (an elite, never a boss, has three at most).
-    if (this.elite)
-      this.add
-        .pixelText(ENEMY_STATUS_RIGHT, 140, ELITES[this.elite].tag, retroStyle(5, ELITES[this.elite].color))
-        .setOrigin(1, 0)
-        .setDepth(STAT_DEPTH);
+    // An elite's tag (elite.ts), in its colour as its name is: the last of
+    // the status tags (updateEnemyStatus), so it sits on the HP row alone and
+    // moves down a row for each row of tags over it. Fixed on the WEAK row
+    // (y 140) it lay under a third row of tags (y 138). "STURDY" is 6 x 20 =
+    // 120px; an elite has three rows at most (its move's tag or buff, or a
+    // wind-up's CHG; PSN/BRN with CHL; this), and on the third it is clear of
+    // "WEAK:FIRE" (to x=996).
+    this.eliteText = this.add
+      .pixelText(
+        ENEMY_STATUS_RIGHT,
+        90,
+        this.elite ? ELITES[this.elite].tag : "",
+        retroStyle(5, this.elite ? ELITES[this.elite].color : DIM_TEXT),
+      )
+      .setOrigin(1, 0)
+      .setDepth(STAT_DEPTH)
+      .setVisible(false);
     this.enemyHpText = this.add
       .pixelText(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
       .setOrigin(0, 0)
@@ -3376,6 +3385,7 @@ export class BattleScene extends Phaser.Scene {
         [this.rageText, this.enraged],
         [this.dotText, this.enemyDot !== null],
         [this.chillText, this.chilled],
+        [this.eliteText, this.elite !== null],
       ],
       ENEMY_STATUS_RIGHT,
       ENEMY_STATUS_MIN_X,
