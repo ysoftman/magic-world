@@ -20,6 +20,12 @@
 // ABYSS's GUARDIANs, as the BLACKSMITH's REFINE was sized with (drops.ts).
 // Left out, the run is the one above.
 //
+// --foe KEY fights any ENEMIES entry instead of the bosses (in --gear
+// weapon,armor, SWORD and SHIELD if not given; the GEAR columns), and
+// --elite fierce|sturdy|swift makes the foe that elite (elite.ts): how its
+// numbers were checked against each region's foes at the level a hero walks
+// in with, e.g. `--foe orc --elite fierce --level 9 --gear sword,ironShield`.
+//
 // --skills lets the hero use the SKILL list too, greedily: each turn it has
 // nothing to heal or brace for, the attack spell or skill with the most
 // expected damage this turn that it can pay for, poison or burn it would
@@ -86,6 +92,7 @@ const { GameState } = await import("../src/gameState");
 const { HI_POTION_HP, POTION_HP } = await import("../src/itemInfo");
 const { ENEMIES } = await import("../src/monsters");
 const { abyssGuardian } = await import("../src/abyss");
+const { actsAgain, ELITES } = await import("../src/elite");
 
 type Foe = ReturnType<typeof scaleEnemy>;
 
@@ -131,9 +138,13 @@ const HP_LOW_SHARE = 0.35;
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`bun run sim:battle [--boss KING|TROLL|MOSS|GLACIER|DRAKE] [--level 8 | --level 6,12,18] [--n 2000] [--potions 3] [--bond N]
+                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift]
                     [--skills | --greedy] [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
        bun run sim:battle --skill-table
   --boss       one boss instead of all five
+  --foe        any ENEMIES key instead (slime, orc, yeti...), its row's intended level the first --level
+  --gear       that fight's GEAR columns, EQUIPMENT keys "weapon,armor" (default sword,shield)
+  --elite      the foe as that elite (elite.ts); with no --foe, the bosses as if they could be
   --level      one level or a comma list instead of 1..${MAX_LEVEL}
   --n          fights per cell (default 2000)
   --potions    POTIONs the hero carries in (default 3)
@@ -189,6 +200,29 @@ if (bosses.length === 0) {
 }
 const levelArg = opt("level");
 const levels = levelArg ? levelArg.split(",").map(Number) : Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
+const ELITE = opt("elite");
+if (ELITE !== undefined && !Object.keys(ELITES).includes(ELITE)) {
+  console.error(`unknown elite ${ELITE}; one of ${Object.keys(ELITES).join(", ")}`);
+  process.exit(1);
+}
+const eliteKind = (ELITE ?? null) as keyof typeof ELITES | null;
+const FOE = opt("foe");
+if (FOE !== undefined) {
+  if (!Object.keys(ENEMIES).includes(FOE)) {
+    console.error(`unknown foe ${FOE}; one of ${Object.keys(ENEMIES).join(", ")}`);
+    process.exit(1);
+  }
+  const [weapon, armor] = (opt("gear") ?? "sword,shield").split(",") as [EquipmentKey, EquipmentKey];
+  bosses = [
+    {
+      tag: FOE.toUpperCase().slice(0, 8),
+      key: FOE as BossCase["key"],
+      level: levels[0],
+      gear: { weapon, armor },
+      todo: { wolf: 0, solo: 0 },
+    },
+  ];
+}
 
 // --- the hero ----------------------------------------------------------------
 
@@ -296,6 +330,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     arena: false,
     abyss: ABYSS === null ? null : { floor: ABYSS, guardian: true },
     ng: NG_SCALE,
+    elite: eliteKind,
   });
   const tell = BOSS_TELLS[foe.name];
   let hp = hero.maxHp;
@@ -549,7 +584,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       companion();
       if (foe.curHp <= 0) return { won: true, rounds, taken };
     }
+    // BattleScene runBattle(): a SWIFT elite may act again
+    const again = !stuck && actsAgain(eliteKind);
     enemyTurn();
+    if (again && !charging && hp > 0 && foe.curHp > 0) enemyTurn();
     defending = false;
     if (wardTurns > 0) wardTurns -= 1;
   }

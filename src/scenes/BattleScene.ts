@@ -60,6 +60,7 @@ import {
 import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP, PIXEL } from "../config";
 import { type MealDef, takeMealCharge } from "../cooking";
 import { MATERIALS, rollDrop } from "../drops";
+import { actsAgain, ELITE_DROP_MULT, ELITES, type EliteKind, rollElite } from "../elite";
 import { bakeBattleFx, flash, loopFx, playFx, shake, warmFx } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
@@ -561,6 +562,8 @@ export class BattleScene extends Phaser.Scene {
   // a field boss or the TROLL KING fought again after its first kill (see
   // init)
   private rematch = false;
+  // the foe is an elite of its kind (elite.ts), rolled in init
+  private elite: EliteKind | null = null;
   private combo = 0;
   private comboText!: PixelText;
   // one successful steal per battle; failed attempts don't count against it
@@ -698,12 +701,15 @@ export class BattleScene extends Phaser.Scene {
     // is battleRules.scaleEnemy's.
     this.night = isNight() && !this.abyss;
     this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
+    const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
+    this.elite = rollElite(def, fought);
     this.enemy = scaleEnemy(def, {
       night: this.night,
       arena: !!this.arena,
       abyss: this.abyss,
       ng: GameState.enemyScale(),
       rematch: this.rematch,
+      elite: this.elite,
     });
     if (this.practice) {
       this.enemy.hp = practiceHp(this.enemy.hp, GameState.effAtk());
@@ -863,9 +869,18 @@ export class BattleScene extends Phaser.Scene {
       .setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
 
     this.add
-      .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, "#ff5555"))
+      .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, this.elite ? ELITES[this.elite].color : "#ff5555"))
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
+    // An elite's tag (elite.ts), in its colour as its name is: right-aligned
+    // on the WEAK row, "STURDY" 6 x 20 = 120px from x=1108, y 140..160, clear
+    // of "WEAK:FIRE" (to x=996) and of the status tags, which reach that
+    // third row only with five up (an elite, never a boss, has three at most).
+    if (this.elite)
+      this.add
+        .pixelText(ENEMY_STATUS_RIGHT, 140, ELITES[this.elite].tag, retroStyle(5, ELITES[this.elite].color))
+        .setOrigin(1, 0)
+        .setDepth(STAT_DEPTH);
     this.enemyHpText = this.add
       .pixelText(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
       .setOrigin(0, 0)
@@ -1578,7 +1593,13 @@ export class BattleScene extends Phaser.Scene {
     // nothing has happened yet to read past, and it was one press more in
     // every fight. It stays in the box until the first action's line.
     const intro = this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`;
-    this.type(this.rested ? `${intro}\nWell rested: your WARD is up!` : intro);
+    // An elite (elite.ts) is named in the line and says what it does under it,
+    // beside the rest's note: "ELITE: much tougher!  Well rested: your WARD
+    // is up!" is 51 of a row's 54 glyphs, "STURDY MAGMA SLIME blocks your
+    // way!" 35.
+    const elite = this.elite && ELITES[this.elite];
+    const notes = [elite && `ELITE: ${elite.note}!`, this.rested && "Well rested: your WARD is up!"].filter(Boolean);
+    this.type([elite ? `${elite.tag} ${intro}` : intro, ...(notes.length > 0 ? [notes.join("  ")] : [])].join("\n"));
 
     this.leaveArmed = false;
     while (this.running) {
@@ -1667,7 +1688,14 @@ export class BattleScene extends Phaser.Scene {
       if (!this.running) return;
       if (this.enemy.curHp <= 0) return this.victory();
 
+      // a SWIFT elite (elite.ts) may act again: not out of a turn it lost
+      // (stuck), nor to loose the strike it has just wound up
+      const again = !this.stuck && actsAgain(this.elite);
       await this.enemyTurn();
+      if (again && this.running && !this.charging && GameState.player.hp > 0 && this.enemy.curHp > 0) {
+        await this.say(`${this.enemy.name} moves again!`);
+        await this.enemyTurn();
+      }
       this.defending = false;
       await this.tickWard();
     }
@@ -3539,6 +3567,8 @@ export class BattleScene extends Phaser.Scene {
       // the ARENA returned above
       const drop = rollDrop(this.enemy, false, Math.random, this.weakFinish);
       if (drop && this.abyss) drop.count *= abyssDropMult(this.abyss.floor);
+      // an elite's (elite.ts), never in the ABYSS
+      if (drop && this.elite) drop.count *= ELITE_DROP_MULT;
       // the KOI FEAST's doubling (cooking.ts), on top of the depth's
       if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
       if (drop) GameState.inventory[drop.material] += drop.count;

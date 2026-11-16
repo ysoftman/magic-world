@@ -1,5 +1,6 @@
 import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale, boutDepth } from "./abyss";
 import { ARENA_GOLD_SHARE } from "./arena";
+import { type EliteKind, eliteDef } from "./elite";
 import type { GameState } from "./gameState";
 import { type Element, ENEMIES, type EnemyDef } from "./monsters";
 
@@ -800,11 +801,22 @@ export const regenAmount = (hp: number, curHp: number): number => Math.min(hp - 
  * `night` is isNight() && not the ABYSS, as BattleScene works it out. A
  * field boss's (or the TROLL KING's) `rematch` pays the gold its ARENA bout
  * does: the ARENA's share, with no night x1.5 (its EXP keeps the night's).
+ * `elite` is BattleScene's roll (elite.ts rollElite), null for most fights.
  */
 export function scaleEnemy(
-  def: EnemyDef,
-  opts: { night: boolean; arena: boolean; abyss: AbyssBout | null; ng: { stat: number; loot: number }; rematch?: boolean },
+  species: EnemyDef,
+  opts: {
+    night: boolean;
+    arena: boolean;
+    abyss: AbyssBout | null;
+    ng: { stat: number; loot: number };
+    rematch?: boolean;
+    elite?: EliteKind | null;
+  },
 ): EnemyDef & { curHp: number } {
+  // an elite (elite.ts) is its species with more HP, ATK, gold and EXP,
+  // before anything below scales it
+  const def = opts.elite ? eliteDef(species, opts.elite) : species;
   const enemy = { ...def, curHp: def.hp };
   if (opts.night && !opts.arena) {
     if (!def.boss) {

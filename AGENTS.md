@@ -399,6 +399,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   `scripts/sim-battle.ts` 의 같은 자리(cast·choose 등 BattleScene 을 옮긴 곳)도 고친다(실제 사례: CHAIN,
   DEFEND). 강타 예고(`BOSS_TELLS`)를 보스 아닌 몬스터에 붙일 때는 `chance` 로 확률을 낮추고, `mult` 는 지역
   입장 레벨에서 막지 않은 강타가 최대 HP 15~25% 가 되게 잰다(밤 x1.25 ATK 가 그대로 곱해진다).
+- 정예(`src/elite.ts`)는 전투가 시작될 때 `BattleScene.init` 이 굴린다(`rollElite`, 필드 씬의 조우 굴림은 모른다). 수치는 `battleRules.scaleEnemy` 의 `elite` 옵션이 종의 HP·ATK·골드·EXP 에 먼저 곱하고(`eliteDef`), 그 위에 밤·HARD MODE 가 얹힌다. 이름은 바꾸지 않는다: 도감·퀘스트·드롭표·결산 줄이 모두 이름으로 종을 찾고 이름 길이로 폭을 쟀기 때문이다. 표시는 적 창 이름 색과 WEAK 줄 오른쪽 태그(6글자까지, x 1108..1228), 전투 첫 줄의 접두와 둘째 줄 `ELITE: <note>!`(note 13글자까지, WELL RESTED 문구와 한 줄 51글자)다. SWIFT 의 두 번째 행동은 `runBattle` 이 `enemyTurn` 을 한 번 더 부르는 것이고, 묶인 턴(`stuck`)과 방금 기를 모은 턴(`charging`)에는 없다. 새 정예는 `ELITES` 한 줄과 README 표, 수치는 `bun run sim:battle --foe <키> --elite <종류> --level <입장 레벨> --gear <무기,방어구>` 로 그 지역 입장 레벨의 SOLO+GEAR 승률·잃는 HP 를 본다(지금 값: 일반 전투의 약 3배 HP 를 잃고, 설원 입장 Lv13 의 FIERCE YETI 가 97%·최대 HP 만큼으로 가장 빡빡하다). `scaleEnemy` 를 부르는 곳(`scripts/sim-battle.ts`)도 같은 옵션을 받는다.
 - 전투 화면에는 `TouchControls` 가 없다(메뉴를 바로 탭한다). 그래서 전투에서 키(ESC 등)에만
   묶인 동작은 탭 경로를 함께 만든다. 실제 사례: 아이템 목록을 닫는 길이 ESC 뿐이라 터치에서는
   아이템을 쓰지 않고는 나올 수 없었고, 재고가 0 이면 전투가 멈췄다 → 지금은 목록 밖을 탭하면
