@@ -644,6 +644,8 @@ export const GameState = {
   houseLevel: 0,
   gardenDay: -1,
   rested: false,
+  // the LIMIT gauge, 0..100 (limit.ts), carried from fight to fight
+  limit: 0,
   // the season (season.ts, counted from day 0) the town last announced,
   // -1 for none yet, so a reload doesn't announce it again
   seasonSeen: -1,
@@ -1064,6 +1066,7 @@ export const GameState = {
     this.houseLevel = 0;
     this.gardenDay = -1;
     this.rested = false;
+    this.limit = 0;
     this.seasonSeen = -1;
     this.mealsCooked = 0;
     this.bountiesDone = 0;
@@ -1180,6 +1183,7 @@ export const GameState = {
           houseLevel: this.houseLevel,
           gardenDay: this.gardenDay,
           rested: this.rested,
+          limit: this.limit,
           seasonSeen: this.seasonSeen,
           mealsCooked: this.mealsCooked,
           bountiesDone: this.bountiesDone,
@@ -1274,6 +1278,8 @@ export const GameState = {
       this.houseLevel = Number.isInteger(data.houseLevel) ? Math.min(MAX_HOUSE, Math.max(0, data.houseLevel)) : 0;
       this.gardenDay = Number.isInteger(data.gardenDay) ? data.gardenDay : -1;
       this.rested = data.rested === true;
+      // empty on saves from before the gauge
+      this.limit = Number.isFinite(data.limit) ? Math.min(100, Math.max(0, data.limit)) : 0;
       this.seasonSeen = Number.isInteger(data.seasonSeen) ? data.seasonSeen : -1;
       // none on saves from before these records
       this.mealsCooked = Number.isInteger(data.mealsCooked) && data.mealsCooked > 0 ? data.mealsCooked : 0;

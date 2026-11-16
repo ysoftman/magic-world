@@ -26,6 +26,12 @@
 // numbers were checked against each region's foes at the level a hero walks
 // in with, e.g. `--foe orc --elite fierce --level 9 --gear sword,ironShield`.
 //
+// --limit N starts each fight with the LIMIT gauge (limit.ts) at N of 100
+// and lets the hero spend it the turn it is full (not while healing or
+// bracing); each cell then also prints `L+nn`, the gauge a fight fills on
+// average (uncapped, what the blow itself dealt left out, no PARRY: that is
+// the player's timing). Without it the hero has no LIMIT, as before.
+//
 // --skills lets the hero use the SKILL list too, greedily: each turn it has
 // nothing to heal or brace for, the attack spell or skill with the most
 // expected damage this turn that it can pay for, poison or burn it would
@@ -93,6 +99,7 @@ const { HI_POTION_HP, POTION_HP } = await import("../src/itemInfo");
 const { ENEMIES } = await import("../src/monsters");
 const { abyssGuardian } = await import("../src/abyss");
 const { actsAgain, ELITES } = await import("../src/elite");
+const { LIMIT_MAX, limitDamage, limitDealt, limitTaken } = await import("../src/limit");
 
 type Foe = ReturnType<typeof scaleEnemy>;
 
@@ -138,12 +145,13 @@ const HP_LOW_SHARE = 0.35;
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`bun run sim:battle [--boss KING|TROLL|MOSS|GLACIER|DRAKE] [--level 8 | --level 6,12,18] [--n 2000] [--potions 3] [--bond N]
-                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift]
+                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift] [--limit N]
                     [--skills | --greedy] [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
        bun run sim:battle --skill-table
   --boss       one boss instead of all five
   --foe        any ENEMIES key instead (slime, orc, yeti...), its row's intended level the first --level
   --gear       that fight's GEAR columns, EQUIPMENT keys "weapon,armor" (default sword,shield)
+  --limit      the LIMIT gauge each fight starts with, 0..100, spent when full; cells add the gauge a fight fills
   --elite      the foe as that elite (elite.ts); with no --foe, the bosses as if they could be
   --level      one level or a comma list instead of 1..${MAX_LEVEL}
   --n          fights per cell (default 2000)
@@ -200,6 +208,7 @@ if (bosses.length === 0) {
 }
 const levelArg = opt("level");
 const levels = levelArg ? levelArg.split(",").map(Number) : Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
+const LIMIT = opt("limit") === undefined ? null : Number(opt("limit"));
 const ELITE = opt("elite");
 if (ELITE !== undefined && !Object.keys(ELITES).includes(ELITE)) {
   console.error(`unknown elite ${ELITE}; one of ${Object.keys(ELITES).join(", ")}`);
@@ -314,6 +323,7 @@ interface Outcome {
   won: boolean;
   rounds: number;
   taken: number; // damage the hero took, poison ticks included
+  gauge: number; // LIMIT the fight filled (limit.ts), uncapped
 }
 
 type Action =
@@ -321,6 +331,7 @@ type Action =
   | { kind: "potion" }
   | { kind: "hiPotion" }
   | { kind: "defend" }
+  | { kind: "limit" }
   | { kind: "magic"; spell: Spell }
   | { kind: "skill"; skill: Skill };
 
@@ -352,6 +363,13 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let chilled = false;
   let rounds = 0;
   let taken = 0;
+  // the LIMIT blow's own damage, which fills nothing, and whether it is spent
+  let limitDmg = 0;
+  let limitSpent = false;
+  // what the fight has filled so far: the foe's HP gone (regrowth not
+  // counted twice here, as BattleScene's syncLimit would) and the hero's
+  const gauge = (): number => limitDealt(foe.hp - Math.max(0, foe.curHp) - limitDmg, foe.hp) + limitTaken(taken, hero.maxHp);
+  const done = (won: boolean): Outcome => ({ won, rounds, taken, gauge: gauge() });
 
   const hurt = (dmg: number): void => {
     hp = Math.max(0, hp - dmg);
@@ -371,6 +389,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     const ward = hero.spells.find((s) => s.kind === "ward");
     if (charging && ward && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
     if (charging && wardTurns === 0) return { kind: "defend" };
+    if (LIMIT !== null && !limitSpent && LIMIT + gauge() >= LIMIT_MAX) return { kind: "limit" };
     if (GREEDY) return greedy();
     const weak = hero.spells.find((s) => s.kind === "attack" && s.element !== undefined && s.element === foe.weakness);
     if (weak && mp >= weak.cost) return { kind: "magic", spell: weak };
@@ -550,7 +569,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
 
   // BattleScene runBattle(): poison tick, hero, companion, foe, WARD tick
   for (;;) {
-    if (hp <= 0) return { won: false, rounds, taken };
+    if (hp <= 0) return done(false);
     if (poisonTurns > 0) {
       hurt(poisonTickDamage(hero.maxHp, hp));
       poisonTurns -= 1;
@@ -564,7 +583,13 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (action.kind === "fight") playerAttack();
       else if (action.kind === "magic") cast(action.spell);
       else if (action.kind === "skill") useSkill(action.skill);
-      else if (action.kind === "defend") {
+      else if (action.kind === "limit") {
+        // BattleScene limitBreak(): the combo is left as it is
+        limitSpent = true;
+        const dmg = Math.min(foe.curHp, limitDamage(hero.atk, foe.def));
+        limitDmg += dmg;
+        foe.curHp -= dmg;
+      } else if (action.kind === "defend") {
         combo = 0;
         defending = true;
       } else if (action.kind === "hiPotion") {
@@ -579,10 +604,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         poisonTurns = 0;
       }
     }
-    if (foe.curHp <= 0) return { won: true, rounds, taken };
+    if (foe.curHp <= 0) return done(true);
     if (wolf) {
       companion();
-      if (foe.curHp <= 0) return { won: true, rounds, taken };
+      if (foe.curHp <= 0) return done(true);
     }
     // BattleScene runBattle(): a SWIFT elite may act again
     const again = !stuck && actsAgain(eliteKind);
@@ -599,6 +624,7 @@ interface Cell {
   win: number; // 0..1
   rounds: number; // mean, all fights
   lost: number; // mean damage taken / max HP, all fights
+  gauge: number; // mean LIMIT filled, all fights
 }
 
 function cell(boss: BossCase, level: number, gear: boolean, wolf: boolean): Cell {
@@ -607,13 +633,15 @@ function cell(boss: BossCase, level: number, gear: boolean, wolf: boolean): Cell
   let wins = 0;
   let rounds = 0;
   let lost = 0;
+  let gauge = 0;
   for (let i = 0; i < N; i++) {
     const o = fight(hero, boss, wolf, bond);
     if (o.won) wins += 1;
     rounds += o.rounds;
     lost += o.taken / hero.maxHp;
+    gauge += o.gauge;
   }
-  return { win: wins / N, rounds: rounds / N, lost: lost / N };
+  return { win: wins / N, rounds: rounds / N, lost: lost / N, gauge: gauge / N };
 }
 
 const COLS = [
@@ -623,7 +651,8 @@ const COLS = [
   { label: "SOLO+NONE", gear: false, wolf: false },
 ];
 const pct = (x: number): string => `${Math.round(x * 100)}%`.padStart(4);
-const fmt = (c: Cell): string => `${pct(c.win)} ${c.rounds.toFixed(1).padStart(5)} ${pct(c.lost)}`;
+const fmt = (c: Cell): string =>
+  `${pct(c.win)} ${c.rounds.toFixed(1).padStart(5)} ${pct(c.lost)}${LIMIT === null ? "" : ` L+${Math.round(c.gauge)}`.padEnd(6)}`;
 
 // --skill-table: what each attack spell and SKILL-list move deals a cast
 // (all its hits), against what a FIGHT (no combo) would: at the level it is

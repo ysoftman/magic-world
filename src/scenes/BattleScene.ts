@@ -66,6 +66,7 @@ import { bakeBattleFx, flash, loopFx, playFx, shake, warmFx } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
+import { chargeLimit, LIMIT_MAX, LIMIT_PARRY, limitDamage, limitDealt, limitFull, limitTaken } from "../limit";
 import { ENEMIES, type EnemyDef, type EnemySpecial } from "../monsters";
 import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -311,6 +312,11 @@ const ENEMY_STATUS_RIGHT = GAME_WIDTH - 52;
 // rows, right of the HP bar (which ends at x=240).
 const PLAYER_STATUS_MIN_X = 324;
 const STATUS_ROWS = [90, 114, 138];
+// the LIMIT gauge's fill, its colour when full, and the tap box round the
+// bar and label (x 64..380, y 70..86) padded 12px
+const LIMIT_COLOR = 0xf472b6;
+const LIMIT_FULL_COLOR = 0xfde047;
+const LIMIT_TAP = new Phaser.Geom.Rectangle(52, 58, 340, 40);
 // the enemy side works the same way: "HP 700/700" (an HARD 3 FLAME DRAKE, the
 // most HP in the game) ends at x=1056, so one tag fills row 1 and the rest stack below, right of
 // the HP bar (which ends at x=992). With a boss's CHG, RAGE, a companion's
@@ -335,6 +341,7 @@ type MenuAction =
   | "magic"
   | "skill"
   | "defend"
+  | "limit"
   | "run"
   | "steal"
   | "foe"
@@ -588,6 +595,13 @@ export class BattleScene extends Phaser.Scene {
   // a field boss or the TROLL KING fought again after its first kill (see
   // init)
   private rematch = false;
+  // The LIMIT gauge (limit.ts) as this battle has it, GameState's but in the
+  // yard, and the two HP figures it was last brought up to date with
+  // (syncLimit); its bar and label under the hero's name
+  private limit = 0;
+  private limitSeen = { foe: 0, hero: 0 };
+  private limitBar!: Phaser.GameObjects.Rectangle;
+  private limitText!: PixelText;
   // the foe is an elite of its kind (elite.ts), rolled in init
   private elite: EliteKind | null = null;
   private combo = 0;
@@ -895,6 +909,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(STAT_DEPTH)
       .setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
+    this.addLimitGauge();
 
     this.add
       .pixelText(GAME_WIDTH - 464, 40, this.enemy.name, retroStyle(7, this.elite ? ELITES[this.elite].color : "#ff5555"))
@@ -1240,6 +1255,11 @@ export class BattleScene extends Phaser.Scene {
       this.resolveAction("defend");
       return;
     }
+    if (e.code === "KeyL") {
+      if (limitFull(this.limit)) this.resolveAction("limit");
+      else Sfx.error();
+      return;
+    }
     if (e.code === "KeyC" && this.practice) {
       this.resolveAction("foe");
       return;
@@ -1379,6 +1399,11 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    // the full LIMIT gauge is its own button: the bar and its label
+    if (limitFull(this.limit) && LIMIT_TAP.contains(pointer.x, pointer.y)) {
+      this.resolveAction("limit");
+      return;
+    }
     for (let i = 0; i < this.menuButtons.length; i++) {
       const t = this.menuTexts[i];
       // padded past the glyphs so a button is a fair finger target: 8px of
@@ -1728,6 +1753,9 @@ export class BattleScene extends Phaser.Scene {
           break;
         case "defend":
           await this.defend();
+          break;
+        case "limit":
+          await this.limitBreak();
           break;
       }
 
@@ -3147,6 +3175,7 @@ export class BattleScene extends Phaser.Scene {
       this.glowBurst.setPosition(this.playerSprite.x + 40, this.playerSprite.y);
       this.glowBurst.explode(12);
       this.parryNote("PARRY!");
+      this.syncLimit(LIMIT_PARRY);
     } else if (press != null) this.parryNote("EARLY");
     return parried;
   }
@@ -3529,6 +3558,7 @@ export class BattleScene extends Phaser.Scene {
   private updateEnemyHp(): void {
     this.enemyHpText.setText(`HP ${this.enemy.curHp}/${this.enemy.hp}`);
     this.enemyHpBar.setScale(Math.max(0, this.enemy.curHp / this.enemy.hp), 1);
+    this.syncLimit();
   }
 
   // hit flashes clearTint the enemy sprite, which would also strip a boss's
@@ -3568,6 +3598,85 @@ export class BattleScene extends Phaser.Scene {
     this.playerHpText.setText(`HP ${GameState.player.hp}/${GameState.effMaxHp()}`);
     this.playerMpText.setText(`MP ${GameState.player.mp}/${GameState.player.maxMp}`);
     this.playerHpBar.setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
+    this.syncLimit();
+  }
+
+  // The LIMIT gauge (limit.ts) in the hero's window, in the strip between
+  // the name (to y 68) and the HP row (from 88): a bar as wide as the HP
+  // bar's, x 64..240, y 74..82, and its label from x 252 at retroStyle(4),
+  // y 70..86. "L:LIMIT!" is 8 x 16 = 128px, to x 380, inside the window's
+  // 476; the status tags start a row lower (y 90). Full, the bar turns gold,
+  // the label says the key (LIMIT! on touch, where the two are the button,
+  // LIMIT_TAP) and both blink.
+  private addLimitGauge(): void {
+    this.limit = this.practice ? LIMIT_MAX : GameState.limit;
+    this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
+    this.add.rectangle(64, 78, 176, 8, 0x2a2a4a).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
+    this.limitBar = this.add.rectangle(64, 78, 176, 8, LIMIT_COLOR).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
+    this.limitText = this.add.pixelText(252, 70, "", retroStyle(4, DIM_TEXT)).setDepth(STAT_DEPTH);
+    this.tweens.add({ targets: [this.limitBar, this.limitText], alpha: 0.45, duration: 420, yoyo: true, repeat: -1, paused: true });
+    this.drawLimit();
+  }
+
+  private drawLimit(): void {
+    const full = limitFull(this.limit);
+    // the bar's end on the 2px grid
+    this.limitBar.setScale(Math.round((this.limit / LIMIT_MAX) * 88) / 88, 1).setFillStyle(full ? LIMIT_FULL_COLOR : LIMIT_COLOR);
+    this.limitText
+      .setText(full ? keyHint("L:LIMIT!", "LIMIT!", { table: "battle" }) || "LIMIT!" : "LIMIT")
+      .setColor(full ? "#fde047" : DIM_TEXT);
+    const blink = this.tweens.getTweensOf(this.limitBar)[0];
+    if (full) blink?.resume();
+    else {
+      blink?.pause();
+      this.limitBar.setAlpha(1);
+      this.limitText.setAlpha(1);
+    }
+  }
+
+  // Brings the gauge up to what both HP figures have lost since it last
+  // looked (limit.ts: dealing fills it, being hit fills it faster), plus
+  // `bonus` (a PARRY's). Called wherever either figure is redrawn, so every
+  // blow, tick and strike is counted without a line in each. The yard's
+  // stays full and leaves the saved one alone.
+  private syncLimit(bonus = 0): void {
+    const dealt = Math.max(0, this.limitSeen.foe - this.enemy.curHp);
+    const taken = Math.max(0, this.limitSeen.hero - GameState.player.hp);
+    this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
+    const was = limitFull(this.limit);
+    const gain = limitDealt(dealt, this.enemy.hp) + limitTaken(taken, GameState.effMaxHp()) + bonus;
+    this.limit = this.practice ? LIMIT_MAX : chargeLimit(this.limit, gain);
+    if (!this.practice) GameState.limit = this.limit;
+    if (!was && limitFull(this.limit)) Sfx.emit("parry");
+    this.drawLimit();
+  }
+
+  // LIMIT (L, or a tap on the full gauge): FIGHT's lunge with a crit's stop
+  // and sparks for one blow of ATK x3 (limit.ts limitDamage). The gauge is
+  // emptied as the blow lands, its own damage not counted back into it.
+  private async limitBreak(): Promise<void> {
+    const total = limitDamage(this.heroAtk(), this.enemy.def);
+    Sfx.attack();
+    this.glowBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+    this.glowBurst.explode(16);
+    await this.lunge(true, () => {
+      Sfx.strike();
+      Sfx.critical();
+      this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
+      this.limitSeen.foe = this.enemy.curHp;
+      this.limit = 0;
+      this.updateEnemyHp();
+      this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      this.fxOn(this.enemySprite, "fx-slash", HIT_FX_MS);
+      this.fxOn(this.enemySprite, "fx-crit", HIT_FX_MS);
+      this.hitBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
+      this.hitBurst.explode(24);
+      shake(this.cameras.main, 200, 0.016);
+      this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, true);
+      this.recoil(this.enemySprite, 1, true);
+    });
+    await this.say(`LIMIT BREAK! You strike for ${total}!`);
+    this.restoreEnemyTint();
   }
 
   // A won fight's quest bookkeeping: the ELDER's and HUNTER's counters, the
