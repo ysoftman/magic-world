@@ -3,7 +3,18 @@ import { Sfx, SNOW_THEME } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
 import { GameState, isNight } from "../gameState";
-import { buildSnow, escapeFromZones, SNOW_ENTRY, SNOW_FISH_POS, SNOW_H, SNOW_TREASURE_POS, SNOW_W, SNOW_ZONES, TILE } from "../levels";
+import {
+  buildSnow,
+  escapeFromZones,
+  SNOW_ENTRY,
+  SNOW_FISH_POS,
+  SNOW_H,
+  SNOW_SHRINE_POS,
+  SNOW_TREASURE_POS,
+  SNOW_W,
+  SNOW_ZONES,
+  TILE,
+} from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
@@ -44,6 +55,7 @@ import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
+import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -69,6 +81,7 @@ export class SnowScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private companionFollower!: CompanionSprite;
   private treasure!: TreasureDigger;
+  private shrine!: Shrine;
   private level: number[][] = [];
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -244,7 +257,7 @@ export class SnowScene extends Phaser.Scene {
       () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
-    // exit + unopened chests; the golem's basin is deliberately not marked
+    // exit, the ice hole, the shrine + unopened chests; the golem's basin is deliberately not marked
     this.minimap = new Minimap(
       this,
       level,
@@ -252,6 +265,7 @@ export class SnowScene extends Phaser.Scene {
       [
         { x: SNOW_ENTRY.x, y: SNOW_ENTRY.y, color: 0xffd166 },
         { x: SNOW_FISH_POS.x, y: SNOW_FISH_POS.y, color: 0x38bdf8 },
+        { ...SNOW_SHRINE_POS, color: 0x7dd3fc },
         ...SNOW_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -271,6 +285,8 @@ export class SnowScene extends Phaser.Scene {
     this.panels.add(new QuestLog(this), "U");
     // the quit question (askQuitToTitle)
     this.dialogue = this.panels.add(new DialogueBox(this, []));
+    // the field's shrine (shrine.ts): Z beside it (update) offers gold for a blessing
+    this.shrine = new Shrine(this, "snow", SNOW_SHRINE_POS, this.player, this.dialogue, { prayed: () => this.holdFights() });
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
     this.panels.add(this.fishing);
@@ -337,6 +353,8 @@ export class SnowScene extends Phaser.Scene {
       // a treasure map's X (ui/TreasureDig.ts) before the ice hole: it is the
       // nearer, smaller target and is kept 2 tiles clear of the hole
       if (this.treasure.tryDig()) return;
+      // ...and the shrine, at the field's other end
+      if (this.shrine.tryPray()) return;
       const dx = this.player.x - SNOW_FISH_POS.x;
       const dy = this.player.y - SNOW_FISH_POS.y;
       if (dx * dx + dy * dy <= 120 * 120) {

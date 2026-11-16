@@ -9,6 +9,7 @@ import {
   buildDungeon,
   DUNGEON_ENTRY,
   DUNGEON_H,
+  DUNGEON_SHRINE_POS,
   DUNGEON_W,
   DUNGEON_ZONES,
   escapeFromZones,
@@ -62,6 +63,7 @@ import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/Night
 import { addProp, TORCH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
+import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -270,7 +272,7 @@ export class DungeonScene extends Phaser.Scene {
       () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
-    // exit + unopened chests (+ the ABYSS stair); the king's lair is
+    // exit, the shrine + unopened chests (+ the ABYSS stair); the king's lair is
     // deliberately not marked
     this.minimap = new Minimap(
       this,
@@ -278,6 +280,7 @@ export class DungeonScene extends Phaser.Scene {
       this.player,
       [
         { x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y, color: 0xffd166 },
+        { ...DUNGEON_SHRINE_POS, color: 0x7dd3fc },
         ...TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -319,6 +322,12 @@ export class DungeonScene extends Phaser.Scene {
     this.panels.add(new QuestLog(this), "U");
     // the ABYSS stair's question and the quit question (askQuitToTitle)
     this.dialogue = this.panels.add(new DialogueBox(this, []));
+    // the field's shrine (shrine.ts): Z beside it offers gold for a blessing
+    new Shrine(this, "dungeon", DUNGEON_SHRINE_POS, this.player, this.dialogue, {
+      ownKey: true,
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      prayed: () => this.holdFights(),
+    });
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

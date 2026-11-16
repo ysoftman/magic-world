@@ -12,6 +12,7 @@ import {
   TILE,
   VOLCANO_ENTRY,
   VOLCANO_H,
+  VOLCANO_SHRINE_POS,
   VOLCANO_TREASURE_POS,
   VOLCANO_W,
   VOLCANO_ZONES,
@@ -56,6 +57,7 @@ import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/Night
 import { addProp, LAVA_BUBBLES } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
+import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -242,9 +244,10 @@ export class VolcanoScene extends Phaser.Scene {
       () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
-    // exit + unopened chests; the drake's crater is deliberately not marked
+    // exit, the shrine + unopened chests; the drake's crater is deliberately not marked
     this.minimap = new Minimap(this, level, this.player, [
       { x: VOLCANO_ENTRY.x, y: VOLCANO_ENTRY.y, color: 0xffd166 },
+      { ...VOLCANO_SHRINE_POS, color: 0x7dd3fc },
       ...VOLCANO_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
         x: t.x,
         y: t.y,
@@ -264,6 +267,12 @@ export class VolcanoScene extends Phaser.Scene {
     this.panels.add(new QuestLog(this), "U");
     // the quit question (askQuitToTitle)
     this.dialogue = this.panels.add(new DialogueBox(this, []));
+    // the field's shrine (shrine.ts): Z beside it offers gold for a blessing
+    new Shrine(this, "volcano", VOLCANO_SHRINE_POS, this.player, this.dialogue, {
+      ownKey: true,
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      prayed: () => this.holdFights(),
+    });
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

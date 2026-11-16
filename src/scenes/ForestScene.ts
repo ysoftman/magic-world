@@ -3,7 +3,17 @@ import { FOREST_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
 import { encounterOut } from "../fx";
 import { econDay, GameState, isNight } from "../gameState";
-import { buildForest, escapeFromZones, FOREST_ENTRY, FOREST_H, FOREST_TREASURE_POS, FOREST_W, FOREST_ZONES, TILE } from "../levels";
+import {
+  buildForest,
+  escapeFromZones,
+  FOREST_ENTRY,
+  FOREST_H,
+  FOREST_SHRINE_POS,
+  FOREST_TREASURE_POS,
+  FOREST_W,
+  FOREST_ZONES,
+  TILE,
+} from "../levels";
 import { ENEMIES } from "../monsters";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
@@ -45,6 +55,7 @@ import { FOREST_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { QuestLog } from "../ui/QuestLog";
 import { SettingsUI } from "../ui/SettingsUI";
+import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
 import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
@@ -175,7 +186,7 @@ export class ForestScene extends Phaser.Scene {
     // if the sky changed with it)
     addAmbient(this, "forest", { caption: true, since: turn?.weather ?? back?.weather, level });
     // butterflies and birds by day, frogs by the ponds
-    addCritters(this, "forest", { level, avoid: [FOREST_ENTRY, ...FOREST_TREASURE_POS] });
+    addCritters(this, "forest", { level, avoid: [FOREST_ENTRY, FOREST_SHRINE_POS, ...FOREST_TREASURE_POS] });
 
     this.spawnMonsters();
 
@@ -225,13 +236,14 @@ export class ForestScene extends Phaser.Scene {
       () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
     );
 
-    // exit + unopened chests; the golem's clearing is deliberately not marked
+    // exit, the shrine + unopened chests; the golem's clearing is deliberately not marked
     this.minimap = new Minimap(
       this,
       level,
       this.player,
       [
         { x: FOREST_ENTRY.x, y: FOREST_ENTRY.y, color: 0xffd166 },
+        { ...FOREST_SHRINE_POS, color: 0x7dd3fc },
         ...FOREST_TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -252,6 +264,12 @@ export class ForestScene extends Phaser.Scene {
     this.panels.add(new QuestLog(this), "U");
     // the quit question (askQuitToTitle)
     this.dialogue = this.panels.add(new DialogueBox(this, []));
+    // the field's shrine (shrine.ts): Z beside it offers gold for a blessing
+    new Shrine(this, "forest", FOREST_SHRINE_POS, this.player, this.dialogue, {
+      ownKey: true,
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      prayed: () => this.holdFights(),
+    });
     // touch has no Q: the settings' QUIT chip runs the same save-and-quit as YES
     this.panels.add(new SettingsUI(this, () => this.quit()), "O");
 

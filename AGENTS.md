@@ -423,6 +423,37 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7)과
   견주고, `--skills` 를 `--greedy` 와 견줘 보스전 라운드를 본다.
 
+## 필드 제단 (`src/shrine.ts`, `src/ui/Shrine.ts`)
+
+동굴·숲·설원·화산에 하나씩 있는 제단은 Z 로 골드를 바치고 두 축복 중 하나를 다음 `BLESSING_BATTLES`(6)전투 동안
+받는 곳이다. 규칙·수치는 `shrine.ts`(`BLESSINGS`·`SHRINES`, Phaser 없음), 돌·이름표·대화는 `ui/Shrine.ts`, 자리는
+`levels.ts` 의 `*_SHRINE_POS` 다. 축복은 요리(`cooking.ts`)와 같은 방식으로 센다: 전투가 시작될 때 한 번
+(`takeBlessingCharge`, 연습 제외), 한 번에 하나, 요리와 겹친다(ATK·DEF 는 곱하고 골드·EXP 는 더한다). 제단마다 `econDay` 하루 한 번
+(`GameState.shrineDays`)이다.
+
+- 새 필드 씬에 넣을 때: 대화창을 만든 뒤 `new Shrine(this, region, pos, this.player, this.dialogue, { ownKey: true,
+  blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(), prayed: () => this.holdFights() })`.
+  씬이 Z 를 직접 받으면(설원) `ownKey` 없이 만들고 그 Z 처리에서 `tryDig()` 다음에 `tryPray()` 를 부른다. 미니맵 표식,
+  `treasure.ts` 의 `keep`(보물 지도 X 가 2칸 안에 오지 않게), `addCritters` 의 `avoid` 도 같이 넣는다.
+- 터치 질문은 선택지 둘까지라 축복은 제단마다 둘이고, 고른 뒤 YES/NO 로 한 번 더 묻는다. 첫 질문의 ESC 는
+  `escPick` 2(선택지 밖)로 그냥 떠난다. N 은 둘째 축복이지만 다음이 YES/NO 라 안전하다.
+- `ownKey` 의 Z 는 keydown 에서 `blocked()` 가 아닐 때만 담고 POST_UPDATE 에서 연다. 실제로 생길 뻔한 일: 대화를
+  닫는 Z 가 같은 프레임 끝에 제단 대화를 다시 열고, 리스너에서 바로 열면 대화창이 같은 Z 로 첫 쪽 타이핑을 건너뛴다.
+- 제단을 옮기면 터치 원판과 겹치는지 화면 좌표로 계산한다("필드 씬 입력"의 모서리 규칙). 실제 사례: 숲 (22,15)·설원
+  (20,14)은 카메라가 모서리에 붙을 때 돌이 Z·ESC 원판 밑에, 동굴 (22,6)은 이름표가 오른쪽 MENU 줄 밑에 들어가 각각
+  (20,15)·(17,14)·(1,8)로 옮겼다. 몬스터 구역에서 한 타일 넘게, 상자에서 3칸 이상 떨어진 열린 바닥에 둔다(돌은 몸이
+  있어 길을 막는다).
+- 돌은 48칸 격자(96px, `props.ts` 의 `SHRINE_TILE`, 룬이 꺼진 `shrine-spent` 는 같은 격자의 다른 팔레트)라 영웅보다
+  머리 하나 크다. 실제 사례: 32칸(64px)일 때는 앞에 선 영웅이 돌을 거의 다 가렸다. 영웅이 돌 뒤(위쪽)에 있으면 돌의
+  깊이를 10.4 로 올려 영웅을 가린다(평소 9).
+- 축복을 더하거나 수치를 바꾸면: 이름은 5글자까지(선택지·HUD·전투 창 태그 `STONE 6` 140px), `info` 는 24글자까지,
+  README 의 제단 표를 같은 커밋에서 고친다. 효과를 새로 만들면 `BlessingEffect` 와 BattleScene 의 훅(`this.blessing`:
+  `heroAtk`·`heroDef`, `victory()` 의 골드·EXP)을 같이 본다. HUD 2행은 요리·축복 태그가 EXP 막대 오른쪽 끝을
+  나눠 쓴다(`StatusHud` 의 `expBarW`, 둘 다 있으면 막대 424px). `scripts/sim-battle.ts` 에는 축복이 없다.
+- GREED 는 그 전투의 골드(연승 보너스 포함, PUMPKIN PIE 와 더해짐)에만 걸리고 재대결·아레나 상금에는 안 걸린다.
+  싼 동굴 제단의 GREED 를 화산에서 쓰면 남는다(하루 한 번 약 +165G, `shrine.ts` 머리 주석). 일부러 둔 것이다(결정:
+  돌아다닐 이유).
+
 ## 작업 완료 후 중간 산출물 정리
 
 - 작업 중 생성한 **중간 산출물**(디버그 스크린샷 png, 검증용 임시 파일, 임시 훅 등)은 작업이 끝나면 반드시 정리한다.

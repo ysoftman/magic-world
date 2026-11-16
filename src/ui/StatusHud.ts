@@ -5,6 +5,7 @@ import { clock, expToNext, GameState, isNight, type QuestState } from "../gameSt
 import { currentObjective } from "../objective";
 import { ART_PX, gridOutline, makeTexture, type PixelMap, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { BLESSINGS } from "../shrine";
 import { type Region, type Weather, weatherToday } from "../weather";
 
 export const STATUS_HUD_HEIGHT = 88;
@@ -35,6 +36,7 @@ const COLORS = {
   caught: "#67e8f9",
   exp: "#86efac",
   meal: "#fdba74",
+  blessing: "#c4b5fd",
 };
 
 // The EXP bar runs x 516..1256 on row 2; while a meal (cooking.ts) is on,
@@ -43,7 +45,13 @@ const COLORS = {
 const EXP_BAR_X = 516;
 const EXP_BAR_W = 740;
 const MEAL_TAG_RIGHT = 1256;
-const EXP_BAR_W_MEAL = MEAL_TAG_RIGHT - 140 - 16 - EXP_BAR_X;
+// A shrine's blessing (shrine.ts) is a tag of the same kind, "STONE 6" 140px
+// at most: alone it has the meal's place, with a meal it sits 20px left of it
+// (x 956..1096). The bar stops 16px short of the leftmost tag: 584px under
+// one, 424px under both.
+const TAG_W = 140;
+const TAG_GAP = 20;
+const expBarW = (tags: number): number => (tags === 0 ? EXP_BAR_W : MEAL_TAG_RIGHT - tags * TAG_W - (tags - 1) * TAG_GAP - 16 - EXP_BAR_X);
 
 // Day/night indicator icons: 16-cell grids baked through Scale2x to 64px and
 // drawn at half that, so each Scale2x cell is one screen pixel, as the item
@@ -263,6 +271,7 @@ export class StatusHud {
     this.addSegment(248, 58, 5, COLORS.caught);
     this.addSegment(452, 58, 5, COLORS.exp);
     this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.meal, 1);
+    this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.blessing, 1);
 
     // y 44..50, 6px: a 5px bar was half an art cell off the 2px grid
     this.hpBar = scene.add.rectangle(444, 47, 192, 6, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
@@ -336,6 +345,9 @@ export class StatusHud {
     this.setSegment(8, "EXP", COLORS.exp);
     const meal = GameState.meal;
     this.setSegment(9, meal ? `${MEALS[meal.key].tag} ${meal.left}` : "", COLORS.meal);
+    const blessing = GameState.blessing;
+    this.setSegment(10, blessing ? `${BLESSINGS[blessing.key].name} ${blessing.left}` : "", COLORS.blessing);
+    this.segments[10].setX(MEAL_TAG_RIGHT - (meal ? TAG_W + TAG_GAP : 0));
 
     // Re-read every frame, swapped only on a change: weatherToday() is a hash
     // of the day number, so the icon follows the weather over midnight (and
@@ -350,7 +362,7 @@ export class StatusHud {
     const cells = (share: number, w: number, of = w): number => (Math.round((Math.max(0, share) * w) / ART_PX) * ART_PX) / of;
     this.hpBar.setScale(cells(hpRatio, 192), 1);
     this.mpBar.setScale(cells(mpRatio, 192), 1);
-    const barW = meal ? EXP_BAR_W_MEAL : EXP_BAR_W;
+    const barW = expBarW((meal ? 1 : 0) + (blessing ? 1 : 0));
     this.expBar.setScale(cells(Math.min(1, p.exp / expToNext(p.level)), barW, EXP_BAR_W), 1);
   }
 

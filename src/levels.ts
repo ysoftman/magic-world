@@ -331,6 +331,24 @@ export const TREASURE_POS: Array<{ id: string; x: number; y: number }> = [
   { id: "dungeon-3", x: 22 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 },
 ];
 
+// The field shrines (shrine.ts, ui/Shrine.ts), one a field and off its road:
+// each stands on open floor more than a tile clear of every monster zone and
+// three or more from the chests, and is solid (the stone's own body, not a
+// tile). The cave's is by the west wall over the south-west pool; the
+// forest's at the foot of the map past the golem's clearing; the snow
+// field's under the rocks south-east of the golem's basin; the volcano's
+// east of the crater's moat. Their "SHRINE" tags (120px) sit over the stones,
+// inside every map and with no other tag near. None is in a map's south-east
+// corner or against its east wall: with the camera hard against those the
+// stone at (22,15) in the forest and (20,14) in the snow sat under the touch
+// Z and ESC discs, and the tag of one at (22,6) in the cave under the touch
+// menu's column (the volcano's camera stops two tiles lower on touch,
+// sceneCommon's TOUCH_CAMERA_FOOT, and its stone shows at screen y 370..462).
+export const DUNGEON_SHRINE_POS = { x: 1 * TILE + TILE / 2, y: 8 * TILE + TILE / 2 };
+export const FOREST_SHRINE_POS = { x: 20 * TILE + TILE / 2, y: 15 * TILE + TILE / 2 };
+export const SNOW_SHRINE_POS = { x: 17 * TILE + TILE / 2, y: 14 * TILE + TILE / 2 };
+export const VOLCANO_SHRINE_POS = { x: 18 * TILE + TILE / 2, y: 13 * TILE + TILE / 2 };
+
 // The cave's walls and pillars are T_ROCK, the volcano's boulder: a tree
 // skinned grey still read as a tree. art/tilesets.ts CAVE_SKIN draws it as
 // plain cave rock with no lava crack. Same solidity as the trees it replaced,

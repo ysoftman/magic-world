@@ -5,6 +5,7 @@ import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialK
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { recordRank } from "./ranking";
+import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays } from "./shrine";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
 
 // bounty board eligibility: these only roam the forest/snow fields, which
@@ -630,6 +631,10 @@ export const GameState = {
   // that the next battles are fought on (cooking.ts)
   pantry: newPantry(),
   meal: null as Meal | null,
+  // a field shrine's blessing on the next battles, and the econDay() each
+  // shrine last heard an offering on (shrine.ts)
+  blessing: null as Blessing | null,
+  shrineDays: {} as ShrineDays,
   // treasure maps held (treasure.ts), at most MAX_MAPS, and how many were dug
   treasureMaps: [] as TreasureMap[],
   mapsDug: 0,
@@ -1052,6 +1057,8 @@ export const GameState = {
     this.abyssPortal = 0;
     this.pantry = newPantry();
     this.meal = null;
+    this.blessing = null;
+    this.shrineDays = {};
     this.treasureMaps = [];
     this.mapsDug = 0;
     this.houseLevel = 0;
@@ -1166,6 +1173,8 @@ export const GameState = {
           abyssPortal: this.abyssPortal,
           pantry: this.pantry,
           meal: this.meal,
+          blessing: this.blessing,
+          shrineDays: this.shrineDays,
           treasureMaps: this.treasureMaps,
           mapsDug: this.mapsDug,
           houseLevel: this.houseLevel,
@@ -1255,6 +1264,9 @@ export const GameState = {
       // none on saves from before cooking: an empty pantry, nothing cooked
       this.pantry = loadPantry(data.pantry);
       this.meal = loadMeal(data.meal);
+      // none on saves from before the shrines: no blessing, none visited
+      this.blessing = loadBlessing(data.blessing);
+      this.shrineDays = loadShrineDays(data.shrineDays);
       // none on saves from before treasure maps
       this.treasureMaps = loadTreasureMaps(data.treasureMaps);
       this.mapsDug = Number.isInteger(data.mapsDug) && data.mapsDug > 0 ? data.mapsDug : 0;

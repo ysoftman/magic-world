@@ -71,6 +71,7 @@ import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep
 import { recordRank } from "../ranking";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
+import { type BlessingDef, takeBlessingCharge } from "../shrine";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
 import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
@@ -598,6 +599,8 @@ export class BattleScene extends Phaser.Scene {
   private wardText!: PixelText;
   // the meal from HOME this battle is fought on (cooking.ts)
   private meal: { def: MealDef; left: number } | null = null;
+  // ...and the field shrine's blessing beside it (shrine.ts)
+  private blessing: { def: BlessingDef; left: number } | null = null;
   // WELL RESTED from the HOME's FEATHER BEDS (home.ts): WARD up at the start
   private rested = false;
   private rageText!: PixelText;
@@ -630,6 +633,8 @@ export class BattleScene extends Phaser.Scene {
     // a meal lasts so many battles: this one takes its charge now, won, lost
     // or fled, each ARENA bout included, and keeps the meal to its end
     this.meal = this.practice ? null : takeMealCharge(GameState);
+    // a shrine's blessing is counted the same way
+    this.blessing = this.practice ? null : takeBlessingCharge(GameState);
     this.combo = 0;
     this.stolen = false;
     this.poisonTurns = 0;
@@ -896,6 +901,13 @@ export class BattleScene extends Phaser.Scene {
     // tag "GRILL 5" (140px) starts at 336
     if (this.meal)
       this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0).setDepth(STAT_DEPTH);
+    // the blessing's the same on the STREAK row under it: "STREAK 999" ends
+    // at x=304, "STONE 6" (140px) starts at 336, y 172..192 in the window's 200
+    if (this.blessing)
+      this.add
+        .pixelText(476, 172, `${this.blessing.def.name} ${this.blessing.left}`, retroStyle(5, "#c4b5fd"))
+        .setOrigin(1, 0)
+        .setDepth(STAT_DEPTH);
     // WARD's bubble round the hero in the battle's 2px cells: a faint disc
     // and its rim a cell thick, in rows (a circle and a 3px stroke, swelling
     // 1.06x, were 1px edges on a 2px picture); it breathes in its alpha
@@ -2733,13 +2745,18 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  // the hero's ATK and DEF as this battle's meal (cooking.ts) leaves them
+  // the hero's ATK and DEF as this battle's meal (cooking.ts) and blessing
+  // (shrine.ts) leave them
   private heroAtk(): number {
-    return Math.round(GameState.effAtk() * (1 + (this.meal?.def.effect.atk ?? 0)) * relicAtk(this.abyss));
+    return Math.round(
+      GameState.effAtk() * (1 + (this.meal?.def.effect.atk ?? 0)) * (1 + (this.blessing?.def.effect.atk ?? 0)) * relicAtk(this.abyss),
+    );
   }
 
   private heroDef(): number {
-    return Math.round(GameState.effDef() * (1 + (this.meal?.def.effect.def ?? 0)) * relicDef(this.abyss));
+    return Math.round(
+      GameState.effDef() * (1 + (this.meal?.def.effect.def ?? 0)) * (1 + (this.blessing?.def.effect.def ?? 0)) * relicDef(this.abyss),
+    );
   }
 
   // WARD (while it lasts) or BULWARK (the next blow) halves a hit, never
@@ -3490,7 +3507,7 @@ export class BattleScene extends Phaser.Scene {
       const streakPct = GameState.streak >= STREAK_MIN && !this.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
       const streakBonus = Math.floor(this.enemy.gold * streakPct);
       // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
-      const mealGold = this.rematch ? 0 : (this.meal?.def.effect.gold ?? 0);
+      const mealGold = this.rematch ? 0 : (this.meal?.def.effect.gold ?? 0) + (this.blessing?.def.effect.gold ?? 0);
       const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + mealGold)));
       GameState.battles += 1;
       // nothing fought in the ABYSS counts toward a quest, the bounty or a
@@ -3526,7 +3543,7 @@ export class BattleScene extends Phaser.Scene {
       if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
       if (drop) GameState.inventory[drop.material] += drop.count;
       const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);
-      const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0)));
+      const exp = Math.round(this.enemy.exp * (1 + (this.meal?.def.effect.exp ?? 0) + (this.blessing?.def.effect.exp ?? 0)));
       GameState.player.exp += exp;
       Sfx.victory();
       // its gold drops on the ground under it (fx.ts) as it goes: out of a
