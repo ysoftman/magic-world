@@ -2031,8 +2031,9 @@ export class BattleScene extends Phaser.Scene {
       if (again && this.running && !this.charging && GameState.player.hp > 0 && this.enemy.curHp > 0) {
         // no line of its own (it was a key between the two blows): the tag
         // pops as it gathers itself (a row over where a move's ATK+ or DEF+
-        // would), and its beat before the blow is the pause
-        this.flashStatus("AGAIN!", ELITES.swift.color, this.enemySprite.x - 200, this.enemySprite.y - 56, 8);
+        // would, and from x 684: at 664 it shared 14px with the second blow's
+        // PARRY!, which ends at 676), and its beat before the blow is the pause
+        this.flashStatus("AGAIN!", ELITES.swift.color, this.enemySprite.x - 180, this.enemySprite.y - 56, 8);
         await this.enemyTurn();
       }
       this.defending = false;
@@ -2542,7 +2543,10 @@ export class BattleScene extends Phaser.Scene {
     Sfx.critical();
     shake(this.cameras.main, 140, 0.01);
     const { name, color } = REACTIONS[kind];
-    this.flashStatus(`${name}!`, color, this.enemySprite.x - 200, this.enemySprite.y - 56, 8);
+    // 48px left of the status labels' column: a one-hit blow tech can crit
+    // (FLAME PILLAR, ICE SPIKES, METEOR), and its "1032!" is 280px about the
+    // foe, from x 860; "DETONATE!" (288px) ended at 904 and now ends at 856
+    this.flashStatus(`${name}!`, color, this.enemySprite.x - 248, this.enemySprite.y - 56, 8);
     this.reacted = true;
     if (!this.practice) GameState.feats.reactions += 1;
     return { mult, extra, tail: ` ${name}!` };
@@ -4352,7 +4356,9 @@ export class BattleScene extends Phaser.Scene {
       this.snatched = 0;
       // back where the "-9G" went (enemyMove), with no line of its own: the
       // payout's page is next and a key here was one more in every such fight
-      if (back > 0) this.flashStatus(`+${back}G`, "#fbbf24", this.playerSprite.x - 170, this.playerSprite.y - 80, 8);
+      // "BACK": a bare "+23G" read as the payout's own "+23G" on the line
+      // under it. "+9999G BACK" is 11 x 24 = 264px at size 6, x 18..282.
+      if (back > 0) this.flashStatus(`+${back}G BACK`, "#fbbf24", this.playerSprite.x - 170, this.playerSprite.y - 80, 6);
     }
     // the TROLL KING's flag (arena.ts: what puts it in the ARENA lineup) for
     // beating it or catching it, which takes beating it down first; never
