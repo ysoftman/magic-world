@@ -1,10 +1,9 @@
 import Phaser from "phaser";
-import { type AbyssBout, abyssDropMult } from "../abyss";
+import type { AbyssBout } from "../abyss";
 import { ARENA_BOSSES, ARENA_CLEAR_BONUS, ARENA_GOLD_SHARE, ARENA_RECOVER_PCT, type ArenaRun } from "../arena";
 import { BATTLE_THEME, BOSS_THEME, FOREST_BATTLE_THEME, Sfx, SNOW_BATTLE_THEME, VOLCANO_BATTLE_THEME } from "../audio";
 import { battleSource, battleTexture } from "../battleHd";
 import {
-  BOSS_LOOT,
   BOSS_TELL_CHANCE,
   BOSS_TELL_COOLDOWN,
   BOSS_TELLS,
@@ -21,7 +20,6 @@ import {
   defendedDamage,
   ENRAGE_ATK_MULT,
   ENRAGE_HP_SHARE,
-  FIELD_LOOT,
   FREEZE_GRACE_TURNS,
   guardedDamage,
   hardenDef,
@@ -49,7 +47,6 @@ import {
   type SpellEffect,
   STEAL_CHANCE,
   STEAL_GOLD_PCT,
-  STREAK_CAP,
   STREAK_MIN,
   scaleEnemy,
   skillCost,
@@ -71,23 +68,21 @@ import {
   type CompanionSkill,
   companionSkillChance,
 } from "../companionSkills";
-import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP, PIXEL } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { type MealDef, takeMealCharge } from "../cooking";
-import { MATERIALS, rollDrop } from "../drops";
-import { actsAgain, ELITE_DROP_MULT, ELITES, type EliteKind, rollElite } from "../elite";
-import { noteWin } from "../feats";
+import { actsAgain, ELITES, type EliteKind, rollElite } from "../elite";
 import { bakeBattleFx, flash, loopFx, playFx, shake, warmFx } from "../fx";
-import { expToNext, GameState, isNight, onSaved } from "../gameState";
+import { GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { chargeLimit, LIMIT_MAX, LIMIT_PARRY, limitDamage, limitDealt, limitFull, limitTaken } from "../limit";
 import { ENEMIES, type EnemyDef, type EnemyMove, type EnemySpecial } from "../monsters";
+import { settleLevels, settleWin } from "../payout";
 import { perkOpened } from "../perks";
 import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texelsOf } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
-import { recordRank } from "../ranking";
-import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
+import { openRelicBout, relicAtk, relicDef } from "../relics";
 import { type KeeperBout, keeperDef } from "../seals";
 import { type BlessingDef, takeBlessingCharge } from "../shrine";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
@@ -4192,26 +4187,6 @@ export class BattleScene extends Phaser.Scene {
     this.restoreEnemyTint();
   }
 
-  // A won fight's quest bookkeeping: the ELDER's and HUNTER's counters, the
-  // achievement tallies, the daily bounty and a story boss's quest flag.
-  private tallyQuestKill(): void {
-    if (this.enemy.name === "SLIME") GameState.quest.slimes += 1;
-    if (this.enemy.name === "GOLDEN SLIME") GameState.quest.goldenSlimes += 1;
-    if (this.enemy.name === ENEMIES.wisp.name) GameState.quest.wispsDefeated += 1;
-    if (this.enemy.name === "BAT") GameState.quest.batsSlain += 1;
-    if (this.enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
-    // daily bounty board: unbounded like the counters above, only ever
-    // compared/clamped at display time
-    if (GameState.bounty && this.enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
-    // two story bosses share the `boss` flag; each sets its own quest gate
-    if (this.enemy.boss) {
-      if (this.enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;
-      else if (this.enemy.name === ENEMIES.iceGolem.name) GameState.quest.snowBoss = true;
-      else if (this.enemy.name === ENEMIES.flameDrake.name) GameState.quest.volcanoBoss = true;
-      else GameState.quest.bossDefeated = true;
-    }
-  }
-
   private async victory(caught = false): Promise<void> {
     this.running = false;
     this.enemyIdle?.stop();
@@ -4241,59 +4216,25 @@ export class BattleScene extends Phaser.Scene {
     const firstMoss = !caught && !this.abyss && this.enemy.name === ENEMIES.mossGolem.name && !GameState.quest.forestBoss;
     const firstDrake = !caught && !this.abyss && this.enemy.name === ENEMIES.flameDrake.name && !GameState.quest.volcanoBoss;
     if (!caught) {
-      GameState.streak += 1;
-      // streak bonus rewards pushing on without fleeing; capped so a long run
-      // can't outpace the boss/chest economy; a rematch pays neither bonus,
-      // as its ARENA bout doesn't (see init)
-      const streakPct = GameState.streak >= STREAK_MIN && !this.rematch ? Math.min(GameState.streak, STREAK_CAP) * 0.1 : 0;
-      const streakBonus = Math.floor(this.enemy.gold * streakPct);
-      // PUMPKIN PIE (cooking.ts) adds to the battle's own payout, not the loot
-      const mealGold = this.rematch
-        ? 0
-        : (this.meal?.def.effect.gold ?? 0) + (this.blessing?.def.effect.gold ?? 0) + GameState.perk("trade");
-      const goldGained = GameState.gainGold(Math.round((this.enemy.gold + streakBonus) * (1 + mealGold)));
-      GameState.battles += 1;
-      // nothing fought in the ABYSS counts toward a quest, the bounty or a
-      // boss's flag (abyss.ts)
-      if (!this.abyss) this.tallyQuestKill();
-      noteWin(GameState.feats, this.elite, this.limitKill && !!(this.enemy.boss || this.enemy.giant));
-      // the usual +5 HP and +2 MP, with a relic's share (relics.ts) and MEND's and CALM's (perks.ts)
-      const winHeal = 5 + relicWinHeal(this.abyss, GameState.effMaxHp()) + Math.ceil(GameState.effMaxHp() * GameState.perk("mend"));
-      GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + winHeal);
-      GameState.player.mp = Math.min(GameState.player.maxMp, GameState.player.mp + 2 + GameState.perk("calm"));
-      // FISH STEW (cooking.ts): a share of max HP back after each win
-      const mealHeal = Math.min(
-        GameState.effMaxHp() - GameState.player.hp,
-        Math.ceil(GameState.effMaxHp() * (this.meal?.def.effect.heal ?? 0)),
-      );
-      GameState.player.hp += mealHeal;
+      // the streak, the gold, the tallies, the rest, the loot and the EXP
+      // (payout.ts settleWin, which an overrun shares)
+      const {
+        gold: goldGained,
+        streakBonus,
+        exp,
+        found,
+        mealHeal,
+      } = settleWin({
+        enemy: this.enemy,
+        rematch: this.rematch,
+        abyss: this.abyss,
+        elite: this.elite,
+        meal: this.meal?.def ?? null,
+        blessing: this.blessing?.def ?? null,
+        weakFinish: this.weakFinish,
+        limitKill: this.limitKill,
+      });
       this.updatePlayerStats();
-      // a boss's first kill always leaves a HI-POTION; anything else, a
-      // rematch too, rolls FIELD_LOOT
-      const roll = Math.random();
-      let edge = 0;
-      const loot =
-        this.enemy.boss && !this.rematch
-          ? BOSS_LOOT
-          : FIELD_LOOT.find((l) => {
-              edge += l.chance;
-              return roll < edge;
-            });
-      if (loot) GameState.inventory[loot.key] += 1;
-      // monster materials for the BLACKSMITH (drops.ts), likelier after a
-      // WEAK FINISH, more of them deep in the ABYSS (abyss.ts, at most x3);
-      // the ARENA returned above
-      const drop = rollDrop(this.enemy, false, Math.random, this.weakFinish);
-      if (drop && this.abyss) drop.count *= abyssDropMult(this.abyss.floor);
-      // an elite's (elite.ts), never in the ABYSS
-      if (drop && this.elite) drop.count *= ELITE_DROP_MULT;
-      // the KOI FEAST's doubling (cooking.ts), on top of the depth's
-      if (drop) drop.count *= 1 + (this.meal?.def.effect.drops ?? 0);
-      if (drop) GameState.inventory[drop.material] += drop.count;
-      const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(Boolean);
-      const expBonus = (this.meal?.def.effect.exp ?? 0) + (this.blessing?.def.effect.exp ?? 0) + GameState.perk("study");
-      const exp = Math.round(this.enemy.exp * (1 + expBonus));
-      GameState.player.exp += exp;
       Sfx.victory();
       // its gold drops on the ground under it (fx.ts) as it goes: out of a
       // death of its own, the coins' flash and puff over a body still whole
@@ -4323,22 +4264,7 @@ export class BattleScene extends Phaser.Scene {
       ];
       const second = finds.filter(Boolean).join("  ");
       await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`);
-      let leveled = false;
-      let newRank = 0;
-      const fromLevel = GameState.player.level;
-      while (GameState.player.level < MAX_LEVEL && GameState.player.exp >= expToNext(GameState.player.level)) {
-        GameState.player.exp -= expToNext(GameState.player.level);
-        GameState.player.level += 1;
-        GameState.player.maxHp = Math.min(MAX_HP, GameState.player.maxHp + 5);
-        GameState.player.maxMp = Math.min(MAX_MP, GameState.player.maxMp + 2);
-        GameState.player.atk += 1;
-        GameState.player.def += 1;
-        GameState.player.hp = GameState.effMaxHp();
-        GameState.player.mp = GameState.player.maxMp;
-        const rank = recordRank(GameState.player.name, GameState.player.level);
-        if (rank > 0) newRank = rank;
-        leveled = true;
-      }
+      const leveled = settleLevels();
       // a level up keeps a line of its own, the burst and the fanfare with it
       if (leveled) {
         Sfx.levelup();
@@ -4352,9 +4278,9 @@ export class BattleScene extends Phaser.Scene {
         // a perk tier opened (perks.ts): on the level's own row, "LEVEL UP! LV
         // 30  RANK #10!  PERK: see the ELDER!" 48 glyphs of a row's 54 (it had
         // a line and a key of its own)
-        const perk = perkOpened(fromLevel, GameState.player.level) ? "  PERK: see the ELDER!" : "";
-        const rank = newRank > 0 ? `  RANK #${newRank}!` : "";
-        await this.say(`LEVEL UP! LV ${GameState.player.level}${rank}${perk}${this.learnedLine(fromLevel)}`);
+        const perk = perkOpened(leveled.from, leveled.level) ? "  PERK: see the ELDER!" : "";
+        const rank = leveled.rank > 0 ? `  RANK #${leveled.rank}!` : "";
+        await this.say(`LEVEL UP! LV ${leveled.level}${rank}${perk}${this.learnedLine(leveled.from)}`);
       }
       // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
       // pay model has no room for it; its own line, news the payout's page
