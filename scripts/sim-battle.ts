@@ -413,6 +413,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let hiPotions = HIPOTIONS;
   // BattleScene's per-battle state (init())
   let combo = 0;
+  let opened = false;
   let poisonTurns = 0;
   let frozen = false;
   let freezeGrace = 0;
@@ -571,8 +572,15 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     // a stuck foe takes it as a crit
     const roll = rollDamage(hero.atk, edgedDef(foe.def, hero.edge), Math.random, hero.edge.crit);
     const dmg = roll.crit || !stuck ? roll.dmg : roll.dmg * CRIT_MULT;
-    const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow")))));
+    // QUICK's first FIGHT, SEAR's burn (battleRules WEAPON_NATURE)
+    const opener = opened ? 1 : hero.edge.opener;
+    opened = true;
+    const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow"))) * opener));
     foe.curHp = Math.max(0, foe.curHp - (Math.random() < PERFECT ? perfectDamage(total) : total));
+    if (foe.curHp > 0 && enemyDot === null && !BURN_PROOF.includes(foe.name) && Math.random() < hero.edge.burn) {
+      enemyDot = COMPANION_DOT_TURNS;
+      dotKind = "BRN";
+    }
   };
 
   // BattleScene castSpell() + spellEffectCanLand() + landSpellEffect()

@@ -42,9 +42,10 @@ function equipInfo(key: EquipmentKey, refine = 0): string {
   const hp = EQUIP_MAXHP[key];
   if (hp) parts.push(`MAX HP +${hp}`);
   // a sword's nature (battleRules WEAPON_NATURE). The longest line with it,
-  // the bag's "IRON SWORD+5: WEAPON, ATK +9 (+5), HEAVY: CUTS HALF DEF", is
-  // 55 glyphs of bodyStyle(22), 770px, in the bag's and the shop's 1160px
-  // panels (195px a side to spare); the BLACKSMITH's 960 shows recipes only
+  // the bag's "DRAKE BLADE: WEAPON, ATK +13 (+5), SEAR: FIGHT MAY BURN", is
+  // 55 glyphs of bodyStyle(22), 770px (x 255..1025), in the bag's and the
+  // shop's 1160px panels; the BLACKSMITH's 960 shows the recipe's
+  // "DRAKE BLADE: WEAPON, ATK +8, SEAR: FIGHT MAY BURN", 49 glyphs, 686px
   const nature = WEAPON_NATURE[key];
   if (nature) parts.push(`${nature.name}: ${nature.info}`);
   return parts.join(", ");

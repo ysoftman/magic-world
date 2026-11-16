@@ -708,6 +708,8 @@ export class BattleScene extends Phaser.Scene {
   private chillLost = 0;
   // a reaction went off this cast: the first one a save sees gets its tip
   private reacted = false;
+  // a FIGHT has been struck this battle (QUICK's is the first)
+  private opened = false;
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
@@ -795,6 +797,7 @@ export class BattleScene extends Phaser.Scene {
     this.chilled = false;
     this.chillLost = 0;
     this.reacted = false;
+    this.opened = false;
     this.pilfered = false;
     this.guarded = false;
     this.defending = false;
@@ -2033,7 +2036,10 @@ export class BattleScene extends Phaser.Scene {
     const roll = rollDamage(this.heroAtk(), edgedDef(this.enemy.def, edge), Math.random, edge.crit);
     const crit = roll.crit || this.stuck !== null;
     const dmg = roll.crit || !this.stuck ? roll.dmg : roll.dmg * CRIT_MULT;
-    let total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
+    // QUICK: the fight's first FIGHT, whoever it is aimed by (a COUNTER, a first strike)
+    const quick = !this.opened && edge.opener > 1;
+    this.opened = true;
+    let total = Math.max(1, Math.floor(dmg * (1 + comboBonus) * (quick ? edge.opener : 1)));
     // PERFECT: the wind-up held so the blow lands a run-up after FIGHT, the
     // reticle shut just before it; the swing's whoosh waits with it
     const dash = this.anim(WINDUP_MS) + this.anim(LUNGE_OUT_MS);
@@ -2077,11 +2083,20 @@ export class BattleScene extends Phaser.Scene {
       // its line types from the contact on, while the hero walks home: after
       // the walk it was 160ms more of every FIGHT with nothing new to see
       const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
-      // HEAVY cutting through a HARDEN, CRUST or ARMOR says so: the one time
-      // the sword's nature shows. "CRITICAL HIT! You strike for 516! COMBO
-      // x99! HEAVY!" is 50 glyphs of a row's 54.
-      const heavy = edge.defShare < 1 && this.foeBuff === "DEF+" ? " HEAVY!" : "";
-      line = this.say(`${crit ? "CRITICAL HIT! " : ""}You strike for ${total}!${comboNote}${heavy}`);
+      // The sword's nature says so when it does something, and only then
+      // (a sword has one, so one note at most): HEAVY cutting through a
+      // HARDEN, CRUST or ARMOR, QUICK's first blow, SEAR's burn as it takes
+      // (FIRE's own, label and all). "CRITICAL HIT! You strike for 516!
+      // COMBO x99! HEAVY!" is 50 glyphs of a row's 54.
+      const sears = edge.burn > 0 && this.enemy.curHp > 0 && this.spellEffectCanLand("burn") && Math.random() < edge.burn;
+      const nature = sears
+        ? this.landSpellEffect("burn")
+        : quick
+          ? " QUICK!"
+          : edge.defShare < 1 && this.foeBuff === "DEF+"
+            ? " HEAVY!"
+            : "";
+      line = this.say(`${crit ? "CRITICAL HIT! " : ""}You strike for ${total}!${comboNote}${nature}`);
     };
     let line: Promise<void> | undefined;
     await this.lunge(crit, onContact, hold);

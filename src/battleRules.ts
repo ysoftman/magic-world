@@ -729,15 +729,31 @@ export interface SkillTarget {
 //   there. A HARDEN, CRUST or ARMOR had only spells for an answer.
 // - KEEN (MYTHRIL SWORD): FIGHT and a one-hit weapon tech crit twice as often
 //   (a tech with odds of its own keeps the better of the two).
+// - QUICK (SWORD): the fight's first FIGHT deals half again. The first sword
+//   is 4 to 6 ATK under the rest and no nature closes that over a long fight
+//   (a combo bonus x1.5 was tried on paper: +14% at five blows against a 25%
+//   gap), so this one is for the fights it is bought for, two blows long,
+//   and against a foe one blow from falling. FIGHT only.
+// - SEAR (DRAKE BLADE): a FIGHT that leaves the foe standing may set it
+//   burning (FIRE's BRN, with its rules: not a fire kind, not one already
+//   burning or poisoned), the footing a MELT wants. FIGHT only.
 export interface Edge {
   /** the share of the foe's DEF the blade meets */
   defShare: number;
   /** FIGHT's crit odds */
   crit: number;
+  /** what the fight's first FIGHT is multiplied by */
+  opener: number;
+  /** a FIGHT's odds of a burn */
+  burn: number;
 }
 export const HEAVY_DEF_SHARE = 0.5;
 export const KEEN_CRIT = 0.2;
+export const QUICK_OPENER = 1.5;
+export const SEAR_CHANCE = 0.15;
 export const WEAPON_NATURE: Partial<Record<EquipmentKey, { name: string; info: string; edge: Partial<Edge> }>> = {
+  sword: { name: "QUICK", info: "FIRST BLOW +50%", edge: { opener: QUICK_OPENER } },
+  drakeBlade: { name: "SEAR", info: "FIGHT MAY BURN", edge: { burn: SEAR_CHANCE } },
   ironSword: { name: "HEAVY", info: "CUTS HALF DEF", edge: { defShare: HEAVY_DEF_SHARE } },
   mythrilSword: { name: "KEEN", info: "CRIT X2", edge: { crit: KEEN_CRIT } },
 };
@@ -745,6 +761,8 @@ export const WEAPON_NATURE: Partial<Record<EquipmentKey, { name: string; info: s
 export const edgeOf = (weapon: EquipmentKey | null): Edge => ({
   defShare: 1,
   crit: CRIT_CHANCE,
+  opener: 1,
+  burn: 0,
   ...(weapon ? WEAPON_NATURE[weapon]?.edge : undefined),
 });
 /** The foe's DEF as FIGHT's blade meets it. */
