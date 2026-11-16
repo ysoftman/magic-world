@@ -29,6 +29,7 @@ import * as plasmaShot from "pixelfx/fx/projectiles/plasma-shot";
 import * as lifeSteal from "pixelfx/fx/shadow/life-steal";
 import * as coinDrop from "pixelfx/fx/spawn/coin-drop";
 import * as poof from "pixelfx/fx/spawn/poof";
+import { BOSS_SHEETS } from "./bossSheets";
 import { PIXEL } from "./config";
 import { GameState } from "./gameState";
 import { densityOf, finish, hiFrame } from "./hiresPaint";
@@ -475,7 +476,13 @@ const battleRes = (table: Record<string, PixelSheet>): Record<string, PixelSheet
 const BATTLE_SHEETS = battleRes(PIXEL_SHEETS);
 
 // every sheet by key, for playing one
-const SHEETS: Record<string, PixelSheet> = battleRes({ ...PIXEL_SHEETS, ...COMPANION_SHEETS, ...SKILL_SHEETS, ...TECH_SHEETS });
+const SHEETS: Record<string, PixelSheet> = battleRes({
+  ...PIXEL_SHEETS,
+  ...COMPANION_SHEETS,
+  ...SKILL_SHEETS,
+  ...TECH_SHEETS,
+  ...BOSS_SHEETS,
+});
 
 // a sheet's frames, the texture point put on (x, y) as a fraction of a frame,
 // and whether it turns to face the blow
@@ -773,7 +780,7 @@ export function warmBattleFx(scene: Phaser.Scene, after: Record<string, PixelShe
   warmSheets(scene, { ...BATTLE_SHEETS, ...after });
 }
 
-/** Bakes the companion sheets `keys` (COMPANION_SHEETS) over the next frames of `scene` (warmSheets). */
+/** Bakes the sheets `keys` a battle warms for itself (a companion's, the moves', a boss's) over the next frames of `scene` (warmSheets). */
 export function warmFx(scene: Phaser.Scene, keys: string[]): void {
   warmSheets(scene, Object.fromEntries(keys.map((key) => [key, SHEETS[key]])));
 }

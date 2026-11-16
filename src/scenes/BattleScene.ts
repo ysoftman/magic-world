@@ -267,6 +267,19 @@ const BREATHS: Record<string, { key: string; tilt: number }> = {
   [ENEMIES.salamander.name]: { key: "fx-spit-fire", tilt: 0 },
   [ENEMIES.iceGolem.name]: { key: "fx-breath-frost", tilt: -0.06 },
 };
+// A boss's move as it is shown (bossSheets.ts), by the move's name: the sheet,
+// its length, how far in the hit lands (the wave breaks, the cloud bursts),
+// whose feet it stands at, and its sound in place of the wind-up's. The
+// sheets are cut 58 cells over the floor (y 224) and 8 under (y 488).
+const MOVE_FX: Record<string, { key: string; ms: number; hit: number; sfx: string; on?: "foe" }> = {
+  SPLASH: { key: "fx-bs-splash", ms: 1300, hit: 530, sfx: "move:splash" },
+  SPORES: { key: "fx-bs-spores", ms: 1500, hit: 440, sfx: "move:spores" },
+  SWEEP: { key: "fx-bs-sweep", ms: 700, hit: 130, sfx: "move:sweep" },
+  ARMOR: { key: "fx-bs-armor", ms: 1200, hit: 0, sfx: "move:armor", on: "foe" },
+};
+// FRENZY's blows land in this in place of the plain hit's sparks
+const CLUB_FX = "fx-bs-club";
+
 // A companion skill's own sheet (fx.ts COMPANION_SHEETS) as its blow lands
 // (skillFxOn), in place of the plain strike's fx-hit: its ms at 1x, on the
 // foe's feet or, `ground`, on the ground under it (a flier's too); `back`, its
@@ -3067,8 +3080,8 @@ export class BattleScene extends Phaser.Scene {
 
   // One blow of the foe's on the hero, all but its line: the lunge (and its
   // PARRY), the damage at `mult` of the roll through WARD/GUARD/DEFEND, the
-  // sparks and the knock-back.
-  private async enemyBlow(mult = 1): Promise<{ dmg: number; crit: boolean; parried: boolean; note: string }> {
+  // sparks (`club`: the TROLL KING's burst of dust instead) and the knock-back.
+  private async enemyBlow(mult = 1, club = false): Promise<{ dmg: number; crit: boolean; parried: boolean; note: string }> {
     const parried = await this.enemyLunge();
     // impact thud lands with the damage, not at the wind-up
     if (!parried) Sfx.hit();
@@ -3081,7 +3094,8 @@ export class BattleScene extends Phaser.Scene {
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
-    this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
+    if (club && !crit) playFx(this, CLUB_FX, this.playerSprite.x, GROUND_Y, this.anim(450), this.enemyBaseScale, true);
+    else this.fxOn(this.playerSprite, crit ? "fx-crit" : "fx-hit", HIT_FX_MS);
     if (braced) this.blockOn();
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(crit ? 16 : 8);
@@ -3107,7 +3121,11 @@ export class BattleScene extends Phaser.Scene {
       if (move.kind === "armor") this.armor = { def, turns: move.turns ?? 2 };
       this.foeBuff = howl ? "ATK+" : "DEF+";
       this.updateEnemyStatus();
-      if (howl) Sfx.charge();
+      const fx = MOVE_FX[move.name];
+      if (fx) {
+        Sfx.emit(fx.sfx);
+        playFx(this, fx.key, this.enemySprite.x, GROUND_Y, this.anim(fx.ms), this.enemyBaseScale);
+      } else if (howl) Sfx.charge();
       else Sfx.ward();
       this.enemySprite.setTint(howl ? 0xfca5a5 : 0xcbd5e1).setTintMode(Phaser.TintModes.FILL);
       this.pulseEnemy(1.08, 160);
@@ -3134,7 +3152,7 @@ export class BattleScene extends Phaser.Scene {
       for (let i = 0; i < hits && GameState.player.hp > 0; i++) {
         // home before it comes again: the next lunge starts from where it stands
         if (i > 0) await this.wait(this.anim(LUNGE_BACK_MS) + 20);
-        const blow = await this.enemyBlow(mult);
+        const blow = await this.enemyBlow(mult, !!move.at);
         dealt.push(blow.dmg);
         note = blow.note || note;
       }
@@ -3168,14 +3186,18 @@ export class BattleScene extends Phaser.Scene {
     this.setPlayerTint(undefined);
   }
 
-  // A blast (EnemyMove "blast"): no lunge and so no PARRY, the foe swelling
-  // where it stands and the hit landing in a flash; WARD, BULWARK and DEFEND
-  // take their share as of any blow. "FLAME DRAKE's SWEEP hits for 999!
-  // (DEFEND)" is 44 glyphs.
+  // A blast (EnemyMove "blast"): no lunge and so no PARRY. Its sheet (MOVE_FX)
+  // plays at the hero's feet from the foe's side and the hit lands as the
+  // sheet's does; WARD, BULWARK and DEFEND take their share as of any blow.
+  // "FLAME DRAKE's SWEEP hits for 999! (DEFEND)" is 44 glyphs.
   private async enemyBlast(move: EnemyMove): Promise<void> {
-    Sfx.charge();
+    const fx = MOVE_FX[move.name];
+    if (fx) {
+      Sfx.emit(fx.sfx);
+      playFx(this, fx.key, this.playerSprite.x, GROUND_Y, this.anim(fx.ms), this.enemyBaseScale, true);
+    } else Sfx.charge();
     this.pulseEnemy(1.1, 120);
-    await this.wait(this.anim(360));
+    await this.wait(this.anim(fx?.hit ?? 360));
     Sfx.hit();
     Sfx.critical();
     const { dmg, note, braced, countered } = this.guardHit(
@@ -3185,12 +3207,15 @@ export class BattleScene extends Phaser.Scene {
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
-    this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
+    // its own sheet is the hit's picture; without one, the crit's and a flash
+    if (!fx) {
+      this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
+      flash(this.cameras.main, 120, 255, 255, 255);
+    }
     if (braced) this.blockOn();
     this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
     this.hitBurst.explode(20);
     shake(this.cameras.main, 240, 0.012);
-    flash(this.cameras.main, 120, 255, 255, 255);
     this.recoil(this.playerSprite, -1, true);
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
     await this.say(`${this.enemy.name}'s ${move.name} hits for ${dmg}!${note}`);
@@ -3767,6 +3792,10 @@ export class BattleScene extends Phaser.Scene {
     // behind the status sheets it was in at 0.77s.
     const death = this.deathOf();
     if (death) warm(foe, death);
+    // a boss's move's sheet (bossSheets.ts): its first HP mark is some rounds off
+    const moveFx =
+      this.enemy.move && (this.enemy.move.kind === "flurry" ? this.enemy.move.at && CLUB_FX : MOVE_FX[this.enemy.move.name]?.key);
+    if (moveFx) warmFx(this, [moveFx]);
     if (big) warm(foe, "rage", ENRAGE_TINT);
     // BOLT's shock and WEB SNARE skip bosses and giants
     if (!big && casts("shock")) warm(foe, "shock");

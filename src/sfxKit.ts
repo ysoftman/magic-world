@@ -598,6 +598,51 @@ const GAME_KIT: Record<string, SfxProgram> = {
     ],
   },
   // ---- battle: blows taken and status ----
+  // ---- battle: the bosses' moves (BattleScene MOVE_FX) ----
+  "move:splash": {
+    id: "move:splash",
+    kind: "se",
+    target: "wave: a lowpassed noise swell opening 300 -> 2.4k over 0.4s as it rears, then a bright wash breaking and hissing out",
+    pitch: "none",
+    steps: [
+      { at: 0, dur: 0.42, wave: "noise", freq: 6000, to: 20000, vol: 0.09, attack: 0.3, filter: { type: "lowpass", freq: 300, to: 2400 } },
+      { at: 0.4, dur: 0.2, wave: "noise", freq: 40000, to: 12000, vol: 0.1, filter: { type: "highpass", freq: 1800 } },
+    ],
+  },
+  "move:spores": {
+    id: "move:spores",
+    kind: "se",
+    target: "spores: a dull noise puff, then three soft triangle blips drifting down G5 E5 C5 as the cloud settles",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.12, wave: "noise", freq: 9000, vol: 0.09, filter: { type: "lowpass", freq: 900 } },
+      { at: 0.08, dur: 0.1, wave: "triangle", freq: N("G5"), vol: 0.07, hold: 0.03, vib: { rate: 9, cents: 30 } },
+      { at: 0.2, dur: 0.1, wave: "triangle", freq: N("E5"), vol: 0.065, hold: 0.03, vib: { rate: 9, cents: 30 } },
+      { at: 0.32, dur: 0.18, wave: "triangle", freq: N("C5"), vol: 0.06, hold: 0.05, vib: { rate: 9, cents: 30 } },
+    ],
+  },
+  "move:sweep": {
+    id: "move:sweep",
+    kind: "se",
+    target: "tail: a fast band-passed whoosh sweeping 500 -> 4k (0.22s) over a driven saw growl sliding A2 -> E2",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.24, wave: "noise", freq: 30000, vol: 0.13, attack: 0.05, filter: { type: "bandpass", freq: 500, to: 4000, q: 1.4 } },
+      { at: 0, dur: 0.26, wave: "sawtooth", freq: N("A2"), to: N("E2"), vol: 0.09, hold: 0.08, drive: 0.6 },
+      { at: 0, dur: 0.2, wave: "square", freq: N("A3"), to: N("E3"), vol: 0.08, hold: 0.06 },
+    ],
+  },
+  "move:armor": {
+    id: "move:armor",
+    kind: "se",
+    target: "ice armour: four crisp 12.5% pulse ticks climbing E5 B5 E6 B6 like plates locking, a metal clink on the last",
+    pitch: "key",
+    steps: [
+      ...["E5", "B5", "E6", "B6"].map((n, i): SfxStep => ({ at: i * 0.08, dur: 0.07, wave: "pulse12", freq: N(n), vol: 0.07, hold: 0.02 })),
+      { at: 0.24, dur: 0.03, wave: "metal", freq: 80000, vol: 0.08 },
+      { at: 0.24, dur: 0.2, wave: "triangle", freq: N("E6"), vol: 0.05, hold: 0.05 },
+    ],
+  },
   limit: {
     id: "limit",
     kind: "se",

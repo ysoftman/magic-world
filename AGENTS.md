@@ -1030,6 +1030,14 @@ Phaser 의 missing 텍스처가 대신 뜬다. 장비 아이콘은 영웅 장비
   자리로 튄다). 한 전투에 동료는 하나라 타이틀에서 굽지 않고 그 전투 create 가 `warmFx` 로 제 동료 것만 나눠 굽는다
   (첫 스킬은 빨라야 영웅 첫 턴 뒤). 위는 y 208(나는 적)·224(땅), 아래는 y 488(fx-bomb 과 같음)로 자른다. 적이 그
   안에 서는 고리·거미줄은 `layer` 로 뒤("back", 적 아래로 `moveBelow`)·앞을 따로 굽는다.
+- 보스 기술의 시트는 `bossSheets.ts` 의 `BOSS_SHEETS`(fx.ts 의 `SHEETS` 에 펼침)이고, 그 보스 전투의 `warmStatuses` 가 처치
+  시트 바로 뒤에 제 것 하나만 `warmFx` 로 굽는다(타이틀 warm 에는 없다). BattleScene 의 `MOVE_FX` 가 기술 이름으로 시트·길이·
+  맞는 순간(`hit`, 파도가 부서지고 포자가 터지는 때)·효과음(`move:*`)을 정하고, blast 는 영웅 발밑(`GROUND_Y`)에 적 쪽에서
+  오게 뒤집어, ARMOR 는 적 발밑에, FRENZY 는 타마다 `fx-bs-club` 을 평범한 타격 불똥 대신 둔다. crop 은 기술 시트와 같은 땅 위
+  58칸·아래 8칸이다. 헤드리스 실측: 텍스처 SPLASH 2.87·SPORES 1.52·SWEEP 1.31·ARMOR 2.84·club 0.57MB, 전투 시작 0.11~0.56초에
+  준비(첫 HP 선은 몇 라운드 뒤), 그 전투 시작의 가장 긴 프레임 간격 27~33ms. 한 번 구운 시트는 세션에 남는다(보스 다섯을 다
+  만나면 9.1MB). 실제 사례: 포자 버섯을 영웅 발밑에 두었더니 흰 줄기가 영웅을 가려 적 쪽으로 14칸 옮겼고(`focus`), 파란 물결은
+  KING SLIME 과 무관해 보여 슬라임의 빨강 램프로 칠했다.
 - SKILL 목록의 스킬·기술 시트는 `skillSheets.ts`·`techSheets.ts` 의 표를 `fx.ts` 의 `SHEETS` 에 펼쳐 넣고, 놓는 자리와
   맞는 순간(`onHit`)은 `skillFx.ts`·`techFx.ts` 가 정한다. 시트 표는 pixelfx·`sheetFx.ts`·`PixelSheet` 타입만 불러
   fx.ts 와 값이 돌지 않게 한다. crop 은 땅 기준 위 58칸·아래 8칸, 적 발 기준 위 46칸이다(`sheetFx.ts` 의 `around`,
