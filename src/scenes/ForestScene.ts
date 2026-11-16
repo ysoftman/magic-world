@@ -54,6 +54,7 @@ import { InventoryUI } from "../ui/InventoryUI";
 import { FOREST_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { QuestLog } from "../ui/QuestLog";
+import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -83,6 +84,7 @@ export class ForestScene extends Phaser.Scene {
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer<ForestKind>[] = [];
+  private runner: FieldRunner | null = null;
   private encounterCooldown = 0;
   private exitingForest = false;
 
@@ -189,6 +191,17 @@ export class ForestScene extends Phaser.Scene {
     addCritters(this, "forest", { level, avoid: [FOREST_ENTRY, FOREST_SHRINE_POS, ...FOREST_TREASURE_POS] });
 
     this.spawnMonsters();
+    // now and then the field's jackpot out in the open, to be run down (ui/Runner.ts)
+    this.runner = turn
+      ? null
+      : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
+          back: !!back,
+          walls: [FOREST_SHRINE_POS],
+          exits: [FOREST_ENTRY],
+          zones: FOREST_ZONES,
+          paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
+          caught: () => this.startBattle("silverWasp"),
+        });
 
     this.spawnTreasures();
 
@@ -420,6 +433,8 @@ export class ForestScene extends Phaser.Scene {
     // only while the hero walks: stood still (by a chest, over a map,
     // deciding the way) a fight still came every ~17s
     if (!moving) return;
+    // nor while a runner is being chased (ui/Runner.ts): its fight is the one to win
+    if (this.runner?.fleeing()) return;
     const nearExit =
       Math.abs(this.player.x - FOREST_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - FOREST_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;

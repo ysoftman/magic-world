@@ -1048,7 +1048,7 @@ const ROAMER_HOP_MS = 560;
 // texture by the lift and its body's offset with it, so the hit box the
 // hero meets stays where it was (Arcade places a body at y + offset -
 // displayOrigin).
-function hop(scene: Phaser.Scene, sprite: Phaser.Physics.Arcade.Sprite): void {
+export function hop(scene: Phaser.Scene, sprite: Phaser.Physics.Arcade.Sprite): void {
   const body = sprite.body as Phaser.Physics.Arcade.Body | null;
   const [originY, offsetY] = [sprite.displayOriginY, body?.offset.y ?? 0];
   let lift = 0;

@@ -465,6 +465,27 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   싼 동굴 제단의 GREED 를 화산에서 쓰면 남는다(하루 한 번 약 +165G, `shrine.ts` 머리 주석). 일부러 둔 것이다(결정:
   돌아다닐 이유).
 
+## 도망치는 희귀 몬스터 (`src/ui/Runner.ts`)
+
+동굴·숲·설원을 만들 때(`create`) `FieldRunner.roll` 이 `RUNNER_CHANCE`(들어설 때 12%, 전투에서 돌아올 때 2.5%)로 그
+지역의 희귀 몬스터를 구역 밖 열린 칸에 세운다. `NOTICE`(3타일) 안에 영웅이 오면 `!` 를 띄우고 `FLEE_MS`(10초) 동안
+달아나다 사라진다. 닿으면 씬의 `startBattle(희귀 몬스터)` 다. 저장하는 상태는 없다(전투 뒤 씬이 다시 만들어지며 사라진다).
+
+- 길 찾기는 없다. 영웅이 걷는 격자(`isWalkableCell`)에서 영웅과 가장 먼 이웃 칸으로 한 칸씩 간다. 막다른 곳을 몰라서
+  몰아넣을 수 있고, 그게 잡는 방법이다. 제단처럼 타일이 아닌 벽은 `walls`, 출구는 `exits` 로 넘긴다.
+- `RUN_SPEED`(290)는 영웅의 가로·세로 속도(240)보다 빠르고 대각선(339)보다 느리다. 실제 사례: 곧장 따라가기만 하는
+  봇이 200~270 에서는 `!` 뒤 1.2~4.4초에 전부 잡았고(쫓을 것이 없음), 310 에서는 9번 중 4번, 290 에서는 11번 중 6번
+  잡았다. 영웅 속도(`sceneCommon` 의 `WALK_SPEED`)를 바꾸면 다시 잰다. 칸에 닿은 프레임에 서지 않고 바로 다음 칸으로
+  출발한다(한 프레임씩 서면 속도의 1/15 을 잃었다).
+- 쫓는 동안(`fleeing()`) 씬의 `checkEncounter` 는 무작위 조우를 굴리지 않는다. 구역의 로머는 그대로라 닿으면 그 전투가
+  시작되고 러너는 사라진다(결정: 지름길의 위험).
+- 새 필드 씬에 넣을 때: `spawnMonsters()` 뒤에 `this.runner = FieldRunner.roll(this, this.player, level, 텍스처, { back,
+  walls, exits, zones, paused, caught })`, `checkEncounter` 의 `if (!moving) return;` 뒤에 `if (this.runner?.fleeing())
+  return;`. `paused` 는 `uiBlocking() || quitting || fieldKeys.leaving()`, `caught` 는 `startBattle` 이다(입장 쿨다운·
+  나가는 중 가드는 `startBattle` 이 본다).
+- 빈도와 벌이는 `Runner.ts` 머리 주석에 있다(시간당 약 3번, 다 잡으면 동굴 약 320G·숲 500G·설원 1370G, 밸런스 sim 은 안 돌림). 확률이나 희귀 몬스터의
+  골드를 바꾸면 같이 고친다. 화산은 희귀 몬스터가 없어 아직 러너가 없다.
+
 ## 작업 완료 후 중간 산출물 정리
 
 - 작업 중 생성한 **중간 산출물**(디버그 스크린샷 png, 검증용 임시 파일, 임시 훅 등)은 작업이 끝나면 반드시 정리한다.

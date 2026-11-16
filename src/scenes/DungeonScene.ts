@@ -62,6 +62,7 @@ import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { addProp, TORCH } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
+import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -100,6 +101,7 @@ export class DungeonScene extends Phaser.Scene {
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer<CaveKind>[] = [];
+  private runner: FieldRunner | null = null;
   private encounterCooldown = 0;
   private exitingDungeon = false;
 
@@ -204,6 +206,15 @@ export class DungeonScene extends Phaser.Scene {
     addAmbient(this, "dungeon", { level });
 
     this.spawnMonsters();
+    // now and then the field's jackpot out in the open, to be run down (ui/Runner.ts)
+    this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
+      back: !!back,
+      walls: [DUNGEON_SHRINE_POS],
+      exits: [DUNGEON_ENTRY],
+      zones: DUNGEON_ZONES,
+      paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
+      caught: () => this.startBattle("cursedGoblin"),
+    });
 
     this.spawnTreasures();
 
@@ -474,6 +485,8 @@ export class DungeonScene extends Phaser.Scene {
     // only while the hero walks: stood still (by a chest, over a map, at the
     // ice hole, deciding the way) a fight still came every ~17s
     if (!moving) return;
+    // nor while a runner is being chased (ui/Runner.ts): its fight is the one to win
+    if (this.runner?.fleeing()) return;
     const nearExit =
       Math.abs(this.player.x - DUNGEON_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - DUNGEON_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;

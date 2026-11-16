@@ -54,6 +54,7 @@ import { InventoryUI } from "../ui/InventoryUI";
 import { Minimap, SNOW_TILE_COLORS } from "../ui/Minimap";
 import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { QuestLog } from "../ui/QuestLog";
+import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -88,6 +89,7 @@ export class SnowScene extends Phaser.Scene {
   private fireflies!: Phaser.GameObjects.Particles.ParticleEmitter;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer<SnowKind>[] = [];
+  private runner: FieldRunner | null = null;
   private encounterCooldown = 0;
   private exitingSnow = false;
 
@@ -196,6 +198,15 @@ export class SnowScene extends Phaser.Scene {
     addAmbient(this, "snow", { caption: true, since: back?.weather });
 
     this.spawnMonsters();
+    // now and then the field's jackpot out in the open, to be run down (ui/Runner.ts)
+    this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
+      back: !!back,
+      walls: [SNOW_SHRINE_POS],
+      exits: [SNOW_ENTRY],
+      zones: SNOW_ZONES,
+      paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
+      caught: () => this.startBattle("auroraMoth"),
+    });
 
     this.spawnTreasures();
 
@@ -423,6 +434,8 @@ export class SnowScene extends Phaser.Scene {
     // only while the hero walks: stood still (by a chest, over a map, at the
     // ice hole, deciding the way) a fight still came every ~17s
     if (!moving) return;
+    // nor while a runner is being chased (ui/Runner.ts): its fight is the one to win
+    if (this.runner?.fleeing()) return;
     const nearExit =
       Math.abs(this.player.x - SNOW_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - SNOW_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
