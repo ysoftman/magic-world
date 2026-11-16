@@ -13,17 +13,30 @@ export interface EnemySpecial {
 // the turn before in its battle window (BattleScene's intent tag, ">HOWL");
 // what each kind does is battleRules' (MOVE_*). `name` is that tag and the
 // bestiary's CAN note: 6 glyphs at most (the tag's row holds 7 with the ">").
-// No boss, giant or jackpot has one, nor a species with a wind-up
-// (battleRules BOSS_TELLS): one warning a foe.
+// No jackpot has one, nor an ordinary species with a wind-up (battleRules
+// BOSS_TELLS): one warning a foe.
 //   drain   a blow that heals it by what it dealt
 //   howl    its ATK up for the rest of the fight, once, then its blow
 //   snatch  a weak blow that takes gold, handed back when it falls
 //   harden  no blow: its DEF up for the rest of the fight, once
-//   flurry  two weak blows, each its own PARRY
+//   flurry  `hits` blows (2) at `mult` (battleRules MOVE_FLURRY_MULT) each,
+//           each its own PARRY
+//   blast   one hit at `mult` that no PARRY meets (a wave, a cloud: nothing
+//           to time), WARD and DEFEND as ever; `poison` leaves the hero's
+//   armor   no blow: its DEF up for `turns` of its turns
+// A boss's or giant's is its second pattern beside its wind-up: not rolled
+// each turn (`chance` 0) but announced as its HP first falls to each share
+// in `at`, so a fight has that many however long it runs, and it comes on
+// top of that turn's action, not in place of it.
 export interface EnemyMove {
-  kind: "drain" | "howl" | "snatch" | "harden" | "flurry";
+  kind: "drain" | "howl" | "snatch" | "harden" | "flurry" | "blast" | "armor";
   name: string;
   chance: number;
+  at?: number[];
+  mult?: number;
+  hits?: number;
+  poison?: boolean;
+  turns?: number;
 }
 
 export interface EnemyDef {
@@ -134,6 +147,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 120,
     boss: true,
     weakness: "bolt",
+    move: { kind: "blast", name: "SPLASH", chance: 0, at: [0.7, 0.35], mult: 1.5 },
   },
   troll: {
     name: "TROLL KING",
@@ -149,6 +163,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 200,
     giant: true,
     weakness: "fire",
+    move: { kind: "flurry", name: "FRENZY", chance: 0, at: [0.7, 0.35], hits: 3, mult: 0.6 },
   },
   wasp: {
     name: "WASP",
@@ -201,6 +216,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // FOREST story boss: same flag/uncatchable path as KING SLIME
     weakness: "fire", // a mossy plant body burns
     special: { kind: "regen", chance: 0.25 }, // regrows its moss: rewards bursting it down
+    move: { kind: "blast", name: "SPORES", chance: 0, at: [0.6], mult: 0.8, poison: true },
   },
   wisp: {
     name: "NIGHT WISP",
@@ -263,6 +279,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // SNOW FIELD superboss: post-game challenge past the MOSS GOLEM
     weakness: "fire", // glacial body shatters under heat
     special: { kind: "freeze", chance: 0.25 },
+    move: { kind: "armor", name: "ARMOR", chance: 0, at: [0.6], turns: 3 },
   },
   // VOLCANO roster, one step past the snow field's (FROST MOTH/YETI/GLACIER
   // GOLEM). Ice is the obvious answer to fire, so most are weak to it; the
@@ -292,8 +309,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     move: { kind: "flurry", name: "FLURRY", chance: MOVE_CHANCE },
   },
   // the volcano's jackpot, scaled off the FIRE IMP as SILVER WASP is off the
-  // WASP. No roamer or grass roll is ever one: it is met only as the
-  // volcano's runner (ui/Runner.ts)
+  // WASP but for its gold, x8 rather than x12: it is met only as the
+  // volcano's runner (ui/Runner.ts, no roamer or grass roll is ever one), and
+  // at x12 the runners there paid a quarter of the hunt
   gildedImp: {
     name: "GILDED IMP",
     texture: "gildedImp",
@@ -316,6 +334,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 700,
     boss: true, // VOLCANO superboss: the last region, past the GLACIER GOLEM
     weakness: "ice",
+    move: { kind: "blast", name: "SWEEP", chance: 0, at: [0.75, 0.5, 0.25], mult: 2.3 },
   },
 };
 

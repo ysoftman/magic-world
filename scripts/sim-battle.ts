@@ -103,6 +103,7 @@ const {
   MOVE_HOWL_ATK,
   MOVE_SNATCH_MULT,
   moveDamage,
+  moveDue,
   moveReady,
   regenAmount,
   rollDamage,
@@ -136,7 +137,16 @@ type Foe = ReturnType<typeof scaleEnemy>;
 // 1/2/4/8/11, solo 3/4/8/10/17): a strike that takes up to 70% of max HP is
 // deadly at a low level. The fights at the intended levels still come out as
 // the monsters.ts and battleRules.ts comments say: 4.8-8.3 rounds beside the
-// WOLF, 32-37% of max HP taken (heals not subtracted). A boss falling before
+// WOLF, 32-37% of max HP taken (heals not subtracted). Then each boss got a
+// second pattern (monsters.ts EnemyMove `at`: SPLASH, FRENZY, SPORES, ARMOR,
+// SWEEP), on top of its turn, to give back what PARRY, PERFECT, LIMIT and the
+// perks took off these fights: the levels above are with it (before it WOLF
+// 4/3/7/14/16, solo 4/6/10/18/20), and at the intended levels it is 4.9-9.4
+// rounds and 40-54% beside the WOLF, 97-100% won alone in the intended gear
+// (GLACIER 95%, as before). With --parry 0.4 --perfect 0.4 --limit 50 and the
+// level's perks a solo hero in that gear loses 66/53/56/44/45% of max HP,
+// where it lost 83/68/75/104/53% before any of those and 48/38/38/42/31%
+// with them and no second pattern. A boss falling before
 // its intended level is seen, not tuned: those comments aim at a threat, not
 // a win rate, and HARD MODE is the challenge. An unarmed Lv8 hero beats the
 // MOSS GOLEM ~91% of the time with the WOLF, ~30% alone (a point or two
@@ -152,11 +162,11 @@ interface BossCase {
   todo: { wolf: number; solo: number };
 }
 const BOSSES: BossCase[] = [
-  { tag: "KING", key: "king", level: 6, gear: { weapon: "sword", armor: "shield" }, todo: { wolf: 4, solo: 4 } },
-  { tag: "TROLL", key: "troll", level: 8, gear: { weapon: "sword", armor: "ironShield" }, todo: { wolf: 3, solo: 6 } },
-  { tag: "MOSS", key: "mossGolem", level: 12, gear: { weapon: "ironSword", armor: "ironShield" }, todo: { wolf: 7, solo: 10 } },
+  { tag: "KING", key: "king", level: 6, gear: { weapon: "sword", armor: "shield" }, todo: { wolf: 4, solo: 5 } },
+  { tag: "TROLL", key: "troll", level: 8, gear: { weapon: "sword", armor: "ironShield" }, todo: { wolf: 6, solo: 7 } },
+  { tag: "MOSS", key: "mossGolem", level: 12, gear: { weapon: "ironSword", armor: "ironShield" }, todo: { wolf: 8, solo: 10 } },
   { tag: "GLACIER", key: "iceGolem", level: 18, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 14, solo: 18 } },
-  { tag: "DRAKE", key: "flameDrake", level: 24, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 16, solo: 20 } },
+  { tag: "DRAKE", key: "flameDrake", level: 24, gear: { weapon: "mythrilSword", armor: "mythrilShield" }, todo: { wolf: 18, solo: 23 } },
 ];
 const WOLF = ENEMIES.wolf;
 const HP_LOW_SHARE = 0.35;
@@ -233,6 +243,11 @@ if (bosses.length === 0) {
 const levelArg = opt("level");
 const levels = levelArg ? levelArg.split(",").map(Number) : Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
 const PARRY = Number(opt("parry") ?? 0);
+// --brace: the hero answers a boss's announced blast or flurry as it does a
+// wind-up (WARD, else DEFEND). Off by default: a DEFEND spends a turn to take
+// 0.3 off a blow, which over a fight costs more than the blow did (KING
+// SLIME Lv6 solo lost 77% of max HP unbraced, 104% braced).
+const BRACE = args.includes("--brace");
 const PERFECT = Number(opt("perfect") ?? 0);
 const PERK_LIST = (opt("perks") ?? "").split(",").filter(Boolean);
 const perk = (key: string): number => (PERK_LIST.includes(key) ? PERKS[key as keyof typeof PERKS].value : 0);
@@ -396,11 +411,14 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let moved = false;
   let buffed = false;
   let snatched = false;
+  let movesUsed = 0;
+  let armor: { def: number; turns: number } | null = null;
   const rollIntent = (): void => {
     const move = foe.move;
     const ready = moveReady(move, { moved, buffed, snatched, gold: 1 });
     moved = false;
-    intent = ready && Math.random() < move.chance;
+    intent = ready && !charging && moveDue(move, { used: movesUsed, curHp: foe.curHp, hp: foe.hp });
+    if (intent && move?.at) movesUsed += 1;
   };
   rollIntent();
   let rounds = 0;
@@ -440,8 +458,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (heal && mp >= heal.cost) return { kind: "magic", spell: heal };
     }
     const ward = hero.spells.find((s) => s.kind === "ward");
-    if (charging && ward && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
-    if (charging && wardTurns === 0) return { kind: "defend" };
+    // a boss's announced blast or flurry is braced for as its wind-up is
+    const brace = charging || (BRACE && intent && !!foe.move?.at && (foe.move.kind === "blast" || foe.move.kind === "flurry"));
+    if (brace && ward && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
+    if (brace && wardTurns === 0) return { kind: "defend" };
     if (LIMIT !== null && !limitSpent && LIMIT + gauge() >= LIMIT_MAX) return { kind: "limit" };
     if (GREEDY) return greedy();
     const weak = hero.spells.find((s) => s.kind === "attack" && s.element !== undefined && s.element === foe.weakness);
@@ -601,19 +621,26 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         foe.atk = Math.round(foe.atk * MOVE_HOWL_ATK);
         buffed = true;
         blow(rollDamage(foe.atk, hero.def).dmg);
-      } else if (kind === "harden") {
-        foe.def += hardenDef(foe.atk);
+      } else if (kind === "harden" || kind === "armor") {
+        const def = hardenDef(foe.atk);
+        foe.def += def;
         buffed = true;
+        if (kind === "armor") armor = { def, turns: foe.move.turns ?? 2 };
       } else if (kind === "flurry") {
-        blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_FLURRY_MULT));
-        if (hp > 0) blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_FLURRY_MULT));
+        for (let i = 0; i < (foe.move.hits ?? 2) && hp > 0; i++)
+          blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? MOVE_FLURRY_MULT));
+      } else if (kind === "blast") {
+        // BattleScene enemyBlast(): no PARRY, the guard as ever
+        hurt(guard(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? 1)));
+        if (foe.move.poison && hp > 0 && poisonTurns === 0 && !hero.resists.poison) poisonTurns = POISON_TURNS;
       } else if (kind === "snatch") {
         if (!blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_SNATCH_MULT))) snatched = true;
       } else {
         const before = hp;
         if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) foe.curHp += Math.min(before - hp, foe.hp - foe.curHp);
       }
-      return;
+      // a boss's is on top of its turn
+      if (!foe.move.at || hp <= 0) return;
     }
     if (tell && charging) {
       const canFreeze = !!tell.freezes && !frozen && freezeGrace === 0;
@@ -640,6 +667,18 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     // BattleScene enemyTurn(): a resist accessory takes the hit, not the status
     if (special === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
     else if (special === "freeze" && !hero.resists.freeze) frozen = true;
+  };
+
+  // BattleScene enemyTurn(): the act, ARMOR's count, the next intent
+  const foeTurn = (): void => {
+    const armored = armor;
+    enemyTurn();
+    if (armored && armor === armored && --armored.turns <= 0) {
+      foe.def -= armored.def;
+      armor = null;
+      buffed = false;
+    }
+    if (!intent && hp > 0 && foe.curHp > 0) rollIntent();
   };
 
   // BattleScene runBattle(): poison tick, hero, companion, foe, WARD tick
@@ -686,12 +725,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     }
     // BattleScene runBattle(): a SWIFT elite may act again
     const again = !stuck && actsAgain(eliteKind);
-    enemyTurn();
-    if (!intent && hp > 0 && foe.curHp > 0) rollIntent();
-    if (again && !charging && hp > 0 && foe.curHp > 0) {
-      enemyTurn();
-      if (!intent && hp > 0 && foe.curHp > 0) rollIntent();
-    }
+    foeTurn();
+    if (again && !charging && hp > 0 && foe.curHp > 0) foeTurn();
     defending = false;
     if (wardTurns > 0) wardTurns -= 1;
   }

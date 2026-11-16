@@ -816,18 +816,27 @@ export const MOVE_FLURRY_MULT = 0.6;
 export const moveDamage = (dmg: number, mult: number): number => Math.max(1, Math.round(dmg * mult));
 /**
  * Whether a foe may announce its move for its next turn: not twice running
- * (`moved`: it used it last turn), a buff only once (`buffed`), SNATCH once
- * and only from a purse (`snatched`, `gold`). DRAIN and FLURRY any time: the
- * hero strikes first, so there is something to drain by then.
+ * (`moved`: it used it last turn), a buff only once at a time (`buffed`),
+ * SNATCH once and only from a purse (`snatched`, `gold`). DRAIN and FLURRY
+ * any time: the hero strikes first, so there is something to drain by then.
  */
 export function moveReady(
   move: EnemyMove | undefined,
   s: { moved: boolean; buffed: boolean; snatched: boolean; gold: number },
 ): move is EnemyMove {
   if (!move || s.moved) return false;
-  if (move.kind === "howl" || move.kind === "harden") return !s.buffed;
+  if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor") return !s.buffed;
   if (move.kind === "snatch") return !s.snatched && s.gold > 0;
   return true;
+}
+/**
+ * Whether a ready move is announced now: an ordinary foe's at its chance, a
+ * boss's when its HP has fallen to the next share in `at` (`used`: how many
+ * of them it has announced).
+ */
+export function moveDue(move: EnemyMove, s: { used: number; curHp: number; hp: number }, rand: () => number = Math.random): boolean {
+  if (!move.at) return rand() < move.chance;
+  return s.used < move.at.length && s.curHp <= s.hp * move.at[s.used];
 }
 
 // FIGHT's blow timed right (BattleScene playerAttack), on top of the combo

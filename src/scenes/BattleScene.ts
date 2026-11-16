@@ -28,6 +28,7 @@ import {
   MOVE_HOWL_ATK,
   MOVE_SNATCH_MULT,
   moveDamage,
+  moveDue,
   moveReady,
   POISON_TURNS,
   parriedDamage,
@@ -661,6 +662,10 @@ export class BattleScene extends Phaser.Scene {
   // the foe falls.
   private intent = false;
   private moved = false;
+  // a boss's move: how many of its HP marks (EnemyMove.at) it has announced,
+  // and what an ARMOR has left: the DEF it put on and the foe's turns to go
+  private movesUsed = 0;
+  private armor: { def: number; turns: number } | null = null;
   private foeBuff: "ATK+" | "DEF+" | null = null;
   private snatched = 0;
   private intentText!: PixelText;
@@ -731,6 +736,8 @@ export class BattleScene extends Phaser.Scene {
     this.frozen = false;
     this.intent = false;
     this.moved = false;
+    this.movesUsed = 0;
+    this.armor = null;
     this.foeBuff = null;
     this.snatched = 0;
     this.thawing = false;
@@ -2952,7 +2959,15 @@ export class BattleScene extends Phaser.Scene {
 
   // the foe's turn, then what it will do with its next (the intent tag)
   private async enemyTurn(): Promise<void> {
+    // ARMOR lasts so many of its turns, the one it went up in not counted
+    const armored = this.armor;
     await this.enemyAct();
+    if (armored && this.armor === armored && --armored.turns <= 0) {
+      this.enemy.def -= armored.def;
+      this.armor = null;
+      this.foeBuff = null;
+      this.updateEnemyStatus();
+    }
     // one a lost turn (web, shock) left unused stays up for the next
     if (this.running && !this.intent && GameState.player.hp > 0 && this.enemy.curHp > 0) this.rollIntent();
   }
@@ -2968,7 +2983,10 @@ export class BattleScene extends Phaser.Scene {
       gold: this.practice ? 0 : GameState.gold,
     });
     this.moved = false;
-    this.intent = ready && Math.random() < move.chance;
+    // a boss winding up has its CHG up: one warning at a time, and the mark
+    // its HP has passed is announced after the strike
+    this.intent = ready && !this.charging && moveDue(move, { used: this.movesUsed, curHp: this.enemy.curHp, hp: this.enemy.hp });
+    if (this.intent && move?.at) this.movesUsed += 1;
     this.updateEnemyStatus();
   }
 
@@ -2989,16 +3007,20 @@ export class BattleScene extends Phaser.Scene {
       this.hideStun();
       return;
     }
-    // a wound-up strike lands before anything else this turn could; a fresh
-    // wind-up only once the cooldown has run out (see BOSS_TELLS)
-    // its announced move, in place of everything below (a turn lost above
-    // keeps it for the next)
+    // its announced move, an ordinary foe's in place of everything below (a
+    // turn lost above keeps it for the next)
     if (this.intent && this.enemy.move) {
       this.intent = false;
       this.moved = true;
       this.updateEnemyStatus();
-      return this.enemyMove(this.enemy.move);
+      await this.enemyMove(this.enemy.move);
+      // a boss's is on top of its turn, not in place of it: in its place it
+      // took the turn's blow or wind-up with it and the fight got easier
+      // (KING SLIME Lv6 solo: 83% of max HP lost became 76%)
+      if (!this.enemy.move.at || !this.running || GameState.player.hp <= 0) return;
     }
+    // a wound-up strike lands before anything else this turn could; a fresh
+    // wind-up only once the cooldown has run out (see BOSS_TELLS)
     const tell = BOSS_TELLS[this.enemy.name];
     if (tell && this.charging) return this.bossStrike(tell);
     if (tell && this.tellCooldown > 0) this.tellCooldown -= 1;
@@ -3013,18 +3035,22 @@ export class BattleScene extends Phaser.Scene {
     // a parried blow carries no poison or freeze
     if (GameState.player.hp <= 0 || parried) return;
 
+    if (special === "poison" || special === "freeze") await this.afflict(special);
+  }
+
+  // poison or freeze off a blow that landed
+  private async afflict(special: "poison" | "freeze"): Promise<void> {
     // a resist accessory still takes the hit but stops the status, and says
     // so — otherwise the gear would look like it did nothing
-    if ((special === "poison" || special === "freeze") && GameState.resists(special)) {
+    if (GameState.resists(special)) {
       await this.say(special === "poison" ? "ANTIDOTE CHARM blocks the poison!" : "EMBER RING blocks freezing!");
       return;
     }
     // ...and a MOON TEA (cooking.ts) shrugs off a share of what gets past
-    if ((special === "poison" || special === "freeze") && this.meal && Math.random() < (this.meal.def.effect.resist ?? 0)) {
+    if (this.meal && Math.random() < (this.meal.def.effect.resist ?? 0)) {
       await this.say(`The ${this.meal.def.name} wards off ${special === "poison" ? "poison" : "the frost"}!`);
       return;
     }
-
     if (special === "poison") {
       Sfx.poison();
       this.poisonTurns = POISON_TURNS;
@@ -3032,9 +3058,7 @@ export class BattleScene extends Phaser.Scene {
       this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashStatus("PSN", "#c084fc");
       await this.say("POISONED! HEAL or POTION cures it.");
-    } else if (special === "freeze") {
-      await this.freezeHero();
-    }
+    } else await this.freezeHero();
   }
 
   // One blow of the foe's on the hero, all but its line: the lunge (and its
@@ -3070,10 +3094,13 @@ export class BattleScene extends Phaser.Scene {
   // hits for 999 and snatches 9999G! (DEFEND)" 48.
   private async enemyMove(move: EnemyMove): Promise<void> {
     const name = this.enemy.name;
-    if (move.kind === "howl" || move.kind === "harden") {
+    if (move.kind === "blast") return this.enemyBlast(move);
+    if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor") {
       const howl = move.kind === "howl";
+      const def = hardenDef(this.enemy.atk);
       if (howl) this.enemy.atk = Math.round(this.enemy.atk * MOVE_HOWL_ATK);
-      else this.enemy.def += hardenDef(this.enemy.atk);
+      else this.enemy.def += def;
+      if (move.kind === "armor") this.armor = { def, turns: move.turns ?? 2 };
       this.foeBuff = howl ? "ATK+" : "DEF+";
       this.updateEnemyStatus();
       if (howl) Sfx.charge();
@@ -3097,16 +3124,20 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (move.kind === "flurry") {
-      const first = await this.enemyBlow(MOVE_FLURRY_MULT);
-      if (GameState.player.hp <= 0) {
-        await this.say(`${name} claws for ${first.dmg}!${first.note}`);
-        this.setPlayerTint(undefined);
-        return;
+      const [hits, mult] = [move.hits ?? 2, move.mult ?? MOVE_FLURRY_MULT];
+      const dealt: number[] = [];
+      let note = "";
+      for (let i = 0; i < hits && GameState.player.hp > 0; i++) {
+        // home before it comes again: the next lunge starts from where it stands
+        if (i > 0) await this.wait(this.anim(LUNGE_BACK_MS) + 20);
+        const blow = await this.enemyBlow(mult);
+        dealt.push(blow.dmg);
+        note = blow.note || note;
       }
-      // home before it comes again: the next lunge starts from where it stands
-      await this.wait(this.anim(LUNGE_BACK_MS) + 20);
-      const second = await this.enemyBlow(MOVE_FLURRY_MULT);
-      await this.say(`${name} claws twice: ${first.dmg} and ${second.dmg}!${second.note || first.note}`);
+      // "TROLL KING strikes 3 times: 99, 99 and 99! (DEFEND)" is 51 glyphs
+      const list = dealt.length > 1 ? `${dealt.slice(0, -1).join(", ")} and ${dealt[dealt.length - 1]}` : `${dealt[0]}`;
+      const verb = hits === 2 ? "claws twice:" : `strikes ${dealt.length} times:`;
+      await this.say(dealt.length > 1 ? `${name} ${verb} ${list}!${note}` : `${name} strikes for ${list}!${note}`);
       this.setPlayerTint(undefined);
       return;
     }
@@ -3131,6 +3162,33 @@ export class BattleScene extends Phaser.Scene {
       await this.say(gold > 0 ? `${name} hits for ${dmg} and snatches ${gold}G!${note}` : `${name} hits for ${dmg}!${note}`);
     }
     this.setPlayerTint(undefined);
+  }
+
+  // A blast (EnemyMove "blast"): no lunge and so no PARRY, the foe swelling
+  // where it stands and the hit landing in a flash; WARD, BULWARK and DEFEND
+  // take their share as of any blow. "FLAME DRAKE's SWEEP hits for 999!
+  // (DEFEND)" is 44 glyphs.
+  private async enemyBlast(move: EnemyMove): Promise<void> {
+    Sfx.charge();
+    this.pulseEnemy(1.1, 120);
+    await this.wait(this.anim(360));
+    Sfx.hit();
+    Sfx.critical();
+    const { dmg, note, braced } = this.guardHit(moveDamage(rollDamage(this.enemy.atk, this.heroDef()).dmg, move.mult ?? 1));
+    GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
+    this.updatePlayerStats();
+    this.setPlayerTint(0xff6666, true);
+    this.fxOn(this.playerSprite, "fx-crit", HIT_FX_MS);
+    if (braced) this.blockOn();
+    this.hitBurst.setPosition(this.playerSprite.x, this.playerSprite.y);
+    this.hitBurst.explode(20);
+    shake(this.cameras.main, 240, 0.012);
+    flash(this.cameras.main, 120, 255, 255, 255);
+    this.recoil(this.playerSprite, -1, true);
+    this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
+    await this.say(`${this.enemy.name}'s ${move.name} hits for ${dmg}!${note}`);
+    this.setPlayerTint(undefined);
+    if (move.poison && GameState.player.hp > 0 && this.poisonTurns === 0) await this.afflict("poison");
   }
 
   // the hero's ATK and DEF as this battle's meal (cooking.ts) and blessing
