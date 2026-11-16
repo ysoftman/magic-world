@@ -65,6 +65,12 @@ const REFUSE_MS = 280;
 // CANDY catch `caught`). Not saved: a reload mid-fight leaves the seal open.
 let fight: { region: SealRegion; battles: number; caught: number } | null = null;
 
+// The plates lit so far, kept through a fight: the field is built again when
+// it returns, and a walk between two plates (7-10s) met a fight in a third or
+// more of the tries, which put every rune out with nothing said. Any other
+// way into the field starts them dark, as a wrong step does. Not saved.
+let litKept: { region: SealRegion; lit: number } | null = null;
+
 /**
  * A field's seal (seals.ts): the red stone under its "SEAL" tag, solid to
  * the hero, and its three rune plates on the floor. Walking the plates in
@@ -123,6 +129,9 @@ export class Seal {
       .setStroke("#1a1028", 4)
       .setDepth(11);
 
+    // (kept still, for the fight after this one)
+    if (opts.back && litKept?.region === region && this.stage() === "shut") this.lit = litKept.lit;
+    else litKept = null;
     // the keeper's fight just ended: felled or caught, it pays
     const fought = opts.back && fight?.region === region ? fight : null;
     fight = null;
@@ -187,6 +196,7 @@ export class Seal {
       // first, when there is nothing lit to go dark (it used to be silent,
       // and read as a plate that did nothing)
       if (wasLit) return;
+      litKept = this.lit > 0 && this.lit < this.plates.length ? { region: this.region, lit: this.lit } : null;
       if (this.lit === 0) {
         Sfx.error();
         this.refuse(p.image);
