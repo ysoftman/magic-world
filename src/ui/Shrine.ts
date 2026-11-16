@@ -7,6 +7,7 @@ import type { PixelText } from "../pixelText";
 import { justBackFromFight } from "../sceneCommon";
 import { BLESSING_BATTLES, BLESSINGS, type BlessingKey, pray, SHRINES, type ShrineRegion, shrineCost, shrineSpent } from "../shrine";
 import type { DialogueBox } from "./DialogueBox";
+import { isTouchDevice } from "./TouchControls";
 
 // how close (px, centre to centre) the hero has to stand for Z to reach the
 // stone: any of the eight cells round it (a diagonal is 91px), and short of a
@@ -124,23 +125,26 @@ export class Shrine {
     }
     Sfx.buy();
     const [a, b] = offers.map((k) => BLESSINGS[k]);
-    // The longest pair ("FURY: ATK +20%, DEF -20%." and "GREED: GOLD +50%.")
-    // packs with the first line into three rows of the touch box's 42 glyphs
-    // ("Once a day, for 200 G, it will bless your" 40, "next 6 battles. FURY:
-    // ATK +20%, DEF -20%." 41, the second blessing), two of the keyboard's 54;
-    // the question takes the choices' page alone there (DialogueBox). ESC
-    // (pick 2, past both) walks away; N, the second, still meets the YES/NO.
-    // On the field's HOLY DAY (omen.ts) a row of its own goes first, "HOLY
-    // DAY: it asks half its gold today." 37 glyphs, and the rest starts on
-    // the next: four rows there, the page's whole.
+    // Each line starts a row of its own, so no blessing breaks over two (in
+    // one run the cave's and the snow field's pairs broke as "GREED:" / "GOLD
+    // +50%." on touch). Touch, 42 glyphs a row: the first line (36 at most),
+    // then a blessing a row (25 at most), three rows; the question takes the
+    // choices' page alone there (DialogueBox). The keyboard's 54 hold both
+    // blessings on one row (43 at most): the first line, the pair and the
+    // question are its three rows, all a page with choices has. On the
+    // field's HOLY DAY (omen.ts) the first line says so, 53 glyphs: one row
+    // on the keyboard, two on touch (four in all, the page's whole). A row
+    // must be a glyph under its width: the box counts the space after it.
+    // ESC (pick 2, past both) walks away; N, the second, still meets the
+    // YES/NO.
+    const first = holy
+      ? `HOLY DAY: once a day, ${cost} G (half) blesses ${BLESSING_BATTLES} battles.`
+      : `Once a day: ${cost} G blesses ${BLESSING_BATTLES} battles.`;
+    const pair = isTouchDevice()
+      ? [`\n${a.name}: ${a.info}.`, `\n${b.name}: ${b.info}.`]
+      : [`\n${a.name}: ${a.info}.`, `${b.name}: ${b.info}.`];
     this.dialogue.ask(
-      [
-        ...(holy ? ["HOLY DAY: it asks half its gold today."] : []),
-        `${holy ? "\n" : ""}Once a day, for ${cost} G, it will bless your next ${BLESSING_BATTLES} battles.`,
-        `${a.name}: ${a.info}.`,
-        `${b.name}: ${b.info}.`,
-        "Which blessing?",
-      ],
+      [first, ...pair, "\nWhich blessing?"],
       "SHRINE",
       [a.name, b.name],
       (i) => {

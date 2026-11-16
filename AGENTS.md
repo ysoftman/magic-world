@@ -553,9 +553,8 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   `omenFightRate()`) 구역의 로머는 그대로다. 러너 도착은 과제의 50%(`RUNNER_WANTED_CHANCE`)와 큰 쪽을 쓴다(`Runner.roll` 의
   `Math.max`: 러너가 있을 이유가 둘이지 러너가 둘은 아니다). 사냥만 하는 영웅에게는 그 필드 골드가 절반인 날이다.
 - HOLY DAY 는 요금만이고 하루 한 번은 그대로다(`shrine.ts` 의 `shrineCost(region, holy)`·`pray(..., holy)`, `ui/Shrine.ts` 가
-  `omenHere() === "holy"` 를 넘김). 대화 첫 쪽 앞에 제 줄 `HOLY DAY: it asks half its gold today.`(37글자)가 서고 나머지는 다음
-  줄에서 시작해 터치 네 줄(한 쪽 전부), 키보드 세 줄이다. 15~100G 를 아끼는 정도라 벌이 영향은 없고, 바운티 SHRINE PRAYER 를
-  반값에 채운다.
+  `omenHere() === "holy"` 를 넘김). 대화 첫 줄이 `HOLY DAY: once a day, 100 G (half) blesses 6 battles.` 로 바뀐다("필드 제단"
+  절의 첫 쪽 항목). 15~100G 를 아끼는 정도라 벌이 영향은 없고, 바운티 SHRINE PRAYER 를 반값에 채운다.
 - 훅은 셋뿐이고 BattleScene·필드 씬·TownScene 에는 없다:
   - 들어서기: `sceneCommon` 의 `fadeAreaTitle(scene, title, region)` 이 `enterField` 를 부르고 토스트(`GOLD RUSH: FIGHTS HERE PAY
     30% MORE GOLD TODAY!` 46글자)를 낸다. 제목과 같은 조건(입장 때만)이라 전투에서 돌아와도 붙잡은 이변이 그대로다.
@@ -613,9 +612,13 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 - 돌은 48칸 격자(96px, `props.ts` 의 `SHRINE_TILE`, 룬이 꺼진 `shrine-spent` 는 같은 격자의 다른 팔레트)라 영웅보다
   머리 하나 크다. 실제 사례: 32칸(64px)일 때는 앞에 선 영웅이 돌을 거의 다 가렸다. 영웅이 돌 뒤(위쪽)에 있으면 돌의
   깊이를 10.4 로 올려 영웅을 가린다(평소 9).
-- 첫 쪽은 `Once a day, for 200 G, it will bless your next 6 battles.` 로 하루 한 번임을 먼저 말한다(기도한 뒤 다시
-  눌러 봐야 알던 것). 터치 42글자에서 첫 줄 40, 둘째 줄이 `next 6 battles. FURY: ATK +20%, DEF -20%.` 41, 셋째 줄이
-  둘째 축복으로 세 줄이다(키보드 두 줄). 값이나 문구를 바꾸면 네 지역 다 다시 줄을 나눠 본다.
+- 첫 쪽은 `Once a day: 200 G blesses 6 battles.`(36글자까지)로 하루 한 번임을 먼저 말하고(기도한 뒤 다시 눌러 봐야 알던
+  것), 줄마다 제 줄에서 시작해 축복 하나가 두 줄로 갈리지 않는다. 터치(42글자)는 첫 줄·축복·축복 세 줄에 질문이 다음 쪽,
+  키보드(54글자)는 두 축복을 한 줄(43글자까지)에 넣어 첫 줄·축복 쌍·질문 세 줄이다(선택지가 붙는 쪽은 세 줄까지). HOLY DAY
+  에는 첫 줄이 `HOLY DAY: once a day, 100 G (half) blesses 6 battles.`(53글자)로 바뀌어 키보드 한 줄, 터치 두 줄(모두 네 줄)이다.
+  실제 사례: 한 문단으로 이어 쓰던 때 터치에서 동굴·설원의 쌍이 `GREED:` / `GOLD +50%.` 로 갈렸고, 42글자 꼭 맞는 줄은
+  다음 줄로 넘어갔다(대화창은 줄 끝 공백까지 센다: 한 줄은 폭보다 한 글자 짧게). 값이나 문구를 바꾸면 네 지역 다 평소·HOLY
+  를 터치와 키보드로 다시 본다.
 - 축복을 더하거나 수치를 바꾸면: 이름은 5글자까지(선택지·HUD·전투 창 태그 `STONE 6` 140px), `info` 는 24글자까지,
   README 의 제단 표를 같은 커밋에서 고친다. 효과를 새로 만들면 `BlessingEffect` 와 BattleScene 의 훅(`this.blessing`:
   `heroAtk`·`heroDef`, `victory()` 의 골드·EXP)을 같이 본다. HUD 2행은 요리·축복 태그가 EXP 막대 오른쪽 끝을
