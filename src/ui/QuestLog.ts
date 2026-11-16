@@ -235,6 +235,7 @@ export class QuestLog {
   // the HUD's second row, whose ends show beside the panel (StatusHud.ts)
   private hudCover: Phaser.GameObjects.Rectangle;
   private title: PixelText;
+  private hard: PixelText;
   private perks: PixelText;
   private stars: PixelText;
   private peddler: PixelText;
@@ -259,8 +260,12 @@ export class QuestLog {
     for (let i = 0; i < DONE_ROWS; i++) {
       this.doneRows.push(text(DONE_X, ROW_Y + i * DONE_GAP, 5, "#7fbf7f"));
     }
-    // "QUEST JOURNAL  HARD 9" on a replay: 21 x 32 = 672px, x=304..976
+    // 13 x 32 = 416px, x=432..848. A replay's "HARD 99" is a tag after it on
+    // its baseline, retroStyle(4): 112px from x=864, to 976. As part of the
+    // title ("QUEST JOURNAL  HARD 9", 672px from x=304) it reached within
+    // 12px of the omen's line left of it and ran under the PEDDLER's.
     this.title = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "QUEST JOURNAL", retroStyle(8, "#ffd166")).setOrigin(0.5);
+    this.hard = scene.add.pixelText(GAME_WIDTH / 2 + 224, PANEL_TOP + 60, "", retroStyle(4, "#ff8a8a")).setOrigin(0, 1);
 
     // The perks taken (perks.ts), or that one is waiting, on a line between
     // the title (to PANEL_TOP+60) and the column headers (from +88): y 66..82
@@ -274,8 +279,8 @@ export class QuestLog {
     // over the field's name, and each field's shards as "C3 F3 S3 V3"
     // between the two counts) read as one small block each.
     // Right: the star shards found (shards.ts), "STARS 12/12" (176px, x
-    // 1020..1196, 24 inside the panel's edge and clear of the replay
-    // title's right end), over the seals whose keepers are gone (seals.ts),
+    // 1020..1196, 24 inside the panel's edge and 44px right of a replay's
+    // HARD tag), over the seals whose keepers are gone (seals.ts),
     // "SEALS 4/4".
     this.stars = scene.add
       .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 10, "", retroStyle(4, "#8ecbff"))
@@ -284,10 +289,9 @@ export class QuestLog {
       .setLineSpacing(10);
 
     // Left: where the PEDDLER is today (peddler.ts), "PEDDLER: VOLCANO" (16 x
-    // 16 = 256px, x 84..340: over the title's row, which starts at y 28, so
-    // it may pass the replay title's left end), over the day's omen and its
-    // field (omen.ts), "GOLD: VOLCANO" (208px, x 84..292: beside the title,
-    // 12px short of "QUEST JOURNAL  HARD 9", x 304..976).
+    // 16 = 256px, x 84..340, 92px short of the title), over the day's omen
+    // and its field (omen.ts), "GOLD: VOLCANO" (208px, x 84..292). Both end
+    // over the perks' line (from y 66, which reaches x 272 at its longest).
     this.peddler = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 10, "", retroStyle(4, "#4fd1c0"));
     this.omen = scene.add.pixelText(ACTIVE_X, PANEL_TOP + 36, "", retroStyle(4, "#fbbf24"));
 
@@ -299,6 +303,7 @@ export class QuestLog {
         // opaque: it reaches up over the HUD (y 0..88), whose lines showed through at 0.95
         gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
         this.title,
+        this.hard,
         this.perks,
         this.stars,
         this.peddler,
@@ -357,7 +362,7 @@ export class QuestLog {
   private refresh(): void {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
-    this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
+    this.hard.setText(GameState.ngPlus > 0 ? `HARD ${GameState.ngPlus}` : "");
     this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`);
     const omen = omenOn(econDay(), GameState.quest);
     this.peddler.setText(`PEDDLER: ${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
