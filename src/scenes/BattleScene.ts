@@ -657,6 +657,8 @@ export class BattleScene extends Phaser.Scene {
   private limitText!: PixelText;
   // the foe is an elite of its kind (elite.ts), rolled in init
   private elite: EliteKind | null = null;
+  // a seal's keeper (seals.ts): the name the opening line gives it
+  private keeperName: string | null = null;
   private combo = 0;
   private comboText!: PixelText;
   // one successful steal per battle; failed attempts don't count against it
@@ -830,6 +832,7 @@ export class BattleScene extends Phaser.Scene {
     this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
     const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
     this.elite = data?.keeper?.elite ?? rollElite(def, fought);
+    this.keeperName = data?.keeper?.name ?? null;
     this.enemy = scaleEnemy(def, {
       night: this.night,
       arena: !!this.arena,
@@ -1821,14 +1824,16 @@ export class BattleScene extends Phaser.Scene {
     // The opening line types out under the menu instead of waiting for a Z:
     // nothing has happened yet to read past, and it was one press more in
     // every fight. It stays in the box until the first action's line.
-    const intro = this.arena ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!` : `${this.enemy.name} blocks your way!`;
+    const intro = this.arena
+      ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!`
+      : `${this.keeperName ?? this.enemy.name} ${this.keeperName ? "rises" : "blocks your way"}!`;
     // An elite (elite.ts) is named in the line and says what it does under it,
     // beside the rest's note: "ELITE: much tougher!  Well rested: your WARD
     // is up!" is 51 of a row's 54 glyphs, "STURDY MAGMA SLIME blocks your
     // way!" 35.
     const elite = this.elite && ELITES[this.elite];
     const notes = [elite && `ELITE: ${elite.note}!`, this.rested && "Well rested: your WARD is up!"].filter(Boolean);
-    this.type([elite ? `${elite.tag} ${intro}` : intro, ...(notes.length > 0 ? [notes.join("  ")] : [])].join("\n"));
+    this.type([elite && !this.keeperName ? `${elite.tag} ${intro}` : intro, ...(notes.length > 0 ? [notes.join("  ")] : [])].join("\n"));
 
     this.rollIntent();
     this.leaveArmed = false;

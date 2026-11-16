@@ -608,9 +608,11 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
   꺼질 뿐이라 힌트 없이도 풀린다. 발판 진행은 저장하지 않는다(씬을 다시 만들면 꺼짐: 도중에 전투가 나면 처음부터).
   네 지역 모두 같은 순서 퍼즐이다(지역별 변형은 넣지 않음).
 - 강적은 새 몬스터가 아니다. 그 지역 희귀종을 정예(`elite.ts`)로 강제하고 종의 HP·ATK 에 배율을 먼저 곱한 것이고
-  (`KeeperBout`, `keeperDef`), 이름(`keeper`)은 필드 대화와 토스트에만 나온다(전투 창은 종 이름 + 정예 태그).
+  (`KeeperBout`, `keeperDef`), 이름(`bout.name`)은 필드 대화·토스트와 전투 첫 줄(`GRUK THE HEXED rises!`, 정예 접두
+  없이, 최장 22글자)에만 나온다(전투 창·도감·결산은 종 이름 + 정예 태그). 실제 사례: 첫 줄도 `FIERCE CURSED GOBLIN
+  blocks your way!` 라 필드에서 부른 이름이 전투에 한 번도 안 나왔다.
   BattleScene 훅은 시작 data 의 `keeper` 하나다(`const def = keeperDef(...)`, `this.elite = data?.keeper?.elite ??
-  rollElite(...)`). 희귀종은 원래 정예가 되지 않으므로 이 조합은 봉인에서만 나온다.
+  rollElite(...)`, `this.keeperName`). 희귀종은 원래 정예가 되지 않으므로 이 조합은 봉인에서만 나온다.
 - 배율은 `sim:battle` 의 "90% 이기는 첫 레벨"(WOLF/SOLO)이 그 지역의 가장 센 일반 정예와 보스 사이에 오게 잡았다:
   동굴 1/1 < GRUK 3/5 < KING 5/6, 숲 3/4 < ZIRR 5/6 < MOSS 7/8, 설원 7/8 < YSKA 10/14 < GLACIER 12/15, 화산 11/14 <
   MOLG 14/17 < DRAKE 18/23. 실제 사례: 배율 없이 정예로만 두면 넷 다 일반 정예와 같거나 그 아래였다(1/2, 2/3, 6/8,

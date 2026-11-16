@@ -131,7 +131,7 @@ export class Seal {
         Sfx.levelup();
         // "GRUK THE HEXED FALLS! MAX MP +3, +150 G" is 39 glyphs, 780px
         // (the longest, MOLG THE GILDED's, 40); the fourth's MP is in the next
-        showToast(scene, `${def.keeper} FALLS! MAX MP +${SEAL_MP}, +${paid.gold} G`, FIELD_TOAST_Y);
+        showToast(scene, `${def.bout.name} FALLS! MAX MP +${SEAL_MP}, +${paid.gold} G`, FIELD_TOAST_Y);
         if (paid.all) showToast(scene, `ALL FOUR SEALS BROKEN! MAX MP +${ALL_SEALS_MP}`, FIELD_TOAST_Y);
         GameState.save();
         this.found?.();
@@ -222,7 +222,7 @@ export class Seal {
       Sfx.buy();
       // the question, 28 glyphs at most ("Call GRUK THE HEXED out?" 24),
       // has the last page's one touch row
-      this.dialogue.ask(["The seal is broken. Something waits inside.", `Call ${def.keeper} out?`], "SEAL", ["YES", "NO"], (i) => {
+      this.dialogue.ask(["The seal is broken. Something waits inside.", `Call ${def.bout.name} out?`], "SEAL", ["YES", "NO"], (i) => {
         if (i !== 0) return;
         fight = { region: this.region, battles: GameState.battles, caught: GameState.caught.length };
         this.startFight();

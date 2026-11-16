@@ -36,9 +36,9 @@ export interface SealDef {
   order: readonly [number, number, number];
   // the stone's riddle, in the order's order; sentence-sized lines
   riddle: readonly string[];
-  // the keeper: its name in the field's talk (the battle shows the species
-  // and its elite tag), an ENEMIES key and the elite it is fought as
-  keeper: string;
+  // the keeper: an ENEMIES key and how it is fought, its name with it (the
+  // field's talk and the battle's opening line; the battle's window shows
+  // the species and its elite tag)
   enemy: string;
   bout: KeeperBout;
   // the purse it leaves, on top of the fight's own payout
@@ -59,6 +59,9 @@ export interface SealDef {
 // As bare elites of their species the four came out at or under the plain
 // elite (1/2, 2/3, 6/8, 10/13).
 export interface KeeperBout {
+  // the name the stone calls it by; the battle's opening line says it too,
+  // the foe's window and the bestiary keep the species' (see above)
+  name: string;
   elite: EliteKind;
   hp: number;
   atk: number;
@@ -95,9 +98,8 @@ export const SEALS: Record<SealRegion, SealDef> = {
       "then the one under the southern pool,",
       "and last the one by the north-west water.",
     ],
-    keeper: "GRUK THE HEXED",
     enemy: "cursedGoblin",
-    bout: { elite: "fierce", hp: 2, atk: 1.25 },
+    bout: { name: "GRUK THE HEXED", elite: "fierce", hp: 2, atk: 1.25 },
     gold: 150,
   },
   // The forest's: the stone west of the road's first bend, plate 0 on the
@@ -117,9 +119,8 @@ export const SEALS: Record<SealRegion, SealDef> = {
       "then the one on the west wall, past the pond,",
       "and last the one where the road gives out.",
     ],
-    keeper: "ZIRR THE SWIFT",
     enemy: "silverWasp",
-    bout: { elite: "swift", hp: 2.5, atk: 1.3 },
+    bout: { name: "ZIRR THE SWIFT", elite: "swift", hp: 2.5, atk: 1.3 },
     gold: 300,
   },
   // The snow field's: the stone west of the golem's basin, plate 0 under the
@@ -140,9 +141,8 @@ export const SEALS: Record<SealRegion, SealDef> = {
       "then the one east of the golem's hollow,",
       "and last the one below the north wall.",
     ],
-    keeper: "YSKA THE PALE",
     enemy: "auroraMoth",
-    bout: { elite: "sturdy", hp: 2, atk: 1.25 },
+    bout: { name: "YSKA THE PALE", elite: "sturdy", hp: 2, atk: 1.25 },
     gold: 600,
   },
   // The volcano's: the stone above the crater's moat east of the bridge,
@@ -163,9 +163,8 @@ export const SEALS: Record<SealRegion, SealDef> = {
       "then the one on the east wall, over the lava,",
       "and last the one before the crater's bridge.",
     ],
-    keeper: "MOLG THE GILDED",
     enemy: "gildedImp",
-    bout: { elite: "fierce", hp: 1.5, atk: 1.15 },
+    bout: { name: "MOLG THE GILDED", elite: "fierce", hp: 1.5, atk: 1.15 },
     gold: 900,
   },
 };
