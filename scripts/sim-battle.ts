@@ -159,7 +159,8 @@ type Elem = Spell["element"];
 // 66% and 102/108/115/123/129%; wind-ups braced (the default) 98/98/100/100/
 // 95% and 85/90/88/96/90%; blasts braced too (--brace) 100/98/100/100/99%
 // and 70/91/82/96/78%. With --parry 0.4 --perfect 0.4 --limit 50 and the
-// level's perks, 48/41/44/44/50% (48/38/38/42/31% with no second pattern).
+// level's perks, 48/41/44/52/54% (48/38/38/42/31% with no second pattern;
+// GLACIER and DRAKE 44/50% while the sim still parried their breaths).
 // A boss falling before
 // its intended level is seen, not tuned: those comments aim at a threat, not
 // a win rate, and HARD MODE is the challenge. An unarmed Lv8 hero beats the
@@ -263,6 +264,8 @@ const PARRY = Number(opt("parry") ?? 0);
 const BRACE = args.includes("--brace");
 // --nobrace: nor a wind-up (no WARD or DEFEND for it): what bracing is worth
 const NOBRACE = args.includes("--nobrace");
+// the strikes BattleScene breathes (its BREATHS), not lunges
+const BREATHERS = new Set([ENEMIES.flameDrake.name, ENEMIES.salamander.name, ENEMIES.iceGolem.name]);
 // --noward: the braces are DEFENDs, WARD never cast
 const NOWARD = args.includes("--noward");
 const PERFECT = Number(opt("perfect") ?? 0);
@@ -407,6 +410,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     elite: eliteKind,
   });
   const tell = BOSS_TELLS[foe.name];
+  // BattleScene BREATHS: a breath streams out where a blow lunges in, so it
+  // can't be PARRIED (the guard as ever)
+  const breath = BREATHERS.has(foe.name);
   let hp = hero.maxHp;
   let mp = hero.maxMp;
   let potions = POTIONS;
@@ -741,7 +747,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (freezeGrace > 0) freezeGrace -= 1;
       charging = false;
       tellCooldown = BOSS_TELL_COOLDOWN;
-      const parried = blow(bossStrikeDamage(foe.atk, tell.mult, hero.def, hero.maxHp), true);
+      const raw = bossStrikeDamage(foe.atk, tell.mult, hero.def, hero.maxHp);
+      let parried = false;
+      if (breath) hurt(guard(raw, true));
+      else parried = blow(raw, true);
       if (hp > 0 && canFreeze && !parried && !hero.resists.freeze) frozen = true;
       riposte(frozen);
       return;
