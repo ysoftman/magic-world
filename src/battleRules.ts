@@ -861,9 +861,12 @@ export function reactionDamage(kind: Reaction, dotTick: number, turns: number): 
 // the turn it howled was half its blows gone (7% of max HP lost at Lv3
 // became 4%).
 export const MOVE_HOWL_ATK = 1.25;
-// HARDEN / CRUST: DEF up by half its ATK (2 at least) for the rest of the
-// fight, in place of a blow (the one move that spends the turn). Spells and a LASER go by no DEF, so they answer it.
-export const hardenDef = (atk: number): number => Math.max(2, Math.round(atk * 0.5));
+// HARDEN / CRUST: DEF up by half its ATK, rounded down (2 at least), for the
+// rest of the fight, in place of a blow (the one move that spends the turn).
+// Spells and a LASER go by no DEF, so they answer it. Rounded up, the SLIME's
+// was +3 against a new hero's 5 or so a FIGHT: the game's first fights, bare
+// handed at Lv1, went from 2.9 rounds to 3.8 with the move (3.4 at +2).
+export const hardenDef = (atk: number): number => Math.max(2, Math.floor(atk * 0.5));
 // SNATCH: half a blow, and gold off the hero (what the foe itself pays, at
 // most what the hero carries), handed back when the foe falls or is caught
 export const MOVE_SNATCH_MULT = 0.5;
