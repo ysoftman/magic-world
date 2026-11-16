@@ -480,7 +480,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   예고되고(`battleRules.moveDue`, `movesUsed`), 기 모으는 중(CHG)에는 예고하지 않고 강타 뒤로 미룬다. 보스의 기술은 그 턴의
   행동을 대신하지 않고 얹힌다(`enemyAct` 가 `move.at` 이면 이어서 평소 행동). 실제 사례: 대신하게 했더니 그 턴의 공격·강타
   예고가 사라져 보스전이 오히려 쉬워졌다(KING SLIME Lv6 솔로 잃는 HP 83→76%). `blast`(`enemyBlast`)는 돌진이 없어 PARRY 가
-  없고 WARD·GUARD·DEFEND 만 통한다. `armor` 는 `turns` 뒤에 DEF 를 되돌린다. 수치는 `/tmp/pwcheck/moves/boss.sh` 같은 표로
+  없고 WARD·GUARD·DEFEND 만 통한다. `armor` 는 `turns` 뒤에 DEF 를 되돌린다. GLACIER GOLEM 의 ARMOR 는 2턴이다. 실제 사례: 3턴일 때 솔로로 가장 센 수를 고르는 영웅(`--greedy`)이 14.2라운드였다(다른 보스 6.8~8.9, 2턴에서 13.0·`--skills` 11.0). 변형별 sim 으로 가르면 ARMOR 가 2.9라운드, DEF 6 이 1.2, 빙결이 0.5 였고 나머지는 Lv18 의 HP 200 이다. 보스전 길이를 볼 때는 기본 가정(약점 주문을 FIGHT 보다 약해도 쓴다)이 아니라 `--greedy`·`--skills` 로 본다: 기본 가정의 GLACIER GOLEM 솔로 19.8라운드는 Lv18 영웅이 FIRE 를 고집한 탓이다. 수치는 `/tmp/pwcheck/moves/boss.sh` 같은 표로
   세 가정(새 요소 없음 / `--parry 0.4 --perfect 0.4 --limit 50` + 그 레벨 특성 / 0.8·100)과 대응 세 단계(`--nobrace` 아무것도
   안 막음 / 기본: CHG 만 막음 / `--brace`: blast 도 막음)를 같이 재고, 기본 가정의 솔로+의도 장비 승률 95% 이상을 지킨다(지금
   95~100%). DEFEND 는 예고된 큰 한 방(`guardHit` 의 `heavy`: CHG 강타와 blast)을 x0.5 로 받고 COUNTER(`counter()`, 턴을 안 쓰는

@@ -289,7 +289,10 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // SNOW FIELD superboss: post-game challenge past the MOSS GOLEM
     weakness: "fire", // glacial body shatters under heat
     special: { kind: "freeze", chance: 0.25 },
-    move: { kind: "armor", name: "ARMOR", chance: 0, at: [0.7, 0.35], turns: 3 },
+    // two of its turns, twice: at three the fight ran 14 rounds alone for a
+    // hero picking its best move (the other bosses 7 to 9), 2.9 of them the
+    // ARMOR's; its 200 HP at Lv18 is the rest, and is the boss
+    move: { kind: "armor", name: "ARMOR", chance: 0, at: [0.7, 0.35], turns: 2 },
   },
   // VOLCANO roster, one step past the snow field's (FROST MOTH/YETI/GLACIER
   // GOLEM). Ice is the obvious answer to fire, so most are weak to it; the

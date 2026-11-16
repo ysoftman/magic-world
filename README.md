@@ -121,7 +121,7 @@
   | KING SLIME    | SPLASH | 70%, 35%      | x2.5 물결. PARRY 불가(WARD·DEFEND 로 절반)                              |
   | TROLL KING    | FRENZY | 70%, 35%      | x0.9 일격 세 번, 각각 PARRY 가능                                        |
   | MOSS GOLEM    | SPORES | 70%, 35%      | x1.3 포자 구름(PARRY 불가)과 독. ANTIDOTE CHARM·TALISMAN 이 독을 막는다 |
-  | GLACIER GOLEM | ARMOR  | 70%, 35%      | 제 턴 3번 동안 DEF + (ATK 의 절반). 주문·LASER 는 DEF 를 무시한다       |
+  | GLACIER GOLEM | ARMOR  | 70%, 35%      | 제 턴 2번 동안 DEF + (ATK 의 절반). 주문·LASER 는 DEF 를 무시한다       |
   | FLAME DRAKE   | SWEEP  | 75%, 50%, 25% | x3 꼬리 휩쓸기. PARRY 불가(WARD·DEFEND 로 절반)                         |
 
 - DEFEND(D): 턴을 써서 막을 자세를 잡고(콤보는 끊기지 않고 그대로 이어진다), 바로 다음 적 턴에 받는 피해(크리티컬 포함)가 x0.7. 예고된 큰 한 방(CHG 뒤 강타·숨결, 보스의 SPLASH·SPORES·SWEEP)은 x0.5 로 받고 그 자리에서 COUNTER(턴을 쓰지 않는 FIGHT 한 번, PERFECT 가능)로 되받아친다. 그 일격에 얼어붙으면 반격하지 못한다. WARD 나 동료 ORC 의 BULWARK 가 걸려 있으면 그쪽(x0.5, 반격 없음)만 적용되고 겹치지 않는다. 콤보는 끊긴다
