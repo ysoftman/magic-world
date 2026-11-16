@@ -3845,6 +3845,10 @@ export class BattleScene extends Phaser.Scene {
       delay: this.anim(14, TYPE_MIN_MS),
       repeat: text.length,
       callback: () => {
+        // a removed event can still fire once more when several glyphs are due
+        // in one frame (BATTLE SPEED 2): `done` twice put ANY KEY:CONTINUE
+        // back over the PARRY hint, or over the menu
+        if (this.typing !== ev) return;
         i++;
         this.msgText.reveal(i);
         if (i >= text.length) {
