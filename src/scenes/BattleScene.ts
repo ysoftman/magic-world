@@ -1440,12 +1440,13 @@ export class BattleScene extends Phaser.Scene {
 
   // PARRY! or PERFECT!, or how the press missed. Up and to the far side of
   // whoever was struck: over the hero a PARRY! lay across the blow's damage
-  // number (a crit's "516!" is 224px wide about the hero, to x 432; PARRY! is
-  // 192px from x 434). FIGHT's is left of the foe, over the hero's head as it
-  // strikes: PERFECT! is 256px to x 848, a crit's number on the foe from 848.
+  // number (a crit's "516!" is 224px wide about a point 40px right of the
+  // hero, popNumber, to x 472; PARRY! is 192px from x 484: from 434 the two
+  // shared 41px). FIGHT's is left of the foe, over the hero's head as it
+  // strikes: PERFECT! is 256px to x 848, a crit's number on the foe from 888.
   private timedNote(label: "PARRY!" | "PERFECT!" | "EARLY" | "LATE", strike = false): void {
     const hit = label.endsWith("!");
-    const x = strike ? this.enemySprite.x - 240 : this.playerSprite.x + 210;
+    const x = strike ? this.enemySprite.x - 240 : this.playerSprite.x + 260;
     this.flashStatus(label, hit ? "#fde047" : DIM_TEXT, x, this.playerSprite.y - 90, hit ? 8 : 6);
   }
 
@@ -3258,7 +3259,9 @@ export class BattleScene extends Phaser.Scene {
         GameState.gold -= gold;
         this.snatched = gold;
         Sfx.pickup();
-        this.flashStatus(`-${gold}G`, "#fbbf24");
+        // left of the hero: over its head the blow's own number is up ("-9999G"
+        // is 192px, x 54..246; a crit's number starts at 248)
+        this.flashStatus(`-${gold}G`, "#fbbf24", this.playerSprite.x - 170, this.playerSprite.y - 80, 8);
       }
       await this.say(gold > 0 ? `${name} hits for ${dmg} and snatches ${gold}G!${note}` : `${name} hits for ${dmg}!${note}`);
     }
@@ -3337,9 +3340,12 @@ export class BattleScene extends Phaser.Scene {
   // COUNTER: the FIGHT a DEFEND strikes back with once a heavy hit is in
   // (battleRules DEFEND_HEAVY_MULT), no turn spent; PERFECT and all, and one
   // more in the combo DEFEND reset. Not from a hero the hit felled or froze.
+  // Its label pops between the two at chest height, under the hit's number
+  // and a PARRY! still rising over the hero's side and under the PERFECT! to
+  // come (all three a row higher): over the hero's head it lay on the number.
   private async counter(): Promise<void> {
     if (!this.running || this.frozen || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
-    this.flashStatus("COUNTER!", "#fde047");
+    this.flashStatus("COUNTER!", "#fde047", this.playerSprite.x + 260, this.playerSprite.y - 20, 8);
     await this.playerAttack();
   }
 
