@@ -1152,9 +1152,9 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyStatus();
     this.updateStatus();
 
-    // the message box (y 604..716) reads like the dialogue box, in its
-    // bodyStyle(33) with its 5px leading: 54 glyphs a row, and a second row's
-    // descenders end at y=697
+    // the message box (y 604..716), in bodyStyle(33) with a 5px leading (as
+    // the touch dialogue box's; the keyboard one is in 22): 54 glyphs a row,
+    // and a second row's descenders end at y=697
     gridOutline(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92), 0xffffff);
     this.msgText = new TypedText(this, 64, GAME_HEIGHT - 104, bodyStyle(33, "#f5f5f5"), {
       wrapWidth: GAME_WIDTH - 128,
@@ -4218,7 +4218,11 @@ export class BattleScene extends Phaser.Scene {
     this.limitBar.setScale(barShare(this.limit, LIMIT_MAX, LIMIT_BAR_W), 1).setFillStyle(full ? LIMIT_FULL_COLOR : LIMIT_COLOR);
     this.limitLabel.setColor(full ? "#fde047" : "#f9a8d4");
     this.limitText
-      .setText(full ? keyHint("L:LIMIT!", "LIMIT!", { table: "battle" }) || "LIMIT!" : "LIMIT")
+      .setText(
+        full
+          ? keyHint("L:BREAK!", "TAP:BREAK!", { table: "battle" }) || "BREAK!"
+          : `${Math.min(99, Math.floor((this.limit / LIMIT_MAX) * 100))}%`,
+      )
       .setColor(full ? "#fde047" : DIM_TEXT);
     const blink = this.tweens.getTweensOf(this.limitBar)[0];
     if (full) blink?.resume();
