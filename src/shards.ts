@@ -31,13 +31,13 @@ export const SHARD_CELLS: Record<ShardRegion, readonly [Cell, Cell, Cell]> = {
   ],
   forest: [
     [24, 3],
-    [1, 16],
-    [24, 16],
+    [1, 14],
+    [24, 13],
   ],
   snow: [
     [22, 1],
     [22, 9],
-    [1, 14],
+    [5, 14],
   ],
   volcano: [
     [1, 1],
