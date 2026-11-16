@@ -165,6 +165,7 @@
 - 도망치는 희귀 몬스터: 동굴·숲·설원에 들어설 때 12%, 전투에서 돌아올 때 2.5% 로 그 지역의 희귀 몬스터(CURSED GOBLIN·SILVER WASP·AURORA MOTH)가 몬스터 구역 밖 열린 곳에 서 있다. 3타일 안으로 다가가면 머리 위에 `!` 가 뜨고 달아나며, 10초 안에 닿으면 그 몬스터와 싸운다(못 잡으면 `IT GOT AWAY`). 곧게 달릴 때는 영웅보다 빠르고 대각선으로 달리는 영웅보다는 느려서, 뒤만 쫓지 말고 모퉁이를 질러 막다른 곳으로 몬다. 쫓는 동안 무작위 조우는 없지만 몬스터 구역의 몬스터에 닿으면 그 전투가 시작되고 놓친다
 
 - 업적(A), 도감(B): 도감은 본/잡은 몬스터와 약점(WEAK)·능력(CAN: 독·빙결·재생·격노)을 보여 주고, 잡을 수 있는 13종 중 잡은 종 20%마다 ATK/DEF +1(최대 +5). 희귀 몬스터(GOLDEN SLIME·CURSED GOBLIN·NIGHT WISP·SILVER WASP·AURORA MOTH)와 보스는 13종에 들지 않아 세지 않는다. 희귀 몬스터는 골드·EXP 가 크고(SILVER WASP·AURORA MOTH 는 숲·설원에서 같은 계열 몬스터 대신 3.5% 로 나오며 그 지역 소재 2개를 꼭 남긴다), CANDY 로 잡을 수는 있지만 도감 완성에는 필요 없다. HUD 의 CAUGHT 도 이 13종 중 잡은 종 수다
+- 업적은 46개다. 새 전투 요소의 업적: QUICK HANDS·UNTOUCHABLE(PARRY 10·100번), FINISHER(보스나 거인을 LIMIT BREAK 로 마무리), ELITE HUNTER(정예 세 종류 모두 처치), PILGRIM(네 제단 모두에 봉헌), RELIC HOARDER(한 다이브에 유물 6개), CURSE BREAKER(저주받은 상자 열기), WELL ROUNDED(특성 7단계 모두). PARRY 와 가득 찬 LIMIT 게이지는 처음 한 번 전투 메시지로 설명한다
 - 업적이 10·20·30·38개가 되면 영웅 외형 TEAL·CRIMSON·NIGHT·GOLD 가 차례로 열린다(토스트 "NEW LOOK UNLOCKED: TRY IT ON AT HOME!", 업적 창 아래에 다음 외형까지의 NEXT LOOK 줄). 업적은 세이브마다 따로라 새 게임은 기본 4종(BLUE·RED·GREEN·VIOLET)부터고, HARD MODE 는 업적과 함께 이어진다
 - HARD MODE: FLAME DRAKE 처치 후 타이틀에서 P. 레벨·장비·도감·동료와 몬스터 소재·요리 재료·보물 지도·집 증축은 유지하고 퀘스트·상자·농장은 처음부터, 소모품은 처음 세트로, 골드는 절반. 회차마다 적 HP/ATK +50%, 보상 +25%(3회차까지)
 - 세이브 슬롯 3개(타이틀에서 선택). 자동 저장 + CTRL+S. 새 게임·HARD MODE·가져오기로 덮어쓴 세이브는 타이틀에서 복원(U), 설정(O)에서 세이브 코드 내보내기/가져오기(가져오면 곧바로 새로고침)

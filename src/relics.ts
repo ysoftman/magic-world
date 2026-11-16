@@ -92,6 +92,9 @@ export function relicLine(): string {
   }).join(" ");
 }
 
+/** How many relics the dive holds, stacks counted (the RELIC HOARDER trophy). */
+export const relicTotal = (): number => [...held.values()].reduce((n, v) => n + v, 0);
+
 // the walking-encounter chance and a chest's gold, in the ABYSS itself
 export const relicAmbush = (): number => 1 - amount("cloak");
 export const relicGold = (): number => 1 + amount("purse");

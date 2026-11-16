@@ -63,6 +63,7 @@ import { GAME_HEIGHT, GAME_WIDTH, MAX_HP, MAX_LEVEL, MAX_MP, PIXEL } from "../co
 import { type MealDef, takeMealCharge } from "../cooking";
 import { MATERIALS, rollDrop } from "../drops";
 import { actsAgain, ELITE_DROP_MULT, ELITES, type EliteKind, rollElite } from "../elite";
+import { noteWin } from "../feats";
 import { bakeBattleFx, flash, loopFx, playFx, shake, warmFx } from "../fx";
 import { expToNext, GameState, isNight, onSaved } from "../gameState";
 import { RESTED_WARD_TURNS } from "../home";
@@ -623,6 +624,8 @@ export class BattleScene extends Phaser.Scene {
   // yard, and the two HP figures it was last brought up to date with
   // (syncLimit); its bar and label under the hero's name
   private limit = 0;
+  // the foe fell to a LIMIT BREAK's blow (the FINISHER trophy, feats.ts)
+  private limitKill = false;
   private limitSeen = { foe: 0, hero: 0 };
   private limitBar!: Phaser.GameObjects.Rectangle;
   private limitText!: PixelText;
@@ -1834,6 +1837,7 @@ export class BattleScene extends Phaser.Scene {
       // a SWIFT elite (elite.ts) may act again: not out of a turn it lost
       // (stuck), nor to loose the strike it has just wound up
       const again = !this.stuck && actsAgain(this.elite);
+      await this.tip("parry");
       await this.enemyTurn();
       if (again && this.running && !this.charging && GameState.player.hp > 0 && this.enemy.curHp > 0) {
         await this.say(`${this.enemy.name} moves again!`);
@@ -1842,7 +1846,25 @@ export class BattleScene extends Phaser.Scene {
       this.defending = false;
       this.thawing = false;
       await this.tickWard();
+      await this.tip("limit");
     }
+  }
+
+  // A first-time line, said once a save (GameState.seenTips, where the
+  // fields' unlock tips are kept): what a PARRY is, before the first blow the
+  // hero ever faces, and what a full LIMIT gauge is for, at the end of the
+  // round that first filled it. 52 and 46 glyphs of a row's 54 (touch: 42
+  // and 45). Not in the yard, whose gauge is always full.
+  private async tip(id: "parry" | "limit"): Promise<void> {
+    const seen = GameState.seenTips;
+    if (!seen || seen.includes(id) || this.practice || !this.running || GameState.player.hp <= 0) return;
+    if (id === "limit" && !limitFull(this.limit)) return;
+    seen.push(id);
+    await this.say(
+      id === "parry"
+        ? keyHint("TIP: press any key just as a blow lands to PARRY it.", "TIP: tap just as a blow lands to PARRY it.")
+        : keyHint("LIMIT is full! L unleashes it now, or save it.", "LIMIT is full! Tap the gauge now, or save it."),
+    );
   }
 
   // one enemy turn spent, whether it attacked, regrew or was the thaw round
@@ -3705,6 +3727,7 @@ export class BattleScene extends Phaser.Scene {
   // LIMIT_TAP) and both blink.
   private addLimitGauge(): void {
     this.limit = this.practice ? LIMIT_MAX : GameState.limit;
+    this.limitKill = false;
     this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
     this.add.rectangle(64, 78, 176, 8, 0x2a2a4a).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
     this.limitBar = this.add.rectangle(64, 78, 176, 8, LIMIT_COLOR).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
@@ -3738,6 +3761,8 @@ export class BattleScene extends Phaser.Scene {
     const dealt = Math.max(0, this.limitSeen.foe - this.enemy.curHp);
     const taken = Math.max(0, this.limitSeen.hero - GameState.player.hp);
     this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
+    // a PARRY is the one thing that brings a bonus: counted for its trophies
+    if (bonus > 0 && !this.practice) GameState.feats.parries += 1;
     const was = limitFull(this.limit);
     const gain = (limitDealt(dealt, this.enemy.hp) + limitTaken(taken, GameState.effMaxHp()) + bonus) * (1 + GameState.perk("surge"));
     this.limit = this.practice ? LIMIT_MAX : chargeLimit(this.limit, gain);
@@ -3759,6 +3784,7 @@ export class BattleScene extends Phaser.Scene {
       Sfx.critical();
       this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
       this.limitSeen.foe = this.enemy.curHp;
+      this.limitKill = this.enemy.curHp <= 0;
       this.limit = 0;
       this.updateEnemyHp();
       this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
@@ -3830,6 +3856,7 @@ export class BattleScene extends Phaser.Scene {
       // nothing fought in the ABYSS counts toward a quest, the bounty or a
       // boss's flag (abyss.ts)
       if (!this.abyss) this.tallyQuestKill();
+      noteWin(GameState.feats, this.elite, this.limitKill && !!(this.enemy.boss || this.enemy.giant));
       // the usual +5 HP and +2 MP, with a relic's share (relics.ts) and MEND's and CALM's (perks.ts)
       const winHeal = 5 + relicWinHeal(this.abyss, GameState.effMaxHp()) + Math.ceil(GameState.effMaxHp() * GameState.perk("mend"));
       GameState.player.hp = Math.min(GameState.effMaxHp(), GameState.player.hp + winHeal);

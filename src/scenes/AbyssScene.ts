@@ -21,7 +21,18 @@ import { escapeFromZones, type MonsterZone, T_GRASS, T_PATH, T_ROCK, T_TALL, T_W
 import { ENEMIES } from "../monsters";
 import { ART_PX, addGroundShadow, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
-import { RELIC_EVERY, RELICS, type RelicKey, relicAmbush, relicGold, relicLine, resetRelics, rollRelicOffer, takeRelic } from "../relics";
+import {
+  RELIC_EVERY,
+  RELICS,
+  type RelicKey,
+  relicAmbush,
+  relicGold,
+  relicLine,
+  relicTotal,
+  resetRelics,
+  rollRelicOffer,
+  takeRelic,
+} from "../relics";
 import {
   addBorderDressing,
   addRoamer,
@@ -348,6 +359,7 @@ export class AbyssScene extends Phaser.Scene {
     else if (back?.cursed && (GameState.battles > back.battles || GameState.caught.length > back.caught)) {
       // the cursed chest's foe fell or was caught: the chest is open, a relic its find
       curseLifted = r.chestOpened = true;
+      GameState.feats.cursedOpened += 1;
       r.offer ??= rollRelicOffer();
     } else if (back?.roamer) r.met.add(back.roamer);
     // A fallen GUARDIAN makes the floor below a checkpoint: a later dive can
@@ -709,6 +721,7 @@ export class AbyssScene extends Phaser.Scene {
       const key = offer[i === 0 ? 0 : 1];
       r.offer = null;
       takeRelic(key);
+      GameState.feats.relicBest = Math.max(GameState.feats.relicBest, relicTotal());
       this.relicTag.setText(relicLine());
       this.holdFights();
       Sfx.chest();

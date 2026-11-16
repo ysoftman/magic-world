@@ -2,12 +2,15 @@ import type Phaser from "phaser";
 import { ARENA_BOSSES } from "./arena";
 import { MAX_GOLD, MAX_LEVEL } from "./config";
 import { RECIPES } from "./drops";
+import { ELITES } from "./elite";
 import { FAVOR_GIVERS, FAVORS } from "./favors";
 import { ALL_FISH, GameState } from "./gameState";
 import { MAX_HOUSE } from "./home";
 import { FOREST_TREASURE_POS, SNOW_TREASURE_POS, TREASURE_POS, VOLCANO_TREASURE_POS } from "./levels";
 import { CATCHABLE } from "./monsters";
+import { PERK_TIERS } from "./perks";
 import { showToast } from "./pixelart";
+import { SHRINES } from "./shrine";
 
 // Every chest across the dungeon, forest, snow field and volcano — a new map
 // only needs its list added here. treasure-hunter checks each id instead of
@@ -317,15 +320,76 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     desc: "Raise a companion's bond to +5",
     ...atLeast(() => Math.max(0, ...Object.keys(GameState.companionBond).map((n) => GameState.companionBondBonus(n))), 5),
   },
+  // The newer ways to fight, counted in GameState.feats (feats.ts) where the
+  // save had nothing to count them by. A PARRY is a key timed to a blow
+  // (BattleScene enemyLunge): ten is a habit formed, a hundred a way of
+  // fighting.
+  {
+    id: "parry-10",
+    name: "QUICK HANDS",
+    desc: "PARRY 10 blows",
+    ...atLeast(() => GameState.feats.parries, 10),
+  },
+  {
+    id: "parry-100",
+    name: "UNTOUCHABLE",
+    desc: "PARRY 100 blows",
+    ...atLeast(() => GameState.feats.parries, 100),
+  },
+  {
+    // the LIMIT gauge kept for the last blow (limit.ts), a giant counting too
+    id: "finisher",
+    name: "FINISHER",
+    desc: "Fell a boss with a LIMIT BREAK",
+    check: () => GameState.feats.limitFinishes >= 1,
+  },
+  {
+    // FIERCE, STURDY and SWIFT (elite.ts), beaten or caught
+    id: "elite-hunter",
+    name: "ELITE HUNTER",
+    desc: "Defeat each kind of elite foe",
+    ...atLeast(() => GameState.feats.elites.length, Object.keys(ELITES).length),
+  },
+  {
+    // shrineDays keeps the day of each shrine's last offering (shrine.ts), so
+    // its keys are the shrines ever prayed at; HARD MODE clears them, the
+    // trophy once claimed stays
+    id: "pilgrim",
+    name: "PILGRIM",
+    desc: "Make an offering at every shrine",
+    ...atLeast(() => Object.keys(GameState.shrineDays).length, Object.keys(SHRINES).length),
+  },
+  {
+    // six picks is ten floors down from a dive's start, or fewer through
+    // cursed chests (relics.ts, abyss.ts)
+    id: "relic-hoarder",
+    name: "RELIC HOARDER",
+    desc: "Hold 6 relics in one ABYSS dive",
+    ...atLeast(() => GameState.feats.relicBest, 6),
+  },
+  {
+    id: "curse-breaker",
+    name: "CURSE BREAKER",
+    desc: "Open a cursed chest in the ABYSS",
+    check: () => GameState.feats.cursedOpened >= 1,
+  },
+  {
+    // every tier, the last at Lv28 (perks.ts)
+    id: "well-rounded",
+    name: "WELL ROUNDED",
+    desc: `Take all ${PERK_TIERS.length} perks from the ELDER`,
+    ...atLeast(() => GameState.perks.length, PERK_TIERS.length),
+  },
 ];
 
 // Hero looks earned with achievements: art/hero.ts HERO_LOOKS past the first
-// BASE_LOOKS open one at each count here, the last once every achievement is
-// in. Counted off GameState.achievements (as the trophy board counts them,
+// BASE_LOOKS open one at each count here. The last was "every achievement"
+// while there were 38; it stays at 38 now there are more, so a save that had
+// GOLD keeps it and the newer trophies only bring it nearer. Counted off GameState.achievements (as the trophy board counts them,
 // so an id an old save kept for a since-removed entry adds nothing), so the
 // save holds nothing new.
 export const BASE_LOOKS = 4;
-export const LOOK_MILESTONES = [10, 20, 30, ACHIEVEMENTS.length];
+export const LOOK_MILESTONES = [10, 20, 30, 38];
 
 export function earnedCount(): number {
   return ACHIEVEMENTS.filter((a) => GameState.achievements.includes(a.id)).length;

@@ -2,6 +2,7 @@ import { ABYSS_FLOOR_MAX } from "./abyss";
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
 import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
+import { loadFeats, noFeats } from "./feats";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
@@ -662,6 +663,8 @@ export const GameState = {
   jackpots: 0,
   farm: Array.from({ length: FARM_PLOTS }, () => null) as Array<FarmPlot | null>,
   achievements: [] as string[],
+  // the newer trophies' counts (feats.ts)
+  feats: noFeats(),
   inventory: {
     potion: 2,
     mPotion: 1,
@@ -1035,6 +1038,7 @@ export const GameState = {
       // the house is the hero's for good; its garden starts the new day over
       houseLevel: this.houseLevel,
       achievements: this.achievements,
+      feats: this.feats,
       equipped: this.equipped,
       refine: this.refine,
       caught: this.caught,
@@ -1100,6 +1104,7 @@ export const GameState = {
     this.jackpots = 0;
     this.farm = Array.from({ length: FARM_PLOTS }, () => null);
     this.achievements = [];
+    this.feats = noFeats();
     this.inventory = {
       potion: 2,
       mPotion: 1,
@@ -1218,6 +1223,7 @@ export const GameState = {
           jackpots: this.jackpots,
           farm: this.farm,
           achievements: this.achievements,
+          feats: this.feats,
           inventory: this.inventory,
           equipped: this.equipped,
           refine: this.refine,
@@ -1324,6 +1330,8 @@ export const GameState = {
         return plot && Object.keys(CROPS).includes(plot.crop) ? { crop: plot.crop as CropKey, plantedAt: plot.plantedAt ?? 0 } : null;
       });
       this.achievements = data.achievements ?? [];
+      // none on saves from before these trophies
+      this.feats = loadFeats(data.feats);
       Object.assign(this.inventory, data.inventory);
       // saves from before the resist accessories carry neither key; set them
       // outright so they can't keep a count left over from a save loaded

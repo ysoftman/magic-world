@@ -216,7 +216,7 @@ const HERO_IDLE_32 = [
 // Any mid shade landed on the trodden snow or a battle backdrop instead, so
 // it is a dark violet grey, as dark as the other looks' outlines.
 // The last four are earned with achievements (achievements.ts
-// LOOK_MILESTONES: 10, 20, 30 and all 38), GOLD the showiest; the pale-haired
+// LOOK_MILESTONES: 10, 20, 30 and 38), GOLD the showiest; the pale-haired
 // two name a dark outline as VIOLET does. Names stay within 7 glyphs, the
 // picker's 144px frames at retroStyle(5).
 export const HERO_LOOKS = [
