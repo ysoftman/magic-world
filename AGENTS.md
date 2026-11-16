@@ -167,10 +167,11 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   (`fadeInAfterAreaTitle`). 실제 사례: 밤 숲에서 외곽선 없는 초록 `THE FOREST` 가 나무 꼭대기에
   묻혔고, 제목이 사라지는 0.6초 동안 함께 들어오던 `TOWN` 이름표와 겹쳐 둘 다 반쯤 비쳤다.
 - 동굴·숲·설원·화산의 지역 제목 아래에는 그 지역에 오늘 남은 것 한 줄이 같이 떴다 사라진다(`sceneCommon` 의
-  `fadeAreaTitle(scene, title, region)` → `areaLeft`: `STARS 1/3   SEAL   SHRINE   PEDDLER`, 남은 것만, 없으면 줄 없음).
-  못 찾은 별 조각, 강적을 아직 못 이긴 봉인, 오늘 안 바친 제단, 오늘 그 지역에 서 있고 살 것이 남은 상인을 센다. 별
+  `fadeAreaTitle(scene, title, region)` → `areaLeft`: `STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`, 남은 것만, 없으면 줄 없음).
+  못 찾은 별 조각, 강적을 아직 못 이긴 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지(5승 뒤부터), 오늘 그 지역에 서 있고 살 것이
+  남은 상인을 센다. 별
   조각·봉인·상인은 마을 해금 팁(`seenTips` 의 `fields`·`peddler`)이 나온 뒤에만 넣는다. 제목과 같은 조건(입장 때만,
-  전투에서 돌아올 때는 없음)이고 저장하는 것은 없다. retroStyle(4) 최장 35글자 560px(x 360..920), y 208..224 로 날씨
+  전투에서 돌아올 때는 없음)이고 저장하는 것은 없다. retroStyle(4) 최장 42글자 672px(x 304..976), y 208..224 로 날씨
   캡션(144..164)·토스트 줄(176..196) 아래다. 토스트가 두 줄로 넘어와 이 줄에 닿으면 그동안 숨는다. 실제 사례: 입장
   직후의 `ACHIEVEMENTS: ...` 두 줄 토스트가 이 줄을 덮었다. 지역에 새 할 일을 넣으면 `areaLeft` 에 한 조각을 더하고
   최장 폭을 다시 잰다.
@@ -656,6 +657,40 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 - 진행은 퀘스트 일지 오른쪽 위 셋째 줄 `SEALS 4/4`(`QuestLog`, 별 조각 두 줄 아래, y 56..72)다.
 - 돌은 제단 격자(`SHRINE_TILE`)의 붉은 팔레트(`seal`)이고 풀린 뒤에는 `shrine-spent` 다. 발판 그림은 `Seal.ts` 안의
   격자를 `scene` 인자로 굽는다(check:art 대상 아님). 발판 깊이 3.6(바닥 위, glint·별 조각 4.5 아래).
+
+## 둥지 연전 (`src/nest.ts`, `src/ui/Nest.ts`)
+
+NEST 는 필드의 굴에서 세 전투를 연달아 하는 곳이다(지금은 동굴 하나, `NESTS` 표). Z → YES 로 들어가면 첫 전투가 바로
+시작되고, 이길 때마다 필드로 돌아오자마자 `ON`/`LEAVE` 를 묻는다(ESC 는 LEAVE). 셋을 다 이기면 골드와 그 지역 소재
+`NEST_PIECES`(3)개, 중간에 물러나거나 도망치면 그때까지 쌓인 골드(`purse`)만, 쓰러지면 평소 패배다. 사이에 회복은 승리의
++5 HP·+2 MP 뿐이다(필드에서 가방을 열 틈이 없다: 질문이 필드와 함께 뜬다). 하루 한 번(`GameState.nestDays`, shrineDays 와
+같은 꼴, 옛 세이브는 빈 값, HARD MODE 의 `reset()` 이 비운다)이고 들어가는 순간 그날을 쓴 것으로 저장해 도중에
+새로고침하면 그날은 끝이다. 정예와 같은 5승(`NEST_MIN_BATTLES`) 뒤부터 열린다.
+
+- BattleScene 에는 훅이 없다. 전투 하나하나가 봉인 강적과 같은 `KeeperBout`(종에 HP·ATK 배율을 먼저 곱한 정예, 첫 줄
+  `NEST MOTHER rises!`)이고 씬의 `startBattle(enemy, keeper)` 로 시작한다. 그래서 세 전투 모두 정예 골드·EXP(x2.5)를 주고
+  `feats.eliteWins` 에 들어간다(바운티 FELL AN ELITE 를 여기서 채울 수 있다: 값은 연전 한 번). 한 둥지에는 정예 종류를
+  둘까지만 써서 한 번으로 ELITE HUNTER 가 나오지 않게 한다.
+- 연전 상태(`run`: 지역·이긴 수·시작할 때의 `battles`·`caught.length`)는 `ui/Nest.ts` 의 모듈 변수다(봉인의 `fight` 와 같은
+  방식, 저장 안 함). 필드가 `{ fromBattle }` 로 다시 만들어질 때 읽어 승리(전투 수나 포획 수가 늚)면 다음 질문이나 결산,
+  아니면(도망) 쌓인 몫으로 끝낸다. 그 밖의 진입(패배 뒤 걸어옴·타이틀·새로고침)은 `run` 을 버린다. 아레나·심연·훈련장은
+  시작하지도 읽지도 않는다. 씬의 `fight` 콜백은 봉인처럼 `encounterCooldown` 을 0 으로 한 뒤 `startBattle` 을 부른다(거절되면
+  `run` 만 남아 다음에 이긴 아무 전투가 한 판으로 세어진다).
+- 수치는 sim 에 배율 옵션이 없어 `/tmp/pwcheck/` 의 일회용 래퍼(ENEMIES 의 HP·ATK 를 곱한 뒤 `--foe KEY --elite KIND
+  --potions 0`)로 잰다. 동굴(WOLF + SWORD·SHIELD, 한 판에 잃는 최대 HP): Lv3 13·34·51%(합 98%, 승리 회복 두 번 25% 를 빼면
+  평균 73%: 포션 없이 다섯 번에 한 번쯤 쓰러짐), Lv2 21·49·77%(대개 실패), Lv4 7·22·29%. sim 은 연전을 못 돌려 판마다의
+  평균을 더한 어림이다(편차는 평균의 절반으로 봄). 골드는 세 전투의 정예 골드 62G + purse 40G 로 하루 약 100G, 동굴 사냥
+  하루치(24분, 약 380G)의 1/4 쯤이고 상은 소재 3개다. 종·배율·purse 를 바꾸면 다시 재고 README 표를 고친다.
+- 새 지역에 넣을 때: `NestRegion`·`NESTS` 한 항목, 씬에 `new Nest(this, region, this.player, this.dialogue, { back: !!back,
+  fight: (f) => { this.encounterCooldown = 0; this.startBattle(f.enemy, f.bout); }, blocked, found })`, 굴 칸을 러너 `walls`·
+  `treasure.ts` 의 `keep`·미니맵 표식에 넣는다. `areaLeft` 는 `NESTS` 에 있는 지역이면 알아서 `NEST` 를 넣는다. 칸은 제단과
+  같은 조건(걷는 바닥, 굴을 벽으로 쳐도 맵이 안 끊김, 구역 한 타일 밖, 입구·상자·제단·봉인 돌·발판·상인·별 조각에서 180px,
+  상자 3칸)과 터치 원판 계산("필드 제단" 절)으로 고른다. Nest 는 늘 제 Z 리스너를 쓰므로 설원에서는 봉인처럼 다른 Z
+  지점에서 두 대화 반경보다 멀리 둔다.
+- 글자: 강적 이름은 봉인과 같은 한도(첫 줄 `<이름> rises!`), 들어가는 질문 둘째 줄 `Win all three for 40 G and 3 SPIDER
+  SILK.` 는 41글자(터치 한 줄 42), 토스트 `NEST CLEARED! +40 G, 3 SPIDER SILK` 34글자. 토스트는 소식(`!`)이다.
+- 그림은 `Nest.ts` 안의 32x24칸 격자(64x48px)를 `scene` 인자로 굽는다(check:art 대상 아님). 들어갈 수 있을 때는 굴 안에 눈
+  둘, 그날을 쓴 뒤에는 눈이 없는 팔레트(`nest-still`)와 흐린 이름표다. 몸은 아래쪽 56x22, 영웅이 뒤에 서면 깊이 10.4.
 
 ## 바운티의 과제 (`src/bounties.ts`)
 

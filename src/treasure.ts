@@ -43,6 +43,7 @@ import {
   VOLCANO_ZONES,
   workplaceCells,
 } from "./levels";
+import { NESTS } from "./nest";
 import { cellCentre, SEALS } from "./seals";
 
 // Treasure maps: now and then a won battle leaves one (BattleScene), naming a
@@ -127,7 +128,14 @@ export const REGIONS: Record<TreasureRegion, RegionDef> = {
     name: "CAVE",
     grid: buildDungeon,
     start: () => ({ x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y + 2 * TILE }),
-    keep: () => [...TREASURE_POS, ABYSS_STAIRS_POS, DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at)],
+    keep: () => [
+      ...TREASURE_POS,
+      ABYSS_STAIRS_POS,
+      DUNGEON_SHRINE_POS,
+      DUNGEON_PEDDLER_POS,
+      cellCentre(SEALS.dungeon.at),
+      cellCentre(NESTS.dungeon.at),
+    ],
     exits: () => [DUNGEON_ENTRY],
     zones: DUNGEON_ZONES,
     noRoads: false,

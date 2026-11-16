@@ -21,6 +21,7 @@ import {
   T_WATER_B,
   TILE,
 } from "./levels";
+import { NESTS, type NestRegion, nestOpen } from "./nest";
 import { peddlerRegion, peddlerSold } from "./peddler";
 import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
 import { PixelText } from "./pixelText";
@@ -980,8 +981,8 @@ export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText, region?: Sh
 
 // Under the title, its weather caption (y 144..164) and the toast line (y
 // 176..196, lower when it wraps): what this field still holds today, so a walk in says what there
-// is to do besides fight. Its widest, every part left, is 35 glyphs: 560px
-// at retroStyle(4), x 360..920.
+// is to do besides fight. Its widest, every part left, is 42 glyphs: 672px
+// at retroStyle(4), x 304..976.
 const AREA_LEFT_Y = STATUS_HUD_HEIGHT + 128;
 
 // the scene's toast (pixelart.ts showToast, "__toast") is up and reaches down to `y`
@@ -992,9 +993,10 @@ function toastOver(scene: Phaser.Scene, y: number): boolean {
 
 /**
  * What `region` still has for the hero today, as the line under its title:
- * "STARS 1/3   SEAL   SHRINE   PEDDLER", each part only while it is left (a
- * shard unfound, the seal's keeper unbeaten, the shrine not prayed at today,
- * the PEDDLER here with something unsold), "" when nothing is. The shards,
+ * "STARS 1/3   SEAL   SHRINE   NEST   PEDDLER", each part only while it is
+ * left (a shard unfound, the seal's keeper unbeaten, the shrine not prayed at
+ * today, the nest not gone into today and open to this hero, the PEDDLER here
+ * with something unsold), "" when nothing is. The shards,
  * the seal and the PEDDLER are named only once the town's tip has told of
  * them (unlockTips.ts "fields" and "peddler"; a save from before the tips
  * knows them all); the shrine stands in plain sight.
@@ -1009,6 +1011,7 @@ export function areaLeft(region: ShardRegion): string {
     if (GameState.seals[region] !== "done") parts.push("SEAL");
   }
   if (!shrineSpent(GameState, region, day)) parts.push("SHRINE");
+  if (region in NESTS && nestOpen(GameState, region as NestRegion, day)) parts.push("NEST");
   const peddlerHere = told("peddler") && peddlerRegion(day, GameState.quest) === region;
   if (peddlerHere && !(peddlerSold(GameState, day, 0) && peddlerSold(GameState, day, 1))) parts.push("PEDDLER");
   return parts.join("   ");

@@ -6,6 +6,7 @@ import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialK
 import { loadFeats, noFeats } from "./feats";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
+import { loadNestDays, type NestDays } from "./nest";
 import { loadPeddler, type PeddlerState } from "./peddler";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
@@ -647,6 +648,8 @@ export const GameState = {
   // shrine last heard an offering on (shrine.ts)
   blessing: null as Blessing | null,
   shrineDays: {} as ShrineDays,
+  // the day each field's nest was last gone into (nest.ts)
+  nestDays: {} as NestDays,
   // treasure maps held (treasure.ts), at most MAX_MAPS, and how many were dug
   treasureMaps: [] as TreasureMap[],
   mapsDug: 0,
@@ -1147,6 +1150,7 @@ export const GameState = {
     this.meal = null;
     this.blessing = null;
     this.shrineDays = {};
+    this.nestDays = {};
     this.treasureMaps = [];
     this.mapsDug = 0;
     this.houseLevel = 0;
@@ -1272,6 +1276,7 @@ export const GameState = {
           meal: this.meal,
           blessing: this.blessing,
           shrineDays: this.shrineDays,
+          nestDays: this.nestDays,
           treasureMaps: this.treasureMaps,
           mapsDug: this.mapsDug,
           houseLevel: this.houseLevel,
@@ -1372,6 +1377,7 @@ export const GameState = {
       // none on saves from before the shrines: no blessing, none visited
       this.blessing = loadBlessing(data.blessing);
       this.shrineDays = loadShrineDays(data.shrineDays);
+      this.nestDays = loadNestDays(data.nestDays);
       // none on saves from before treasure maps
       this.treasureMaps = loadTreasureMaps(data.treasureMaps);
       this.mapsDug = Number.isInteger(data.mapsDug) && data.mapsDug > 0 ? data.mapsDug : 0;

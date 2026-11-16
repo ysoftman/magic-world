@@ -22,6 +22,7 @@ import {
   TREASURE_POS,
 } from "../levels";
 import { ENEMIES } from "../monsters";
+import { NESTS } from "../nest";
 import { objectiveLine } from "../objective";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
@@ -61,6 +62,7 @@ import { addGuideArrow } from "../ui/GuideArrow";
 import { addHelpPopup } from "../ui/HelpPopup";
 import { InventoryUI } from "../ui/InventoryUI";
 import { CAVE_TILE_COLORS, Minimap } from "../ui/Minimap";
+import { Nest } from "../ui/Nest";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { addProp, TORCH } from "../ui/propFx";
@@ -215,7 +217,7 @@ export class DungeonScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
       region: "dungeon",
       back: !!back,
-      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at)],
+      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at), cellCentre(NESTS.dungeon.at)],
       exits: [DUNGEON_ENTRY],
       zones: DUNGEON_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -300,6 +302,7 @@ export class DungeonScene extends Phaser.Scene {
       [
         { x: DUNGEON_ENTRY.x, y: DUNGEON_ENTRY.y, color: 0xffd166 },
         { ...DUNGEON_SHRINE_POS, color: 0x7dd3fc },
+        { ...cellCentre(NESTS.dungeon.at), color: 0xfbbf24 },
         ...TREASURE_POS.filter((t) => !GameState.openedTreasures.includes(t.id)).map((t) => ({
           x: t.x,
           y: t.y,
@@ -355,6 +358,17 @@ export class DungeonScene extends Phaser.Scene {
       fight: () => {
         this.encounterCooldown = 0;
         this.startBattle(SEALS.dungeon.enemy as CaveKind, SEALS.dungeon.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
+    });
+    // the cave's nest (nest.ts): three fights back to back, once a day
+    new Nest(this, "dungeon", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, as the seal's keeper is
+      fight: (f) => {
+        this.encounterCooldown = 0;
+        this.startBattle(f.enemy as CaveKind, f.bout);
       },
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       found: () => this.holdFights(),
