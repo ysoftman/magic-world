@@ -56,6 +56,7 @@ import { Minimap } from "../ui/Minimap";
 import { lightsOverTiles, NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { addProp, LAVA_BUBBLES } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
+import { FieldRunner } from "../ui/Runner";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { STATUS_HUD_HEIGHT, StatusHud } from "../ui/StatusHud";
@@ -63,7 +64,7 @@ import { isTouchDevice, TouchControls } from "../ui/TouchControls";
 import { TreasureDigger } from "../ui/TreasureDig";
 import { weatherToday } from "../weather";
 
-type VolcanoKind = "magmaSlime" | "fireImp" | "salamander" | "flameDrake";
+type VolcanoKind = "magmaSlime" | "fireImp" | "gildedImp" | "salamander" | "flameDrake";
 
 const ENCOUNTER_COOLDOWN = 600;
 const ENTRY_GRACE = 1200;
@@ -105,6 +106,7 @@ export class VolcanoScene extends Phaser.Scene {
   private objectLayer!: Phaser.Tilemaps.TilemapLayer;
   private roamerGroup!: Phaser.Physics.Arcade.Group;
   private roamers: Roamer<VolcanoKind>[] = [];
+  private runner: FieldRunner | null = null;
   private encounterCooldown = 0;
   private exitingVolcano = false;
 
@@ -197,6 +199,16 @@ export class VolcanoScene extends Phaser.Scene {
     addAmbient(this, "volcano", { caption: true, since: back?.weather });
 
     this.spawnMonsters();
+    // now and then the volcano's jackpot out in the open, to be run down
+    // (ui/Runner.ts): the only way a GILDED IMP is met
+    this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
+      back: !!back,
+      walls: [VOLCANO_SHRINE_POS],
+      exits: [VOLCANO_ENTRY],
+      zones: VOLCANO_ZONES,
+      paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
+      caught: () => this.startBattle("gildedImp"),
+    });
 
     this.spawnTreasures();
 
@@ -378,6 +390,8 @@ export class VolcanoScene extends Phaser.Scene {
     // only while the hero walks: stood still (by a chest, over a map, at the
     // ice hole, deciding the way) a fight still came every ~17s
     if (!moving) return;
+    // nor while a runner is being chased (ui/Runner.ts): its fight is the one to win
+    if (this.runner?.fleeing()) return;
     const nearExit =
       Math.abs(this.player.x - VOLCANO_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - VOLCANO_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;

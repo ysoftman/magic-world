@@ -317,7 +317,7 @@ const PILFER_GAP_MS = 90;
 const DEATH_FX_MS = 1800;
 // the deaths' kinds: the snow field's and the volcano's rosters
 const SHATTER_KIN = [ENEMIES.frostMoth, ENEMIES.auroraMoth, ENEMIES.yeti, ENEMIES.iceGolem].map((e) => e.name);
-const BURNAWAY_KIN = [ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
+const BURNAWAY_KIN = [ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.gildedImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
 // stone and the troll that turns to it: the forest's boss and golem
 const PETRIFY_KIN = [ENEMIES.troll, ENEMIES.mossGolem].map((e) => e.name);
 

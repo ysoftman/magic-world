@@ -6,6 +6,7 @@ import {
   CURSED_GOBLIN_PALETTE,
   FIRE_IMP_PALETTE,
   FROST_MOTH_PALETTE,
+  GILDED_IMP_PALETTE,
   GOBLIN_PALETTE,
   GOLD_SLIME_PALETTE,
   MAGMA_SLIME_PALETTE,
@@ -906,5 +907,6 @@ export function bakeHdMonsters(this: Phaser.Scene): void {
   makeTexture(this, "auroraMoth@hd", FROST_MOTH_64, AURORA_MOTH_PALETTE, 1);
   makeTexture(this, "yeti@hd", YETI_64, YETI_PALETTE, 1);
   makeTexture(this, "fireImp@hd", FIRE_IMP_64, FIRE_IMP_PALETTE, 1);
+  makeTexture(this, "gildedImp@hd", FIRE_IMP_64, GILDED_IMP_PALETTE, 1);
   makeTexture(this, "salamander@hd", SALAMANDER_64, SALAMANDER_PALETTE, 1);
 }

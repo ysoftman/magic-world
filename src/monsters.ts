@@ -208,6 +208,20 @@ export const ENEMIES: Record<string, EnemyDef> = {
   // GOLEM's ("regrows its moss") — the drake still enrages like every boss.
   magmaSlime: { name: "MAGMA SLIME", texture: "magmaSlime", hp: 60, atk: 17, def: 3, exp: 80, gold: 48, weakness: "ice" },
   fireImp: { name: "FIRE IMP", texture: "fireImp", hp: 66, atk: 20, def: 3, exp: 105, gold: 66, weakness: "ice" },
+  // the volcano's jackpot, scaled off the FIRE IMP as SILVER WASP is off the
+  // WASP. No roamer or grass roll is ever one: it is met only as the
+  // volcano's runner (ui/Runner.ts)
+  gildedImp: {
+    name: "GILDED IMP",
+    texture: "gildedImp",
+    hp: 112,
+    atk: 21,
+    def: 4,
+    exp: 525,
+    gold: 792,
+    rare: true, // volcano jackpot: big payout, not required for collection
+    weakness: "ice",
+  },
   salamander: { name: "SALAMANDER", texture: "salamander", hp: 90, atk: 21, def: 5, exp: 130, gold: 80, weakness: "bolt" },
   flameDrake: {
     name: "FLAME DRAKE",

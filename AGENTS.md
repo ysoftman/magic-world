@@ -491,8 +491,14 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   walls, exits, zones, paused, caught })`, `checkEncounter` 의 `if (!moving) return;` 뒤에 `if (this.runner?.fleeing())
   return;`. `paused` 는 `uiBlocking() || quitting || fieldKeys.leaving()`, `caught` 는 `startBattle` 이다(입장 쿨다운·
   나가는 중 가드는 `startBattle` 이 본다).
-- 빈도와 벌이는 `Runner.ts` 머리 주석에 있다(시간당 약 3번, 다 잡으면 동굴 약 320G·숲 500G·설원 1370G, 밸런스 sim 은 안 돌림). 확률이나 희귀 몬스터의
-  골드를 바꾸면 같이 고친다. 화산은 희귀 몬스터가 없어 아직 러너가 없다.
+- 빈도와 벌이는 `Runner.ts` 머리 주석에 있다(시간당 약 3번, 다 잡으면 동굴 약 320G·숲 500G·설원 1370G·화산 2380G, 밸런스 sim 은 안 돌림). 확률이나 희귀
+  몬스터의 골드를 바꾸면 같이 고친다.
+- 화산의 GILDED IMP(`src/monsters.ts` 의 `gildedImp`)는 러너로만 만난다(구역 로머·무작위 조우에 없음). FIRE IMP 격자에
+  팔레트만 다른 리스킨이라 외곽선 `K` 는 FIRE IMP 와 같은 값이다. 불 종 목록(`battleRules.ts` 의 `BURN_PROOF`,
+  BattleScene 의 `BURNAWAY_KIN`)에도 들어 있다. 새 희귀 몬스터를 넣으면 이 두 목록 같은 종별 목록과 `drops.ts`,
+  HD 굽기(`hdMonsters.ts`)를 같이 본다.
+- 서 있는 동안에는 몬스터 구역(한 타일 여유)에 들어가지 않는다. 실제 사례: 화산 러너가 다리를 건너 FLAME DRAKE 의
+  분화구 안에서 어슬렁거렸다. 달아날 때는 어디든 간다(분화구 포함).
 
 ## 작업 완료 후 중간 산출물 정리
 

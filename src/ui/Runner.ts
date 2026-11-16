@@ -4,7 +4,8 @@ import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import { hop, isWalkableCell } from "../sceneCommon";
 
 // A runner: now and then a field's jackpot monster (the cave's CURSED GOBLIN,
-// the forest's SILVER WASP, the snow field's AURORA MOTH) stands out in the
+// the forest's SILVER WASP, the snow field's AURORA MOTH, the volcano's GILDED
+// IMP, which is met no other way) stands out in the
 // open, away from the monster zones, where the hero can see it. It idles
 // until the hero comes within NOTICE, then runs — "!" over its head — and
 // the hero has FLEE_MS to run it down before it is gone. Touching it is the
@@ -25,12 +26,14 @@ import { hop, isWalkableCell } from "../sceneCommon";
 // cells off (headless, the three fields in turn): at 200-270 it caught every
 // one within 1.2-4.4s of the "!", at 310 four of nine, at 290 six of eleven
 // in 1.1-4.9s, the rest gone at the 10s. A player who heads it off does
-// better than the bot.
+// better than the bot. The volcano's lava leaves fewer ways to run: the bot
+// caught five of five there.
 //
 // How often. RUNNER_CHANCE of a field's builds: on arrival 12%, back from a
 // fight 2.5% — at ~130 fights an hour about three an hour, a field's jackpot
-// each (108G in the cave, 168G in the forest, 456G in the snow field): some
-// 320G, 500G and 1370G an hour more if every one is caught, less the chases
+// each (108G in the cave, 168G in the forest, 456G in the snow field, 792G
+// in the volcano): some 320G, 500G, 1370G and 2380G an hour more if every
+// one is caught (the volcano hunts 8.5-9.0k an hour, cooking.ts), less the chases
 // lost and the ~10s each takes. Not run through the balance sim. The
 // jackpots' own 3.5% among their kind's roamers stays as it was.
 export const RUNNER_CHANCE = { arrival: 0.12, back: 0.025 };
@@ -76,7 +79,10 @@ export class FieldRunner {
   private scene: Phaser.Scene;
   private hero: Point;
   private sprite: Phaser.Physics.Arcade.Sprite;
+  // where it may run, and where it idles: clear of the monster zones, so it
+  // never strolls into a pack or a boss's lair before anyone has seen it
   private open: (tx: number, ty: number) => boolean;
+  private calm: (tx: number, ty: number) => boolean;
   private paused: () => boolean;
   private target: Point;
   private wait = 800;
@@ -116,7 +122,8 @@ export class FieldRunner {
       }
     }
     if (spots.length === 0) return null;
-    return new FieldRunner(scene, hero, texture, centre(spots[Math.floor(Math.random() * spots.length)]), open, opts);
+    const calm = (tx: number, ty: number): boolean => open(tx, ty) && !inZone(centre([tx, ty]));
+    return new FieldRunner(scene, hero, texture, centre(spots[Math.floor(Math.random() * spots.length)]), open, calm, opts);
   }
 
   private constructor(
@@ -125,11 +132,13 @@ export class FieldRunner {
     texture: string,
     at: Point,
     open: (tx: number, ty: number) => boolean,
+    calm: (tx: number, ty: number) => boolean,
     opts: RunnerOpts,
   ) {
     this.scene = scene;
     this.hero = hero;
     this.open = open;
+    this.calm = calm;
     this.paused = opts.paused;
     this.target = at;
     // a roamer in every way but where it goes: its depth, hit box and hop
@@ -190,8 +199,12 @@ export class FieldRunner {
   // every way is nearer: cornered), any neighbour when idling
   private next(): Point {
     const [tx, ty] = cellOf(this.sprite);
-    const ways = STEPS.map(([dx, dy]): Cell => [tx + dx, ty + dy]).filter(([x, y]) => this.open(x, y));
-    if (!this.alarmed) return centre(ways[Math.floor(Math.random() * ways.length)] ?? [tx, ty]);
+    const around = STEPS.map(([dx, dy]): Cell => [tx + dx, ty + dy]);
+    if (!this.alarmed) {
+      const strolls = around.filter(([x, y]) => this.calm(x, y));
+      return centre(strolls[Math.floor(Math.random() * strolls.length)] ?? [tx, ty]);
+    }
+    const ways = around.filter(([x, y]) => this.open(x, y));
     const from = (c: Cell): number => Math.hypot(centre(c).x - this.hero.x, centre(c).y - this.hero.y);
     let best: Cell = [tx, ty];
     // a little noise breaks ties, so it doesn't always turn the same way

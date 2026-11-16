@@ -577,6 +577,24 @@ export const FIRE_IMP_PALETTE = {
   n: 0x78716c,
   N: 0xd6d3d1,
 };
+// GILDED IMP (the volcano's jackpot, met only as a runner, ui/Runner.ts): the
+// fire imp cast in gold, amber in its shade, pale gold wings, its eyes and
+// the flame at its tail's tip aquamarine. The outline and the horns are the fire imp's own, which hold
+// on the ash and the scorch.
+export const GILDED_IMP_PALETTE = {
+  K: 0x1c0a0a,
+  R: 0x92400e,
+  r: 0xd97706,
+  l: 0xf59e0b,
+  h: 0xfcd34d,
+  O: 0xb45309,
+  o: 0xfbbf24,
+  a: 0xfde68a,
+  y: 0x67e8f9,
+  Y: 0xecfeff,
+  n: 0x78716c,
+  N: 0xd6d3d1,
+};
 const FIRE_IMP_32 = [
   "................................",
   "................................",
@@ -1056,6 +1074,7 @@ export function bakeMonsters(this: Phaser.Scene): void {
   makeTexture(this, "iceGolem", ICE_GOLEM_48, ICE_GOLEM_PALETTE, ART_PX);
   makeTexture(this, "magmaSlime", SLIME_32, MAGMA_SLIME_PALETTE, ART_PX);
   makeTexture(this, "fireImp", FIRE_IMP_32, FIRE_IMP_PALETTE, ART_PX);
+  makeTexture(this, "gildedImp", FIRE_IMP_32, GILDED_IMP_PALETTE, ART_PX);
   makeTexture(this, "salamander", SALAMANDER_32, SALAMANDER_PALETTE, ART_PX);
   makeTexture(this, "flameDrake", FLAME_DRAKE_48, FLAME_DRAKE_PALETTE, ART_PX);
 }

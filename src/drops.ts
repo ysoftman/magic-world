@@ -31,9 +31,10 @@ export interface Drop {
 // always drops a handful, so beating it is a real step toward the gear; the
 // DRAKE SCALE comes from the FLAME DRAKE alone, which is what holds the best
 // weapon back until the last fight. Rare jackpots (GOLDEN SLIME, CURSED
-// GOBLIN, NIGHT WISP) already pay out in gold and drop nothing; the forest's
-// and the snow field's (SILVER WASP, AURORA MOTH) leave two of their kind's
-// material as well, a sure step toward the BLACKSMITH's REFINE. The delivery
+// GOBLIN, NIGHT WISP) already pay out in gold and drop nothing; the forest's,
+// the snow field's and the volcano's (SILVER WASP, AURORA MOTH, GILDED IMP)
+// leave two of their kind's material as well, a sure step toward the
+// BLACKSMITH's REFINE. The delivery
 // prices (delivery.ts PIECE_GOLD) are worked out from these odds.
 const DROP_TABLE: Record<string, { material: MaterialKey; chance: number; count: number }> = {
   slime: { material: "slimeGel", chance: 0.3, count: 1 },
@@ -54,6 +55,7 @@ const DROP_TABLE: Record<string, { material: MaterialKey; chance: number; count:
   iceGolem: { material: "frostScale", chance: 1, count: 3 },
   magmaSlime: { material: "magmaCore", chance: 0.2, count: 1 },
   fireImp: { material: "magmaCore", chance: 0.25, count: 1 },
+  gildedImp: { material: "magmaCore", chance: 1, count: 2 },
   salamander: { material: "magmaCore", chance: 0.3, count: 1 },
   flameDrake: { material: "drakeScale", chance: 1, count: 1 },
 };

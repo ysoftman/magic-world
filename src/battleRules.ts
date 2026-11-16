@@ -207,7 +207,14 @@ export const BOSS_LOOT = FIELD_LOOT[3];
 // these lists; they predate the spells' effects.
 export type SpellEffect = "burn" | "chill" | "shock";
 export const SPELL_EFFECT_WEAK_MULT = 2;
-export const BURN_PROOF = [ENEMIES.wisp, ENEMIES.magmaSlime, ENEMIES.fireImp, ENEMIES.salamander, ENEMIES.flameDrake].map((e) => e.name);
+export const BURN_PROOF = [
+  ENEMIES.wisp,
+  ENEMIES.magmaSlime,
+  ENEMIES.fireImp,
+  ENEMIES.gildedImp,
+  ENEMIES.salamander,
+  ENEMIES.flameDrake,
+].map((e) => e.name);
 export const CHILL_PROOF = [ENEMIES.frostMoth, ENEMIES.yeti, ENEMIES.iceGolem].map((e) => e.name);
 
 // Spells are learned automatically at their level gate, so nothing about
