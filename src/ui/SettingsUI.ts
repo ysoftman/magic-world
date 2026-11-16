@@ -8,7 +8,11 @@ import { bindKeyHint, keyHint } from "./Gamepad";
 import { isTouchDevice } from "./TouchControls";
 
 // Twelve retroStyle(6) rows (24px, Press Start 2P measures 1em) from
-// PANEL_TOP+98 at a 30px pitch. The panel grew upward for the ninth (BATTLE
+// PANEL_TOP+98 at a 30px pitch, in two columns: the cursor and the setting's
+// name from LABEL_X, its value from VALUE_X in the hint's blue. (Centred as
+// "NAME: VALUE" the colon fell at a different x on every row and the twelve
+// read as one block; and the panel was 95% opaque, the map's buildings
+// showing between the rows.) The panel grew upward for the ninth (BATTLE
 // SPEED) and is pinned by its bottom edge at y=588 rather than centred, so the
 // rows and the touch clearance below them didn't have to shrink: it spans
 // y=92..588 (just under the 88px HUD), the title runs 132..164 — low enough
@@ -20,20 +24,28 @@ import { isTouchDevice } from "./TouchControls";
 // d-pad), the tenth (GUIDE ARROW) came out of the pitch (40 to 36) and the
 // eleventh (FULLSCREEN) did again (33) and the twelfth (OVERRUN) once more:
 // 30 keeps the rows where they were (178..532, 12px above the hint and 8 under
-// the CLOSE chip) and leaves 6 between rows, each still a 30px tap. Widest row
-// "> BGM VOLUME: ##########  100%" is 30 x 24 = 720px, x=280..1000, and on
-// touch "< BGM VOLUME: ##########  100% >" is 32 x 24 = 768px, x=256..1024:
-// inside the panel's 160..1120, clear of the touch menu (x>=1222), and far
-// above the d-pad (x<=258 from y=508).
+// the CLOSE chip) and leaves 6 between rows, each still a 30px tap.
+// A row is "> " + a name of 12 glyphs at most + 2 apart + the value: the
+// widest value "##########  100%" is 16, so 32 x 24 = 768px, x=256..1024.
+// On touch a stepped row under the cursor wears "< " for "> " and " >" after
+// its value, to x=1072. A save row has no value and runs on into the value
+// column ("> IMPORT SAVE (SLOT 3)", 22 glyphs). All inside the panel's
+// 160..1120, clear of the touch menu (x>=1222), short of Z (x>=1076, and
+// that only from y=532) and far above the d-pad (x<=258 from y=508).
 const PANEL_W = 960;
 const PANEL_H = 496;
 const PANEL_TOP = 588 - PANEL_H;
 const TITLE_Y = PANEL_TOP + 56;
 const ROW_Y = PANEL_TOP + 98;
 const ROW_GAP = 30;
-// the rows' tap zone: as wide as the widest touch row, a full pitch per row
+const ROW_GLYPH = 24;
+const LABEL_X = GAME_WIDTH / 2 - 16 * ROW_GLYPH;
+const VALUE_X = LABEL_X + 16 * ROW_GLYPH;
+const VALUE_COLOR = "#8ecbff";
+// the rows' tap zone: as wide as the widest touch row (x 208..1072), a full
+// pitch per row
 const ROWS_TOP = ROW_Y - ROW_GAP / 2;
-const ROWS_HIT_W = 768;
+const ROWS_HIT_W = 864;
 
 const SPEED_LABELS: Record<number, string> = { 0.5: "SLOW", 1: "NORMAL", 2: "FAST" };
 const TIME_SPEED_LABELS: Record<number, string> = { 1: "NORMAL", 5: "FAST", 20: "VERY FAST" };
@@ -96,6 +108,7 @@ export class SettingsUI {
   private panel: Phaser.GameObjects.Rectangle;
   private title: PixelText;
   private rows: PixelText[] = [];
+  private values: PixelText[] = [];
   private rowsHit: Phaser.GameObjects.Zone;
   private hint: PixelText;
   private closeChip: Phaser.GameObjects.Container;
@@ -110,7 +123,7 @@ export class SettingsUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
-    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
       .setVisible(false);
@@ -121,13 +134,15 @@ export class SettingsUI {
       .setDepth(152)
       .setVisible(false);
     LABELS.forEach((_, i) => {
-      const row = scene.add
-        .pixelText(GAME_WIDTH / 2, ROW_Y + i * ROW_GAP, "", retroStyle(6, "#f5f5f5"))
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(152)
-        .setVisible(false);
-      this.rows.push(row);
+      const cell = (x: number, color: string): PixelText =>
+        scene.add
+          .pixelText(x, ROW_Y + i * ROW_GAP, "", retroStyle(6, color))
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(152)
+          .setVisible(false);
+      this.rows.push(cell(LABEL_X, "#f5f5f5"));
+      this.values.push(cell(VALUE_X, VALUE_COLOR));
     });
     // The keyboard line (55 x 16 = 880px, x 200..1080, 40px inside the
     // panel's sides) runs under the touch d-pad's up arrow; the touch line is
@@ -188,8 +203,8 @@ export class SettingsUI {
 
     // Every row takes a tap or click, the title's touch player's only way to
     // change one (no d-pad there). One zone over all the rows, a full pitch
-    // each so the 9px gaps count too (y 173..537, under the chips' 170 and
-    // above the hint's 544; x 256..1024, clear of the d-pad's up arrow at
+    // each so the 6px gaps count too (y 175..535, under the chips' 170 and
+    // above the hint's 544; x 208..1072, clear of the d-pad's up arrow at
     // x<=194 and of Z at x>=1076). It reads a tap by row, and a stepped row
     // by half like the pagers (BestiaryUI): see tapRow. On pointerup: asking
     // for fullscreen needs the browser's user activation, a touch only grants
@@ -267,7 +282,7 @@ export class SettingsUI {
     this.closeChip.setVisible(true);
     this.quitChip?.setVisible(true);
     this.quitText?.setText("QUIT");
-    for (const t of this.rows) t.setVisible(true);
+    for (const t of [...this.rows, ...this.values]) t.setVisible(true);
     this.rowsHit.setVisible(true);
     this.refresh();
   }
@@ -280,7 +295,7 @@ export class SettingsUI {
     this.hint.setVisible(false);
     this.closeChip.setVisible(false);
     this.quitChip?.setVisible(false);
-    for (const t of this.rows) t.setVisible(false);
+    for (const t of [...this.rows, ...this.values]) t.setVisible(false);
     // hidden, it is no hit target: the title reads a tap that hits nothing as ENTER
     this.rowsHit.setVisible(false);
   }
@@ -303,7 +318,7 @@ export class SettingsUI {
     this.hint.destroy();
     this.closeChip.destroy();
     this.quitChip?.destroy();
-    for (const t of this.rows) t.destroy();
+    for (const t of [...this.rows, ...this.values]) t.destroy();
     this.rowsHit.destroy();
   }
 
@@ -471,18 +486,18 @@ export class SettingsUI {
     ];
     LABELS.forEach((label, i) => {
       const selected = i === this.row;
-      const value = values[i] ? `: ${values[i]}` : "";
       // the save actions name the slot they act on: "> IMPORT SAVE (SLOT 3)"
-      // is 22 x 24 = 528px, inside the widest row's 720
+      // is 22 x 24 = 528px, inside the widest row's 768
       const slot = i >= LABELS.length - 2 ? ` (SLOT ${GameState.saveSlot})` : "";
-      const text = `${label}${slot}${value}`;
       // on touch a stepped row (volumes, speeds) under the cursor wears the
       // pagers' "< >" in place of "> ": the halves a tap steps it by
-      const stepped = i < 2 || i in SPEEDS;
-      this.rows[i].setText(!selected ? text : touch && stepped ? `< ${text} >` : `> ${text}`);
+      const stepped = touch && selected && (i < 2 || i in SPEEDS);
+      this.rows[i].setText(`${!selected ? " " : stepped ? "<" : ">"} ${label}${slot}`);
+      this.values[i].setText(stepped ? `${values[i]} >` : values[i]);
       // N/A stays greyed even under the cursor; the "> " still marks it
       const dimmed = i === FULLSCREEN_ROW && !fullscreenOk;
       this.rows[i].setColor(dimmed ? DIM_TEXT : selected ? "#ffd166" : "#f5f5f5");
+      this.values[i].setColor(dimmed ? DIM_TEXT : selected ? "#ffd166" : VALUE_COLOR);
     });
   }
 }
