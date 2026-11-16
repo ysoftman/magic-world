@@ -1029,6 +1029,23 @@ export interface FightSpot {
 }
 const fightSpots = new WeakMap<Phaser.Scene, FightSpot>();
 
+// when each scene last came back from a fight (takeFightSpot), by the game's clock
+const cameBack = new WeakMap<Phaser.Scene, number>();
+const BACK_TALK_GRACE_MS = 1200;
+
+/**
+ * True for a moment after `scene` came back from a fight. The Z that paged
+ * the fight's last lines is often pressed once more: beside a stone, the
+ * shrine or the PEDDLER it opened their talk at once, and a keeper's reward
+ * toast waited behind it. Their talks (ui/Seal.ts, Shrine.ts, Peddler.ts,
+ * Nest.ts) don't start while this holds; the same length as the fields'
+ * grace before a fight.
+ */
+export function justBackFromFight(scene: Phaser.Scene): boolean {
+  const at = cameBack.get(scene);
+  return at !== undefined && scene.game.loop.time - at < BACK_TALK_GRACE_MS;
+}
+
 /** Notes where `scene`'s hero is as a fight starts (as its fade ends). */
 export function noteFightSpot(scene: Phaser.Scene, spot: FightSpot): void {
   fightSpots.set(scene, spot);
@@ -1044,6 +1061,8 @@ export function noteFightSpot(scene: Phaser.Scene, spot: FightSpot): void {
  */
 export function takeFightSpot(scene: Phaser.Scene, data?: { fromBattle?: boolean }): FightSpot | undefined {
   const spot = data?.fromBattle ? fightSpots.get(scene) : undefined;
+  if (spot) cameBack.set(scene, scene.game.loop.time);
+  else cameBack.delete(scene);
   fightSpots.delete(scene);
   scene.sys.settings.data = {};
   return spot;

@@ -5,6 +5,7 @@ import { econDay, GameState } from "../gameState";
 import { NEST_FIGHTS, NEST_MIN_BATTLES, NEST_PIECES, NESTS, type NestFight, type NestRegion, nestSpent, payNest } from "../nest";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { justBackFromFight } from "../sceneCommon";
 import { cellCentre } from "../seals";
 import type { DialogueBox } from "./DialogueBox";
 
@@ -188,6 +189,7 @@ export class Nest {
 
   /** Starts the nest's talk if the hero stands by it; false when not. */
   tryTalk(): boolean {
+    if (justBackFromFight(this.scene)) return false;
     if (Math.hypot(this.at.x - this.hero.x, this.at.y - this.hero.y) > TALK_RADIUS) return false;
     const def = NESTS[this.region];
     const day = econDay();

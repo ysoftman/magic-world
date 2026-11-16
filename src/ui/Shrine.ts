@@ -3,6 +3,7 @@ import { Sfx } from "../audio";
 import { econDay, GameState } from "../gameState";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { justBackFromFight } from "../sceneCommon";
 import { BLESSING_BATTLES, BLESSINGS, type BlessingKey, pray, SHRINES, type ShrineRegion, shrineSpent } from "../shrine";
 import type { DialogueBox } from "./DialogueBox";
 
@@ -111,6 +112,7 @@ export class Shrine {
 
   /** Starts the shrine's talk if the hero stands by it; false when not. */
   tryPray(): boolean {
+    if (justBackFromFight(this.scene)) return false;
     if (Math.hypot(this.at.x - this.hero.x, this.at.y - this.hero.y) > PRAY_RADIUS) return false;
     const { cost, offers } = SHRINES[this.region];
     if (shrineSpent(GameState, this.region, econDay())) {

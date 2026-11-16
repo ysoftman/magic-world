@@ -3,6 +3,7 @@ import { Sfx } from "../audio";
 import { econDay, GameState } from "../gameState";
 import { buyFromPeddler, type PeddlerOffer, type PeddlerRegion, peddlerRegion, peddlerSold, peddlerStock } from "../peddler";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
+import { justBackFromFight } from "../sceneCommon";
 import type { DialogueBox } from "./DialogueBox";
 
 // how close (px, centre to centre) the hero has to stand for Z to reach him:
@@ -83,6 +84,7 @@ export class Peddler {
 
   /** Starts his talk if the hero stands by him; false when not. */
   tryTalk(): boolean {
+    if (justBackFromFight(this.scene)) return false;
     if (Math.hypot(this.at.x - this.hero.x, this.at.y - this.hero.y) > TALK_RADIUS) return false;
     const [pieces, deal] = this.stock;
     const sold = [peddlerSold(GameState, this.day, 0), peddlerSold(GameState, this.day, 1)];

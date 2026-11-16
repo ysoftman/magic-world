@@ -3,6 +3,7 @@ import { Sfx } from "../audio";
 import { GameState } from "../gameState";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { justBackFromFight } from "../sceneCommon";
 import { ALL_SEALS_MP, cellCentre, fellKeeper, SEAL_MP, SEALS, type SealRegion, stepPlate } from "../seals";
 import type { DialogueBox } from "./DialogueBox";
 
@@ -210,6 +211,7 @@ export class Seal {
 
   /** Starts the stone's talk if the hero stands by it; false when not. */
   tryTalk(): boolean {
+    if (justBackFromFight(this.scene)) return false;
     if (Math.hypot(this.at.x - this.hero.x, this.at.y - this.hero.y) > TALK_RADIUS) return false;
     const def = SEALS[this.region];
     const stage = this.stage();

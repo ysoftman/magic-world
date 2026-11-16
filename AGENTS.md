@@ -507,6 +507,10 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 (`takeBlessingCharge`, 연습 제외), 한 번에 하나, 요리와 겹친다(ATK·DEF 는 곱하고 골드·EXP 는 더한다). 제단마다 `econDay` 하루 한 번
 (`GameState.shrineDays`)이다.
 
+- 전투에서 돌아온 뒤 1.2초(`sceneCommon` 의 `justBackFromFight`, `takeFightSpot` 이 시각을 적음) 동안은 제단·봉인 돌·상인·
+  둥지의 대화(`tryPray`·`tryTalk`)가 열리지 않는다. 실제 사례: 결산을 넘기던 Z 가 한 번 더 눌려 옆의 돌 대화가 바로 열리고
+  강적 보상 토스트가 그 뒤로 밀렸다. Z 로 여는 새 필드 지점도 여는 함수 맨 앞에서 이것을 본다(둥지의 연전 질문은 Z 가
+  아니라 그대로 뜬다).
 - 새 필드 씬에 넣을 때: 대화창을 만든 뒤 `new Shrine(this, region, pos, this.player, this.dialogue, { ownKey: true,
   blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(), prayed: () => this.holdFights() })`.
   씬이 Z 를 직접 받으면(설원) `ownKey` 없이 만들고 그 Z 처리에서 `tryDig()` 다음에 `tryPray()` 를 부른다. 미니맵 표식,
