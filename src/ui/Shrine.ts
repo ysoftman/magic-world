@@ -1,10 +1,11 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { econDay, GameState } from "../gameState";
+import { omenHere } from "../omen";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { justBackFromFight } from "../sceneCommon";
-import { BLESSING_BATTLES, BLESSINGS, type BlessingKey, pray, SHRINES, type ShrineRegion, shrineSpent } from "../shrine";
+import { BLESSING_BATTLES, BLESSINGS, type BlessingKey, pray, SHRINES, type ShrineRegion, shrineCost, shrineSpent } from "../shrine";
 import type { DialogueBox } from "./DialogueBox";
 
 // how close (px, centre to centre) the hero has to stand for Z to reach the
@@ -114,7 +115,9 @@ export class Shrine {
   tryPray(): boolean {
     if (justBackFromFight(this.scene)) return false;
     if (Math.hypot(this.at.x - this.hero.x, this.at.y - this.hero.y) > PRAY_RADIUS) return false;
-    const { cost, offers } = SHRINES[this.region];
+    const { offers } = SHRINES[this.region];
+    const holy = omenHere() === "holy";
+    const cost = shrineCost(this.region, holy);
     if (shrineSpent(GameState, this.region, econDay())) {
       this.dialogue.start(["The rune is dark.", "The shrine has had today's offering. Come back tomorrow."], "SHRINE");
       return true;
@@ -127,9 +130,13 @@ export class Shrine {
     // ATK +20%, DEF -20%." 41, the second blessing), two of the keyboard's 54;
     // the question takes the choices' page alone there (DialogueBox). ESC
     // (pick 2, past both) walks away; N, the second, still meets the YES/NO.
+    // On the field's HOLY DAY (omen.ts) a row of its own goes first, "HOLY
+    // DAY: it asks half its gold today." 37 glyphs, and the rest starts on
+    // the next: four rows there, the page's whole.
     this.dialogue.ask(
       [
-        `Once a day, for ${cost} G, it will bless your next ${BLESSING_BATTLES} battles.`,
+        ...(holy ? ["HOLY DAY: it asks half its gold today."] : []),
+        `${holy ? "\n" : ""}Once a day, for ${cost} G, it will bless your next ${BLESSING_BATTLES} battles.`,
         `${a.name}: ${a.info}.`,
         `${b.name}: ${b.info}.`,
         "Which blessing?",
@@ -146,7 +153,8 @@ export class Shrine {
 
   // the blessing picked: too little gold, or YES/NO to the offering
   private offer(key: BlessingKey): void {
-    const { cost } = SHRINES[this.region];
+    const holy = omenHere() === "holy";
+    const cost = shrineCost(this.region, holy);
     const def = BLESSINGS[key];
     if (GameState.gold < cost) {
       Sfx.error();
@@ -160,7 +168,7 @@ export class Shrine {
     if (old) lines.push(`It takes the place of ${BLESSINGS[old.key].name} (${old.left} left).`);
     lines.push(`Offer ${cost} G?`);
     this.dialogue.ask(lines, "SHRINE", ["YES", "NO"], (i) => {
-      if (i !== 0 || !pray(GameState, this.region, key, econDay())) return;
+      if (i !== 0 || !pray(GameState, this.region, key, econDay(), holy)) return;
       // the BOUNTY BOARD's SHRINE PRAYER counts these (bounties.ts)
       GameState.prayers += 1;
       Sfx.ward();

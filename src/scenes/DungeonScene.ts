@@ -24,6 +24,7 @@ import {
 import { ENEMIES } from "../monsters";
 import { NESTS } from "../nest";
 import { objectiveLine } from "../objective";
+import { omenFightRate } from "../omen";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
@@ -545,7 +546,8 @@ export class DungeonScene extends Phaser.Scene {
     // is the road to the KING SLIME, not a hunting ground, and three times the
     // fights would only drag the walk. A fight pays about the same (7.3 G to
     // 8.9), so hunting here makes ~0.45x the town's gold an hour, as meant.
-    const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);
+    // (half on the field's CALM DAY, omen.ts)
+    const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * omenFightRate() * (delta / 1000);
     if (Math.random() < rate) {
       this.startBattle();
     }

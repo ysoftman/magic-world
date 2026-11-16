@@ -1564,7 +1564,10 @@ export class FieldToasts {
     const tipped = this.tip !== undefined && showUnlockTip(this.scene, this.tip, this.toastY);
     // today's omen (omen.ts), once a day's stay in the town and after any tip
     // of this claim: "TODAY: GOLD RUSH OVER THE VOLCANO!" 34 glyphs
-    if (this.tip === "town" && !tipped && omenToldDay !== econDay()) {
+    // ...and only onto an empty toast row: the queue behind a toast holds
+    // three, and a new hero's first day has tips and trophies enough to push
+    // one of them out
+    if (this.tip === "town" && !tipped && omenToldDay !== econDay() && !toastOver(this.scene, 0)) {
       omenToldDay = econDay();
       const omen = omenOn(omenToldDay, GameState.quest);
       showToast(this.scene, `TODAY: ${OMENS[omen.kind].name} OVER THE ${OMEN_REGION_NAMES[omen.region]}!`, this.toastY);

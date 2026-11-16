@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { econDay, GameState } from "../gameState";
 import { type MonsterZone, TILE } from "../levels";
+import { omenRunner } from "../omen";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import { hop, isWalkableCell } from "../sceneCommon";
 
@@ -51,6 +52,10 @@ export const RUNNER_ARRIVAL_CHANCE = 0.12;
 // with the catch, so it is one runner more on the day in fourteen that posts
 // the bounty: under 1% on the table above.
 export const RUNNER_WANTED_CHANCE = 0.5;
+// A field's CALM DAY (omen.ts OMEN_CALM_RUNNER) brings one on 30% of the walks
+// in, that day and that field only: one day in four in one field of those
+// open, about +0.2 runners a walk in there, against a day's hunt halved by
+// the same omen. Under the table's 15% either way.
 const runnerWanted = (): boolean => {
   const b = GameState.bounty;
   return !!b && b.kind === "runner" && !b.claimed && b.day === econDay() && GameState.runnersCaught - (b.snap ?? 0) < b.need;
@@ -127,7 +132,9 @@ export class FieldRunner {
     texture: string,
     opts: RunnerOpts,
   ): FieldRunner | null {
-    const arrival = runnerWanted() ? RUNNER_WANTED_CHANCE : RUNNER_ARRIVAL_CHANCE;
+    // the bounty's odds or a CALM DAY's (omen.ts), whichever is more: they
+    // are two reasons one runner should be there, not two runners
+    const arrival = Math.max(runnerWanted() ? RUNNER_WANTED_CHANCE : RUNNER_ARRIVAL_CHANCE, omenRunner());
     if (Math.random() >= (opts.back ? RUNNER_FIELDS[opts.region].back : arrival)) return null;
     const blocked = new Set([...opts.walls, ...opts.exits].map((p) => cellOf(p).join(",")));
     const open = (tx: number, ty: number): boolean => isWalkableCell(level, tx, ty) && !blocked.has(`${tx},${ty}`);

@@ -20,6 +20,7 @@ import {
 } from "../levels";
 import { ENEMIES } from "../monsters";
 import { NESTS } from "../nest";
+import { omenFightRate } from "../omen";
 import { addGroundShadow, FIELD_TOAST_Y, retroStyle } from "../pixelart";
 import {
   addBorderDressing,
@@ -446,7 +447,8 @@ export class VolcanoScene extends Phaser.Scene {
     const nearExit =
       Math.abs(this.player.x - VOLCANO_ENTRY.x) < EXIT_SAFE_RADIUS_X && Math.abs(this.player.y - VOLCANO_ENTRY.y) < EXIT_SAFE_RADIUS_Y;
     if (nearExit) return;
-    const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * (delta / 1000);
+    // (half on the field's CALM DAY, omen.ts)
+    const rate = 0.06 * (isNight() ? NIGHT_ENCOUNTER_MULT : 1) * omenFightRate() * (delta / 1000);
     if (Math.random() < rate) {
       this.startBattle();
     }

@@ -23,10 +23,19 @@
 //   fights that run longer and hit harder; the BOUNTY BOARD's FELL AN ELITE
 //   is quickest there. Never the rare ones, the bosses, nor before the
 //   ELITE_MIN_BATTLES wins (rollElite's own rules).
+// - CALM DAY: the field's random fights come OMEN_CALM_FIGHTS as often (the
+//   scenes' checkEncounter; the roamers in their zones are as ever), and a
+//   runner stands there on OMEN_CALM_RUNNER of the walks in (ui/Runner.ts).
+//   A day for what is done on foot: the star shards, the seal's plates, a
+//   treasure map's X, the runner itself. Half the hunt's gold for who only
+//   hunts, which is the point of saying where it is.
+// - HOLY DAY: the field's shrine asks half its gold (shrine.ts shrineCost),
+//   still once a day. 15 to 100 G saved: a reason to pray there today, and
+//   the BOUNTY BOARD's SHRINE PRAYER at half its cost.
 import { ELITE_CHANCE } from "./elite";
 
 export type OmenRegion = "dungeon" | "forest" | "snow" | "volcano";
-export type OmenKind = "gold" | "wild";
+export type OmenKind = "gold" | "wild" | "calm" | "holy";
 
 interface OmenDef {
   // the field's line and the toasts; 9 glyphs at most
@@ -39,10 +48,14 @@ interface OmenDef {
 
 export const OMEN_GOLD = 0.3;
 export const OMEN_ELITE_MULT = 3;
+export const OMEN_CALM_FIGHTS = 0.5;
+export const OMEN_CALM_RUNNER = 0.3;
 
 export const OMENS: Record<OmenKind, OmenDef> = {
   gold: { name: "GOLD RUSH", tag: "GOLD", says: "FIGHTS HERE PAY 30% MORE GOLD TODAY" },
   wild: { name: "WILD HUNT", tag: "WILD", says: "THREE TIMES THE ELITES HERE TODAY" },
+  calm: { name: "CALM DAY", tag: "CALM", says: "FEW FIGHTS HERE, SEEK SHARDS AND RUNES" },
+  holy: { name: "HOLY DAY", tag: "HOLY", says: "THE SHRINE HERE ASKS HALF ITS GOLD TODAY" },
 };
 const KINDS = Object.keys(OMENS) as OmenKind[];
 
@@ -106,3 +119,9 @@ export const omenGold = (): number => (here?.kind === "gold" ? OMEN_GOLD : 0);
  * together are OMEN_ELITE_MULT times it. 0 without the omen.
  */
 export const omenEliteExtra = (): number => (here?.kind === "wild" ? (ELITE_CHANCE * (OMEN_ELITE_MULT - 1)) / (1 - ELITE_CHANCE) : 0);
+
+/** CALM DAY: what the field's random fights' rate is multiplied by, 1 without it. */
+export const omenFightRate = (): number => (here?.kind === "calm" ? OMEN_CALM_FIGHTS : 1);
+
+/** CALM DAY: the chance a runner stands in the field as the hero walks in, 0 without it. */
+export const omenRunner = (): number => (here?.kind === "calm" ? OMEN_CALM_RUNNER : 0);

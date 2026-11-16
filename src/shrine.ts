@@ -69,6 +69,10 @@ export const SHRINES: Record<ShrineRegion, ShrineDef> = {
 
 const SHRINE_REGIONS = Object.keys(SHRINES) as ShrineRegion[];
 
+/** What `region`'s shrine asks: half, rounded up, on the field's HOLY DAY (omen.ts). */
+export const shrineCost = (region: ShrineRegion, holy: boolean): number =>
+  holy ? Math.ceil(SHRINES[region].cost / 2) : SHRINES[region].cost;
+
 export interface Blessing {
   key: BlessingKey;
   // battles still to come, this one included while it is being fought
@@ -113,8 +117,9 @@ export const shrineSpent = (state: { shrineDays: ShrineDays }, region: ShrineReg
 // BLESSING_BATTLES battles in place of any other, the shrine spent for the
 // day. False (and nothing taken) when it is spent already or the gold is
 // short.
-export function pray(state: ShrineState, region: ShrineRegion, key: BlessingKey, day: number): boolean {
-  const { cost, offers } = SHRINES[region];
+export function pray(state: ShrineState, region: ShrineRegion, key: BlessingKey, day: number, holy = false): boolean {
+  const { offers } = SHRINES[region];
+  const cost = shrineCost(region, holy);
   if (!offers.includes(key) || shrineSpent(state, region, day) || state.gold < cost) return false;
   state.gold -= cost;
   state.blessing = { key, left: BLESSING_BATTLES };

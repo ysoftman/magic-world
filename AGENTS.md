@@ -544,13 +544,23 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 (`omenOn(day, quest)`) 저장하는 것이 없다. 영웅이 필드에 들어설 때 그날의 이변을 붙잡아(`enterField`, 상인처럼 들어선 날로
 고정: 필드 안에서 자정이 지나도 나갔다 올 때까지 그대로) 마을에 돌아오면 푼다(`leaveFields`).
 
-- 지금 둘: GOLD RUSH(그 필드 전투 골드 +30%, `OMEN_GOLD`)와 WILD HUNT(그 필드 일반 전투의 정예 확률 3배, 8→24%,
-  `OMEN_ELITE_MULT`). 이변은 날마다 있고 두 종류·열린 지역에 고르게 나온다(4000일 표본에서 조합마다 477~526일).
+- 지금 넷: GOLD RUSH(그 필드 전투 골드 +30%, `OMEN_GOLD`), WILD HUNT(그 필드 일반 전투의 정예 확률 3배, 8→24%,
+  `OMEN_ELITE_MULT`), CALM DAY(그 필드의 무작위 조우 절반 `OMEN_CALM_FIGHTS`, 입장 때 러너 30% `OMEN_CALM_RUNNER`), HOLY DAY(그
+  필드 제단 요금 절반, 올림). 이변은 날마다 있고 네 종류·열린 지역에 고르게 나온다(4000일 표본에서 16조합이 229~273일씩).
+- CALM DAY 는 걸어서 하는 일(별 조각·봉인 발판·보물 지도·러너)의 날이다. 무작위 조우만 줄고(네 씬 `checkEncounter` 의
+  `omenFightRate()`) 구역의 로머는 그대로다. 러너 도착은 과제의 50%(`RUNNER_WANTED_CHANCE`)와 큰 쪽을 쓴다(`Runner.roll` 의
+  `Math.max`: 러너가 있을 이유가 둘이지 러너가 둘은 아니다). 사냥만 하는 영웅에게는 그 필드 골드가 절반인 날이다.
+- HOLY DAY 는 요금만이고 하루 한 번은 그대로다(`shrine.ts` 의 `shrineCost(region, holy)`·`pray(..., holy)`, `ui/Shrine.ts` 가
+  `omenHere() === "holy"` 를 넘김). 대화 첫 쪽 앞에 제 줄 `HOLY DAY: it asks half its gold today.`(37글자)가 서고 나머지는 다음
+  줄에서 시작해 터치 네 줄(한 쪽 전부), 키보드 세 줄이다. 15~100G 를 아끼는 정도라 벌이 영향은 없고, 바운티 SHRINE PRAYER 를
+  반값에 채운다.
 - 훅은 셋뿐이고 BattleScene·필드 씬·TownScene 에는 없다:
   - 들어서기: `sceneCommon` 의 `fadeAreaTitle(scene, title, region)` 이 `enterField` 를 부르고 토스트(`GOLD RUSH: FIGHTS HERE PAY
     30% MORE GOLD TODAY!` 46글자)를 낸다. 제목과 같은 조건(입장 때만)이라 전투에서 돌아와도 붙잡은 이변이 그대로다.
   - 마을: `FieldToasts` 가 `tip: "town"` 으로 만들어질 때 `leaveFields`, update 에서 그날 한 번(세션 변수 `omenToldDay`)
     `TODAY: GOLD RUSH OVER THE VOLCANO!` 를 낸다(해금 팁이 나온 claim 은 다음으로 미룸).
+  - 마을 토스트는 토스트 줄이 비었을 때만 낸다(대기 줄은 셋까지라 소식이 몰린 날 하나를 밀어낼 수 있다). 실측: 해금 팁 여섯과
+    업적이 한꺼번에 뜬 마을 진입에서 여덟 줄 뒤 10.4초에 떴고 빠진 줄은 없었다.
   - 효과: 골드는 `payout.ts` `settleWin` 의 `mealGold` 합에 `omenGold()`(요리·축복·TRADE 와 더해짐, 재대결·심연 제외, 압도의
     몫에도 같이), 정예는 `sceneCommon` `meetFoe` 맨 앞의 추가 굴림(`omenEliteExtra()`, `rollElite` 의 규칙 그대로: 희귀종·보스·
     5승 전은 안 됨. 걸리면 그 정예로 바로 전투, 정예는 원래 압도되지 않는다).
@@ -561,7 +571,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 - 벌이: GOLD RUSH 는 그 필드 그날 사냥 골드의 +30%. 이틀에 하루 꼴이라 일지를 따라 그 필드만 도는 영웅은 길게 봐 +15%
   쯤이다. WILD HUNT 는 정예가 x2.5 를 줘 사냥의 골드·EXP 가 +12% 에서 +36% 로(대신 전투가 길고 아프다). 수치를 바꾸면 이
   줄과 README 를 고친다.
-- 알리는 곳: 퀘스트 일지 왼쪽 위 셋째 줄 `GOLD: VOLCANO`(태그 4글자 + 지역 7글자 = 13글자 208px, x 84..292, y 50..66. 상인 두
+- 알리는 곳: 퀘스트 일지 왼쪽 위 셋째 줄 `GOLD: VOLCANO`(태그 GOLD·WILD·CALM·HOLY 4글자 + 지역 7글자 = 13글자 208px, x 84..292, y 50..66. 상인 두
   줄을 y 10 으로 올려 perks 줄 66..82 와 안 겹침), 지역 제목 아래 줄 맨 앞의 이름, 위 두 토스트. 새 이변은 이름 9글자·태그
   4글자·토스트 문구(`<이름>: <says>!` 52글자) 한도를 지킨다.
 - 새 이변을 넣으면 `OmenKind`·`OMENS` 와 읽는 곳 한 줄(`omenHere()` 또는 전용 getter)을 넣는다. 종류 수가 바뀌면 날짜별
