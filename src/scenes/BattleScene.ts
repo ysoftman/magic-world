@@ -1802,6 +1802,7 @@ export class BattleScene extends Phaser.Scene {
       // with one (a gauge that filled on a fight's last blow is full at the
       // next fight's start: said at a round's end, most fights never did)
       await this.tip("limit");
+      await this.tip("intent");
       // a frozen hero forfeits this action (null matches no case below); the
       // companion and the enemy still take their turns
       let action = this.frozen ? null : await this.playerTurn();
@@ -1905,13 +1906,16 @@ export class BattleScene extends Phaser.Scene {
   // A first-time line, said once a save (GameState.seenTips, where the
   // fields' unlock tips are kept): what a PARRY is, before the first blow the
   // hero ever faces, and what a full LIMIT gauge is for, before the first
-  // menu that has one. 52 and 46 glyphs of a row's 54 (touch: 42
-  // and 45). Not in the yard, whose gauge is always full.
-  private async tip(id: "parry" | "limit"): Promise<void> {
+  // menu that has one; and what the foe's blinking tag is, before the first
+  // menu under one. 52, 46 and 49 (">SNATCH", the longest) glyphs of a row's
+  // 54 (touch: 42, 45, the same). Not in the yard, whose gauge is always full.
+  private async tip(id: "parry" | "limit" | "intent"): Promise<void> {
     const seen = GameState.seenTips;
     if (!seen || seen.includes(id) || this.practice || !this.running || GameState.player.hp <= 0) return;
     if (id === "limit" && !limitFull(this.limit)) return;
+    if (id === "intent" && !this.intent) return;
     seen.push(id);
+    if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`);
     await this.say(
       id === "parry"
         ? keyHint("TIP: press any key just as a blow lands to PARRY it.", "TIP: tap just as a blow lands to PARRY it.")
