@@ -139,7 +139,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     // on it 9 rounds. With companions cut to x0.8 (BattleScene
     // COMPANION_ATK_MULT) 100 takes 8 rounds alone and 5 with a WOLF, and
     // ATK 9 -> 10 keeps the threat the shorter fight lost: ~62% of max HP
-    // gone solo, as at 120 / 9 (Lv6, SWORD + SHIELD).
+    // gone solo, as at 120 / 9 (Lv6, SWORD + SHIELD). With its SPLASH (below)
+    // and DEFEND's COUNTER since: 85% solo bracing its wind-ups, 70% its
+    // SPLASH too, 102% neither (sim-battle's header).
     hp: 100,
     atk: 10,
     def: 2,
@@ -147,7 +149,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 120,
     boss: true,
     weakness: "bolt",
-    move: { kind: "blast", name: "SPLASH", chance: 0, at: [0.7, 0.35], mult: 1.5 },
+    move: { kind: "blast", name: "SPLASH", chance: 0, at: [0.7, 0.35], mult: 2.5 },
   },
   troll: {
     name: "TROLL KING",
@@ -155,7 +157,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     // 90 -> 150 for the same reason as the KING SLIME, then 110 with it: at
     // Lv8 (SWORD + IRON SHIELD) 7-8 rounds alone instead of 9-11, 4-5 with a
     // WOLF at x0.8 (never under 3), and ATK 13 -> 14 for the threat: 57% of
-    // max HP lost solo where 74% was, 39% with the WOLF where 35% was
+    // max HP lost solo where 74% was, 39% with the WOLF where 35% was. With
+    // its FRENZY (below) and DEFEND's COUNTER since: 90% solo, 46% with the
+    // WOLF (sim-battle's header).
     hp: 110,
     atk: 14,
     def: 3,
@@ -163,7 +167,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 200,
     giant: true,
     weakness: "fire",
-    move: { kind: "flurry", name: "FRENZY", chance: 0, at: [0.7, 0.35], hits: 3, mult: 0.6 },
+    move: { kind: "flurry", name: "FRENZY", chance: 0, at: [0.7, 0.35], hits: 3, mult: 0.9 },
   },
   wasp: {
     name: "WASP",
@@ -216,7 +220,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // FOREST story boss: same flag/uncatchable path as KING SLIME
     weakness: "fire", // a mossy plant body burns
     special: { kind: "regen", chance: 0.25 }, // regrows its moss: rewards bursting it down
-    move: { kind: "blast", name: "SPORES", chance: 0, at: [0.6], mult: 0.8, poison: true },
+    move: { kind: "blast", name: "SPORES", chance: 0, at: [0.7, 0.35], mult: 1.3, poison: true },
   },
   wisp: {
     name: "NIGHT WISP",
@@ -279,7 +283,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // SNOW FIELD superboss: post-game challenge past the MOSS GOLEM
     weakness: "fire", // glacial body shatters under heat
     special: { kind: "freeze", chance: 0.25 },
-    move: { kind: "armor", name: "ARMOR", chance: 0, at: [0.6], turns: 3 },
+    move: { kind: "armor", name: "ARMOR", chance: 0, at: [0.7, 0.35], turns: 3 },
   },
   // VOLCANO roster, one step past the snow field's (FROST MOTH/YETI/GLACIER
   // GOLEM). Ice is the obvious answer to fire, so most are weak to it; the
@@ -334,7 +338,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 700,
     boss: true, // VOLCANO superboss: the last region, past the GLACIER GOLEM
     weakness: "ice",
-    move: { kind: "blast", name: "SWEEP", chance: 0, at: [0.75, 0.5, 0.25], mult: 2.3 },
+    move: { kind: "blast", name: "SWEEP", chance: 0, at: [0.75, 0.5, 0.25], mult: 3 },
   },
 };
 

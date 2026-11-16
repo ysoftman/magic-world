@@ -77,7 +77,8 @@ export const REGEN_PCT = 0.12;
 //   max HP, and up to 48-58% enraged. Bosses take no night stat bump (see
 //   init); only the wild TROLL KING can stack night on enrage (both multiply
 //   ATK), which would reach 82% but stops at the cap below. WARD halves that
-//   to at most 35%.
+//   to at most 35%, and so does a DEFEND now (DEFEND_HEAVY_MULT), which
+//   strikes back as well.
 // - BOSS_STRIKE_MAX_HP_SHARE: the strike never takes more than this share of
 //   max HP before WARD, so from full HP it can't kill, whatever stacks
 // - BossTell.chance: a big ordinary foe's own odds (ORC, YETI, SALAMANDER),
@@ -146,8 +147,20 @@ export const WARD_COLOR = 0x93c5fd;
 // DEFENDing each wind-up it can't WARD, x0.5 took the first level at a 90%
 // win 2-5 lower and left the strikes before Lv18 near harmless; x0.7 takes
 // it 0-2 lower, with 32-37% of max HP still lost at each boss's intended
-// level.
+// level. (Measured before the bosses' second patterns and the heavy share
+// below; sim-battle's header has the numbers with them.)
 export const DEFEND_MULT = 0.7;
+// ...and a heavy hit, one that was announced and no PARRY meets (a wind-up's
+// strike, a boss's blast), by this, WARD's share for the one hit, with a
+// COUNTER: a FIGHT struck back at once, no turn spent (BattleScene
+// counter()). At 0.7 and no COUNTER, bracing for an announced hit cost more
+// than it saved: the turn it spends is a blow the fight then runs longer by
+// (sim-battle, KING SLIME Lv6 alone: 110% of max HP lost bracing its
+// wind-ups against 85% not; now 85% against 102%, and 70% bracing its
+// SPLASH too). An armed "next FIGHT x2" did not pay either: a hero with MP
+// gave up a spell for it. WARD keeps its place: the same share with no
+// COUNTER, but for three turns and every hit in them.
+export const DEFEND_HEAVY_MULT = 0.5;
 
 // What a won ordinary fight leaves (one roll, at most one item; victory()).
 // It used to be POTION 30% and HI-POTION 8%, and the stock piled up: the
@@ -792,7 +805,8 @@ export function bossStrikeDamage(atk: number, mult: number, def: number, maxHp: 
 export const guardedDamage = (raw: number, halved: boolean): number => (halved ? Math.max(1, Math.ceil(raw * WARD_MULT)) : raw);
 
 // a hit on a DEFENDing hero, never below 1
-export const defendedDamage = (raw: number): number => Math.max(1, Math.ceil(raw * DEFEND_MULT));
+export const defendedDamage = (raw: number, heavy = false): number =>
+  Math.max(1, Math.ceil(raw * (heavy ? DEFEND_HEAVY_MULT : DEFEND_MULT)));
 // a parried hit (BattleScene enemyLunge: a press timed to the blow), on top
 // of WARD/GUARD/DEFEND, never below 1. Player skill, so sim-battle leaves it out.
 export const PARRY_MULT = 0.7;

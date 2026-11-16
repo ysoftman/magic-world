@@ -1906,6 +1906,8 @@ export class BattleScene extends Phaser.Scene {
       }
       this.defending = false;
       this.thawing = false;
+      // felled by a COUNTER
+      if (this.running && this.enemy.curHp <= 0 && GameState.player.hp > 0) return this.victory();
       await this.tickWard();
     }
   }
@@ -3017,7 +3019,7 @@ export class BattleScene extends Phaser.Scene {
       // a boss's is on top of its turn, not in place of it: in its place it
       // took the turn's blow or wind-up with it and the fight got easier
       // (KING SLIME Lv6 solo: 83% of max HP lost became 76%)
-      if (!this.enemy.move.at || !this.running || GameState.player.hp <= 0) return;
+      if (!this.enemy.move.at || !this.running || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
     }
     // a wound-up strike lands before anything else this turn could; a fresh
     // wind-up only once the cooldown has run out (see BOSS_TELLS)
@@ -3174,7 +3176,10 @@ export class BattleScene extends Phaser.Scene {
     await this.wait(this.anim(360));
     Sfx.hit();
     Sfx.critical();
-    const { dmg, note, braced } = this.guardHit(moveDamage(rollDamage(this.enemy.atk, this.heroDef()).dmg, move.mult ?? 1));
+    const { dmg, note, braced, countered } = this.guardHit(
+      moveDamage(rollDamage(this.enemy.atk, this.heroDef()).dmg, move.mult ?? 1),
+      true,
+    );
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
     this.updatePlayerStats();
     this.setPlayerTint(0xff6666, true);
@@ -3189,6 +3194,7 @@ export class BattleScene extends Phaser.Scene {
     await this.say(`${this.enemy.name}'s ${move.name} hits for ${dmg}!${note}`);
     this.setPlayerTint(undefined);
     if (move.poison && GameState.player.hp > 0 && this.poisonTurns === 0) await this.afflict("poison");
+    if (countered) await this.counter();
   }
 
   // the hero's ATK and DEF as this battle's meal (cooking.ts) and blessing
@@ -3209,14 +3215,26 @@ export class BattleScene extends Phaser.Scene {
   // below 1, else DEFEND takes its share; the three never stack, and BULWARK
   // is used up by the blow either way. Worst case "CRITICAL! CURSED GOBLIN
   // strikes for 999! (DEFEND)", 49 glyphs. `braced`: DEFEND or BULWARK took
-  // it, which blockOn() shows (WARD has its bubble already)
-  private guardHit(raw: number): { dmg: number; note: string; braced: boolean } {
+  // it, which blockOn() shows (WARD has its bubble already). A `heavy` hit (a
+  // wind-up's strike, a blast) DEFEND takes at its heavy share and answers:
+  // `countered`, for the caller to strike back once its line is read.
+  private guardHit(raw: number, heavy = false): { dmg: number; note: string; braced: boolean; countered: boolean } {
     const warded = this.wardTurns > 0;
     const guarded = !warded && this.guarded;
     this.guarded = false;
     const defended = !warded && !guarded && this.defending;
-    const dmg = defended ? defendedDamage(raw) : guardedDamage(raw, warded || guarded);
-    return { dmg, note: warded ? " (WARD)" : guarded ? " (GUARD)" : defended ? " (DEFEND)" : "", braced: guarded || defended };
+    const dmg = defended ? defendedDamage(raw, heavy) : guardedDamage(raw, warded || guarded);
+    const note = warded ? " (WARD)" : guarded ? " (GUARD)" : defended ? " (DEFEND)" : "";
+    return { dmg, note, braced: guarded || defended, countered: defended && heavy };
+  }
+
+  // COUNTER: the FIGHT a DEFEND strikes back with once a heavy hit is in
+  // (battleRules DEFEND_HEAVY_MULT), no turn spent; PERFECT and all, and one
+  // more in the combo DEFEND reset. Not from a hero the hit felled or froze.
+  private async counter(): Promise<void> {
+    if (!this.running || this.frozen || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
+    this.flashStatus("COUNTER!", "#fde047");
+    await this.playerAttack();
   }
 
   // the blow caught on a half-dome on the hero's foe side (fx.ts fx-block),
@@ -3271,7 +3289,7 @@ export class BattleScene extends Phaser.Scene {
     const parried = !breath && (await this.enemyLunge());
     if (!parried) Sfx.hit();
     Sfx.critical();
-    const guard = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()));
+    const guard = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()), true);
     const { note, braced } = guard;
     const dmg = parried ? parriedDamage(guard.dmg) : guard.dmg;
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
@@ -3286,12 +3304,11 @@ export class BattleScene extends Phaser.Scene {
     this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg, true);
     await this.say(`${tell.strike}! ${dmg} damage!${note}`);
     this.setPlayerTint(undefined);
-    if (GameState.player.hp <= 0 || !canFreeze || parried) return;
-    if (GameState.resists("freeze")) {
-      await this.say("EMBER RING blocks freezing!");
-      return;
+    if (GameState.player.hp > 0 && canFreeze && !parried) {
+      if (GameState.resists("freeze")) await this.say("EMBER RING blocks freezing!");
+      else await this.freezeHero();
     }
-    await this.freezeHero();
+    if (guard.countered) await this.counter();
   }
 
   // the breath's loop over the hero, fading in and out (the sheet is a loop, so

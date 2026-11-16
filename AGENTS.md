@@ -430,9 +430,13 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   행동을 대신하지 않고 얹힌다(`enemyAct` 가 `move.at` 이면 이어서 평소 행동). 실제 사례: 대신하게 했더니 그 턴의 공격·강타
   예고가 사라져 보스전이 오히려 쉬워졌다(KING SLIME Lv6 솔로 잃는 HP 83→76%). `blast`(`enemyBlast`)는 돌진이 없어 PARRY 가
   없고 WARD·GUARD·DEFEND 만 통한다. `armor` 는 `turns` 뒤에 DEF 를 되돌린다. 수치는 `/tmp/pwcheck/moves/boss.sh` 같은 표로
-  세 가정(새 요소 없음 / `--parry 0.4 --perfect 0.4 --limit 50` + 그 레벨 특성 / 0.8·100)을 같이 재고, 새 요소 없는 솔로+의도
-  장비 승률 95% 이상을 지킨다(지금 97~100%, GLACIER 95%). sim 의 영웅은 예고된 기술에 DEFEND 하지 않는다(`--brace` 로 켬):
-  DEFEND 는 턴을 써서 일격의 0.3 을 덜 뿐이라 켜면 잃는 HP 가 늘었다(KING 77→104%). 보스 기술 이름은 도감 CAN 줄에 넣지
+  세 가정(새 요소 없음 / `--parry 0.4 --perfect 0.4 --limit 50` + 그 레벨 특성 / 0.8·100)과 대응 세 단계(`--nobrace` 아무것도
+  안 막음 / 기본: CHG 만 막음 / `--brace`: blast 도 막음)를 같이 재고, 기본 가정의 솔로+의도 장비 승률 95% 이상을 지킨다(지금
+  95~100%). DEFEND 는 예고된 큰 한 방(`guardHit` 의 `heavy`: CHG 강타와 blast)을 x0.5 로 받고 COUNTER(`counter()`, 턴을 안 쓰는
+  `playerAttack`)로 되받는다. 실제 사례: x0.7 뿐일 때는 예고에 DEFEND 하는 쪽이 잃는 HP 가 더 많았다(KING 솔로 110% 대 85%,
+  턴 하나가 일격 하나만큼 전투를 늘린다). "다음 FIGHT x2" 도 시험했지만 MP 가 있는 영웅은 주문 한 번을 포기하는 셈이라
+  이득이 없었다. 새 예고 공격을 넣으면 PARRY 가 되는 일격인지(`enemyBlow`), DEFEND 로 받는 큰 한 방인지(`heavy`) 둘 중
+  하나로 정한다. COUNTER 가 적을 쓰러뜨릴 수 있어 `runBattle` 은 적 턴 뒤에도 승리를 본다. 보스 기술 이름은 도감 CAN 줄에 넣지
   않는다(`CAN:REGEN,SPORES,ENRAGE` 368px 가 이름 칸을 넘는다).
 - 정예(`src/elite.ts`)는 전투가 시작될 때 `BattleScene.init` 이 굴린다(`rollElite`, 필드 씬의 조우 굴림은 모른다). 수치는 `battleRules.scaleEnemy` 의 `elite` 옵션이 종의 HP·ATK·골드·EXP 에 먼저 곱하고(`eliteDef`), 그 위에 밤·HARD MODE 가 얹힌다. 이름은 바꾸지 않는다: 도감·퀘스트·드롭표·결산 줄이 모두 이름으로 종을 찾고 이름 길이로 폭을 쟀기 때문이다. 표시는 적 창 이름 색과 WEAK 줄 오른쪽 태그(6글자까지, x 1108..1228), 전투 첫 줄의 접두와 둘째 줄 `ELITE: <note>!`(note 13글자까지, WELL RESTED 문구와 한 줄 51글자)다. SWIFT 의 두 번째 행동은 `runBattle` 이 `enemyTurn` 을 한 번 더 부르는 것이고, 묶인 턴(`stuck`)과 방금 기를 모은 턴(`charging`)에는 없다. 새 정예는 `ELITES` 한 줄과 README 표, 수치는 `bun run sim:battle --foe <키> --elite <종류> --level <입장 레벨> --gear <무기,방어구>` 로 그 지역 입장 레벨의 SOLO+GEAR 승률·잃는 HP 를 본다(지금 값: 일반 전투의 약 3배 HP 를 잃고, 설원 입장 Lv13 의 FIERCE YETI 가 97%·최대 HP 만큼으로 가장 빡빡하다). `scaleEnemy` 를 부르는 곳(`scripts/sim-battle.ts`)도 같은 옵션을 받는다.
 - LIMIT 게이지(`src/limit.ts`, `GameState.limit` 0..100, 저장됨)는 메뉴 버튼이 아니라 영웅 창의 게이지 자체가 버튼이다(L, 터치는 `LIMIT_TAP` 상자). 그래서 `layoutMenu()` 폭은 그대로다. 자리는 이름(y 68 까지)과 HP 줄(y 88 부터) 사이 띠로, 막대 x 64..240·y 74..82, 라벨 x 252 부터 retroStyle(4)(`L:LIMIT!` 8글자 128px, x 380 까지)다. 충전은 피해 지점마다 훅을 두지 않고 `updateEnemyHp()`·`updatePlayerStats()` 끝의 `syncLimit()` 이 두 HP 가 지난번보다 줄어든 만큼을 센다(동료 타격·지속 피해·독 포함, 회복은 0). 그래서 HP 를 바꾸는 새 코드는 지금처럼 그 두 함수로 화면을 갱신하기만 하면 된다. PARRY 보너스만 `enemyLunge` 의 `syncLimit(LIMIT_PARRY)` 한 줄이다. LIMIT 일격(`limitBreak`)은 제 피해를 `limitSeen` 에 먼저 반영해 스스로를 채우지 않는다. 훈련장은 늘 가득이고 `GameState.limit` 을 쓰지 않는다. 수치를 바꾸면 `bun run sim:battle --foe <키> --level <입장 레벨> --gear <무기,방어구> --limit 0` 의 `L+nn`(한 판에 차는 양, 지금 22~40)과 `--boss <이름> --limit 100` 대 옵션 없는 실행의 라운드 차(지금 1.5~2.5 라운드)를 다시 본다. PARRY·PERFECT 를 쓰는 플레이어는 `--parry P --perfect P`(성공 비율, 0.4 가 평균·0.8 이 숙련 가정)로 넣고, 새 전투 요소를 더하면 보스 다섯의 의도 레벨에서 옵션 없는 실행과 `--parry 0.4 --perfect 0.4 --limit 50 --perks <그 레벨의 특성>` 을 견준다(2026-11 통합 점검: 솔로+의도 장비로 잃는 HP 가 53~104% → 31~49%, 그래서 `LIMIT_MULT` 3→2.5·`LIMIT_TAKEN` 150→120).
