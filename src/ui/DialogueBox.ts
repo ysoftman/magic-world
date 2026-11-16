@@ -1,43 +1,99 @@
 import Phaser from "phaser";
-import { GAME_HEIGHT, GAME_WIDTH } from "../config";
+import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { GameState } from "../gameState";
-import { BODY_GLYPH_W, bodyStyle, retroStyle } from "../pixelart";
+import { BODY_GLYPH_W, type BodySize, bodyStyle, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { hideTouchButtons, isTouchDevice } from "./TouchControls";
 import { TypedText } from "./TypedText";
 
-// The talk is in bodyStyle(33), 21px a glyph and a 39px line, 5px apart: four
-// rows from y=496, the last one's descenders ending at 665, inside the box's
-// 488..680. (Press Start 2P's five 32px rows had no gap between them and ran
-// a page into one block.) The speaker's tab and the choices stay in
-// retroStyle(8).
-const GLYPH_W = BODY_GLYPH_W[33];
-const LINE_SPACING = 5;
-const ROW_PITCH = 39 + LINE_SPACING;
-const CHARS_PER_ROW = Math.floor((GAME_WIDTH - 128) / GLYPH_W);
-// On touch the text stops at x=930, short of the ESC (x>=960) and Z (x>=1076)
+// Where the box and its glyphs sit: one layout for keyboard play, one for
+// touch (pointer: coarse).
+interface Layout {
+  size: BodySize;
+  lineSpacing: number;
+  charsPerRow: number;
+  // the box inside its 8px white border
+  boxW: number;
+  boxTop: number;
+  boxH: number;
+  textX: number;
+  textY: number;
+  // a question's last page holds this many rows of text over its choices
+  questionRows: number;
+  choiceSize: number;
+  choiceX: number;
+  choiceY: number;
+  choicePitch: number;
+  nameSize: number;
+}
+const ROWS_PER_PAGE = 4;
+const BORDER = 8;
+// Keyboard: the talk is in bodyStyle(22), 14px a glyph and a 26px line, 8px
+// apart (a 34px pitch, about 1.5 of the glyph's size), 60 glyphs a row. It
+// was bodyStyle(33) across the whole screen, 54 glyphs of 21px: big enough
+// that a row was read in several looks, and two rows filled the screen's
+// width. At 22 a full-width row would hold 84 glyphs, too long to find the
+// next row's start from, so the box is as wide as 60 glyphs (840px) and 24px
+// either side, centred: x 196..1084, with its border 188..1092. A page holds
+// more than before (4 x 60 against 4 x 54), and a wider row never wraps into
+// more rows, so every talk measured for the old rows still fits its pages.
+// Four rows from y=536, the last one's descenders ending at 664, inside the
+// box's 524..680 (caps start 18px under its top, descenders end 16px over
+// its foot).
+// ask(): the choices sit on the page's fourth row in retroStyle(6), y
+// 644..668, 14px under the third row's descenders (630) and 12px over the
+// box's foot (at 640 they crowded the row above), so a question's last
+// page packs at most three rows of text above them. Each choice is "> " plus
+// its label, 280px apart from x=220: three seven-glyph labels end at 220 +
+// 2 x 280 + 9 x 24 = 996, short of the text's right end at 1060.
+const KEYBOARD: Layout = {
+  size: 22,
+  lineSpacing: 8,
+  charsPerRow: 60,
+  boxW: 60 * BODY_GLYPH_W[22] + 48,
+  boxTop: GAME_HEIGHT - 196,
+  boxH: 156,
+  textX: GAME_WIDTH / 2 - 30 * BODY_GLYPH_W[22],
+  textY: GAME_HEIGHT - 184,
+  questionRows: ROWS_PER_PAGE - 1,
+  choiceSize: 6,
+  choiceX: GAME_WIDTH / 2 - 30 * BODY_GLYPH_W[22],
+  choiceY: GAME_HEIGHT - 76,
+  choicePitch: 280,
+  nameSize: 4,
+};
+// Touch keeps bodyStyle(33), 21px a glyph and a 39px line, 5px apart, across
+// the screen: a phone shows the game far smaller than a desk screen does, and
+// the box has to stay clear of the buttons anyway. Four rows from y=496, the
+// last one's descenders ending at 665, inside the box's 488..680. The text
+// stops at x=930 (42 glyphs), short of the ESC (x>=960) and Z (x>=1076)
 // buttons over the box's right end; the d-pad over its left end is hidden
 // while the box is up (bar < and > under a question's choices, see below).
-// Keyboard play keeps the full 54-glyph row.
-const TOUCH_CHARS_PER_ROW = 42;
-const ROWS_PER_PAGE = 4;
-// ask(): the choices sit on the page's fourth row, 8px down it where the
-// body's caps start (y 636..668, inside the box's 488..680; 14px under the
-// third row's descenders), so a question's last page packs at most three rows
-// of text above them. Each choice is "> " plus its label at retroStyle(8),
-// CHOICE_PITCH apart from x=48: three five-glyph labels end at 48 + 2 x 256 +
-// 7 x 32 = 784, short of the keyboard box's right edge.
-const CHOICE_Y = GAME_HEIGHT - 224 + (ROWS_PER_PAGE - 1) * ROW_PITCH + 8;
-const CHOICE_PITCH = 256;
-// On touch the choices bring back the d-pad's < and > (hiding only its ^ and
-// v, TouchControls' "updown") so they can step between them. Those two sit at
-// x 42..258, y 572..660, over the box's left end, so a question's last page
-// keeps to one row of text (its descenders end at y 533; a second row's caps
-// would sit at 548..572, on the arrows) and the choices start at x=288, 30px
-// right of them. Two end at 288 + 256 + 7 x 32 = 768; a third would end at
-// 1024, into the ESC button (x>=960), so touch questions keep to two.
-const TOUCH_QUESTION_ROWS = 1;
-const TOUCH_CHOICE_X = 288;
+// The choices are in retroStyle(8) on the fourth row, 8px down it where the
+// body's caps start (y 636..668). They bring back the d-pad's < and > (hiding
+// only its ^ and v, TouchControls' "updown") so they can step between them.
+// Those two sit at x 42..258, y 572..660, over the box's left end, so a
+// question's last page keeps to one row of text (its descenders end at y 533;
+// a second row's caps would sit at 548..572, on the arrows) and the choices
+// start at x=288, 30px right of them. Two end at 288 + 256 + 7 x 32 = 768; a
+// third would end at 1024, into the ESC button (x>=960), so touch questions
+// keep to two.
+const TOUCH: Layout = {
+  size: 33,
+  lineSpacing: 5,
+  charsPerRow: 42,
+  boxW: GAME_WIDTH - 64,
+  boxTop: GAME_HEIGHT - 232,
+  boxH: 192,
+  textX: 48,
+  textY: GAME_HEIGHT - 224,
+  questionRows: 1,
+  choiceSize: 8,
+  choiceX: 288,
+  choiceY: GAME_HEIGHT - 84,
+  choicePitch: 256,
+  nameSize: 6,
+};
 // A confirm (Z/ENTER/SPACE, or a tap on a choice) within this long of the
 // choices showing is dropped, and restarts the wait. The Z meant to skip the
 // last page's typing can land just as the typing ends on its own, and Z
@@ -65,7 +121,7 @@ export class DialogueBox {
   private pageSize = 1;
   private pageText = "";
   private touch = isTouchDevice();
-  private charsPerRow = this.touch ? TOUCH_CHARS_PER_ROW : CHARS_PER_ROW;
+  private layout = this.touch ? TOUCH : KEYBOARD;
 
   private border: Phaser.GameObjects.Rectangle;
   private box: Phaser.GameObjects.Rectangle;
@@ -100,32 +156,36 @@ export class DialogueBox {
     this.scene = scene;
     this.lines = lines;
 
+    const lay = this.layout;
+    const boxY = lay.boxTop + lay.boxH / 2;
     this.border = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 136, GAME_WIDTH - 48, 208, 0xffffff)
+      .rectangle(GAME_WIDTH / 2, boxY, lay.boxW + 2 * BORDER, lay.boxH + 2 * BORDER, 0xffffff)
       .setScrollFactor(0)
       .setDepth(200);
     this.box = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 136, GAME_WIDTH - 64, 192, 0x0b0b2b)
+      .rectangle(GAME_WIDTH / 2, boxY, lay.boxW, lay.boxH, 0x0b0b2b)
       .setScrollFactor(0)
       .setDepth(201);
-    this.text = new TypedText(scene, 48, GAME_HEIGHT - 224, bodyStyle(33, "#f5f5f5"), {
-      wrapWidth: this.charsPerRow * GLYPH_W,
-      lineSpacing: LINE_SPACING,
+    this.text = new TypedText(scene, lay.textX, lay.textY, bodyStyle(lay.size, "#f5f5f5"), {
+      wrapWidth: lay.charsPerRow * BODY_GLYPH_W[lay.size],
+      lineSpacing: lay.lineSpacing,
     })
       .setScrollFactor(0)
       .setDepth(202);
     // On a plate of the box's colour, a tab on the box's top edge: bare, it
     // sat on the map and ran into the name tags behind it (ELDER over
-    // BLACKSMITH). The plate starts at 40,452 and reaches 8px past the name
-    // either side and 4px over it, so the glyphs sit at 48,456 and the
-    // plate's foot on the border at y=480 (sized to the name in open()).
+    // BLACKSMITH). The plate reaches 8px past the name either side and 4px
+    // over it, the glyphs start at the text's x, and the plate's foot is on
+    // the border's top edge (sized to the name in open()).
+    const nameH = lay.nameSize * PIXEL;
+    const plateY = lay.boxTop - BORDER - nameH - NAME_PAD_TOP;
     this.namePlate = scene.add
-      .rectangle(40, GAME_HEIGHT - 268, 0, 0, 0x0b0b2b)
+      .rectangle(lay.textX - NAME_PAD_X, plateY, 0, 0, 0x0b0b2b)
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(202);
     this.nameText = scene.add
-      .pixelText(40 + NAME_PAD_X, GAME_HEIGHT - 268 + NAME_PAD_TOP, "", retroStyle(6, "#ffd166"))
+      .pixelText(lay.textX, plateY + NAME_PAD_TOP, "", retroStyle(lay.nameSize, "#ffd166"))
       .setScrollFactor(0)
       .setDepth(202);
 
@@ -170,10 +230,9 @@ export class DialogueBox {
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.N).on(Phaser.Input.Keyboard.Events.DOWN, () => {
       if (this.choosing || this.typingQuestion()) this.pickQueued = this.choices.length - 1;
     });
-    const choiceX = this.touch ? TOUCH_CHOICE_X : 48;
     for (let i = 0; i < MAX_CHOICES; i++) {
       const t = scene.add
-        .pixelText(choiceX + i * CHOICE_PITCH, CHOICE_Y, "", retroStyle(8, "#f5f5f5"))
+        .pixelText(lay.choiceX + i * lay.choicePitch, lay.choiceY, "", retroStyle(lay.choiceSize, "#f5f5f5"))
         .setScrollFactor(0)
         .setDepth(202)
         .setVisible(false);
@@ -249,7 +308,7 @@ export class DialogueBox {
     }
     // a question's last page keeps the fourth row for its choices (on touch,
     // the d-pad's rows too): what doesn't fit moves on to a page of its own.
-    const questionRows = this.touch ? TOUCH_QUESTION_ROWS : ROWS_PER_PAGE - 1;
+    const questionRows = this.layout.questionRows;
     while (
       this.choices.length > 0 &&
       this.index + page.length === this.lines.length &&
