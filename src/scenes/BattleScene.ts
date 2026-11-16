@@ -99,6 +99,7 @@ import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { skyOverlay } from "../ui/NightOverlay";
 import { BAR_TRACK, barShare } from "../ui/StatusHud";
+import { isTouchDevice } from "../ui/TouchControls";
 import { TypedText } from "../ui/TypedText";
 import { battleBgKey } from "./BootScene";
 import type { EndingData } from "./EndingScene";
@@ -497,14 +498,22 @@ const SKILLS_PER_PAGE = SKILLS_PER_ROW * SKILL_ROWS;
 const SKILL_COL_X = [24, 434, 844];
 const SKILL_ROW_Y = [488, 520, 552, 584];
 // In the message box: the cursor's skill on the battle line's own row
-// ("DOUBLE SLASH  14 MP  Two quick cuts of your weapon." in bodyStyle(33), 54
-// glyphs at most: battleRules MoveBase.info), the key hint under it, 16px
-// glyphs at y 682..698, and with more than one page "< 1/3 >" right of it (x
-// 1104..1216, tapped on a half to turn back or on). The touch hint,
+// ("DOUBLE SLASH  14 MP  Two quick cuts of your weapon." in the message's own
+// size, 54 glyphs at most: battleRules MoveBase.info), the key hint under it,
+// 16px glyphs at y 682..698, and with more than one page "< 1/3 >" right of
+// it (tapped on a half to turn back or on; where, see msgLayout). The touch hint,
 // TOUCH_ITEM_HINT, is 688px, x 296..984.
 const SKILL_INFO_Y = GAME_HEIGHT - 104;
 const SKILL_HINT_Y = GAME_HEIGHT - 30;
-const SKILL_PAGE_RIGHT = GAME_WIDTH - 64;
+// The message box's text by input, as the dialogue box's: 22px and 60 glyphs
+// in a box that wide on a keyboard, 33px and 54 across the screen on touch.
+// The SKILL list's info row is set the same, and its page chip ends 32px
+// inside the box's right edge (keyboard x 940..1052, clear of the hint's 432px
+// to 856; touch x 1104..1216 as before).
+const msgLayout = (): { size: 22 | 33; x: number; wrapWidth: number; lineSpacing: number; boxW: number } =>
+  isTouchDevice()
+    ? { size: 33, x: 64, wrapWidth: GAME_WIDTH - 128, lineSpacing: 5, boxW: GAME_WIDTH - 64 }
+    : { size: 22, x: (GAME_WIDTH - 60 * 14) / 2, wrapWidth: 60 * 14, lineSpacing: 8, boxW: 60 * 14 + 48 };
 // the move the list was last left on, kept for the next battle's cursor (not
 // saved: a reload starts at the top)
 let lastSkill: string | undefined;
@@ -1178,13 +1187,18 @@ export class BattleScene extends Phaser.Scene {
     this.updateEnemyStatus();
     this.updateStatus();
 
-    // the message box (y 604..716), in bodyStyle(33) with a 5px leading (as
-    // the touch dialogue box's; the keyboard one is in 22): 54 glyphs a row,
-    // and a second row's descenders end at y=697
-    gridOutline(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, GAME_WIDTH - 64, 112, 0x0b0b2b, 0.92), 0xffffff);
-    this.msgText = new TypedText(this, 64, GAME_HEIGHT - 104, bodyStyle(33, "#f5f5f5"), {
-      wrapWidth: GAME_WIDTH - 128,
-      lineSpacing: 5,
+    // The message box (y 604..716), laid out as the dialogue box is
+    // (ui/DialogueBox.ts). Keyboard: bodyStyle(22) at a 34px pitch, 60 glyphs
+    // a row (840px from x 220), in a box as wide as that and 24px a side
+    // (x 196..1084): in bodyStyle(33) across the screen a two-row payout
+    // filled it edge to edge. Touch keeps 33 with a 5px leading, 54 glyphs a
+    // row across the screen, a second row's descenders ending at y=697. The
+    // lines are written for 54 glyphs, so on a keyboard none wraps sooner.
+    const msg = msgLayout();
+    gridOutline(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 60, msg.boxW, 112, 0x0b0b2b, 0.92), 0xffffff);
+    this.msgText = new TypedText(this, msg.x, GAME_HEIGHT - 104, bodyStyle(msg.size, "#f5f5f5"), {
+      wrapWidth: msg.wrapWidth,
+      lineSpacing: msg.lineSpacing,
     });
 
     this.menuButtons = [
@@ -1287,13 +1301,13 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setVisible(false);
     // in the message box, a panel: no outline needed
-    this.skillInfoText = this.add.pixelText(64, SKILL_INFO_Y, "", bodyStyle(33, "#ffd166")).setVisible(false);
+    this.skillInfoText = this.add.pixelText(msg.x, SKILL_INFO_Y, "", bodyStyle(msg.size, "#ffd166")).setVisible(false);
     this.skillHintText = this.add
       .pixelText(GAME_WIDTH / 2, SKILL_HINT_Y, "", retroStyle(4, "#9f9fd0"))
       .setOrigin(0.5)
       .setVisible(false);
     this.skillPageText = this.add
-      .pixelText(SKILL_PAGE_RIGHT, SKILL_HINT_Y, "", retroStyle(4, "#ffd166"))
+      .pixelText(GAME_WIDTH / 2 + msg.boxW / 2 - 32, SKILL_HINT_Y, "", retroStyle(4, "#ffd166"))
       .setOrigin(1, 0.5)
       .setVisible(false);
 
