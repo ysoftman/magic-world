@@ -43,8 +43,10 @@ const DONE_ROWS = 13;
 //   x 700..1200, 20px inside the panel's 1220 edge
 // Heights (Press Start 2P lines measure exactly 1em; a detail's caps sit
 // -7..+8 of its y, descenders to +11): 8 two-line rows 56px apart end at
-// PANEL_TOP+579 (the last detail line), 23px clear of the close hint's top
-// (PANEL_TOP+602); 13 one-line rows 34px apart (36 until the
+// PANEL_TOP+575 (the last detail line), 27px clear of the close hint's top
+// (PANEL_TOP+602). A detail sits 22px under its title: its caps start 5px
+// under the title's glyphs and end 16px over the next title's (at 26 it was
+// 9 and 12, and a detail read as either's); 13 one-line rows 34px apart (36 until the
 // SILK job made it 13) end at PANEL_TOP+568. The 640px panel leaves 40px
 // above and below.
 const PANEL_W = 1160;
@@ -57,7 +59,7 @@ const DONE_X = PANEL_LEFT + 640;
 const HEADER_Y = PANEL_TOP + 100;
 const ROW_Y = PANEL_TOP + 150;
 const ACTIVE_GAP = 56;
-const DETAIL_DY = 26;
+const DETAIL_DY = 22;
 const DONE_GAP = 34;
 
 const PROGRESS_COLOR = "#ffd166";
