@@ -616,19 +616,29 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 
 ## 바운티의 과제 (`src/bounties.ts`)
 
-BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대신 과제(`DEEDS`: 정예 처치·PARRY·러너 잡기·제단 기도)가
-나온다. `BountyState` 에 `kind`·`snap` 이 붙고(처치 의뢰와 옛 세이브에는 없음) `target` 에는 과제 이름이 들어간다.
+BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대신 과제(`DEEDS`: 정예 처치·PARRY·러너 잡기·제단 기도·PERFECT·원소 반응·LIMIT
+마무리)가 나온다. `BountyState` 에 `kind`·`snap` 이 붙고(처치 의뢰와 옛 세이브에는 없음) `target` 에는 과제 이름이 들어간다.
 
-- 과제는 이미 있는 카운터로 센다(`GameState.deedCounters()`: `feats.parries`·`feats.eliteWins`, `prayers`,
-  `runnersCaught`). 바운티는 게시될 때의 값(`snap`)을 적고 진행은 그 뒤 늘어난 만큼이다. `have` 는 `syncBounty()` 가
+- 과제는 이미 있는 카운터로 센다(`GameState.deedCounters()`: `feats.parries`·`feats.eliteWins`·`feats.perfects`·
+  `feats.reactions`·`feats.limitKills`, `prayers`, `runnersCaught`). 바운티는 게시될 때의 값(`snap`)을 적고 진행은 그 뒤 늘어난 만큼이다. `have` 는 `syncBounty()` 가
   저장할 때마다와 게시판이 굴리기 전에 맞춘다. 그래서 `have` 를 읽는 곳(게시판 대화, 일지, 날 넘김 정산, 상한 거부)은
   처치 의뢰와 같은 코드이고 전투·필드는 바운티를 모른다. 새 과제는 카운터 하나와 `DEEDS` 한 줄이다.
-- 전투 안에서 세야 하는 과제(PERFECT, 원소 반응, LIMIT 마무리)는 아직 없다. 넣으려면 그 카운터를 `feats.ts` 에 두고
-  BattleScene 에서 한 줄로 올린다(PARRY 가 `GameState.feats.parries += 1` 인 것처럼).
+- 전투 안에서 세는 과제는 카운터를 `feats.ts`(`Feats`·`noFeats`·`loadFeats`)에 두고 BattleScene 에서 한 줄로 올린다:
+  PARRY 는 `syncLimit`, PERFECT 는 `playerAttack` 의 `perfectDamage` 다음 줄, 반응은 `react()` 끝, LIMIT 마무리는
+  `limitBreak` 의 `limitKill` 다음 줄(어떤 적이든 센다. 업적 FINISHER 의 `limitFinishes` 는 보스·거인만이라 따로다).
+  넷 다 훈련장(`practice`)에서는 안 세고 아레나·심연에서는 센다. 정예는 `victory()` 의 `noteWin` 이라 쓰러뜨린 것만 센다
+  (잡으면 안 셈).
+- 나오는 조건(`open`): 정예는 5승 뒤, LIMIT FINISH 는 5승 뒤(게이지가 한 번은 찼을 때), REACTIONS 는 Lv4 부터(THORNS 의
+  독 뒤 FIRE 로 혼자 DETONATE 를 낼 수 있는 레벨, `REACTION_MIN_LEVEL`). THORNS 의 learnLevel 이나 반응 표
+  (`battleRules.ts` 의 `reactionOf`)를 바꾸면 이 레벨과 힌트(`FIRE ON POISON, ICE ON BURN`)를 다시 맞춘다.
 - 글자 폭: 이름은 14글자까지(일지 제목 `BOUNTY: CATCH A RUNNER` 22글자, 한도 23), 일지 힌트는 `힌트 - 9999G` 로 37글자까지
-  (힌트 28글자), 게시판 줄 `BOUNTY: CATCH A RUNNER 0/1` + `REWARD: 9999 GOLD.` 는 터치 한 줄 42글자 안이다.
+  (힌트 28글자), 게시판의 `BOUNTY: CATCH A RUNNER 0/1` 과 `REWARD: 9999 GOLD.` 는 각각 터치 한 줄 42글자 안이다. 둘을 이은
+  `BOUNTY: <이름> 0/9 REWARD: 999 GOLD.` 가 한 줄에 들어가려면 이름이 12글자까지다(새 셋은 12 이하, 13·14글자인
+  FELL AN ELITE·CATCH A RUNNER 는 두 줄로 넘어가고 대화창이 쪽을 다시 나눈다). 보상은 지금 최대 299G(화산이 열린 뒤 배수 6).
 - 보상은 `pay` x 바운티 풀 평균 골드 x `BOUNTY_MULT`(처치 의뢰는 평균 4.5마리분)다. 러너는 그날 안 나올 수 있어 가장
-  높고(6), 기도는 제단 골드만 들면 되어 가장 낮다(3). 러너 확률(`Runner.ts`)이나 정예 확률을 바꾸면 다시 본다.
+  높고(6), 기도는 제단 골드만 들면 되어 가장 낮다(3). PERFECT HITS(5~8번, 4)는 FIGHT 마다 시도할 수 있고 실패에
+  손해가 없어 PARRY(3~5번, 4)보다 횟수가 많고, REACTIONS(2~3번, 5)는 상태를 먼저 걸고 주문 둘의 MP 를 써야 해 셋 중
+  가장 높고, LIMIT FINISH(1번, 3)는 가득 찬 게이지가 필드의 일반 적을 한 방에 쓰러뜨려 게이지 값(3~4전투)만 든다. 러너 확률(`Runner.ts`)이나 정예 확률을 바꾸면 다시 본다.
 - 러너 과제는 닿은 순간 센다(전투 결과와 무관, 러너당 한 번). 저장 전에 일지를 열면 `have` 가 한 박자 늦을 수 있다.
 - 별 조각·봉인·상인의 존재는 `unlockTips.ts` 의 두 줄(3승·8승 뒤 마을 토스트)로 알린다. ELDER·HUNTER 대사는 건드리지
   않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).

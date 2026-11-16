@@ -896,9 +896,13 @@ export const GameState = {
     return {
       parries: this.feats.parries,
       eliteWins: this.feats.eliteWins,
+      perfects: this.feats.perfects,
+      reactions: this.feats.reactions,
+      limitKills: this.feats.limitKills,
       prayers: this.prayers,
       runnersCaught: this.runnersCaught,
       battles: this.battles,
+      level: this.player.level,
     };
   },
   // A deed bounty's `have` brought up to its counter. Run by every save and

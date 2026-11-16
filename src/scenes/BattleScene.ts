@@ -2008,6 +2008,7 @@ export class BattleScene extends Phaser.Scene {
       const now = performance.now();
       if (press != null && now - press <= PERFECT_WINDOW_MS) {
         total = perfectDamage(total);
+        if (!this.practice) GameState.feats.perfects += 1;
         Sfx.emit("perfect");
         this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
         this.glowBurst.explode(12);
@@ -2402,6 +2403,7 @@ export class BattleScene extends Phaser.Scene {
     const { name, color } = REACTIONS[kind];
     this.flashStatus(`${name}!`, color, this.enemySprite.x - 200, this.enemySprite.y - 56, 8);
     this.reacted = true;
+    if (!this.practice) GameState.feats.reactions += 1;
     return { mult, extra, tail: ` ${name}!` };
   }
 
@@ -4139,6 +4141,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.curHp = Math.max(0, this.enemy.curHp - total);
       this.limitSeen.foe = this.enemy.curHp;
       this.limitKill = this.enemy.curHp <= 0;
+      if (this.limitKill && !this.practice) GameState.feats.limitKills += 1;
       this.limit = 0;
       this.updateEnemyHp();
       this.enemySprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);

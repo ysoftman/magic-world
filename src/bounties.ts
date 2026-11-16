@@ -19,22 +19,44 @@ import { ELITE_MIN_BATTLES } from "./elite";
 // offer one (ui/Runner.ts: ~1.4-2.7 an hour and the arrivals' 12%), the
 // prayer's the least because its cost is only the shrine's gold, which the
 // blessing already repays.
-export type BountyKind = "elite" | "parry" | "runner" | "pray";
+//
+// Three are counted inside the battle (feats.ts, one line each in
+// BattleScene): PERFECTs, reactions and a foe finished by the LIMIT BREAK.
+// - PERFECT HITS asks for more than LAND PARRIES at the same pay: every
+//   FIGHT is a try and a miss costs nothing, where a parry waits on the foe.
+// - REACTIONS pays most of the three: each wants a status on the foe first
+//   and the element that answers it, two casts' MP and a foe that lives to
+//   the second. It is posted from REACTION_MIN_LEVEL, where the hero can
+//   make one alone (THORNS' poison, then FIRE: DETONATE).
+// - LIMIT FINISH pays least: a full gauge fells most of a field's foes in
+//   one blow, so its cost is the gauge, three or four fights' filling
+//   (limit.ts). Posted once LIMIT_MIN_BATTLES are won, when one has filled.
+export type BountyKind = "elite" | "parry" | "runner" | "pray" | "perfect" | "react" | "limit";
+
+// THORNS' learnLevel (battleRules.ts SKILLS); FIRE is known from the start
+const REACTION_MIN_LEVEL = 4;
+const LIMIT_MIN_BATTLES = 5;
 
 export interface DeedCounters {
   // feats.ts
   parries: number;
   eliteWins: number;
+  perfects: number;
+  reactions: number;
+  limitKills: number;
   // gameState.ts
   prayers: number;
   runnersCaught: number;
-  // wins so far, for what a hero can be asked yet
+  // wins so far and the hero's level, for what a hero can be asked yet
   battles: number;
+  level: number;
 }
 
 interface DeedDef {
   // the board's and the journal's name for it, in the species' place:
-  // "BOUNTY: CATCH A RUNNER" is the journal's widest, 22 of its 23 glyphs
+  // "BOUNTY: CATCH A RUNNER" is the journal's widest, 22 of its 23 glyphs.
+  // At 12 or under the board's "BOUNTY: <label> 0/9 REWARD: 999 GOLD." is
+  // one touch row (42); the two of 13 and 14 wrap onto a second
   label: string;
   need: readonly [number, number];
   pay: number;
@@ -78,6 +100,30 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
     hint: "A SHRINE STANDS IN EACH FIELD",
     open: () => true,
     count: (c) => c.prayers,
+  },
+  perfect: {
+    label: "PERFECT HITS",
+    need: [5, 8],
+    pay: 4,
+    hint: "Z AS YOUR OWN BLOW LANDS",
+    open: () => true,
+    count: (c) => c.perfects,
+  },
+  react: {
+    label: "REACTIONS",
+    need: [2, 3],
+    pay: 5,
+    hint: "FIRE ON POISON, ICE ON BURN",
+    open: (c) => c.level >= REACTION_MIN_LEVEL,
+    count: (c) => c.reactions,
+  },
+  limit: {
+    label: "LIMIT FINISH",
+    need: [1, 1],
+    pay: 3,
+    hint: "END A FIGHT WITH L:LIMIT",
+    open: (c) => c.battles >= LIMIT_MIN_BATTLES,
+    count: (c) => c.limitKills,
   },
 };
 
