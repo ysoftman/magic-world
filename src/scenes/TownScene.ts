@@ -2135,9 +2135,10 @@ export class TownScene extends Phaser.Scene {
   // on a YES under the last page (NO, or ESC, keeps them). Every line is at
   // most 42 glyphs (the touch box's row) and the delivery starts on a row of
   // its own; the longest talk — a bounty still open plus a delivery ready —
-  // fills three rows ("BOUNTY: FROST MOTH 5/6 REWARD: 342 GOLD." 1 row,
-  // "DELIVER 4 SPIDER SILK FOR 1560 GOLD + A BOMB. YOU HAVE 5." 2) and the
-  // question gets a page of its own over the choices.
+  // fills four rows ("BOUNTY: FROST MOTH 5/6 REWARD: 342 GOLD." 1 row, 2
+  // with the omen's "THE OMEN FAVORS IT."; "DELIVER 4 SPIDER SILK FOR 1560
+  // GOLD + A BOMB. YOU HAVE 5." 2) and the question gets a page of its own
+  // over the choices.
   private startBountyDialogue(): void {
     GameState.rollBountyIfStale();
     const b = GameState.bounty;
@@ -2149,6 +2150,9 @@ export class TownScene extends Phaser.Scene {
       lines.push("BOUNTY CLAIMED TODAY.");
     } else if (b.have < b.need) {
       lines.push(`BOUNTY: ${b.target} ${b.have}/${b.need}`, `REWARD: ${b.reward} GOLD.`);
+      // the day's omen suits it (bounties.ts OMEN_FAVOR): said in the same
+      // run, 19 glyphs, a second row at most
+      if (GameState.omenFavors(b)) lines.push("THE OMEN FAVORS IT.");
     } else if (GameState.gold + b.reward > MAX_GOLD) {
       // refused whole, as the delivery is (delivery.ts deliver()): gainGold()
       // would credit only what fits. Unclaimed, it stays up, past the day's

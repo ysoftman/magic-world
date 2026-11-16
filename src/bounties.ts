@@ -1,4 +1,5 @@
 import { ELITE_MIN_BATTLES } from "./elite";
+import type { OmenKind } from "./omen";
 
 // The BOUNTY BOARD's other bounties. Half the days the board asks for kills
 // of one species, as it always did (gameState.ts rollBountyIfStale); the
@@ -145,12 +146,28 @@ const KINDS = Object.keys(DEEDS) as BountyKind[];
 
 export const isBountyKind = (v: unknown): v is BountyKind => typeof v === "string" && KINDS.includes(v as BountyKind);
 
-/** The deed the board posts today, or null for a kill bounty. */
-export function rollDeed(c: DeedCounters, rand: () => number = Math.random): { kind: BountyKind; need: number; snap: number } | null {
+// The day's omen (omen.ts) leans the board toward the bounty it suits, so a
+// day has one road through it: the WILD HUNT's field is where an elite is
+// felled, the CALM DAY's where a runner stands, the HOLY DAY's shrine asks
+// half. When the board posts a deed and the omen's is open to this hero, it
+// is that one OMEN_FAVOR of the time (else any open one, itself included):
+// 29% of such days against the 7% of one deed in seven. A GOLD RUSH leans a
+// kill bounty toward its field's species the same way (gameState
+// rollBountyIfStale). The board says so under the bounty ("THE OMEN FAVORS
+// IT."), from the bounty and the day alone: nothing more is saved.
+export const OMEN_FAVOR = 0.5;
+export const OMEN_DEED: Partial<Record<OmenKind, BountyKind>> = { wild: "elite", calm: "runner", holy: "pray" };
+
+/** The deed the board posts today, or null for a kill bounty; `favored` is the day's omen's (OMEN_DEED). */
+export function rollDeed(
+  c: DeedCounters,
+  rand: () => number = Math.random,
+  favored?: BountyKind,
+): { kind: BountyKind; need: number; snap: number } | null {
   if (rand() >= DEED_SHARE) return null;
   const open = KINDS.filter((k) => DEEDS[k].open(c));
   if (open.length === 0) return null;
-  const kind = open[Math.floor(rand() * open.length)];
+  const kind = favored && open.includes(favored) && rand() < OMEN_FAVOR ? favored : open[Math.floor(rand() * open.length)];
   const [min, max] = DEEDS[kind].need;
   return { kind, need: min + Math.floor(rand() * (max - min + 1)), snap: DEEDS[kind].count(c) };
 }

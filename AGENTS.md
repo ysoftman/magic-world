@@ -853,6 +853,13 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
 - SHRINE PRAYER 는 오늘 안 바친 열린 제단이 하나라도 있을 때만 나온다(`deedCounters().shrinesLeft`, `gameState.ts` 의
   `SHRINE_GATES`). 실제 사례: 게시판을 읽기 전에 열린 제단에 다 바친 날은 끝낼 수 없는 과제가 걸렸다. 새 지역에 제단을
   넣으면 `SHRINE_GATES` 에도 넣는다.
+- 그날 이변(`omen.ts`)이 게시판을 제 쪽으로 기울인다(`bounties.ts` 의 `OMEN_DEED`·`OMEN_FAVOR` 0.5): 과제가 나오는 날, 이변의
+  과제(WILD HUNT → FELL AN ELITE, CALM DAY → CATCH A RUNNER, HOLY DAY → SHRINE PRAYER)가 그 영웅에게 열려 있으면 절반은 그것이다
+  (그날 29%, 평소 과제 하나는 7%). GOLD RUSH 는 처치 의뢰의 절반을 그 필드의 종으로 돌린다(`gameState.ts` 의
+  `OMEN_FIELD_MONSTERS`, 동굴은 SLIME·GOBLIN·BAT). 실측(4000번씩): 맞는 바운티가 29.3~30.9%, 처치 의뢰는 50% 그대로, 나머지 과제는
+  3~4% 씩. 맞으면 게시판이 `THE OMEN FAVORS IT.`(19글자)를 같은 문단에 잇는다(`GameState.omenFavors(b)`, 바운티와 날짜만으로 판단해
+  저장하는 것이 없다). 이 줄까지 넣어도 바운티 두 줄 + 납품 두 줄로 터치 한 쪽 네 줄 안이다. 일지에는 따로 표시하지 않는다
+  (왼쪽 위의 이변 줄과 바운티 행이 이미 나란히 있다). 이변이나 과제를 더하면 `OMEN_DEED` 를 같이 본다.
 - 글자 폭: 이름은 14글자까지(일지 제목 `BOUNTY: CATCH A RUNNER` 22글자, 한도 23), 일지 힌트는 `힌트 - 9999G` 로 37글자까지
   (힌트 28글자), 게시판의 `BOUNTY: CATCH A RUNNER 0/1` 과 `REWARD: 9999 GOLD.` 는 각각 터치 한 줄 42글자 안이다. 둘을 이은
   `BOUNTY: <이름> 0/9 REWARD: 999 GOLD.` 가 한 줄에 들어가려면 이름이 12글자까지다(새 셋은 12 이하, 13·14글자인

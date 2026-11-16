@@ -1,5 +1,5 @@
 import { ABYSS_FLOOR_MAX } from "./abyss";
-import { type BountyKind, DEEDS, type DeedCounters, deedProgress, isBountyKind, rollDeed } from "./bounties";
+import { type BountyKind, DEEDS, type DeedCounters, deedProgress, isBountyKind, OMEN_DEED, OMEN_FAVOR, rollDeed } from "./bounties";
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
 import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
@@ -7,6 +7,7 @@ import { loadFeats, noFeats } from "./feats";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { loadNestDays, type NestDays } from "./nest";
+import { type OmenRegion, omenOn } from "./omen";
 import { loadPeddler, type PeddlerState } from "./peddler";
 import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
@@ -28,6 +29,14 @@ export const FIRE_BEASTS = [...VOLCANO_BOUNTY_MONSTERS];
 // kill value once their item bonuses are folded in), biased to the high
 // end since a rotating bounty can't attach a themed item like HUNTER's do
 const BOUNTY_MULT = 1.5;
+// the bounty pool's species by the field they are hunted in, for the day's
+// GOLD RUSH (omen.ts): the cave's are met in the town's grass too
+const OMEN_FIELD_MONSTERS: Record<OmenRegion, Set<string>> = {
+  dungeon: new Set(["SLIME", "GOBLIN", "BAT"]),
+  forest: FOREST_BOUNTY_MONSTERS,
+  snow: SNOW_BOUNTY_MONSTERS,
+  volcano: VOLCANO_BOUNTY_MONSTERS,
+};
 // each field's shrine and the quest flag that opens the field (the pool's
 // gates above): what the board's SHRINE PRAYER has to pray at (bounties.ts)
 const SHRINE_GATES: Array<[ShrineRegion, (q: QuestState) => boolean]> = [
@@ -926,6 +935,14 @@ export const GameState = {
     const b = this.bounty;
     if (b && isBountyKind(b.kind) && !b.claimed) b.have = deedProgress(b.kind, b.snap ?? 0, this.deedCounters());
   },
+  // Whether today's omen favors `b` (bounties.ts OMEN_DEED, or a GOLD RUSH's
+  // field for a kill bounty): the board's "THE OMEN FAVORS IT."
+  omenFavors(b: BountyState): boolean {
+    if (b.day !== econDay()) return false;
+    const omen = omenOn(b.day, this.quest);
+    if (b.kind) return OMEN_DEED[omen.kind] === b.kind;
+    return omen.kind === "gold" && OMEN_FIELD_MONSTERS[omen.region].has(b.target);
+  },
   rollBountyIfStale(): void {
     this.syncBounty();
     if (this.bounty && this.bounty.day === econDay()) return;
@@ -949,7 +966,9 @@ export const GameState = {
     // today's claimed one on top, so the trophy lands at the board)
     if (this.bounty && (this.bounty.claimed || this.bounty.have >= this.bounty.need)) this.bountiesDone += 1;
     const pool = this.bountyPool();
-    const deed = rollDeed(this.deedCounters());
+    // the day's omen leans the board its way (bounties.ts OMEN_FAVOR)
+    const omen = omenOn(econDay(), this.quest);
+    const deed = rollDeed(this.deedCounters(), Math.random, OMEN_DEED[omen.kind]);
     if (deed) {
       const avg = pool.reduce((sum, e) => sum + e.gold, 0) / pool.length;
       this.bounty = {
@@ -964,7 +983,10 @@ export const GameState = {
       };
       return;
     }
-    const target = pool[Math.floor(Math.random() * pool.length)];
+    // ...a GOLD RUSH toward a species of its field, whose kills pay more today
+    const rush = omen.kind === "gold" ? pool.filter((e) => OMEN_FIELD_MONSTERS[omen.region].has(e.name)) : [];
+    const from = rush.length > 0 && Math.random() < OMEN_FAVOR ? rush : pool;
+    const target = from[Math.floor(Math.random() * from.length)];
     const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive
     this.bounty = {
       target: target.name,
