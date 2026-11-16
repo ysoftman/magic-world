@@ -1629,10 +1629,18 @@ export function saveOnShutdown(scene: Phaser.Scene, parts: ReadonlyArray<{ destr
   });
 }
 
-// an overrun foe's last moment: knocked this far from the hero as it fades, under its puff
+// an overrun foe's last moment: knocked this far from the hero as it fades,
+// its puff where it ends up, under the hero (at 10.6 over it, a herd swept
+// in a row hid the hero a second or two at a time)
 const OVERRUN_KNOCK_PX = 24;
 const OVERRUN_FADE_MS = 180;
 const OVERRUN_PUFF_MS = 600;
+const OVERRUN_PUFF_DEPTH = 9.9;
+// overruns this close together are one sweep, and the status line adds them
+// up ("OVERRUN x6: +760G +524EXP  +2 ITEMS", 40 glyphs at most): each line
+// alone was gone 0.6-1.3s later under the next, the sum never read
+const OVERRUN_CHAIN_MS = 3000;
+let sweep: { scene: string; at: number; count: number; gold: number; exp: number; items: number } | null = null;
 
 /**
  * A foe of `kind` met in the open (a roamer touched, or the grass's roll):
@@ -1671,7 +1679,16 @@ export function meetFoe(
   const result = settleOverrun(met.enemy);
   toasts.quietSave();
   const { status, news } = overrunLines(result);
-  toasts.toast(status);
+  const now = Date.now();
+  if (!sweep || sweep.scene !== scene.scene.key || now - sweep.at > OVERRUN_CHAIN_MS)
+    sweep = { scene: scene.scene.key, at: now, count: 0, gold: 0, exp: 0, items: 0 };
+  sweep.at = now;
+  sweep.count += 1;
+  sweep.gold += result.payout.gold;
+  sweep.exp += result.payout.exp;
+  sweep.items += result.payout.found.length;
+  const items = sweep.items > 0 ? `  +${sweep.items} ITEM${sweep.items > 1 ? "S" : ""}` : "";
+  toasts.toast(sweep.count === 1 ? status : `OVERRUN x${sweep.count}: +${sweep.gold}G +${sweep.exp}EXP${items}`);
   for (const line of news) toasts.toast(line);
   if (result.levels) Sfx.levelup();
   else {
@@ -1682,16 +1699,27 @@ export function meetFoe(
   if (roamer) roamers.splice(roamers.indexOf(roamer), 1);
   const body = roamer?.sprite.body as Phaser.Physics.Arcade.Body | undefined;
   if (body) body.enable = false;
-  const sprite = roamer?.sprite ?? scene.add.image(hero.x + 40, hero.y, (ENEMIES[kind] ?? ENEMIES.slime).texture).setDepth(10);
-  const away = sprite.x >= hero.x ? 1 : -1;
+  // out of the grass: a step ahead the way the hero walks (it rolls only
+  // while walking), not always to its right
+  const v = hero.body?.velocity ?? { x: 1, y: 0 };
+  const [ax, ay] = Math.abs(v.x) >= Math.abs(v.y) ? [Math.sign(v.x) || 1, 0] : [0, Math.sign(v.y)];
+  const sprite =
+    roamer?.sprite ?? scene.add.image(hero.x + ax * 40, hero.y + ay * 40, (ENEMIES[kind] ?? ENEMIES.slime).texture).setDepth(10);
+  // knocked straight away from the hero
+  const dx = sprite.x - hero.x;
+  const dy = sprite.y - hero.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const endX = sprite.x + (dx / d) * OVERRUN_KNOCK_PX;
+  const endY = sprite.y + (dy / d) * OVERRUN_KNOCK_PX;
   scene.tweens.killTweensOf(sprite);
   scene.tweens.add({
     targets: sprite,
-    x: sprite.x + away * OVERRUN_KNOCK_PX,
+    x: endX,
+    y: endY,
     alpha: 0,
     duration: OVERRUN_FADE_MS,
     onComplete: () => sprite.destroy(),
   });
-  playFx(scene, "fx-poof", sprite.x, sprite.y + sprite.displayHeight / 2 - 4, OVERRUN_PUFF_MS, 1).setDepth(10.6);
+  playFx(scene, "fx-poof", endX, endY + sprite.displayHeight / 2 - 4, OVERRUN_PUFF_MS, 1).setDepth(OVERRUN_PUFF_DEPTH);
   return "overrun";
 }
