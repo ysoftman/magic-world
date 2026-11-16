@@ -69,7 +69,7 @@ export class LookPicker {
       this.cancelQueued = true;
     });
     const panel = gridOutline(
-      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95),
+      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1),
       0xffffff,
     ).setInteractive();
     this.detail = scene.add.pixelText(GAME_WIDTH / 2, DETAIL_Y, "", retroStyle(4, PICKED)).setOrigin(0.5);

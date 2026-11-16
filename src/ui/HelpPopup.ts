@@ -86,7 +86,7 @@ export function addHelpPopup(
   const goalText = scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + PANEL_H - 70, "", retroStyle(5, "#7fbf7f")).setOrigin(0.5);
   const popup = scene.add
     .container(0, 0, [
-      gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff),
+      gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff),
       scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 44, "HELP", retroStyle(8, "#ffd166")).setOrigin(0.5),
       bindKeyHint(scene.add.pixelText(GAME_WIDTH / 2, PANEL_TOP + 84, "", bodyStyle(33, "#f5f5f5")), body)
         .setOrigin(0.5, 0)

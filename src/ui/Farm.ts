@@ -117,7 +117,7 @@ export class FarmUI {
       .setScrollFactor(0)
       .setDepth(150)
       .setVisible(false);
-    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95), 0xffffff)
+    this.panel = gridOutline(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1), 0xffffff)
       .setScrollFactor(0)
       .setDepth(151)
       .setVisible(false);

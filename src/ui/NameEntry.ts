@@ -110,7 +110,7 @@ export class NameEntry {
     const dim = scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5).setInteractive();
     dim.on("pointerdown", () => this.queue.push({ kind: "back" }));
     const panel = gridOutline(
-      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 0.95),
+      scene.add.rectangle(GAME_WIDTH / 2, PANEL_TOP + PANEL_H / 2, PANEL_W, PANEL_H, 0x0b0b2b, 1),
       0xffffff,
     ).setInteractive();
     // an underscore only under a slot still empty: under every glyph it read
