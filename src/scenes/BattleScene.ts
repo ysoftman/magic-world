@@ -233,6 +233,9 @@ const SPELL_BURST_DEPTH = 0.5;
 // its 34-cell core clears the hero (from 40 it hid half the hero at launch)
 const SHOT_START_X = 40;
 const ORB_START_X = 104;
+// a line's typewriter: ms a glyph at BATTLE SPEED 1 and its floor. At 14 the
+// typing alone was 0.75-1.1s of a round's 1.9-2.2s (a 54-glyph row 0.76s).
+const TYPE_MS = 10;
 const TYPE_MIN_MS = 6;
 const FREEZE_TINT = 0x67e8f9;
 // a poison tick's purple, filled on the foe and multiplied on the hero, which
@@ -2036,10 +2039,14 @@ export class BattleScene extends Phaser.Scene {
       shake(this.cameras.main, crit ? 120 : 60, crit ? 0.012 : 0.004);
       this.flashDamage(this.enemySprite.x, this.enemySprite.y, total, crit);
       this.recoil(this.enemySprite, 1, crit);
+      // its line types from the contact on, while the hero walks home: after
+      // the walk it was 160ms more of every FIGHT with nothing new to see
+      const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
+      line = this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
     };
+    let line: Promise<void> | undefined;
     await this.lunge(crit, onContact, hold);
-    const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
-    await this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
+    await line;
     this.restoreEnemyTint();
   }
 
@@ -4526,8 +4533,35 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  // A line typed out, then a key or tap to go on (awaitAdvance). One while it
+  // still types shows the rest of it at once and is not the one that goes on:
+  // a late PARRY or PERFECT press lands here, and must not skip the line of
+  // the blow it missed. The wait for the next starts a frame later, so the
+  // same press can't be it.
   private say(text: string): Promise<void> {
-    return new Promise((resolve) => this.type(text, () => this.awaitAdvance(resolve)));
+    return new Promise((resolve) => {
+      const rush = (): void => {
+        if (!this.typing) return;
+        this.typing.remove();
+        this.typing = undefined;
+        this.msgText.reveal(text.length);
+        stop();
+        this.time.delayedCall(1, () => this.awaitAdvance(resolve));
+      };
+      const onKey = (e: KeyboardEvent): void => {
+        if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) rush();
+      };
+      const stop = (): void => {
+        this.input.keyboard?.off("keydown", onKey);
+        this.input.off("pointerdown", rush);
+      };
+      this.input.keyboard?.on("keydown", onKey);
+      this.input.on("pointerdown", rush);
+      this.type(text, () => {
+        stop();
+        this.awaitAdvance(resolve);
+      });
+    });
   }
 
   // types `text` into the message box, then `done`; a line still typing
@@ -4537,7 +4571,7 @@ export class BattleScene extends Phaser.Scene {
     this.msgText.setText(text);
     let i = 0;
     const ev = this.time.addEvent({
-      delay: this.anim(14, TYPE_MIN_MS),
+      delay: this.anim(TYPE_MS, TYPE_MIN_MS),
       repeat: text.length,
       callback: () => {
         // a removed event can still fire once more when several glyphs are due
