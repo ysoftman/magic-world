@@ -90,7 +90,7 @@
   | VOID          | 마법 스킬 | 28   | 28          | 66           | 무속성                                                |
   | BLACK HOLE    | 마법 기술 | 29   | 30          | 74           | 무속성, DEF 무시(마법 기술)                           |
 
-- 상태 이상: 독(WASP·SPIDER), 빙결(FROST MOTH·YETI·GLACIER GOLEM, 1턴 행동 불가), 재생(MOSS GOLEM). ANTIDOTE CHARM·EMBER RING·TALISMAN 으로 막는다
+- 상태 이상: 독(WASP·SPIDER, MOSS GOLEM 의 SPORES), 빙결(FROST MOTH·YETI·GLACIER GOLEM, 1턴 행동 불가), 재생(MOSS GOLEM). WASP·SPIDER·FROST MOTH 의 독·빙결은 예고(`>POISON`·`>FREEZE`)된 일격에만 실리고 PARRY 하면 걸리지 않는다. YETI·GLACIER GOLEM 의 빙결은 예고 없이 평소 일격(20~25%)에 실린다. ANTIDOTE CHARM·EMBER RING·TALISMAN 으로 막는다
 - 적 창의 HP 막대 아래에 약점이 나온다: 이미 싸워 본(도감에 있는) 종이면 `WEAK:ICE` 처럼, 처음 보는 종은 `WEAK:?`, 약점이 없으면 `WEAK:-`
 - 보스와 거인은 HP 30% 이하에서 격노(ATK x1.3). 기를 모으면(CHG) 다음 턴에 강타가 오니 DEFEND·WARD·회복으로 대비한다. 강타는 최대 HP 70% 를 넘지 않고, GLACIER GOLEM 의 강타는 빙결을 건다
 - 보스와 거인의 두 번째 패턴: HP 가 정해진 선까지 처음 떨어지면 적 창에 `>SPLASH` 처럼 예고가 깜빡이고, 다음 턴에 그 기술을 쓴 뒤 평소 행동(공격·기 모으기)까지 한다. 한 전투에 선의 수만큼만 나온다. 기술마다 제 연출과 소리가 있다(덮쳐 오는 슬라임 물결, 터지는 포자 버섯, 불꼬리, 솟는 얼음 결정, 곤봉의 흙먼지)
@@ -115,6 +115,8 @@
   | BAT               | DRAIN          | 일격으로 준 피해만큼 제 HP 회복                                                   |
   | WOLF              | HOWL           | ATK x1.25(전투 끝까지, 한 번, `ATK+`)하고 바로 공격                               |
   | FIRE IMP          | FLURRY         | x0.6 일격 두 번, 각각 PARRY 가능                                                  |
+  | WASP·SPIDER       | POISON         | 일격에 독이 실린다(이미 중독이면 쓰지 않는다)                                     |
+  | FROST MOTH        | FREEZE         | 일격에 빙결이 실린다(얼어 있거나 풀린 직후엔 쓰지 않는다)                         |
 
 - LIMIT: 영웅 창 이름 아래의 게이지. 피해를 주면 차고(적 HP 전부를 깎으면 22%), 맞으면 더 빨리 찬다(최대 HP 전부를 잃으면 120%, PARRY 성공마다 +6%). 일반 전투 서너 판, 보스전은 중반쯤에 가득 찬다. 가득 차면 금색으로 깜빡이고 L(터치는 게이지를 탭)로 LIMIT BREAK: MP 없이 ATK x2.5 의 일격(크리티컬·콤보·약점 없음, 콤보는 끊지 않음)을 넣고 게이지가 비워진다. 게이지는 전투가 끝나도 남고 저장되므로, 아껴 두었다가 보스의 CHG 뒤나 마무리에 쓸 수 있다. 훈련장에서는 늘 가득 차 있고 저장된 게이지는 건드리지 않는다
 - 큰 몬스터 ORC·YETI·SALAMANDER 도 적 턴의 25% 로 기를 모아(CHG) 다음 턴에 강타한다. 막지 않으면 그 지역에 처음 들어설 레벨에서 최대 HP 의 약 20%(밤 약 30%)

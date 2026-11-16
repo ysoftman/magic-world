@@ -831,16 +831,19 @@ export const moveDamage = (dmg: number, mult: number): number => Math.max(1, Mat
 /**
  * Whether a foe may announce its move for its next turn: not twice running
  * (`moved`: it used it last turn), a buff only once at a time (`buffed`),
- * SNATCH once and only from a purse (`snatched`, `gold`). DRAIN and FLURRY
- * any time: the hero strikes first, so there is something to drain by then.
+ * SNATCH once and only from a purse (`snatched`, `gold`), a status only
+ * where it could land (`immune`: poisoned already, or frozen or inside the
+ * grace after a freeze). DRAIN and FLURRY any time: the hero strikes first,
+ * so there is something to drain by then.
  */
 export function moveReady(
   move: EnemyMove | undefined,
-  s: { moved: boolean; buffed: boolean; snatched: boolean; gold: number },
+  s: { moved: boolean; buffed: boolean; snatched: boolean; gold: number; immune: boolean },
 ): move is EnemyMove {
   if (!move || s.moved) return false;
   if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor") return !s.buffed;
   if (move.kind === "snatch") return !s.snatched && s.gold > 0;
+  if (move.kind === "afflict") return !s.immune;
   return true;
 }
 /**

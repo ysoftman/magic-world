@@ -421,7 +421,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let armor: { def: number; turns: number } | null = null;
   const rollIntent = (): void => {
     const move = foe.move;
-    const ready = moveReady(move, { moved, buffed, snatched, gold: 1 });
+    const immune = move?.status === "poison" ? poisonTurns > 0 : frozen || freezeGrace > 0;
+    const ready = moveReady(move, { moved, buffed, snatched, gold: 1, immune });
     moved = false;
     intent = ready && !charging && moveDue(move, { used: movesUsed, curHp: foe.curHp, hp: foe.hp });
     if (intent && move?.at) movesUsed += 1;
@@ -635,6 +636,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     if (intent && foe.move) {
       intent = false;
       moved = true;
+      if (freezeGrace > 0) freezeGrace -= 1;
       const kind = foe.move.kind;
       if (kind === "howl") {
         foe.atk = Math.round(foe.atk * MOVE_HOWL_ATK);
@@ -648,6 +650,11 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       } else if (kind === "flurry") {
         for (let i = 0; i < (foe.move.hits ?? 2) && hp > 0; i++)
           blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? MOVE_FLURRY_MULT));
+      } else if (kind === "afflict") {
+        if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) {
+          if (foe.move.status === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
+          else if (foe.move.status === "freeze" && !hero.resists.freeze) frozen = true;
+        }
       } else if (kind === "blast") {
         // BattleScene enemyBlast(): no PARRY, the guard as ever
         hurt(guard(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? 1), true));

@@ -2998,6 +2998,7 @@ export class BattleScene extends Phaser.Scene {
       buffed: this.foeBuff !== null,
       snatched: this.snatched > 0,
       gold: this.practice ? 0 : GameState.gold,
+      immune: move?.status === "poison" ? this.poisonTurns > 0 : this.frozen || this.freezeGrace > 0,
     });
     this.moved = false;
     // a boss winding up has its CHG up: one warning at a time, and the mark
@@ -3030,6 +3031,8 @@ export class BattleScene extends Phaser.Scene {
       this.intent = false;
       this.moved = true;
       this.updateEnemyStatus();
+      // the turns since a thaw count through a move's turn as any other's
+      if (this.freezeGrace > 0) this.freezeGrace -= 1;
       await this.enemyMove(this.enemy.move);
       // a boss's is on top of its turn, not in place of it: in its place it
       // took the turn's blow or wind-up with it and the fight got easier
@@ -3163,8 +3166,15 @@ export class BattleScene extends Phaser.Scene {
       this.setPlayerTint(undefined);
       return;
     }
-    const { dmg, parried, note } = await this.enemyBlow(move.kind === "snatch" ? MOVE_SNATCH_MULT : 1);
+    const { dmg, crit, parried, note } = await this.enemyBlow(move.kind === "snatch" ? MOVE_SNATCH_MULT : 1);
     const landed = !parried && GameState.player.hp > 0;
+    if (move.kind === "afflict") {
+      // the plain attack's line, then the sting or the frost it carried
+      await this.say(crit ? `CRITICAL! ${name} strikes for ${dmg}!${note}` : `${name} attacks for ${dmg}!${note}`);
+      this.setPlayerTint(undefined);
+      if (landed && move.status) await this.afflict(move.status);
+      return;
+    }
     if (move.kind === "drain") {
       const healed = landed ? Math.min(dmg, this.enemy.hp - this.enemy.curHp) : 0;
       if (healed > 0) {
@@ -3775,6 +3785,8 @@ export class BattleScene extends Phaser.Scene {
     const foe = this.enemySprite;
     const hero = this.playerSprite;
     const { name, special } = this.enemy;
+    // a status the foe's move leaves (monsters.ts "afflict") or its special
+    const status = this.enemy.move?.status ?? special?.kind;
     const big = this.enemy.boss || this.enemy.giant;
     const spells = this.knownSpells();
     const skills = this.knownSkills();
@@ -3808,11 +3820,12 @@ export class BattleScene extends Phaser.Scene {
     if (spells.some((s) => s.kind === "heal")) warm(hero, "heal");
     if (spells.some((s) => s.kind === "ward")) warm(hero, "ward");
     // a resist accessory stops the status outright; a MOON TEA only sometimes
-    if (special?.kind === "poison" && !GameState.resists("poison")) {
+    if (status === "poison" && !GameState.resists("poison")) {
       warm(hero, "poison");
       warm(hero, "poison", PSN_TINT);
     }
-    if ((special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze")) warm(hero, "freeze");
+    if ((status === "freeze" || special?.kind === "freeze" || BOSS_TELLS[name]?.freezes) && !GameState.resists("freeze"))
+      warm(hero, "freeze");
     if (special?.kind === "regen") warm(foe, "regrow");
     // The hero's fall (soulFx.ts), ahead of the move sheets when it is a blow
     // or two from it, behind them otherwise (below).
