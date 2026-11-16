@@ -287,6 +287,8 @@ const MOVE_FX: Record<string, { key: string; ms: number; hit: number; sfx: strin
 };
 // FRENZY's blows land in this in place of the plain hit's sparks
 const CLUB_FX = "fx-bs-club";
+// a HOWL's throb and red flush before the bite it leads into
+const HOWL_MS = 480;
 
 // A companion skill's own sheet (fx.ts COMPANION_SHEETS) as its blow lands
 // (skillFxOn), in place of the plain strike's fx-hit: its ms at 1x, on the
@@ -1940,7 +1942,10 @@ export class BattleScene extends Phaser.Scene {
       await this.tip("parry");
       await this.enemyTurn();
       if (again && this.running && !this.charging && GameState.player.hp > 0 && this.enemy.curHp > 0) {
-        await this.say(`${this.enemy.name} moves again!`);
+        // no line of its own (it was a key between the two blows): the tag
+        // pops as it gathers itself (a row over where a move's ATK+ or DEF+
+        // would), and its beat before the blow is the pause
+        this.flashStatus("AGAIN!", ELITES.swift.color, this.enemySprite.x - 200, this.enemySprite.y - 56, 8);
         await this.enemyTurn();
       }
       this.defending = false;
@@ -3046,14 +3051,19 @@ export class BattleScene extends Phaser.Scene {
       this.statusOn(this.enemySprite, dot.label === "PSN" ? "poison" : "burn", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.enemySprite.x, this.enemySprite.y, dmg);
       this.updateEnemyHp();
-      await this.say(`${this.enemy.name} takes ${dmg} ${word.toLowerCase()}!`);
-      this.restoreEnemyTint();
     }
-    if (dot.turns === 0) {
+    // The last tick and its wearing off on one line, where they were two and
+    // a key each: "GLACIER GOLEM takes 999 poison! The poison wears off." is
+    // 53 glyphs. No tick (the foe at 1 HP), only the wearing off.
+    const over = dot.turns === 0;
+    if (over) {
       this.enemyDot = null;
       this.updateEnemyStatus();
-      await this.say(`${word} on ${this.enemy.name} wore off.`);
     }
+    const tick = dmg > 0 ? `${this.enemy.name} takes ${dmg} ${word.toLowerCase()}!` : "";
+    const worn = over ? (dmg > 0 ? ` The ${word.toLowerCase()} wears off.` : `${word} on ${this.enemy.name} wore off.`) : "";
+    if (tick || worn) await this.say(tick + worn);
+    this.restoreEnemyTint();
   }
 
   // the foe's turn, then what it will do with its next (the intent tag)
@@ -3222,11 +3232,18 @@ export class BattleScene extends Phaser.Scene {
         this.restoreEnemyTint();
         return;
       }
-      // the howl is no turn spent: its bite follows, the stronger for it
-      await this.say(`${name} lets out a HOWL! Its ATK rises.`);
+      // The howl is no turn spent: its bite follows, the stronger for it, and
+      // the two share a line. With one of its own ("lets out a HOWL! Its ATK
+      // rises.") the turn took a key more than any other foe's. "CRITICAL!
+      // WOLF howls (ATK up), bites for 999! (DEFEND)" is 53 glyphs.
+      await this.wait(this.anim(HOWL_MS));
       this.restoreEnemyTint();
       const bite = await this.enemyBlow();
-      await this.say(bite.crit ? `CRITICAL! ${name} strikes for ${bite.dmg}!${bite.note}` : `${name} attacks for ${bite.dmg}!${bite.note}`);
+      await this.say(
+        bite.crit
+          ? `CRITICAL! ${name} howls (ATK up), bites for ${bite.dmg}!${bite.note}`
+          : `${name} howls (ATK up) and bites for ${bite.dmg}!${bite.note}`,
+      );
       this.setPlayerTint(undefined);
       return;
     }
@@ -3521,13 +3538,13 @@ export class BattleScene extends Phaser.Scene {
       this.statusOn(this.playerSprite, "poison", STATUS_FX_MS, STATUS_POP_MIN_MS);
       this.flashDamage(this.playerSprite.x, this.playerSprite.y, dmg);
       this.updatePlayerStats();
-      await this.say(`The poison deals ${dmg} damage!`);
-      this.setPlayerTint(this.frozen ? FREEZE_TINT : undefined);
     }
-    if (this.poisonTurns === 0) {
-      this.updateStatus();
-      await this.say("The poison wore off.");
-    }
+    // the last tick and its wearing off on one line (they were two, a key each)
+    const over = this.poisonTurns === 0;
+    if (over) this.updateStatus();
+    if (dmg > 0) await this.say(`The poison deals ${dmg} damage!${over ? " It wears off." : ""}`);
+    else if (over) await this.say("The poison wore off.");
+    if (dmg > 0) this.setPlayerTint(this.frozen ? FREEZE_TINT : undefined);
   }
 
   private async thaw(): Promise<void> {
@@ -4208,7 +4225,9 @@ export class BattleScene extends Phaser.Scene {
     if (this.snatched > 0) {
       const back = GameState.gainGold(this.snatched);
       this.snatched = 0;
-      await this.say(`You take back your ${back}G!`);
+      // back where the "-9G" went (enemyMove), with no line of its own: the
+      // payout's page is next and a key here was one more in every such fight
+      if (back > 0) this.flashStatus(`+${back}G`, "#fbbf24", this.playerSprite.x - 170, this.playerSprite.y - 80, 8);
     }
     // the TROLL KING's flag (arena.ts: what puts it in the ARENA lineup) for
     // beating it or catching it, which takes beating it down first; never
@@ -4330,9 +4349,12 @@ export class BattleScene extends Phaser.Scene {
         // the stat window takes the new HP/MP with the burst and the line, not
         // only once the hero is back in the field
         this.updatePlayerStats();
-        await this.say(`LEVEL UP! LV ${GameState.player.level}${newRank > 0 ? `  RANK #${newRank}!` : ""}${this.learnedLine(fromLevel)}`);
-        // a perk tier opened (perks.ts): its own line, 41 glyphs of a row's 54
-        if (perkOpened(fromLevel, GameState.player.level)) await this.say("A PERK awaits you: see the ELDER in town.");
+        // a perk tier opened (perks.ts): on the level's own row, "LEVEL UP! LV
+        // 30  RANK #10!  PERK: see the ELDER!" 48 glyphs of a row's 54 (it had
+        // a line and a key of its own)
+        const perk = perkOpened(fromLevel, GameState.player.level) ? "  PERK: see the ELDER!" : "";
+        const rank = newRank > 0 ? `  RANK #${newRank}!` : "";
+        await this.say(`LEVEL UP! LV ${GameState.player.level}${rank}${perk}${this.learnedLine(fromLevel)}`);
       }
       // now and then a TREASURE MAP (treasure.ts), never in the ABYSS, whose
       // pay model has no room for it; its own line, news the payout's page
