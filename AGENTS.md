@@ -581,9 +581,9 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 
 ## 필드 봉인 (`src/seals.ts`, `src/ui/Seal.ts`)
 
-필드의 퍼즐이다(지금은 동굴만, `SEALS` 표에 지역을 더한다). 붉은 돌(SEAL)과 룬 발판 3개가 있고, 발판을 `order` 대로
-밟으면 봉인이 풀려(`GameState.seals[지역] = "open"`) 돌에서 Z 로 봉인된 강적을 부른다. 이기거나 잡으면 `"done"` 이고
-최대 MP +3·지역 골드를 한 번 준다(`fellKeeper`). 옛 세이브는 전부 닫힘, HARD MODE 는 `reset()` 으로 다시 닫는다.
+필드의 퍼즐이다(동굴·숲·설원·화산, `SEALS` 표). 붉은 돌(SEAL)과 룬 발판 3개가 있고, 발판을 `order` 대로 밟으면 봉인이
+풀려(`GameState.seals[지역] = "open"`) 돌에서 Z 로 봉인된 강적을 부른다. 이기거나 잡으면 `"done"` 이고 최대 MP +3·지역
+골드를 한 번 준다(`fellKeeper`, 넷째에는 최대 MP +5 가 더). 옛 세이브는 전부 닫힘, HARD MODE 는 `reset()` 으로 다시 닫는다.
 
 - 순서 힌트는 돌 자신이 말한다(`riddle`: 발판이 놓인 곳으로 가리킴). 발판이 셋이라 순서는 6가지뿐이고 틀리면 전부
   꺼질 뿐이라 힌트 없이도 풀린다. 발판 진행은 저장하지 않는다(씬을 다시 만들면 꺼짐: 도중에 전투가 나면 처음부터).
@@ -592,14 +592,18 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
   rollElite(...)`). 희귀종은 원래 정예가 되지 않으므로 이 조합은 봉인에서만 나온다.
 - 승리 판정은 전투 뒤 씬이 다시 만들어질 때 한다: 부르기 전의 `GameState.battles`·`caught.length` 를 모듈 변수에 적어
   두고 돌아왔을 때 늘었으면 이긴 것이다(심연 수호자와 같은 방식). 그래서 BattleScene 의 `victory()` 에는 훅이 없다.
-  전투 중 새로고침하면 봉인은 풀린 채로 남는다.
-- 새 지역에 넣을 때: `SEALS` 에 항목(칸은 구역 한 타일 밖·입구/상자/제단/상인/별 조각에서 180px 밖인지 스크립트로 확인),
-  씬에 `new Seal(this, region, this.player, this.dialogue, { back: !!back, fight: () => this.startBattle(enemy, elite),
-  blocked, found })`, `startBattle` 이 `elite` 를 Battle data 로 넘기게 하고, 돌 칸을 러너 `walls` 와 `treasure.ts` 의
-  `keep` 에 넣는다. 씬이 Z 를 직접 받는 설원은 Seal 이 제 Z 리스너를 쓰므로 얼음 낚시·제단과 같은 자리에 두지 않는다.
-  `SealRegion` 타입도 넓힌다.
-- 보상을 최대 MP 로 둔 것은 별 조각(최대 HP·ATK·DEF)·제단(전투 수 제한 축복)과 겹치지 않게 하려는 결정이다. 수치를
-  바꾸면 README 의 봉인 줄을 같이 고친다.
+  전투 중 새로고침하면 봉인은 풀린 채로 남는다. 씬의 `fight` 콜백은 `encounterCooldown` 을 0 으로 한 뒤 `startBattle`
+  을 부른다. 실제로 생길 뻔한 일: 봉인이 풀린 직후(발견 뒤 1.2초 유예)나 전투에서 막 돌아왔을 때 부르면 `startBattle`
+  이 조용히 거절하는데 적어 둔 값은 남아, 다음에 이긴 아무 전투가 보상을 줬다.
+- 새 지역에 넣을 때: `SEALS` 에 항목과 `SealRegion`, 씬에 `new Seal(this, region, this.player, this.dialogue, { back:
+  !!back, fight, blocked, found })`, `startBattle(enemy?, keeper?)` 가 `keeper` 를 Battle data 로 넘기게 하고, 돌 칸을
+  러너 `walls` 와 `treasure.ts` 의 `keep` 에 넣는다. 칸은 걷는 바닥·입구에서 도달(돌을 벽으로 쳐도 맵이 안 끊김)·구역
+  한 타일 밖·입구/상자/제단/상인/별 조각에서 180px 밖인지 스크립트로 확인한다. Seal 은 늘 제 Z 리스너를 쓰므로 씬이 Z
+  를 직접 받는 설원에서는 얼음 낚시·제단·상인 자리에서 두 대화 반경(96+120px)보다 멀리 둔다.
+- 보상을 최대 MP 로 둔 것은 별 조각(최대 HP·ATK·DEF)·제단(전투 수 제한 축복)과 겹치지 않게 하려는 결정이다. 업적은
+  하나(SEALBREAKER, 하나라도)뿐이고 넷 전부는 업적이 아니라 최대 MP +5 다(결정). 수치를 바꾸면 README 의 봉인 표를
+  같이 고친다.
+- 진행은 퀘스트 일지 오른쪽 위 셋째 줄 `SEALS 4/4`(`QuestLog`, 별 조각 두 줄 아래, y 56..72)다.
 - 돌은 제단 격자(`SHRINE_TILE`)의 붉은 팔레트(`seal`)이고 풀린 뒤에는 `shrine-spent` 다. 발판 그림은 `Seal.ts` 안의
   격자를 `scene` 인자로 굽는다(check:art 대상 아님). 발판 깊이 3.6(바닥 위, glint·별 조각 4.5 아래).
 

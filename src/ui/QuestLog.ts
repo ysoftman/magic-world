@@ -9,6 +9,7 @@ import { PEDDLER_REGION_NAMES, peddlerRegion } from "../peddler";
 import { perkDue, perkLine } from "../perks";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
+import { SEAL_REGIONS, sealsDone } from "../seals";
 import { SHARDS_TOTAL, type ShardRegion, shardsFound } from "../shards";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hideTouchButtons } from "./TouchControls";
@@ -262,9 +263,12 @@ export class QuestLog {
     // rows of retroStyle(4) as the PEDDLER's are on the left: "STARS 12/12"
     // over each field's count, "C3 F3 S3 V3" (cave, forest, snow, volcano),
     // both 176px, x 1020..1196, 60px clear of the replay title's right end
-    // (960) and 24 inside the panel's edge; y 26..42 and 46..62
+    // (960) and 24 inside the panel's edge. A third row under them counts the
+    // seals whose keepers are gone (seals.ts), "SEALS 4/4". Three rows from
+    // y 16: 16..32, 36..52, 56..72, right of the perks' line (to x 1008) and
+    // over the column headers (from 88)
     this.stars = scene.add
-      .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 26, "", retroStyle(4, "#8ecbff"))
+      .pixelText(PANEL_LEFT + PANEL_W - 24, PANEL_TOP + 16, "", retroStyle(4, "#8ecbff"))
       .setOrigin(1, 0)
       .setAlign("right")
       .setLineSpacing(4);
@@ -340,7 +344,7 @@ export class QuestLog {
     this.title.setText(GameState.ngPlus > 0 ? `QUEST JOURNAL  HARD ${GameState.ngPlus}` : "QUEST JOURNAL");
     const found = (r: ShardRegion): number => shardsFound(GameState.shards, r);
     this.stars.setText(
-      `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nC${found("dungeon")} F${found("forest")} S${found("snow")} V${found("volcano")}`,
+      `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nC${found("dungeon")} F${found("forest")} S${found("snow")} V${found("volcano")}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`,
     );
     this.peddler.setText(`PEDDLER TODAY\n${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
     const taken = GameState.perks;

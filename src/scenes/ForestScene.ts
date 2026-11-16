@@ -41,6 +41,7 @@ import {
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
+import { cellCentre, type KeeperBout, SEALS } from "../seals";
 import { type Season, seasonLook, seasonToday } from "../season";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
@@ -57,6 +58,7 @@ import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
+import { Seal } from "../ui/Seal";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { StarShards } from "../ui/StarShards";
@@ -200,7 +202,7 @@ export class ForestScene extends Phaser.Scene {
       : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
           region: "forest",
           back: !!back,
-          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS],
+          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS, cellCentre(SEALS.forest.at)],
           exits: [FOREST_ENTRY],
           zones: FOREST_ZONES,
           paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -288,6 +290,18 @@ export class ForestScene extends Phaser.Scene {
       ownKey: true,
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
+    });
+    // the field's seal (seals.ts): its stone, its three rune plates, its keeper
+    new Seal(this, "forest", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, so no grace holds it off (a find's, an arrival's): a call
+      // that started no fight would leave the seal waiting on the next win
+      fight: () => {
+        this.encounterCooldown = 0;
+        this.startBattle(SEALS.forest.enemy as ForestKind, SEALS.forest.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
     });
     // the PEDDLER, on the days this field is his (peddler.ts)
     if (Peddler.here("forest")) {
@@ -518,7 +532,7 @@ export class ForestScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: ForestKind): void {
+  private startBattle(enemy?: ForestKind, keeper?: KeeperBout): void {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
@@ -531,7 +545,7 @@ export class ForestScene extends Phaser.Scene {
       const rolled = roll < 0.35 ? "wasp" : roll < 0.7 ? "spider" : "orc";
       const kind = enemy ?? (rolled === "wasp" && Math.random() < SILVER_WASP_CHANCE ? "silverWasp" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("forest") });
-      this.scene.start("Battle", { enemy: kind, from: "Forest" });
+      this.scene.start("Battle", { enemy: kind, from: "Forest", keeper });
     });
   }
 }

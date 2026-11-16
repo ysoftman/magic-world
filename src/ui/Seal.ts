@@ -3,7 +3,7 @@ import { Sfx } from "../audio";
 import { GameState } from "../gameState";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
-import { cellCentre, fellKeeper, SEAL_MP, SEALS, type SealRegion, stepPlate } from "../seals";
+import { ALL_SEALS_MP, cellCentre, fellKeeper, SEAL_MP, SEALS, type SealRegion, stepPlate } from "../seals";
 import type { DialogueBox } from "./DialogueBox";
 
 // the stone is the shrine's (art/props.ts), in its place on its tile the
@@ -129,7 +129,9 @@ export class Seal {
       if (paid) {
         Sfx.levelup();
         // "GRUK THE HEXED FALLS! MAX MP +3, +150 G" is 39 glyphs, 780px
+        // (the longest, MOLG THE GILDED's, 40); the fourth's MP is in the next
         showToast(scene, `${def.keeper} FALLS! MAX MP +${SEAL_MP}, +${paid.gold} G`, FIELD_TOAST_Y);
+        if (paid.all) showToast(scene, `ALL FOUR SEALS BROKEN! MAX MP +${ALL_SEALS_MP}`, FIELD_TOAST_Y);
         GameState.save();
         this.found?.();
       }

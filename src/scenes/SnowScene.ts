@@ -42,6 +42,7 @@ import {
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
+import { cellCentre, type KeeperBout, SEALS } from "../seals";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
@@ -57,6 +58,7 @@ import { NIGHT_ENCOUNTER_MULT, NightOverlay } from "../ui/NightOverlay";
 import { Peddler } from "../ui/Peddler";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
+import { Seal } from "../ui/Seal";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { StarShards } from "../ui/StarShards";
@@ -206,7 +208,7 @@ export class SnowScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
       region: "snow",
       back: !!back,
-      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS],
+      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS, cellCentre(SEALS.snow.at)],
       exits: [SNOW_ENTRY],
       zones: SNOW_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -305,6 +307,18 @@ export class SnowScene extends Phaser.Scene {
     this.dialogue = this.panels.add(new DialogueBox(this, []));
     // the field's shrine (shrine.ts): Z beside it (update) offers gold for a blessing
     this.shrine = new Shrine(this, "snow", SNOW_SHRINE_POS, this.player, this.dialogue, { prayed: () => this.holdFights() });
+    // the field's seal (seals.ts): its stone, its three rune plates, its keeper
+    new Seal(this, "snow", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, so no grace holds it off (a find's, an arrival's): a call
+      // that started no fight would leave the seal waiting on the next win
+      fight: () => {
+        this.encounterCooldown = 0;
+        this.startBattle(SEALS.snow.enemy as SnowKind, SEALS.snow.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
+    });
     // the PEDDLER, on the days this field is his (peddler.ts)
     this.peddler = Peddler.here("snow")
       ? new Peddler(this, SNOW_PEDDLER_POS, this.player, this.dialogue, { bought: () => this.holdFights() })
@@ -518,7 +532,7 @@ export class SnowScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: SnowKind): void {
+  private startBattle(enemy?: SnowKind, keeper?: KeeperBout): void {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
@@ -531,7 +545,7 @@ export class SnowScene extends Phaser.Scene {
       const rolled = roll < 0.5 ? "frostMoth" : "yeti";
       const kind = enemy ?? (rolled === "frostMoth" && Math.random() < AURORA_MOTH_CHANCE ? "auroraMoth" : rolled);
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("snow") });
-      this.scene.start("Battle", { enemy: kind, from: "Snow" });
+      this.scene.start("Battle", { enemy: kind, from: "Snow", keeper });
     });
   }
 }

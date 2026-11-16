@@ -2,7 +2,6 @@ import Phaser from "phaser";
 import { abyssOpen } from "../abyss";
 import { DUNGEON_THEME, Sfx } from "../audio";
 import { GAME_WIDTH } from "../config";
-import type { EliteKind } from "../elite";
 import { encounterOut } from "../fx";
 import { GameState, isNight } from "../gameState";
 import {
@@ -50,7 +49,7 @@ import {
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
-import { cellCentre, SEALS } from "../seals";
+import { cellCentre, type KeeperBout, SEALS } from "../seals";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { addAbyssRift, STAIR_RIFT } from "../ui/abyssRift";
@@ -351,7 +350,12 @@ export class DungeonScene extends Phaser.Scene {
     // the cave's seal (seals.ts): its stone, its three rune plates, its keeper
     new Seal(this, "dungeon", this.player, this.dialogue, {
       back: !!back,
-      fight: () => this.startBattle(SEALS.dungeon.enemy as CaveKind, SEALS.dungeon.elite),
+      // asked for, so no grace holds it off (a find's, an arrival's): a call
+      // that started no fight would leave the seal waiting on the next win
+      fight: () => {
+        this.encounterCooldown = 0;
+        this.startBattle(SEALS.dungeon.enemy as CaveKind, SEALS.dungeon.bout);
+      },
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       found: () => this.holdFights(),
     });
@@ -599,7 +603,7 @@ export class DungeonScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: CaveKind, elite?: EliteKind): void {
+  private startBattle(enemy?: CaveKind, keeper?: KeeperBout): void {
     // A fade out either way is a scene change: a battle rolled while the exit
     // or the ABYSS stair fades (no safe radius round the stair), or that stair
     // reached while a battle fades, started both scenes at once.
@@ -611,7 +615,7 @@ export class DungeonScene extends Phaser.Scene {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.35 ? "slime" : roll < 0.7 ? "goblin" : "bat");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("dungeon") });
-      this.scene.start("Battle", { enemy: kind, from: "Dungeon", elite });
+      this.scene.start("Battle", { enemy: kind, from: "Dungeon", keeper });
     });
   }
 }

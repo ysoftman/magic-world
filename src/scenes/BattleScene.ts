@@ -88,6 +88,7 @@ import type { PixelText } from "../pixelText";
 import { endPracticeRun, type PracticeRun, practiceEnemy, practiceHp, randomStep } from "../practice";
 import { recordRank } from "../ranking";
 import { openRelicBout, relicAtk, relicDef, relicWinHeal } from "../relics";
+import { type KeeperBout, keeperDef } from "../seals";
 import { type BlessingDef, takeBlessingCharge } from "../shrine";
 import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../skillFx";
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
@@ -740,8 +741,9 @@ export class BattleScene extends Phaser.Scene {
     arena?: ArenaRun;
     abyss?: AbyssBout;
     practice?: PracticeRun;
-    // a field seal's keeper (seals.ts): the elite it is fought as, not rolled
-    elite?: EliteKind;
+    // a field seal's keeper (seals.ts): the elite it is fought as, not
+    // rolled, and its own HP and ATK on top
+    keeper?: KeeperBout;
   }): void {
     // Phaser reuses the scene instance across scene.start(), so per-battle
     // counters must reset here rather than in the field initializer
@@ -785,7 +787,7 @@ export class BattleScene extends Phaser.Scene {
     this.guarded = false;
     this.defending = false;
     this.weakFinish = false;
-    const def = ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime;
+    const def = keeperDef(ENEMIES[data?.enemy ?? ""] ?? ENEMIES.slime, data?.keeper);
     // Night is the risk/reward shift: tougher enemies, richer payout. Applied
     // to the copy, so ENEMIES stays the daytime baseline. Two exceptions, from
     // the balance audit:
@@ -827,7 +829,7 @@ export class BattleScene extends Phaser.Scene {
     this.night = isNight() && !this.abyss;
     this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
     const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
-    this.elite = data?.elite ?? rollElite(def, fought);
+    this.elite = data?.keeper?.elite ?? rollElite(def, fought);
     this.enemy = scaleEnemy(def, {
       night: this.night,
       arena: !!this.arena,

@@ -44,6 +44,7 @@ import {
   wanderRoamers,
   whilePanelUp,
 } from "../sceneCommon";
+import { cellCentre, type KeeperBout, SEALS } from "../seals";
 import { AchievementsUI } from "../ui/AchievementsUI";
 import { addAmbient } from "../ui/Ambient";
 import { BestiaryUI } from "../ui/BestiaryUI";
@@ -59,6 +60,7 @@ import { Peddler } from "../ui/Peddler";
 import { addProp, LAVA_BUBBLES } from "../ui/propFx";
 import { QuestLog } from "../ui/QuestLog";
 import { FieldRunner } from "../ui/Runner";
+import { Seal } from "../ui/Seal";
 import { SettingsUI } from "../ui/SettingsUI";
 import { Shrine } from "../ui/Shrine";
 import { StarShards } from "../ui/StarShards";
@@ -207,7 +209,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
       region: "volcano",
       back: !!back,
-      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS],
+      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS, cellCentre(SEALS.volcano.at)],
       exits: [VOLCANO_ENTRY],
       zones: VOLCANO_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -290,6 +292,18 @@ export class VolcanoScene extends Phaser.Scene {
       ownKey: true,
       blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
       prayed: () => this.holdFights(),
+    });
+    // the field's seal (seals.ts): its stone, its three rune plates, its keeper
+    new Seal(this, "volcano", this.player, this.dialogue, {
+      back: !!back,
+      // asked for, so no grace holds it off (a find's, an arrival's): a call
+      // that started no fight would leave the seal waiting on the next win
+      fight: () => {
+        this.encounterCooldown = 0;
+        this.startBattle(SEALS.volcano.enemy as VolcanoKind, SEALS.volcano.bout);
+      },
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+      found: () => this.holdFights(),
     });
     // the PEDDLER, on the days this field is his (peddler.ts)
     if (Peddler.here("volcano")) {
@@ -480,7 +494,7 @@ export class VolcanoScene extends Phaser.Scene {
     GameState.save();
   }
 
-  private startBattle(enemy?: VolcanoKind): void {
+  private startBattle(enemy?: VolcanoKind, keeper?: KeeperBout): void {
     // A fade out either way is a scene change: the exit reached while a
     // battle fades, or a roamer met while the exit fades, started both scenes
     // at once and left the town running under the battle.
@@ -492,7 +506,7 @@ export class VolcanoScene extends Phaser.Scene {
       const roll = Math.random();
       const kind = enemy ?? (roll < 0.4 ? "magmaSlime" : roll < 0.75 ? "fireImp" : "salamander");
       noteFightSpot(this, { x: this.player.x, y: this.player.y, weather: weatherToday("volcano") });
-      this.scene.start("Battle", { enemy: kind, from: "Volcano" });
+      this.scene.start("Battle", { enemy: kind, from: "Volcano", keeper });
     });
   }
 }
