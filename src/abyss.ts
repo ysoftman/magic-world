@@ -46,9 +46,12 @@ import { type MonsterZone, T_PATH, T_ROCK, T_TALL, T_WATER_A, TILE } from "./lev
 // - RELICS (relics.ts) are what a dive builds: one of two when it starts and
 //   on every second stair down, held for that dive only.
 // - A floor's chest is CURSED CURSED_CHANCE of the time: it asks before it
-//   opens, and opening it is a fight with one of the floor's own foes as
-//   CURSED_DEPTH floors further down would have it (and pay for it). Won, the
-//   chest gives a relic offer instead of its gold; fled from, it stays shut
+//   opens, and opening it is a fight with a foe of CURSED_DEPTH floors
+//   further down, from that floor's roster and scaled (and paying) as there,
+//   and never shallower than CURSED_MIN_DEPTH: on the first floors eight
+//   down was still a cave foe at x1.5, a relic for nothing, where B13 is the
+//   volcano's at x1.72. Won (or its
+//   foe caught), the chest gives a relic offer instead of its gold; fled from, it stays shut
 //   and cursed. A way to trade HP for the build between the stairs' offers,
 //   and always a choice: nothing on the floor depends on it.
 // - No day or night underground: no night stat/loot shift, no night
@@ -154,8 +157,10 @@ export interface AbyssBout {
 
 export const CURSED_CHANCE = 0.35;
 export const CURSED_DEPTH = 8;
-// the floor a bout's foe is scaled for; its label and drops keep `floor`
-export const boutDepth = (bout: AbyssBout): number => bout.floor + (bout.cursed ? CURSED_DEPTH : 0);
+export const CURSED_MIN_DEPTH = 13;
+// the floor a bout's foe is scaled for (and a cursed chest's is rolled
+// from); its label and drops keep `floor`
+export const boutDepth = (bout: AbyssBout): number => (bout.cursed ? Math.max(bout.floor + CURSED_DEPTH, CURSED_MIN_DEPTH) : bout.floor);
 
 export function abyssScale(floor: number, ng: { stat: number; loot: number }): { stat: number; loot: number } {
   const depth = Math.max(0, floor - 1);

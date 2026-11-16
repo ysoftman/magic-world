@@ -7,6 +7,7 @@ import {
   abyssKind,
   abyssResume,
   abyssScale,
+  boutDepth,
   cellCenter,
   floorSeed,
   generateFloor,
@@ -232,8 +233,10 @@ interface AbyssRun {
   // Where the hero stood when the fight began, who it was with, and the win
   // count then: a guardian is only down if GameState.battles grew (it can't
   // be caught, and a flight leaves the count alone), so one fled from stays.
-  // `cursed` is the cursed chest's fight: won, by the same count, it opens.
-  fight: { x: number; y: number; roamer: string | null; guardian: boolean; cursed: boolean; battles: number } | null;
+  // `cursed` is the cursed chest's fight: won, by the same count, or its foe
+  // caught (a catch leaves that count alone, so the catch list's length is
+  // kept too), it opens.
+  fight: { x: number; y: number; roamer: string | null; guardian: boolean; cursed: boolean; battles: number; caught: number } | null;
 }
 
 let run: AbyssRun | null = null;
@@ -342,8 +345,8 @@ export class AbyssScene extends Phaser.Scene {
     let unsealed = false;
     let curseLifted = false;
     if (back?.guardian && GameState.battles > back.battles) unsealed = r.guardianDown = true;
-    else if (back?.cursed && GameState.battles > back.battles) {
-      // the cursed chest's foe fell: the chest is open, a relic its find
+    else if (back?.cursed && (GameState.battles > back.battles || GameState.caught.length > back.caught)) {
+      // the cursed chest's foe fell or was caught: the chest is open, a relic its find
       curseLifted = r.chestOpened = true;
       r.offer ??= rollRelicOffer();
     } else if (back?.roamer) r.met.add(back.roamer);
@@ -836,8 +839,8 @@ export class AbyssScene extends Phaser.Scene {
     } else this.physics.add.overlap(this.player, zone, () => this.openChest(chest));
   }
 
-  // A cursed chest asks first (abyss.ts): OPEN is a fight with one of the
-  // floor's foes scaled CURSED_DEPTH floors deeper, LEAVE (and ESC) walks
+  // A cursed chest asks first (abyss.ts): OPEN is a fight with a foe of
+  // CURSED_DEPTH floors deeper (B13 at the least), LEAVE (and ESC) walks
   // away. Asked once a visit to the chest, as the stair up asks. "A CURSED
   // CHEST. OPEN IT?" is 24 glyphs, one row of a touch question.
   private askCursed(): void {
@@ -849,7 +852,7 @@ export class AbyssScene extends Phaser.Scene {
       if (i !== 0) return;
       // the question's own wait is not a fight's cooldown
       this.encounterCooldown = 0;
-      this.startBattle(abyssKind(r.floor), null, true);
+      this.startBattle(abyssKind(boutDepth({ floor: r.floor, guardian: false, cursed: true })), null, true);
     });
   }
 
@@ -902,7 +905,15 @@ export class AbyssScene extends Phaser.Scene {
     // leaving the battle and a floor running at once
     this.leaving = true;
     const guardian = !!roamer && roamer.id === null;
-    run.fight = { x: this.player.x, y: this.player.y, roamer: roamer?.id ?? null, guardian, cursed, battles: GameState.battles };
+    run.fight = {
+      x: this.player.x,
+      y: this.player.y,
+      roamer: roamer?.id ?? null,
+      guardian,
+      cursed,
+      battles: GameState.battles,
+      caught: GameState.caught.length,
+    };
     const bout: AbyssBout = { floor: run.floor, guardian, cursed };
     encounterOut(this.cameras.main, 300, () => {
       this.scene.start("Battle", { enemy: kind, from: "Abyss", abyss: bout });
