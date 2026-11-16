@@ -9,6 +9,23 @@ export interface EnemySpecial {
   chance: number; // kept low (0.2-0.3) so plain attacks still dominate a fight
 }
 
+// A species' second action, in place of its plain attack some turns and shown
+// the turn before in its battle window (BattleScene's intent tag, ">HOWL");
+// what each kind does is battleRules' (MOVE_*). `name` is that tag and the
+// bestiary's CAN note: 6 glyphs at most (the tag's row holds 7 with the ">").
+// No boss, giant or jackpot has one, nor a species with a wind-up
+// (battleRules BOSS_TELLS): one warning a foe.
+//   drain   a blow that heals it by what it dealt
+//   howl    its ATK up for the rest of the fight, once, then its blow
+//   snatch  a weak blow that takes gold, handed back when it falls
+//   harden  no blow: its DEF up for the rest of the fight, once
+//   flurry  two weak blows, each its own PARRY
+export interface EnemyMove {
+  kind: "drain" | "howl" | "snatch" | "harden" | "flurry";
+  name: string;
+  chance: number;
+}
+
 export interface EnemyDef {
   name: string;
   texture: string;
@@ -23,10 +40,25 @@ export interface EnemyDef {
   weakness?: Element; // attack spell element that deals bonus damage (bestiary shows the hint)
   flying?: boolean; // hovers over its shadow in battle; everything else stands on the ground (BattleScene)
   special?: EnemySpecial;
+  move?: EnemyMove;
 }
 
+// An ordinary fight is over in about two rounds (sim-battle --foe), so the
+// foe acts once or twice: at 0.35 a move shows in one fight in three, rolled
+// before the first turn too so it is announced from the opening menu.
+const MOVE_CHANCE = 0.35;
+
 export const ENEMIES: Record<string, EnemyDef> = {
-  slime: { name: "SLIME", texture: "slime", hp: 16, atk: 5, def: 0, exp: 8, gold: 5 },
+  slime: {
+    name: "SLIME",
+    texture: "slime",
+    hp: 16,
+    atk: 5,
+    def: 0,
+    exp: 8,
+    gold: 5,
+    move: { kind: "harden", name: "HARDEN", chance: MOVE_CHANCE },
+  },
   goldSlime: {
     name: "GOLDEN SLIME",
     texture: "goldSlime",
@@ -38,7 +70,17 @@ export const ENEMIES: Record<string, EnemyDef> = {
     rare: true, // rare world jackpot: big payout, not required for collection
     weakness: "fire",
   },
-  goblin: { name: "GOBLIN", texture: "goblin", hp: 22, atk: 7, def: 1, exp: 14, gold: 9, weakness: "bolt" },
+  goblin: {
+    name: "GOBLIN",
+    texture: "goblin",
+    hp: 22,
+    atk: 7,
+    def: 1,
+    exp: 14,
+    gold: 9,
+    weakness: "bolt",
+    move: { kind: "snatch", name: "SNATCH", chance: MOVE_CHANCE },
+  },
   cursedGoblin: {
     name: "CURSED GOBLIN",
     // a light violet palette (art/monsters.ts CURSED_GOBLIN_PALETTE): an old
@@ -53,8 +95,29 @@ export const ENEMIES: Record<string, EnemyDef> = {
     rare: true, // dungeon-exclusive jackpot: a palette reskin, as GOLDEN SLIME is
     weakness: "bolt",
   },
-  bat: { name: "BAT", texture: "bat", hp: 18, atk: 6, def: 0, exp: 12, gold: 8, weakness: "ice", flying: true },
-  wolf: { name: "WOLF", texture: "wolf", hp: 30, atk: 9, def: 1, exp: 25, gold: 15, weakness: "fire" },
+  bat: {
+    name: "BAT",
+    texture: "bat",
+    hp: 18,
+    atk: 6,
+    def: 0,
+    exp: 12,
+    gold: 8,
+    weakness: "ice",
+    flying: true,
+    move: { kind: "drain", name: "DRAIN", chance: MOVE_CHANCE },
+  },
+  wolf: {
+    name: "WOLF",
+    texture: "wolf",
+    hp: 30,
+    atk: 9,
+    def: 1,
+    exp: 25,
+    gold: 15,
+    weakness: "fire",
+    move: { kind: "howl", name: "HOWL", chance: MOVE_CHANCE },
+  },
   king: {
     name: "KING SLIME",
     texture: "king",
@@ -206,8 +269,28 @@ export const ENEMIES: Record<string, EnemyDef> = {
   // salamander's scales shrug ice off, so it falls to bolt instead. No
   // specials: poison and freeze don't fit fire, and regen's line is the MOSS
   // GOLEM's ("regrows its moss") — the drake still enrages like every boss.
-  magmaSlime: { name: "MAGMA SLIME", texture: "magmaSlime", hp: 60, atk: 17, def: 3, exp: 80, gold: 48, weakness: "ice" },
-  fireImp: { name: "FIRE IMP", texture: "fireImp", hp: 66, atk: 20, def: 3, exp: 105, gold: 66, weakness: "ice" },
+  magmaSlime: {
+    name: "MAGMA SLIME",
+    texture: "magmaSlime",
+    hp: 60,
+    atk: 17,
+    def: 3,
+    exp: 80,
+    gold: 48,
+    weakness: "ice",
+    move: { kind: "harden", name: "CRUST", chance: MOVE_CHANCE },
+  },
+  fireImp: {
+    name: "FIRE IMP",
+    texture: "fireImp",
+    hp: 66,
+    atk: 20,
+    def: 3,
+    exp: 105,
+    gold: 66,
+    weakness: "ice",
+    move: { kind: "flurry", name: "FLURRY", chance: MOVE_CHANCE },
+  },
   // the volcano's jackpot, scaled off the FIRE IMP as SILVER WASP is off the
   // WASP. No roamer or grass roll is ever one: it is met only as the
   // volcano's runner (ui/Runner.ts)

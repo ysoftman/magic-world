@@ -138,6 +138,9 @@ const PARTNER_COLOR = "#ffd166";
 function speciesNotes(def: EnemyDef): { weak: string; can: string } {
   const can = [
     def.special ? SPECIAL_NOTE[def.special.kind] : "",
+    // its move, by the name its battle tag shows (monsters.ts EnemyMove); no
+    // species has a special as well, and "CAN:HARDEN" is "CAN:POISON"'s 10
+    def.move?.name ?? "",
     // every boss/giant enrages once at low HP (BattleScene.enemyTurn)
     def.boss || def.giant ? "ENRAGE" : "",
   ].filter(Boolean);

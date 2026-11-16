@@ -32,6 +32,12 @@
 // average (uncapped, what the blow itself dealt left out, no PARRY: that is
 // the player's timing). Without it the hero has no LIMIT, as before.
 //
+// --parry P and --perfect P are the share (0..1) of the foe's blows the
+// player PARRIES and of FIGHTs timed PERFECT (BattleScene enemyLunge,
+// playerAttack; battleRules parriedDamage, perfectDamage): a parried blow
+// brings no poison or freeze either, and fills LIMIT_PARRY of the gauge.
+// 0.4 is a player who tries, 0.8 one who has it down; left out, none.
+//
 // --perks a,b,... gives the hero those perks (perks.ts keys, whatever its
 // level): MIGHT, WALL, VIGOR and FOCUS through GameState as the game applies
 // them, FLOW, SURGE, BREAK and PACK where the battle reads them. The rest
@@ -89,7 +95,15 @@ const {
   companionAtk,
   defendedDamage,
   guardedDamage,
+  parriedDamage,
+  perfectDamage,
   poisonTickDamage,
+  hardenDef,
+  MOVE_FLURRY_MULT,
+  MOVE_HOWL_ATK,
+  MOVE_SNATCH_MULT,
+  moveDamage,
+  moveReady,
   regenAmount,
   rollDamage,
   scaleEnemy,
@@ -106,7 +120,7 @@ const { ENEMIES } = await import("../src/monsters");
 const { abyssGuardian } = await import("../src/abyss");
 const { actsAgain, ELITES } = await import("../src/elite");
 const { PERKS } = await import("../src/perks");
-const { LIMIT_MAX, limitDamage, limitDealt, limitTaken } = await import("../src/limit");
+const { LIMIT_MAX, LIMIT_PARRY, limitDamage, limitDealt, limitTaken } = await import("../src/limit");
 
 type Foe = ReturnType<typeof scaleEnemy>;
 
@@ -152,12 +166,14 @@ const HP_LOW_SHARE = 0.35;
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`bun run sim:battle [--boss KING|TROLL|MOSS|GLACIER|DRAKE] [--level 8 | --level 6,12,18] [--n 2000] [--potions 3] [--bond N]
-                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift] [--limit N] [--perks a,b]
+                    [--foe KEY [--gear W,A]] [--elite fierce|sturdy|swift] [--limit N] [--perks a,b] [--parry P] [--perfect P]
                     [--skills | --greedy] [--refine N] [--forged] [--ng N] [--abyss FLOOR] [--hipotions N] [--talisman] [--meal atk|def]
        bun run sim:battle --skill-table
   --boss       one boss instead of all five
   --foe        any ENEMIES key instead (slime, orc, yeti...), its row's intended level the first --level
   --gear       that fight's GEAR columns, EQUIPMENT keys "weapon,armor" (default sword,shield)
+  --parry      share of the foe's blows parried, 0..1 (default 0)
+  --perfect    share of FIGHTs timed PERFECT, 0..1 (default 0)
   --perks      perks taken, a comma list of perks.ts keys (might,vigor,flow...)
   --limit      the LIMIT gauge each fight starts with, 0..100, spent when full; cells add the gauge a fight fills
   --elite      the foe as that elite (elite.ts); with no --foe, the bosses as if they could be
@@ -216,6 +232,8 @@ if (bosses.length === 0) {
 }
 const levelArg = opt("level");
 const levels = levelArg ? levelArg.split(",").map(Number) : Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
+const PARRY = Number(opt("parry") ?? 0);
+const PERFECT = Number(opt("perfect") ?? 0);
 const PERK_LIST = (opt("perks") ?? "").split(",").filter(Boolean);
 const perk = (key: string): number => (PERK_LIST.includes(key) ? PERKS[key as keyof typeof PERKS].value : 0);
 const LIMIT = opt("limit") === undefined ? null : Number(opt("limit"));
@@ -372,15 +390,30 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let enemyDot: number | null = null; // turns left (burn: FIRE's effect)
   let stuck = false;
   let chilled = false;
+  // the foe's move (BattleScene rollIntent(), enemyMove()): no gold in the
+  // sim, so SNATCH is its half blow and is only kept from repeating
+  let intent = false;
+  let moved = false;
+  let buffed = false;
+  let snatched = false;
+  const rollIntent = (): void => {
+    const move = foe.move;
+    const ready = moveReady(move, { moved, buffed, snatched, gold: 1 });
+    moved = false;
+    intent = ready && Math.random() < move.chance;
+  };
+  rollIntent();
   let rounds = 0;
   let taken = 0;
   // the LIMIT blow's own damage, which fills nothing, and whether it is spent
   let limitDmg = 0;
+  let parries = 0;
   let limitSpent = false;
   // what the fight has filled so far: the foe's HP gone (regrowth not
   // counted twice here, as BattleScene's syncLimit would) and the hero's
   const gauge = (): number =>
-    (limitDealt(foe.hp - Math.max(0, foe.curHp) - limitDmg, foe.hp) + limitTaken(taken, hero.maxHp)) * (1 + perk("surge"));
+    (limitDealt(foe.hp - Math.max(0, foe.curHp) - limitDmg, foe.hp) + limitTaken(taken, hero.maxHp) + parries * LIMIT_PARRY) *
+    (1 + perk("surge"));
   const done = (won: boolean): Outcome => ({ won, rounds, taken, gauge: gauge() });
 
   const hurt = (dmg: number): void => {
@@ -391,6 +424,13 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   // else DEFEND takes its share
   // (PARRY x0.7 and FIGHT's PERFECT x1.25 are the player's timing, left out: these are the numbers with neither)
   const guard = (raw: number): number => (wardTurns > 0 ? guardedDamage(raw, true) : defending ? defendedDamage(raw) : raw);
+  // BattleScene enemyLunge(): the blow parried or not, on top of the guard
+  const blow = (raw: number): boolean => {
+    const parried = Math.random() < PARRY;
+    if (parried) parries += 1;
+    hurt(parried ? parriedDamage(guard(raw)) : guard(raw));
+    return parried;
+  };
 
   const choose = (): Action => {
     if (hp <= hero.maxHp * HP_LOW_SHARE) {
@@ -439,7 +479,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   const playerAttack = (): void => {
     combo += 1;
     const { dmg } = rollDamage(hero.atk, foe.def);
-    foe.curHp = Math.max(0, foe.curHp - Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow"))))));
+    const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow")))));
+    foe.curHp = Math.max(0, foe.curHp - (Math.random() < PERFECT ? perfectDamage(total) : total));
   };
 
   // BattleScene castSpell() + spellEffectCanLand() + landSpellEffect()
@@ -552,13 +593,35 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       stuck = false;
       return;
     }
+    if (intent && foe.move) {
+      intent = false;
+      moved = true;
+      const kind = foe.move.kind;
+      if (kind === "howl") {
+        foe.atk = Math.round(foe.atk * MOVE_HOWL_ATK);
+        buffed = true;
+        blow(rollDamage(foe.atk, hero.def).dmg);
+      } else if (kind === "harden") {
+        foe.def += hardenDef(foe.atk);
+        buffed = true;
+      } else if (kind === "flurry") {
+        blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_FLURRY_MULT));
+        if (hp > 0) blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_FLURRY_MULT));
+      } else if (kind === "snatch") {
+        if (!blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_SNATCH_MULT))) snatched = true;
+      } else {
+        const before = hp;
+        if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) foe.curHp += Math.min(before - hp, foe.hp - foe.curHp);
+      }
+      return;
+    }
     if (tell && charging) {
       const canFreeze = !!tell.freezes && !frozen && freezeGrace === 0;
       if (freezeGrace > 0) freezeGrace -= 1;
       charging = false;
       tellCooldown = BOSS_TELL_COOLDOWN;
-      hurt(guard(bossStrikeDamage(foe.atk, tell.mult, hero.def, hero.maxHp)));
-      if (hp > 0 && canFreeze && !hero.resists.freeze) frozen = true;
+      const parried = blow(bossStrikeDamage(foe.atk, tell.mult, hero.def, hero.maxHp));
+      if (hp > 0 && canFreeze && !parried && !hero.resists.freeze) frozen = true;
       return;
     }
     if (tell && tellCooldown > 0) tellCooldown -= 1;
@@ -573,8 +636,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       foe.curHp += regenAmount(foe.hp, foe.curHp);
       return;
     }
-    hurt(guard(rollDamage(foe.atk, hero.def).dmg));
-    if (hp <= 0) return;
+    if (blow(rollDamage(foe.atk, hero.def).dmg) || hp <= 0) return;
     // BattleScene enemyTurn(): a resist accessory takes the hit, not the status
     if (special === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
     else if (special === "freeze" && !hero.resists.freeze) frozen = true;
@@ -625,7 +687,11 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     // BattleScene runBattle(): a SWIFT elite may act again
     const again = !stuck && actsAgain(eliteKind);
     enemyTurn();
-    if (again && !charging && hp > 0 && foe.curHp > 0) enemyTurn();
+    if (!intent && hp > 0 && foe.curHp > 0) rollIntent();
+    if (again && !charging && hp > 0 && foe.curHp > 0) {
+      enemyTurn();
+      if (!intent && hp > 0 && foe.curHp > 0) rollIntent();
+    }
     defending = false;
     if (wardTurns > 0) wardTurns -= 1;
   }

@@ -2,7 +2,7 @@ import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale, boutDepth } from
 import { ARENA_GOLD_SHARE } from "./arena";
 import { type EliteKind, eliteDef } from "./elite";
 import type { GameState } from "./gameState";
-import { type Element, ENEMIES, type EnemyDef } from "./monsters";
+import { type Element, ENEMIES, type EnemyDef, type EnemyMove } from "./monsters";
 
 // The battle's rules without the battle: every constant, table and formula
 // BattleScene plays by that needs no Phaser, so the balance sim (outside the
@@ -797,6 +797,39 @@ export const defendedDamage = (raw: number): number => Math.max(1, Math.ceil(raw
 // of WARD/GUARD/DEFEND, never below 1. Player skill, so sim-battle leaves it out.
 export const PARRY_MULT = 0.7;
 export const parriedDamage = (dmg: number): number => Math.max(1, Math.ceil(dmg * PARRY_MULT));
+// ---- a species' move (monsters.ts EnemyMove; BattleScene enemyMove) ----
+// HOWL: ATK x1.25 for the rest of the fight, and its blow the same turn.
+// Howling in place of a blow made the WOLF easier: a fight is two rounds, so
+// the turn it howled was half its blows gone (7% of max HP lost at Lv3
+// became 4%).
+export const MOVE_HOWL_ATK = 1.25;
+// HARDEN / CRUST: DEF up by half its ATK (2 at least) for the rest of the
+// fight, in place of a blow (the one move that spends the turn). Spells and a LASER go by no DEF, so they answer it.
+export const hardenDef = (atk: number): number => Math.max(2, Math.round(atk * 0.5));
+// SNATCH: half a blow, and gold off the hero (what the foe itself pays, at
+// most what the hero carries), handed back when the foe falls or is caught
+export const MOVE_SNATCH_MULT = 0.5;
+export const snatchGold = (heroGold: number, foeGold: number): number => Math.min(heroGold, foeGold);
+// FLURRY: two blows at this share each, 1.2 blows in all if neither is parried
+export const MOVE_FLURRY_MULT = 0.6;
+// a share of a rolled blow, never below 1
+export const moveDamage = (dmg: number, mult: number): number => Math.max(1, Math.round(dmg * mult));
+/**
+ * Whether a foe may announce its move for its next turn: not twice running
+ * (`moved`: it used it last turn), a buff only once (`buffed`), SNATCH once
+ * and only from a purse (`snatched`, `gold`). DRAIN and FLURRY any time: the
+ * hero strikes first, so there is something to drain by then.
+ */
+export function moveReady(
+  move: EnemyMove | undefined,
+  s: { moved: boolean; buffed: boolean; snatched: boolean; gold: number },
+): move is EnemyMove {
+  if (!move || s.moved) return false;
+  if (move.kind === "howl" || move.kind === "harden") return !s.buffed;
+  if (move.kind === "snatch") return !s.snatched && s.gold > 0;
+  return true;
+}
+
 // FIGHT's blow timed right (BattleScene playerAttack), on top of the combo
 // bonus and a crit, always at least 1 more. Player skill too: not in sim-battle.
 export const PERFECT_MULT = 1.25;
