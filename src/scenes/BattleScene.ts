@@ -1749,6 +1749,10 @@ export class BattleScene extends Phaser.Scene {
       if (GameState.player.hp <= 0) return this.defeat();
 
       if (this.poisonTurns > 0) await this.poisonTick();
+      // the full LIMIT gauge explained, the first time the menu comes up
+      // with one (a gauge that filled on a fight's last blow is full at the
+      // next fight's start: said at a round's end, most fights never did)
+      await this.tip("limit");
       // a frozen hero forfeits this action (null matches no case below); the
       // companion and the enemy still take their turns
       let action = this.frozen ? null : await this.playerTurn();
@@ -1846,14 +1850,13 @@ export class BattleScene extends Phaser.Scene {
       this.defending = false;
       this.thawing = false;
       await this.tickWard();
-      await this.tip("limit");
     }
   }
 
   // A first-time line, said once a save (GameState.seenTips, where the
   // fields' unlock tips are kept): what a PARRY is, before the first blow the
-  // hero ever faces, and what a full LIMIT gauge is for, at the end of the
-  // round that first filled it. 52 and 46 glyphs of a row's 54 (touch: 42
+  // hero ever faces, and what a full LIMIT gauge is for, before the first
+  // menu that has one. 52 and 46 glyphs of a row's 54 (touch: 42
   // and 45). Not in the yard, whose gauge is always full.
   private async tip(id: "parry" | "limit"): Promise<void> {
     const seen = GameState.seenTips;
@@ -3772,7 +3775,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // LIMIT (L, or a tap on the full gauge): FIGHT's lunge with a crit's stop
-  // and sparks for one blow of ATK x3 (limit.ts limitDamage). The gauge is
+  // and sparks for one blow of ATK x2.5 (limit.ts limitDamage). The gauge is
   // emptied as the blow lands, its own damage not counted back into it.
   private async limitBreak(): Promise<void> {
     const total = Math.round(limitDamage(this.heroAtk(), this.enemy.def) * (1 + GameState.perk("break")));
