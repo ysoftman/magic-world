@@ -710,14 +710,23 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
 - 나오는 조건(`open`): 정예는 5승 뒤, LIMIT FINISH 는 5승 뒤(게이지가 한 번은 찼을 때), REACTIONS 는 Lv4 부터(THORNS 의
   독 뒤 FIRE 로 혼자 DETONATE 를 낼 수 있는 레벨, `REACTION_MIN_LEVEL`). THORNS 의 learnLevel 이나 반응 표
   (`battleRules.ts` 의 `reactionOf`)를 바꾸면 이 레벨과 힌트(`FIRE ON POISON, ICE ON BURN`)를 다시 맞춘다.
+- SHRINE PRAYER 는 오늘 안 바친 열린 제단이 하나라도 있을 때만 나온다(`deedCounters().shrinesLeft`, `gameState.ts` 의
+  `SHRINE_GATES`). 실제 사례: 게시판을 읽기 전에 열린 제단에 다 바친 날은 끝낼 수 없는 과제가 걸렸다. 새 지역에 제단을
+  넣으면 `SHRINE_GATES` 에도 넣는다.
 - 글자 폭: 이름은 14글자까지(일지 제목 `BOUNTY: CATCH A RUNNER` 22글자, 한도 23), 일지 힌트는 `힌트 - 9999G` 로 37글자까지
   (힌트 28글자), 게시판의 `BOUNTY: CATCH A RUNNER 0/1` 과 `REWARD: 9999 GOLD.` 는 각각 터치 한 줄 42글자 안이다. 둘을 이은
   `BOUNTY: <이름> 0/9 REWARD: 999 GOLD.` 가 한 줄에 들어가려면 이름이 12글자까지다(새 셋은 12 이하, 13·14글자인
   FELL AN ELITE·CATCH A RUNNER 는 두 줄로 넘어가고 대화창이 쪽을 다시 나눈다). 보상은 지금 최대 299G(화산이 열린 뒤 배수 6).
-- 보상은 `pay` x 바운티 풀 평균 골드 x `BOUNTY_MULT`(처치 의뢰는 평균 4.5마리분)다. 러너는 그날 안 나올 수 있어 가장
-  높고(6), 기도는 제단 골드만 들면 되어 가장 낮다(3). PERFECT HITS(5~8번, 4)는 FIGHT 마다 시도할 수 있고 실패에
-  손해가 없어 PARRY(3~5번, 4)보다 횟수가 많고, REACTIONS(2~3번, 5)는 상태를 먼저 걸고 주문 둘의 MP 를 써야 해 셋 중
-  가장 높고, LIMIT FINISH(1번, 3)는 가득 찬 게이지가 필드의 일반 적을 한 방에 쓰러뜨려 게이지 값(3~4전투)만 든다. 러너 확률(`Runner.ts`)이나 정예 확률을 바꾸면 다시 본다.
+- 보상은 `pay` x 바운티 풀 평균 골드 x `BOUNTY_MULT`(처치 의뢰는 평균 4.5마리분)다. 어떤 과제도 처치 의뢰 평균보다 낮지
+  않게 둔다: SHRINE PRAYER·LIMIT FINISH 4.5, LAND PARRIES(3~5번)·PERFECT HITS(5~8번) 5, FELL AN ELITE 5.5, REACTIONS(2~3번) 6,
+  CATCH A RUNNER 7. 실제 사례: 3~6 일 때 가장 낮은 것이 처치 의뢰 평균의 2/3 라, 처치 의뢰의 최고(가장 비싼 종 6마리,
+  평균의 3배)와 견줘 꽝으로 읽혔다. 화산까지 열린 뒤(평균 33.3G): 처치 23~720G·평균 224G, 과제 224·249·274·299·349G. 지역이
+  열릴 때마다 평균(9.3·15.3·22.8·33.3G)이 둘을 같이 올린다. 순서의 이유: 기도는 제단 골드(축복이 갚음)와 걸음 한 번,
+  LIMIT 은 게이지 하나, PERFECT 는 FIGHT 마다 시도할 수 있어 PARRY 보다 횟수만 많고, 반응은 상태를 먼저 걸고 주문 둘의 MP 가
+  들고, 러너는 그날 안 나올 수 있다. 러너·정예 확률이나 몬스터 골드를 바꾸면 `/tmp/pwcheck/` 의 일회용 표로 다시 본다.
+- CATCH A RUNNER 가 걸려 있고 아직 못 채운 동안에는 필드 입장 때의 러너 도착 확률이 12% 대신 50%(`Runner.ts` 의
+  `RUNNER_WANTED_CHANCE`)다. 실제 사례: 12% 에서는 입구를 평균 8번 들락거리는 것이 과제의 가장 빠른 길이었다. 잡으면 끝나서
+  과제가 걸린 날(14일에 하루쯤)에 러너 하나가 더 나오는 정도다(벌이 표의 1% 미만).
 - 러너 과제는 닿아서 전투가 실제로 시작될 때 센다(전투 결과와 무관, 러너당 한 번). 러너의 `caught` 콜백은 봉인처럼
   `encounterCooldown` 을 0 으로 한 뒤 `startBattle` 의 반환값(시작했으면 true)을 돌려주고, `Runner.ts` 는 true 일 때만
   `tagged`·`runnersCaught` 를 올린다. 실제 사례: 상자·기도 뒤의 유예(`holdFights`, 1.2초) 중에 닿으면 `startBattle` 이

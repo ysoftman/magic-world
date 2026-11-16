@@ -12,7 +12,7 @@ import { PERKS, type PerkKey, perkValue, soundPerks } from "./perks";
 import { recordRank } from "./ranking";
 import { loadSeals, type SealState } from "./seals";
 import { loadShards } from "./shards";
-import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays } from "./shrine";
+import { type Blessing, loadBlessing, loadShrineDays, type ShrineDays, type ShrineRegion, shrineSpent } from "./shrine";
 import { loadTreasureMaps, type TreasureMap } from "./treasure";
 
 // bounty board eligibility: these only roam the forest/snow fields, which
@@ -28,6 +28,14 @@ export const FIRE_BEASTS = [...VOLCANO_BOUNTY_MONSTERS];
 // kill value once their item bonuses are folded in), biased to the high
 // end since a rotating bounty can't attach a themed item like HUNTER's do
 const BOUNTY_MULT = 1.5;
+// each field's shrine and the quest flag that opens the field (the pool's
+// gates above): what the board's SHRINE PRAYER has to pray at (bounties.ts)
+const SHRINE_GATES: Array<[ShrineRegion, (q: QuestState) => boolean]> = [
+  ["dungeon", () => true],
+  ["forest", (q) => q.bossDefeated],
+  ["snow", (q) => q.forestBoss],
+  ["volcano", (q) => q.snowBoss],
+];
 
 export interface PlayerState {
   name: string;
@@ -904,6 +912,7 @@ export const GameState = {
       limitKills: this.feats.limitKills,
       prayers: this.prayers,
       runnersCaught: this.runnersCaught,
+      shrinesLeft: SHRINE_GATES.filter(([region, open]) => open(this.quest) && !shrineSpent(this, region, econDay())).length,
       battles: this.battles,
       level: this.player.level,
     };

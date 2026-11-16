@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GameState } from "../gameState";
+import { econDay, GameState } from "../gameState";
 import { type MonsterZone, TILE } from "../levels";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import { hop, isWalkableCell } from "../sceneCommon";
@@ -45,6 +45,16 @@ import { hop, isWalkableCell } from "../sceneCommon";
 // through the balance sim. The jackpots' own 3.5% among their kind's roamers
 // stays as it was.
 export const RUNNER_ARRIVAL_CHANCE = 0.12;
+// ...and while the BOUNTY BOARD's CATCH A RUNNER is still open (bounties.ts):
+// at 12% the bounty was best done by walking in and out of a field's gate
+// (eight times on average) until one stood there. At 50% it is two. It ends
+// with the catch, so it is one runner more on the day in fourteen that posts
+// the bounty: under 1% on the table above.
+export const RUNNER_WANTED_CHANCE = 0.5;
+const runnerWanted = (): boolean => {
+  const b = GameState.bounty;
+  return !!b && b.kind === "runner" && !b.claimed && b.day === econDay() && GameState.runnersCaught - (b.snap ?? 0) < b.need;
+};
 export type RunnerRegion = "dungeon" | "forest" | "snow" | "volcano";
 // `back`: the chance on a return from a fight; `speed`: its run, px a second
 export const RUNNER_FIELDS: Record<RunnerRegion, { back: number; speed: number }> = {
@@ -117,7 +127,8 @@ export class FieldRunner {
     texture: string,
     opts: RunnerOpts,
   ): FieldRunner | null {
-    if (Math.random() >= (opts.back ? RUNNER_FIELDS[opts.region].back : RUNNER_ARRIVAL_CHANCE)) return null;
+    const arrival = runnerWanted() ? RUNNER_WANTED_CHANCE : RUNNER_ARRIVAL_CHANCE;
+    if (Math.random() >= (opts.back ? RUNNER_FIELDS[opts.region].back : arrival)) return null;
     const blocked = new Set([...opts.walls, ...opts.exits].map((p) => cellOf(p).join(",")));
     const open = (tx: number, ty: number): boolean => isWalkableCell(level, tx, ty) && !blocked.has(`${tx},${ty}`);
     // every cell the hero can walk to

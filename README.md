@@ -213,17 +213,17 @@
   | 1    | NEST SENTRY (FIERCE BAT)     | HP x1.3, ATK x1.2                   |
   | 2    | NEST GUARD (FIERCE GOBLIN)   | HP x1.5, ATK x1.3                   |
   | 3    | NEST MOTHER (STURDY BAT)     | HP x2.5, ATK x1.5                   |
-- 바운티 종류: BOUNTY BOARD 의 일일 바운티는 절반은 처치 의뢰(3~6마리), 절반은 아래 일곱 중 하나다(하루 하나, 게시판을 읽은 뒤에 한 것만 센다. 전투에서 세는 것은 훈련장에서는 안 센다). 보상은 열린 지역 몬스터의 평균 골드 x 1.5 에 표의 배수를 곱한 값(처치 의뢰는 평균 4.5마리분)
+- 바운티 종류: BOUNTY BOARD 의 일일 바운티는 절반은 처치 의뢰(3~6마리), 절반은 아래 일곱 중 하나다(하루 하나, 게시판을 읽은 뒤에 한 것만 센다. 전투에서 세는 것은 훈련장에서는 안 센다). 보상은 열린 지역 몬스터의 평균 골드 x 1.5 에 표의 배수를 곱한 값(처치 의뢰는 평균 4.5마리분). CATCH A RUNNER 가 걸려 있는 동안은 필드에 들어설 때 러너가 서 있을 확률이 12% 대신 50%다
 
   | 바운티         | 할 일                                   | 배수 |
   | -------------- | --------------------------------------- | ---- |
-  | FELL AN ELITE  | 정예 1마리 처치(5승 뒤부터 나옴)        | 5    |
-  | LAND PARRIES   | PARRY 3~5번                             | 4    |
-  | CATCH A RUNNER | 도망치는 희귀 몬스터 1마리에 닿기       | 6    |
-  | SHRINE PRAYER  | 제단에 한 번 바치기                     | 3    |
-  | PERFECT HITS   | FIGHT 의 PERFECT 5~8번                  | 4    |
-  | REACTIONS      | 원소 반응 2~3번(Lv4 부터 나옴)          | 5    |
-  | LIMIT FINISH   | LIMIT BREAK 로 적 1마리 마무리(5승 뒤)  | 3    |
+  | FELL AN ELITE  | 정예 1마리 처치(5승 뒤부터 나옴)        | 5.5  |
+  | LAND PARRIES   | PARRY 3~5번                             | 5    |
+  | CATCH A RUNNER | 도망치는 희귀 몬스터 1마리에 닿기       | 7    |
+  | SHRINE PRAYER  | 제단에 한 번 바치기(안 바친 제단이 남은 날) | 4.5  |
+  | PERFECT HITS   | FIGHT 의 PERFECT 5~8번                  | 5    |
+  | REACTIONS      | 원소 반응 2~3번(Lv4 부터 나옴)          | 6    |
+  | LIMIT FINISH   | LIMIT BREAK 로 적 1마리 마무리(5승 뒤)  | 4.5  |
 - 3승·8승 뒤 마을에서 한 번씩 토스트로 알려 준다: `STAR SHARDS AND SEALS HIDE IN EVERY FIELD!`, `A PEDDLER ROAMS THE FIELDS: SEE THE JOURNAL!`
 - 동굴·숲·설원·화산에 들어서면 지역 제목 아래에 그 지역에 오늘 남은 것이 한 줄로 뜬다(예: `STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`: 못 찾은 별 조각, 안 푼 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지, 오늘 거기 서 있는 상인). 다 했으면 줄이 없고, 별 조각·봉인·상인은 위 토스트가 나온 뒤부터 나온다
 - 업적(A), 도감(B): 도감은 본/잡은 몬스터와 약점(WEAK)·능력(CAN: 독·빙결·재생·격노)을 보여 주고, 잡을 수 있는 13종 중 잡은 종 20%마다 ATK/DEF +1(최대 +5). 희귀 몬스터(GOLDEN SLIME·CURSED GOBLIN·NIGHT WISP·SILVER WASP·AURORA MOTH·GILDED IMP)와 보스는 13종에 들지 않아 세지 않는다. 희귀 몬스터는 골드·EXP 가 크고(SILVER WASP·AURORA MOTH 는 숲·설원에서 같은 계열 몬스터 대신 3.5% 로 나오며 그 지역 소재 2개를 꼭 남긴다), CANDY 로 잡을 수는 있지만 도감 완성에는 필요 없다. HUD 의 CAUGHT 도 이 13종 중 잡은 종 수다

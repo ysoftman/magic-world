@@ -16,9 +16,17 @@ import { ELITE_MIN_BATTLES } from "./elite";
 // BOUNTY_MULT its gold, 4.5 kills of the pool's average on average, and a
 // deed pays `pay` kills at the pool's average gold (bountyPool, so it grows
 // with the regions open). The runner's is the most because the day may not
-// offer one (ui/Runner.ts: ~1.4-2.7 an hour and the arrivals' 12%), the
-// prayer's the least because its cost is only the shrine's gold, which the
-// blessing already repays.
+// offer one (ui/Runner.ts: ~1.4-2.7 an hour and half the arrivals while the
+// bounty is up), the prayer's and the LIMIT's the least: one walk to a
+// shrine, whose gold the blessing already repays, or one blow.
+//
+// None pays under the kill bounty's average. At 3-6 the least was two thirds
+// of it, and read as a dud beside a kill bounty's best (6 of the dearest
+// species, three times the average). With every region open (the pool's
+// average 33.3 G): kills 23-720 G, 224 on average; deeds 224 (the prayer,
+// the LIMIT), 249 (parries, PERFECTs), 274 (an elite), 299 (reactions), 349
+// (a runner). Each region's opening scales both alike (the average is 9.3,
+// 15.3, 22.8, 33.3 G).
 //
 // Three are counted inside the battle (feats.ts, one line each in
 // BattleScene): PERFECTs, reactions and a foe finished by the LIMIT BREAK.
@@ -28,7 +36,7 @@ import { ELITE_MIN_BATTLES } from "./elite";
 //   and the element that answers it, two casts' MP and a foe that lives to
 //   the second. It is posted from REACTION_MIN_LEVEL, where the hero can
 //   make one alone (THORNS' poison, then FIRE: DETONATE).
-// - LIMIT FINISH pays least: a full gauge fells most of a field's foes in
+// - LIMIT FINISH pays least of the three: a full gauge fells most of a field's foes in
 //   one blow, so its cost is the gauge, three or four fights' filling
 //   (limit.ts). Posted once LIMIT_MIN_BATTLES are won, when one has filled.
 export type BountyKind = "elite" | "parry" | "runner" | "pray" | "perfect" | "react" | "limit";
@@ -47,6 +55,8 @@ export interface DeedCounters {
   // gameState.ts
   prayers: number;
   runnersCaught: number;
+  // open fields whose shrine has not had today's offering
+  shrinesLeft: number;
   // wins so far and the hero's level, for what a hero can be asked yet
   battles: number;
   level: number;
@@ -72,7 +82,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   elite: {
     label: "FELL AN ELITE",
     need: [1, 1],
-    pay: 5,
+    pay: 5.5,
     hint: "A FOE WITH A COLORED TAG",
     open: (c) => c.battles >= ELITE_MIN_BATTLES,
     count: (c) => c.eliteWins,
@@ -80,7 +90,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   parry: {
     label: "LAND PARRIES",
     need: [3, 5],
-    pay: 4,
+    pay: 5,
     hint: "Z AS A FOE'S BLOW LANDS",
     open: () => true,
     count: (c) => c.parries,
@@ -88,7 +98,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   runner: {
     label: "CATCH A RUNNER",
     need: [1, 1],
-    pay: 6,
+    pay: 7,
     hint: "A RARE FOE LOOSE IN A FIELD",
     open: () => true,
     count: (c) => c.runnersCaught,
@@ -96,15 +106,17 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   pray: {
     label: "SHRINE PRAYER",
     need: [1, 1],
-    pay: 3,
+    pay: 4.5,
     hint: "A SHRINE STANDS IN EACH FIELD",
-    open: () => true,
+    // each shrine takes one offering a day: with every open one prayed at
+    // before the board was read, the day had no prayer left to count
+    open: (c) => c.shrinesLeft > 0,
     count: (c) => c.prayers,
   },
   perfect: {
     label: "PERFECT HITS",
     need: [5, 8],
-    pay: 4,
+    pay: 5,
     hint: "Z AS YOUR OWN BLOW LANDS",
     open: () => true,
     count: (c) => c.perfects,
@@ -112,7 +124,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   react: {
     label: "REACTIONS",
     need: [2, 3],
-    pay: 5,
+    pay: 6,
     hint: "FIRE ON POISON, ICE ON BURN",
     open: (c) => c.level >= REACTION_MIN_LEVEL,
     count: (c) => c.reactions,
@@ -120,7 +132,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
   limit: {
     label: "LIMIT FINISH",
     need: [1, 1],
-    pay: 3,
+    pay: 4.5,
     hint: "END A FIGHT WITH L:LIMIT",
     open: (c) => c.battles >= LIMIT_MIN_BATTLES,
     count: (c) => c.limitKills,
