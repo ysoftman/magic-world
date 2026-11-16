@@ -56,6 +56,10 @@
 // ~25), so beside it the list would also be credited with the better pick.
 // --skill-table prints what each attack spell and skill deals a cast instead
 // of fighting (battleRules.ts sized the skills off it).
+//
+// Reactions (battleRules REACTIONS: MELT, SHATTER, DETONATE, a crit on a
+// stuck foe) happen whenever a cast meets the status, in every run; only the
+// --skills / --greedy hero counts one's damage when it picks its move.
 
 import type { Skill, Spell } from "../src/battleRules";
 import type { EquipmentKey } from "../src/gameState";
@@ -94,6 +98,9 @@ const {
   comboBonus,
   companionAtk,
   defendedDamage,
+  reactionDamage,
+  reactionOf,
+  CRIT_MULT,
   guardedDamage,
   parriedDamage,
   perfectDamage,
@@ -124,6 +131,7 @@ const { PERKS } = await import("../src/perks");
 const { LIMIT_MAX, LIMIT_PARRY, limitDamage, limitDealt, limitTaken } = await import("../src/limit");
 
 type Foe = ReturnType<typeof scaleEnemy>;
+type Elem = Spell["element"];
 
 // the bosses, their intended level and gear (battleRules.ts BOSS_TELLS note:
 // "KING Lv6 + SHIELD, TROLL Lv8 + IRON SHIELD, MOSS Lv12 + IRON, GLACIER
@@ -409,6 +417,29 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let wardTurns = 0;
   let defending = false;
   let enemyDot: number | null = null; // turns left (burn: FIRE's effect)
+  let dotKind: "PSN" | "BRN" | null = null;
+  let chillLost = 0;
+  // BattleScene react(): the status spent, the cast's multiplier and what it adds
+  const react = (element: Elem): { mult: number; extra: number } => {
+    const kind = reactionOf(element, { dot: enemyDot === null ? null : dotKind, chilled });
+    if (!kind) return { mult: 1, extra: 0 };
+    const out = reactionDamage(kind, Math.max(1, Math.round(foe.hp * COMPANION_DOT_PCT)), enemyDot ?? 0);
+    if (kind === "shatter") {
+      chilled = false;
+      foe.atk += chillLost;
+      chillLost = 0;
+    } else {
+      enemyDot = null;
+      dotKind = null;
+    }
+    return out;
+  };
+  const chill = (): void => {
+    const before = foe.atk;
+    chilled = true;
+    foe.atk = Math.max(1, Math.round(before * COMPANION_CHILL_MULT));
+    chillLost = before - foe.atk;
+  };
   let stuck = false;
   let chilled = false;
   // the foe's move (BattleScene rollIntent(), enemyMove()): no gold in the
@@ -497,19 +528,32 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     const odds = Math.min(1, effect.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1));
     return odds * COMPANION_DOT_TURNS * Math.max(1, Math.round(foe.hp * COMPANION_DOT_PCT));
   };
+  // a cast's damage with the reaction it would set off now (battleRules
+  // REACTIONS), less what the status it spends had left to tick: the greedy
+  // hero takes a reaction when it is the most damage, as a player reading the
+  // skill list's INFO line would, and never plays a set-up for one (a hero
+  // that did, THORNS then FIRE and the like, lost as much as one that never
+  // used the list: MOSS 86% of max HP against 58%)
+  const reacted = (mean: number, element: Elem): number => {
+    const kind = reactionOf(element, { dot: enemyDot === null ? null : dotKind, chilled });
+    if (!kind) return mean;
+    const tick = Math.max(1, Math.round(foe.hp * COMPANION_DOT_PCT));
+    const { mult, extra } = reactionDamage(kind, tick, enemyDot ?? 0);
+    return mean * mult + extra - (kind === "shatter" ? 0 : tick * (enemyDot ?? 0));
+  };
   const greedy = (): Action => {
     let best: Action = { kind: "fight" };
     let most = fightMean(hero.atk, foe.def) * (1 + comboBonus(combo + 1) * (1 + perk("flow")));
     for (const spell of hero.spells) {
       if (spell.kind !== "attack" || mp < spell.cost) continue;
       const weak = spell.element !== undefined && spell.element === foe.weakness;
-      const value = spellMean(spell, weak) + dotValue(spell.effect, weak);
+      const value = reacted(spellMean(spell, weak), spell.element) + dotValue(spell.effect, weak);
       if (value > most) [best, most] = [{ kind: "magic", spell }, value];
     }
     for (const skill of hero.skills) {
       if (mp < skillCost(skill, hero.maxMp) || (skill.grounded && foe.flying)) continue;
       const weak = skill.element !== undefined && skill.element === foe.weakness;
-      const value = skillMean(skill, hero.atk, foe.def, weak, !!foe.flying) + dotValue(skill.effect, weak);
+      const value = reacted(skillMean(skill, hero.atk, foe.def, weak, !!foe.flying), skill.element) + dotValue(skill.effect, weak);
       if (value > most) [best, most] = [{ kind: "skill", skill }, value];
     }
     return best;
@@ -518,7 +562,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   // BattleScene playerAttack()
   const playerAttack = (): void => {
     combo += 1;
-    const { dmg } = rollDamage(hero.atk, foe.def);
+    // a stuck foe takes it as a crit
+    const roll = rollDamage(hero.atk, foe.def);
+    const dmg = roll.crit || !stuck ? roll.dmg : roll.dmg * CRIT_MULT;
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow")))));
     foe.curHp = Math.max(0, foe.curHp - (Math.random() < PERFECT ? perfectDamage(total) : total));
   };
@@ -549,12 +595,14 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
           ? !chilled && !CHILL_PROOF.includes(foe.name)
           : !stuck && !foe.boss && !foe.giant);
     const effect = fx && canLand && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
-    foe.curHp = Math.max(0, foe.curHp - dmg);
+    const reaction = react(spell.element);
+    foe.curHp = Math.max(0, foe.curHp - (Math.round(dmg * reaction.mult) + reaction.extra));
     if (!effect || foe.curHp <= 0) return;
-    if (effect === "burn") enemyDot = COMPANION_DOT_TURNS;
-    else if (effect === "chill") {
-      chilled = true;
-      foe.atk = Math.max(1, Math.round(foe.atk * COMPANION_CHILL_MULT));
+    if (effect === "burn") {
+      enemyDot = COMPANION_DOT_TURNS;
+      dotKind = "BRN";
+    } else if (effect === "chill") {
+      chill();
     } else stuck = true;
   };
 
@@ -576,8 +624,11 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
             : !stuck && !foe.boss && !foe.giant);
     const effect = fx && canLand && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
     let total = 0;
+    let reaction: { mult: number; extra: number } | undefined;
     for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
-      const { dmg } = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying });
+      const rolled = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying }).dmg;
+      reaction ??= react(skill.element);
+      const dmg = Math.round(rolled * reaction.mult) + (i === 0 ? reaction.extra : 0);
       foe.curHp = Math.max(0, foe.curHp - dmg);
       total += dmg;
     }
@@ -585,10 +636,11 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     combo = weak || skill.style === "weapon" ? combo + 1 : 0;
     if (skill.drain) hp += Math.min(hero.maxHp - hp, Math.ceil(total * skill.drain));
     if (!effect || foe.curHp <= 0) return;
-    if (effect === "burn" || effect === "poison") enemyDot = COMPANION_DOT_TURNS;
-    else if (effect === "chill") {
-      chilled = true;
-      foe.atk = Math.max(1, Math.round(foe.atk * COMPANION_CHILL_MULT));
+    if (effect === "burn" || effect === "poison") {
+      enemyDot = COMPANION_DOT_TURNS;
+      dotKind = effect === "burn" ? "BRN" : "PSN";
+    } else if (effect === "chill") {
+      chill();
     } else stuck = true;
   };
 

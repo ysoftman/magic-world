@@ -13,6 +13,7 @@ import {
   bossStrikeDamage,
   CHILL_PROOF,
   COMBO_CAP,
+  CRIT_MULT,
   captureChance,
   comboBonus,
   companionAtk,
@@ -34,6 +35,9 @@ import {
   parriedDamage,
   perfectDamage,
   poisonTickDamage,
+  REACTIONS,
+  reactionDamage,
+  reactionOf,
   regenAmount,
   rollDamage,
   SKILLS,
@@ -693,6 +697,10 @@ export class BattleScene extends Phaser.Scene {
   // the stars round a stuck foe's head (statusFx's stun loop): what fades them out
   private stunStars?: () => void;
   private chilled = false;
+  // the ATK a chill took, given back when a SHATTER spends it
+  private chillLost = 0;
+  // a reaction went off this cast: the first one a save sees gets its tip
+  private reacted = false;
   private pilfered = false;
   // ORC's BULWARK: halves the next enemy hit, then it's gone
   private guarded = false;
@@ -771,6 +779,8 @@ export class BattleScene extends Phaser.Scene {
     // the last battle's, gone with its scene
     this.stunStars = undefined;
     this.chilled = false;
+    this.chillLost = 0;
+    this.reacted = false;
     this.pilfered = false;
     this.guarded = false;
     this.defending = false;
@@ -1763,7 +1773,10 @@ export class BattleScene extends Phaser.Scene {
     this.skillCursor.setPosition(target.x - ITEM_TEXT_OFFSET, target.y).setVisible(true);
     const skill = skills[this.skillIndex];
     this.msgText.setVisible(false);
-    this.skillInfoText.setText(`${skill.name}  ${this.skillCost(skill)} MP  ${skill.info}`).setVisible(true);
+    // what it would set off on the foe as it stands, in place of its own note
+    const reaction = reactionOf(skill.element, { dot: this.enemyDot?.label ?? null, chilled: this.chilled });
+    const info = reaction ? REACTIONS[reaction].info : skill.info;
+    this.skillInfoText.setText(`${skill.name}  ${this.skillCost(skill)} MP  ${info}`).setVisible(true);
     this.skillHintText.setVisible(true);
     bindKeyHint(this.skillHintText, () => keyHint("HJKL:MOVE  Z/X:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
     this.skillPageText.setText(`< ${page + 1}/${pages} >`).setVisible(pages > 1);
@@ -1933,12 +1946,15 @@ export class BattleScene extends Phaser.Scene {
   // menu that has one; and what the foe's blinking tag is, before the first
   // menu under one. 52, 46 and 49 (">SNATCH", the longest) glyphs of a row's
   // 54 (touch: 42, 45, the same). Not in the yard, whose gauge is always full.
-  private async tip(id: "parry" | "limit" | "intent"): Promise<void> {
+  private async tip(id: "parry" | "limit" | "intent" | "react"): Promise<void> {
     const seen = GameState.seenTips;
     if (!seen || seen.includes(id) || this.practice || !this.running || GameState.player.hp <= 0) return;
     if (id === "limit" && !limitFull(this.limit)) return;
     if (id === "intent" && !this.intent) return;
+    if (id === "react" && !this.reacted) return;
     seen.push(id);
+    // 52 glyphs
+    if (id === "react") return this.say("TIP: BRN+ice, CHL+bolt, PSN+fire: a status reacts!");
     if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`);
     await this.say(
       id === "parry"
@@ -1967,7 +1983,10 @@ export class BattleScene extends Phaser.Scene {
   private async playerAttack(): Promise<void> {
     this.addCombo();
     const comboBonus = this.comboBonus();
-    const { dmg, crit } = rollDamage(this.heroAtk(), this.enemy.def);
+    // a foe that can't move (stunned, webbed) takes it as a crit
+    const roll = rollDamage(this.heroAtk(), this.enemy.def);
+    const crit = roll.crit || this.stuck !== null;
+    const dmg = roll.crit || !this.stuck ? roll.dmg : roll.dmg * CRIT_MULT;
     let total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
     // PERFECT: the wind-up held so the blow lands a run-up after FIGHT, the
     // reticle shut just before it; the swing's whoosh waits with it
@@ -2088,12 +2107,14 @@ export class BattleScene extends Phaser.Scene {
       await this.say(refreshed ? `WARD renewed for ${WARD_TURNS} turns!` : `A WARD halves damage for ${WARD_TURNS} turns!`);
       return;
     }
-    const { dmg, weak } = spellRoll(spell, this.enemy.weakness);
+    const { dmg: rolled, weak } = spellRoll(spell, this.enemy.weakness);
     const fx = spell.effect;
     const effect =
       fx && this.spellEffectCanLand(fx.kind) && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
     if (spell.ultimate) await this.castNova(spell);
     else await this.castProjectile(spell);
+    const reaction = this.react(spell.element);
+    const dmg = Math.round(rolled * reaction.mult) + reaction.extra;
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
     this.updateEnemyHp();
     this.enemySprite.setTint(spell.color).setTintMode(Phaser.TintModes.FILL);
@@ -2108,12 +2129,13 @@ export class BattleScene extends Phaser.Scene {
       Sfx.critical();
       shake(this.cameras.main, 120, 0.01);
     }
-    // worst case "WEAKNESS! ICE hits for 39! ATK DN! CHAIN x99!", 45 glyphs
-    const tail = effect && this.enemy.curHp > 0 ? this.landSpellEffect(effect) : "";
+    // worst case "WEAKNESS! BOLT hits for 99! SHATTER! STUN! CHAIN x99!", 53 glyphs
+    const tail = reaction.tail + (effect && this.enemy.curHp > 0 ? this.landSpellEffect(effect) : "");
     const chain = weak && this.enemy.curHp > 0 && this.combo >= 2 ? ` CHAIN x${this.combo}!` : "";
     const finish = this.weakFinish ? " WEAK FINISH!" : "";
     await this.say(`${weak ? `WEAKNESS! ${spell.name} hits for ${dmg}!` : `${spell.name}! ${dmg} damage!`}${tail}${chain}${finish}`);
     this.restoreEnemyTint();
+    await this.tip("react");
   }
 
   // A move off the SKILL list (battleRules SKILLS): its effects (skillFx.ts
@@ -2140,18 +2162,23 @@ export class BattleScene extends Phaser.Scene {
     let blows = 0;
     let over = false;
     let unflash: Phaser.Time.TimerEvent | undefined;
+    let reaction: { mult: number; extra: number; tail: string } | undefined;
     // the hits' numbers in a row across the foe, centred on it
     const popX = (i: number): number => this.enemySprite.x + (i - (skill.hits - 1) / 2) * SKILL_POP_STEP;
     const land = (): void => {
       if (over || blows >= skill.hits) return;
       const i = blows++;
       if (this.enemy.curHp <= 0) return;
-      const hit = skillHit(skill, {
+      const rolled = skillHit(skill, {
         atk: this.heroAtk(),
         def: this.enemy.def,
         weakness: this.enemy.weakness,
         flying: this.enemy.flying,
       });
+      // a reaction goes off as the first hit lands, its multiplier on every
+      // hit of the cast and what it adds on that first one
+      reaction ??= this.react(skill.element);
+      const hit = { ...rolled, dmg: Math.round(rolled.dmg * reaction.mult) + (i === 0 ? reaction.extra : 0) };
       this.enemy.curHp = Math.max(0, this.enemy.curHp - hit.dmg);
       dealt.push(hit.dmg);
       crit ||= hit.crit;
@@ -2199,7 +2226,7 @@ export class BattleScene extends Phaser.Scene {
     if (weak || melee) this.addCombo();
     else this.resetCombo();
     this.weakFinish = weak && down;
-    const tail = effect && !down ? this.landSkillEffect(effect) : "";
+    const tail = (reaction?.tail ?? "") + (effect && !down ? this.landSkillEffect(effect) : "");
     const chain = weak && !down && this.combo >= 2 ? ` CHAIN x${this.combo}!` : "";
     const combo = melee && !down && this.combo >= 2 ? ` COMBO x${this.combo}!` : "";
     const finish = this.weakFinish ? " WEAK FINISH!" : "";
@@ -2208,6 +2235,7 @@ export class BattleScene extends Phaser.Scene {
     await this.say(`${head} ${dealt.join("+")} damage!${drained}${tail}${chain}${combo}${finish}`);
     this.restoreEnemyTint();
     this.updateEnemyHp();
+    await this.tip("react");
   }
 
   // A move's sounds, all in this one place: its own (skillSfx.ts) cast as it
@@ -2336,6 +2364,45 @@ export class BattleScene extends Phaser.Scene {
     return " POISON!";
   }
 
+  // CHL on the foe: its ATK down until the fight ends or a SHATTER spends it
+  private chill(): void {
+    const before = this.enemy.atk;
+    this.chilled = true;
+    this.enemy.atk = Math.max(1, Math.round(before * COMPANION_CHILL_MULT));
+    this.chillLost = before - this.enemy.atk;
+  }
+
+  // The reaction (battleRules REACTIONS) a cast of `element` sets off on the
+  // foe as it lands, its status spent here: what the cast's damage is
+  // multiplied by, what is added to it, and " MELT!" for its line. Its name
+  // pops over the status labels' spot (landSpellEffect), which the cast's own
+  // side effect may fill the same moment.
+  private react(element: Spell["element"]): { mult: number; extra: number; tail: string } {
+    const kind = reactionOf(element, { dot: this.enemyDot?.label ?? null, chilled: this.chilled });
+    if (!kind) return { mult: 1, extra: 0, tail: "" };
+    const tick = Math.max(1, Math.round(this.enemy.hp * COMPANION_DOT_PCT));
+    const { mult, extra } = reactionDamage(kind, tick, this.enemyDot?.turns ?? 0);
+    if (kind === "shatter") {
+      this.chilled = false;
+      this.enemy.atk += this.chillLost;
+      this.chillLost = 0;
+      Sfx.freeze();
+      this.fxOn(this.enemySprite, "fx-ice", HIT_FX_MS);
+    } else {
+      if (kind === "detonate") Sfx.poison();
+      else Sfx.spark();
+      this.enemyDot = null;
+      this.fxOn(this.enemySprite, "fx-fire", HIT_FX_MS);
+    }
+    this.updateEnemyStatus();
+    Sfx.critical();
+    shake(this.cameras.main, 140, 0.01);
+    const { name, color } = REACTIONS[kind];
+    this.flashStatus(`${name}!`, color, this.enemySprite.x - 200, this.enemySprite.y - 56, 8);
+    this.reacted = true;
+    return { mult, extra, tail: ` ${name}!` };
+  }
+
   // the companion skills' own "would it do anything" rules (see
   // companionSkillUseful), plus BURN_PROOF / CHILL_PROOF; THORNS' poison is
   // VENOM STING's
@@ -2364,8 +2431,7 @@ export class BattleScene extends Phaser.Scene {
       return " BURN!";
     }
     if (kind === "chill") {
-      this.chilled = true;
-      this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
+      this.chill();
       this.updateEnemyStatus();
       Sfx.freeze();
       this.statusOn(this.enemySprite, "chill", STATUS_FX_MS, STATUS_POP_MIN_MS);
@@ -2935,8 +3001,7 @@ export class BattleScene extends Phaser.Scene {
       this.guarded = true;
       tail = `${dmg} dmg +GUARD`;
     } else if (skill.kind === "chill" && this.enemy.curHp > 0) {
-      this.chilled = true;
-      this.enemy.atk = Math.max(1, Math.round(this.enemy.atk * COMPANION_CHILL_MULT));
+      this.chill();
       this.updateEnemyStatus();
       // frosted over as ICE's CHL leaves it (landSpellEffect): CHILL never
       // ticks, so this is the one time the frost shows

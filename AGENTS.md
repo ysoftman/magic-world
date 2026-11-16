@@ -414,6 +414,15 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   피해 반대편 위에 둔다. 실제 사례: 영웅 머리 위의 `PARRY!` 가 피해 숫자와 겹쳐 둘 다 못 읽었다. 타이밍 입력을 다른 행동에
   더하면 `timedPress` 를 null 로 여는 곳과 닿는 순간 undefined 로 닫는 곳을 짝지어 둔다(열린 채 남으면 다음 키가 그 입력으로
   먹힌다, `init` 이 한 번 더 닫는다).
+- 원소 반응(`battleRules.ts` 의 `REACTIONS`·`reactionOf`·`reactionDamage`)은 BattleScene `react(element)` 한 곳에서 난다:
+  주문은 맞는 순간(`castSpell`), 스킬은 첫 타가 닿을 때(`castSkill` 의 `land`) 불러 상태를 쓰고 배율·추가 피해를 받는다. 상태
+  하나에 반응 하나다(화상+얼음 MELT, 냉기+번개 SHATTER, 독+불 DETONATE). 새 반응은 그 표와 `reactionOf`, sim 의 `react`·
+  `reacted`(greedy 가 반응 피해를 셈에 넣음)를 같이 고치고, 스킬 목록 INFO 줄에 뜨는 `info` 는 이름 + 9 + info 가 54글자 안인지
+  잰다. 반응은 쓰는 상태가 남겼을 피해보다 손해가 아니게 한다. 실제 사례: MELT 가 x1.5 뿐일 때는 보스의 새 화상(세 틱 = 최대
+  HP 15%)을 지우는 쪽이 손해였다 → 남은 틱을 같이 터뜨린다. 냉기를 거는 곳은 `chill()` 하나로 모아 SHATTER 가 깎인 ATK 를
+  돌려준다(`chillLost`). sim 측정(8000판): 반응을 넣어도 보스전 잃는 HP 는 스킬 쓰는 영웅 기준 0~6%p 줄 뿐이고(MOSS 58→52,
+  DRAKE 48→45, 나머지 그대로) 평균 가정은 그대로다. 반응을 노려 상태부터 거는 플레이(THORNS 뒤 FIRE)는 그냥 가장 센 기술을
+  쓰는 것보다 못했다(MOSS 86% 대 58%): 발판은 동료 스킬이나 어차피 쓸 기술의 부가 효과여야 이득이다.
 - 몬스터의 기술(`src/monsters.ts` 의 `move`, 규칙은 `battleRules.ts` 의 `MOVE_*`·`moveReady`)은 다음 턴에 쓸 것을 미리
   굴려(`rollIntent`: 첫 턴 전과 적 턴이 끝날 때마다) 적 창의 `>이름` 태그로 예고하고, 그 턴에 `enemyAct` 가 일반 공격 대신
   `enemyMove` 를 부른다. 묶여서(web·shock) 잃은 턴의 예고는 다음 턴까지 남는다. 새 기술은 종의 `move` 한 줄, `enemyMove` 의

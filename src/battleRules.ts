@@ -811,6 +811,50 @@ export const defendedDamage = (raw: number, heavy = false): number =>
 // of WARD/GUARD/DEFEND, never below 1. Player skill, so sim-battle leaves it out.
 export const PARRY_MULT = 0.7;
 export const parriedDamage = (dmg: number): number => Math.max(1, Math.ceil(dmg * PARRY_MULT));
+// ---- reactions: a status on the foe meets an element (BattleScene react) ----
+// A spell or skill of the right element on a foe with the right status
+// spends the status for more: order is worth something, and the moves that
+// leave a status often (THORNS 50%, FLAME PILLAR 20%, FROST NOVA 20%, a
+// companion's VENOM, FIREBALL or CHILL) are a set-up for the next cast.
+//   MELT      ice on a burning foe (BRN): the cast at MELT_MULT and what the
+//             burn had left to tick at once (at x1.5 alone it was a loss on a
+//             boss: a fresh burn's three ticks are 15% of its HP)
+//   SHATTER   bolt on a chilled foe (CHL): the cast at SHATTER_MULT, the chill
+//             spent and its ATK back, which is the price
+//   DETONATE  fire on a poisoned foe (PSN): what the poison had left to tick,
+//             at DETONATE_MULT, at once on top of the cast
+// One status, one reaction: none can be had again until the status is back.
+// A stunned or webbed foe (it can't be a boss or giant) takes FIGHT as a crit.
+export type Reaction = "melt" | "shatter" | "detonate";
+export const MELT_MULT = 1.5;
+export const SHATTER_MULT = 2;
+export const DETONATE_MULT = 1.5;
+export const REACTIONS: Record<Reaction, { name: string; info: string; color: string }> = {
+  // the skill list's INFO line while the cursor's skill would react: name + 9
+  // + info <= 54 with the longest names of each element (FROST NOVA 10,
+  // THUNDERCLAP 11, FLAME PILLAR 12)
+  melt: { name: "MELT", info: "MELT! x1.5 on a burning foe.", color: "#67e8f9" },
+  shatter: { name: "SHATTER", info: "SHATTER! x2 on a chilled foe.", color: "#fde047" },
+  detonate: { name: "DETONATE", info: "DETONATE! Its poison at once.", color: "#fb923c" },
+};
+/** The reaction `element` sets off on a foe with these statuses, if any. */
+export function reactionOf(element: Element | undefined, s: { dot: "PSN" | "BRN" | null; chilled: boolean }): Reaction | null {
+  if (element === "ice" && s.dot === "BRN") return "melt";
+  if (element === "bolt" && s.chilled) return "shatter";
+  if (element === "fire" && s.dot === "PSN") return "detonate";
+  return null;
+}
+/**
+ * What a reaction does to its cast: the damage multiplied by `mult` and
+ * `extra` on top, the dot's ticks left (`dotTick` each, `turns` of them) all
+ * at once: DETONATE's at its multiplier, MELT's as they were.
+ */
+export function reactionDamage(kind: Reaction, dotTick: number, turns: number): { mult: number; extra: number } {
+  if (kind === "shatter") return { mult: SHATTER_MULT, extra: 0 };
+  if (kind === "melt") return { mult: MELT_MULT, extra: dotTick * turns };
+  return { mult: 1, extra: Math.round(dotTick * turns * DETONATE_MULT) };
+}
+
 // ---- a species' move (monsters.ts EnemyMove; BattleScene enemyMove) ----
 // HOWL: ATK x1.25 for the rest of the fight, and its blow the same turn.
 // Howling in place of a blow made the WOLF easier: a fight is two rounds, so
