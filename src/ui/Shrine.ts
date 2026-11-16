@@ -120,12 +120,14 @@ export class Shrine {
     Sfx.buy();
     const [a, b] = offers.map((k) => BLESSINGS[k]);
     // The longest pair ("FURY: ATK +20%, DEF -20%." and "GREED: GOLD +50%.")
-    // packs with the first line into three rows of the touch box's 42 glyphs;
+    // packs with the first line into three rows of the touch box's 42 glyphs
+    // ("Once a day, for 200 G, it will bless your" 40, "next 6 battles. FURY:
+    // ATK +20%, DEF -20%." 41, the second blessing), two of the keyboard's 54;
     // the question takes the choices' page alone there (DialogueBox). ESC
     // (pick 2, past both) walks away; N, the second, still meets the YES/NO.
     this.dialogue.ask(
       [
-        `An old shrine. For ${cost} G it blesses your next ${BLESSING_BATTLES} battles.`,
+        `Once a day, for ${cost} G, it will bless your next ${BLESSING_BATTLES} battles.`,
         `${a.name}: ${a.info}.`,
         `${b.name}: ${b.info}.`,
         "Which blessing?",

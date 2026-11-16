@@ -515,6 +515,9 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
 - 돌은 48칸 격자(96px, `props.ts` 의 `SHRINE_TILE`, 룬이 꺼진 `shrine-spent` 는 같은 격자의 다른 팔레트)라 영웅보다
   머리 하나 크다. 실제 사례: 32칸(64px)일 때는 앞에 선 영웅이 돌을 거의 다 가렸다. 영웅이 돌 뒤(위쪽)에 있으면 돌의
   깊이를 10.4 로 올려 영웅을 가린다(평소 9).
+- 첫 쪽은 `Once a day, for 200 G, it will bless your next 6 battles.` 로 하루 한 번임을 먼저 말한다(기도한 뒤 다시
+  눌러 봐야 알던 것). 터치 42글자에서 첫 줄 40, 둘째 줄이 `next 6 battles. FURY: ATK +20%, DEF -20%.` 41, 셋째 줄이
+  둘째 축복으로 세 줄이다(키보드 두 줄). 값이나 문구를 바꾸면 네 지역 다 다시 줄을 나눠 본다.
 - 축복을 더하거나 수치를 바꾸면: 이름은 5글자까지(선택지·HUD·전투 창 태그 `STONE 6` 140px), `info` 는 24글자까지,
   README 의 제단 표를 같은 커밋에서 고친다. 효과를 새로 만들면 `BlessingEffect` 와 BattleScene 의 훅(`this.blessing`:
   `heroAtk`·`heroDef`, `victory()` 의 골드·EXP)을 같이 본다. HUD 2행은 요리·축복 태그가 EXP 막대 오른쪽 끝을
