@@ -1100,6 +1100,10 @@ export interface Roamer<K extends string = string> {
   wait: number;
   speed: number;
   kind: K;
+  // the way it last walked (a unit vector, 0,0 before its first walk): its
+  // back while it stands (firstStrike)
+  headX: number;
+  headY: number;
 }
 
 /**
@@ -1138,6 +1142,8 @@ export function addRoamer<K extends string>(
     wait: 300 + Math.random() * 800,
     speed: (boss ? 40 : 56) + Math.random() * 40,
     kind,
+    headX: 0,
+    headY: 0,
   };
   hop(scene, sprite);
   return roamer;
@@ -1200,6 +1206,8 @@ export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
       r.wait = 500 + Math.random() * 900;
     } else {
       s.setVelocity((dx / dist) * r.speed, (dy / dist) * r.speed);
+      r.headX = dx / dist;
+      r.headY = dy / dist;
     }
     s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
     s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
@@ -1209,18 +1217,24 @@ export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
 // FIRST STRIKE: who gets a blow in before the battle's first turn, by how a
 // roamer and the hero meet. The fights met most often had nothing to decide
 // before the menu; this is the walk up to them.
-// - "hero": the hero walks into a roamer that is walking away from it. The
-//   battle opens on a free FIGHT.
+// - "hero": the hero walks into a roamer's back: one walking away from it,
+//   or one stood still that last walked away from it. The battle opens on a
+//   free FIGHT.
 // - "foe": the roamer reaches a hero whose back is to it (looking away, as it
 //   last walked: stood still or walking off). The foe opens with one blow.
-// - null: face to face, from the side, or a roamer stood still met head on.
+// - null: face to face, from the side, or a roamer yet to take a step.
 // A roamer has no drawn facing (most are front-on art, and a flip would not
-// show), so its back is where it is walking from: what the player reads is
-// "it is going away from me". Both tests are a 60-degree cone either side
+// show), so its back is where it is walking, or last walked, from: what the
+// player reads is "it is going away from me", or "it stopped with its back
+// to me". Moving counted alone at first, and a hero walking up as people do
+// met 6% of its fights on an AMBUSH: a roamer walks a second or two at a time
+// and stands 0.5-1.4s between, and the hero mostly reached one standing.
+// Both tests are a 60-degree cone either side
 // (FIRST_STRIKE_COS), wide enough to be meant and narrow enough that a
 // side-swipe is neither. A boss or a giant is never surprised and never
-// surprises; the grass's random fights, the runners, the seals' keepers and
-// the nests have no walk-up and pass none. An OVERRUN comes first (meetFoe):
+// surprises; the grass's random fights, the seals' keepers and the nests
+// have no walk-up and pass none (a runner run down is an AMBUSH of its own,
+// Runner.ts). An OVERRUN comes first (meetFoe):
 // a foe that falls in the field has no battle to open.
 export type Opening = "hero" | "foe";
 const FIRST_STRIKE_COS = 0.5;
@@ -1240,8 +1254,8 @@ export function firstStrike(walk: HeroWalk, roamer: Roamer): Opening | null {
   if (looking <= -FIRST_STRIKE_COS) return "foe";
   const v = roamer.sprite.body?.velocity;
   const speed = v ? Math.hypot(v.x, v.y) : 0;
-  // 1 when the roamer walks straight away from the hero
-  const leaving = v && speed > 1 ? (v.x * dx + v.y * dy) / (speed * dist) : 0;
+  // 1 when the roamer walks (or last walked) straight away from the hero
+  const leaving = v && speed > 1 ? (v.x * dx + v.y * dy) / (speed * dist) : (roamer.headX * dx + roamer.headY * dy) / dist;
   return looking >= FIRST_STRIKE_COS && leaving >= FIRST_STRIKE_COS ? "hero" : null;
 }
 

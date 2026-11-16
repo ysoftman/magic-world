@@ -2274,6 +2274,8 @@ export class TownScene extends Phaser.Scene {
         wait: 300 + Math.random() * 800,
         speed: 44 + Math.random() * 24,
         kind: "troll",
+        headX: 0,
+        headY: 0,
       });
       this.tweens.add({
         targets: sprite,
