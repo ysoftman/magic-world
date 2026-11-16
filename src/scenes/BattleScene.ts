@@ -357,7 +357,7 @@ const SOUL_WARM_HP = 0.4;
 
 // status labels sit right-aligned on the HP rows, 20px inside each window
 const PLAYER_STATUS_RIGHT = 476;
-const ENEMY_STATUS_RIGHT = GAME_WIDTH - 52;
+const ENEMY_STATUS_RIGHT = GAME_WIDTH - 48;
 // Player tags are size 5, 3 glyphs = 60px with 20px between. "HP 999/999"
 // (MAX_HP) ends at x=304, so a row holds two (336..476); a third (WRD with
 // PSN and FRZ up) wraps to a second row beside the HP bar (which ends at
@@ -385,12 +385,25 @@ const LIMIT_BAR_X = 156;
 const LIMIT_BAR_W = 120;
 const LIMIT_NOTE_X = 288;
 const LIMIT_TAP = new Phaser.Geom.Rectangle(52, 58, 408, 40);
-// the enemy side works the same way: "HP 700/700" (an HARD 3 FLAME DRAKE, the
-// most HP in the game) ends at x=1056, so one tag fills row 1 and the rest stack below, right of
-// the HP bar (which ends at x=1056 too). With a boss's CHG, RAGE, a companion's
-// PSN/BRN and CHL all up, the fourth takes a third row (y 138..158), above
-// the COMBO line at y=168. The player never has more than three tags.
-const ENEMY_STATUS_MIN_X = 1076;
+// The enemy side works the same way: "HP 700/700" (an HARD 3 FLAME DRAKE, the
+// most HP in the game) and the HP bar end at x=1056, and the tags keep to x
+// 1072..1232 on all three rows (y 90, 114, 138, the third beside "WEAK:FIRE",
+// which ends at x=996; the COMBO line is under them at y=168). The 160px
+// hold two short tags (CHG or PSN/BRN/CHL, 60px, with RAGE or ATK+/DEF+, 80)
+// or one long one, and layoutTags puts each in the first row with room, so
+// the most a fight can raise fits the three:
+// - a boss or giant (never an elite, elite.ts): CHG or its move's tag (the
+//   two are never up together, rollIntent), RAGE, PSN/BRN, CHL, and the
+//   GLACIER GOLEM alone a DEF+ besides: CHG DEF+ / RAGE PSN / CHL, or
+//   >ARMOR / DEF+ PSN / RAGE CHL;
+// - any other foe: CHG (ORC, YETI, SALAMANDER, which have no move) or its
+//   move's tag or the buff that leaves (one use), PSN/BRN, CHL, and an
+//   elite's tag (to 120px): >SNATCH / PSN CHL / STURDY.
+// At 152px (x 1076..1228) and filled a row at a time, the GLACIER GOLEM's
+// five ran on leftwards along the third row, over "WEAK:FIRE". An elite's
+// tag with RAGE cannot happen; forced, the third row runs over WEAK.
+// The player never has more than three tags.
+const ENEMY_STATUS_MIN_X = 1072;
 // ...which is why a foe's HP stays three digits (battleRules ENEMY_HP_MAX): a
 // fourth would run "HP" into the first tag. Nothing outside the deep ABYSS
 // comes near it.
@@ -1041,7 +1054,7 @@ export class BattleScene extends Phaser.Scene {
     // An elite's tag (elite.ts), in its colour as its name is: the last of
     // the status tags (updateEnemyStatus), so it sits on the HP row alone and
     // moves down a row for each row of tags over it. Fixed on the WEAK row
-    // (y 140) it lay under a third row of tags (y 138). "STURDY" is 6 x 20 =
+    // (then y 140) it lay under a third row of tags (y 138). "STURDY" is 6 x 20 =
     // 120px; an elite has three rows at most (its move's tag or buff, or a
     // wind-up's CHG; PSN/BRN with CHL; this), and on the third it is clear of
     // "WEAK:FIRE" (to x=996).
@@ -1064,13 +1077,14 @@ export class BattleScene extends Phaser.Scene {
     // (BestiaryUI's "WEAK:FIRE"), once an earlier fight has put the species
     // there; "WEAK:?" the first time, the book having nothing either, and
     // "WEAK:-" for one with none. Between the HP bar (to y=122) and the COMBO
-    // line (from 168), y 140..160; "WEAK:FIRE" is 9 x 20 = 180px from x=816,
-    // clear of the status tags' third row (from x=1076).
+    // line (from 168), y 138..158, level with the status tags' third row;
+    // "WEAK:FIRE" is 9 x 20 = 180px from x=816, clear of that row (from
+    // x=1072, ENEMY_STATUS_MIN_X).
     const weak = this.enemy.weakness;
     this.add
       .pixelText(
         GAME_WIDTH - 464,
-        140,
+        138,
         !this.weakKnown ? "WEAK:?" : weak ? `WEAK:${weak.toUpperCase()}` : "WEAK:-",
         retroStyle(5, this.weakKnown && weak ? "#fdba74" : DIM_TEXT),
       )
@@ -1136,7 +1150,7 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false);
     this.tweens.add({ targets: this.chargeText, alpha: 0.35, duration: 320, yoyo: true, repeat: -1 });
     // The move it will use next turn, pulsing as CHG does. ">SNATCH" is 7 x
-    // 20 = 140px of the row's 152 (x 1076..1228), so it holds row 1 alone and
+    // 20 = 140px of the row's 160 (x 1072..1232), so it holds row 1 alone and
     // PSN/BRN with CHL take row 2: never the third, where an elite's tag is.
     // The buff a move leaves takes its place (a species has one move, and a
     // buffing one is used once), so the two are never up together.
@@ -3717,17 +3731,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private layoutTags(tags: Array<[PixelText, boolean]>, rightEdge: number, minX: number): void {
-    let right = rightEdge;
-    let row = 0;
+    // each in the first row with room for it (the last, if none has): a
+    // short tag fills the hole a long one left on a row above
+    const rights = STATUS_ROWS.map(() => rightEdge);
     for (const [t, on] of tags) {
       t.setVisible(on);
       if (!on) continue;
-      if (right - t.width < minX && row < STATUS_ROWS.length - 1) {
-        row += 1;
-        right = rightEdge;
-      }
-      t.setPosition(right, STATUS_ROWS[row]);
-      right -= t.width + 20;
+      const fits = rights.findIndex((right) => right - t.width >= minX);
+      const row = fits < 0 ? STATUS_ROWS.length - 1 : fits;
+      t.setPosition(rights[row], STATUS_ROWS[row]);
+      rights[row] -= t.width + 20;
     }
   }
 

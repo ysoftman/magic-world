@@ -133,7 +133,7 @@ export const DEEDS: Record<BountyKind, DeedDef> = {
     label: "LIMIT FINISH",
     need: [1, 1],
     pay: 4.5,
-    hint: "END A FIGHT WITH L:LIMIT",
+    hint: "END A FIGHT WITH L:BREAK",
     open: (c) => c.battles >= LIMIT_MIN_BATTLES,
     count: (c) => c.limitKills,
   },
