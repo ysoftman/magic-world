@@ -3767,7 +3767,7 @@ export class BattleScene extends Phaser.Scene {
     const gain = (limitDealt(dealt, this.enemy.hp) + limitTaken(taken, GameState.effMaxHp()) + bonus) * (1 + GameState.perk("surge"));
     this.limit = this.practice ? LIMIT_MAX : chargeLimit(this.limit, gain);
     if (!this.practice) GameState.limit = this.limit;
-    if (!was && limitFull(this.limit)) Sfx.emit("parry");
+    if (!was && limitFull(this.limit)) Sfx.emit("limit");
     this.drawLimit();
   }
 

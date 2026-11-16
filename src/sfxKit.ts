@@ -598,6 +598,18 @@ const GAME_KIT: Record<string, SfxProgram> = {
     ],
   },
   // ---- battle: blows taken and status ----
+  limit: {
+    id: "limit",
+    kind: "se",
+    // it fills on a blow given or taken: A and E sit on strike's and hit's E
+    target: "limit full: a square power-up sweep A4 -> A5 (130ms) into a ringing 12.5% pulse fifth E6 + A6 with a slow shimmer",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.14, wave: "square", freq: N("A4"), to: N("A5"), vol: 0.04, attack: 0.02, hold: 0.08 },
+      { at: 0.12, dur: 0.3, wave: "pulse12", freq: N("E6"), vol: 0.036, hold: 0.08, vib: { rate: 12, cents: 25 } },
+      { at: 0.12, dur: 0.3, wave: "pulse12", freq: N("A6"), vol: 0.036, hold: 0.08, vib: { rate: 12, cents: 25 } },
+    ],
+  },
   perfect: {
     id: "perfect",
     kind: "se",
