@@ -234,6 +234,21 @@ function skyIcon(weather: Weather | null, night: boolean): string {
   return (weather && WEATHER_ICONS[weather]?.key) ?? (night ? "moon" : "sun");
 }
 
+// How much of a `width`px bar `cur` of `max` fills, as its x scale: its end on
+// the 2px art grid, and never at odds with the figures beside it. Anything
+// over 0 shows a cell (HP 1/999 rounded to an empty bar) and anything short
+// of full leaves one dark (998/999 rounded to a full one).
+export function barShare(cur: number, max: number, width: number): number {
+  const all = Math.round(width / ART_PX);
+  if (max <= 0 || cur <= 0) return 0;
+  if (cur >= max) return 1;
+  return Math.min(all - 1, Math.max(1, Math.round((cur / max) * all))) / all;
+}
+// the dark bar a gauge fills, so how far a full one reaches shows
+export const BAR_TRACK = 0x2a2a4a;
+// as wide as "HP 999/999" over them (10 x 20)
+const STAT_BAR_W = 200;
+
 // Compact top-of-screen overlay: colored stat segments on row 1, quest/caught
 // and the EXP bar on row 2, HP/MP thin bars under the values. Everything is
 // scroll-locked and drawn above the night/dungeon overlays so it stays legible;
@@ -244,6 +259,8 @@ export class StatusHud {
   private accent!: Phaser.GameObjects.Rectangle;
   private hpBar!: Phaser.GameObjects.Rectangle;
   private mpBar!: Phaser.GameObjects.Rectangle;
+  private barTracks: Phaser.GameObjects.Rectangle[] = [];
+  private expTrack!: Phaser.GameObjects.Rectangle;
   private expBar!: Phaser.GameObjects.Rectangle;
   private dayNightIcon!: Phaser.GameObjects.Image;
   private region: Region | null;
@@ -295,9 +312,17 @@ export class StatusHud {
     this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.meal, 1);
     this.addSegment(MEAL_TAG_RIGHT, 58, 5, COLORS.blessing, 1);
 
-    // y 44..50, 6px: a 5px bar was half an art cell off the 2px grid
-    this.hpBar = scene.add.rectangle(444, 47, 192, 6, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
-    this.mpBar = scene.add.rectangle(684, 47, 192, 6, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    // y 44..50, 6px: a 5px bar was half an art cell off the 2px grid. Each
+    // on a dark track as wide as its figures at their widest ("HP 999/999",
+    // 200px; MP's ends at x=884, 40px short of G): bare and 192px, a full
+    // bar under "HP 900/900" stopped short of the text and read as not full,
+    // and nothing showed how long a full one was.
+    this.barTracks = [444, 684].map((x) =>
+      scene.add.rectangle(x, 47, STAT_BAR_W, 6, BAR_TRACK, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110),
+    );
+    this.hpBar = scene.add.rectangle(444, 47, STAT_BAR_W, 6, 0x4ade80, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.mpBar = scene.add.rectangle(684, 47, STAT_BAR_W, 6, 0x60a5fa, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
+    this.expTrack = scene.add.rectangle(EXP_BAR_X, 68, EXP_BAR_W, 8, BAR_TRACK, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
     this.expBar = scene.add.rectangle(EXP_BAR_X, 68, EXP_BAR_W, 8, 0x22c55e, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110);
 
     this.setVisible(GameState.hudVisible);
@@ -328,6 +353,8 @@ export class StatusHud {
   setVisible(visible: boolean): void {
     this.panel.setVisible(visible);
     this.accent.setVisible(visible);
+    for (const t of this.barTracks) t.setVisible(visible);
+    this.expTrack.setVisible(visible);
     this.hpBar.setVisible(visible);
     this.mpBar.setVisible(visible);
     this.expBar.setVisible(visible);
@@ -349,7 +376,6 @@ export class StatusHud {
     const q = GameState.quest;
     const maxHp = GameState.effMaxHp();
     const hpRatio = maxHp > 0 ? p.hp / maxHp : 0;
-    const mpRatio = p.maxMp > 0 ? p.mp / p.maxMp : 0;
     const hpColor = hpRatio < 0.25 ? "#ef4444" : hpRatio < 0.5 ? "#fbbf24" : COLORS.hp;
 
     this.setSegment(0, p.name, COLORS.name);
@@ -382,9 +408,10 @@ export class StatusHud {
 
     // each bar's end on the 2px grid: a share of it in whole art cells
     const cells = (share: number, w: number, of = w): number => (Math.round((Math.max(0, share) * w) / ART_PX) * ART_PX) / of;
-    this.hpBar.setScale(cells(hpRatio, 192), 1);
-    this.mpBar.setScale(cells(mpRatio, 192), 1);
+    this.hpBar.setScale(barShare(p.hp, maxHp, STAT_BAR_W), 1);
+    this.mpBar.setScale(barShare(p.mp, p.maxMp, STAT_BAR_W), 1);
     const barW = expBarW((meal ? 1 : 0) + (blessing ? 1 : 0));
+    this.expTrack.setScale(barW / EXP_BAR_W, 1);
     this.expBar.setScale(cells(Math.min(1, p.exp / expToNext(p.level)), barW, EXP_BAR_W), 1);
   }
 

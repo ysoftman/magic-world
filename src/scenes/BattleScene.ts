@@ -97,6 +97,7 @@ import { addBattleWeather } from "../ui/BattleWeather";
 import { bindKeyHint, keyHint, onInputChange } from "../ui/Gamepad";
 import { GEAR_LAYOUT } from "../ui/HeroGear";
 import { skyOverlay } from "../ui/NightOverlay";
+import { BAR_TRACK, barShare } from "../ui/StatusHud";
 import { TypedText } from "../ui/TypedText";
 import { battleBgKey } from "./BootScene";
 import type { EndingData } from "./EndingScene";
@@ -357,19 +358,35 @@ const SOUL_WARM_HP = 0.4;
 const PLAYER_STATUS_RIGHT = 476;
 const ENEMY_STATUS_RIGHT = GAME_WIDTH - 52;
 // Player tags are size 5, 3 glyphs = 60px with 20px between. "HP 999/999"
-// ends at x=304, so a row holds two (336..476); a third (WRD with PSN and
-// FRZ up) wraps to a second row in the free strip between the HP and MP
-// rows, right of the HP bar (which ends at x=240).
+// (MAX_HP) ends at x=304, so a row holds two (336..476); a third (WRD with
+// PSN and FRZ up) wraps to a second row beside the HP bar (which ends at
+// x=304 too, 20px short of the tags).
 const PLAYER_STATUS_MIN_X = 324;
 const STATUS_ROWS = [90, 114, 138];
-// the LIMIT gauge's fill, its colour when full, and the tap box round the
-// bar and label (x 64..380, y 70..86) padded 12px
+// Each window's rows: the figures, and their bar 2px under them on a dark
+// track as wide as the figures at their widest (10 glyphs x 24). The next
+// row starts 6px or more under the bar, so a bar reads as the row's over it:
+// with 8px either side, and the LIMIT gauge a bare bar over "HP", the empty
+// gauge read as HP's bar and the green HP bar as MP's (which had none).
+const STAT_BAR_W = 240;
+const STAT_BAR_H = 8;
+const HP_ROW_Y = 88;
+const MP_ROW_Y = 128;
+const HP_COLOR = 0x22c55e;
+const MP_COLOR = 0x60a5fa;
+// The LIMIT gauge's fill and its colour when full; its bar (x 156..276,
+// right of its own label) and the three notches that cut it into quarters;
+// where the figure right of it starts; and the tap box round the row (x
+// 64..448 at its widest, touch's "TAP:BREAK!", y 70..86) padded 12px.
 const LIMIT_COLOR = 0xf472b6;
 const LIMIT_FULL_COLOR = 0xfde047;
-const LIMIT_TAP = new Phaser.Geom.Rectangle(52, 58, 340, 40);
+const LIMIT_BAR_X = 156;
+const LIMIT_BAR_W = 120;
+const LIMIT_NOTE_X = 288;
+const LIMIT_TAP = new Phaser.Geom.Rectangle(52, 58, 408, 40);
 // the enemy side works the same way: "HP 700/700" (an HARD 3 FLAME DRAKE, the
 // most HP in the game) ends at x=1056, so one tag fills row 1 and the rest stack below, right of
-// the HP bar (which ends at x=992). With a boss's CHG, RAGE, a companion's
+// the HP bar (which ends at x=1056 too). With a boss's CHG, RAGE, a companion's
 // PSN/BRN and CHL all up, the fourth takes a third row (y 138..158), above
 // the COMBO line at y=168. The player never has more than three tags.
 const ENEMY_STATUS_MIN_X = 1076;
@@ -627,6 +644,7 @@ export class BattleScene extends Phaser.Scene {
   private thawing = false;
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
+  private playerMpBar!: Phaser.GameObjects.Rectangle;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
   private playerHpText!: PixelText;
   private playerMpText!: PixelText;
@@ -657,6 +675,7 @@ export class BattleScene extends Phaser.Scene {
   private limitSeen = { foe: 0, hero: 0 };
   private limitBar!: Phaser.GameObjects.Rectangle;
   private limitText!: PixelText;
+  private limitLabel!: PixelText;
   // the foe is an elite of its kind (elite.ts), rolled in init
   private elite: EliteKind | null = null;
   // a seal's keeper (seals.ts): the name the opening line gives it
@@ -912,7 +931,7 @@ export class BattleScene extends Phaser.Scene {
     // MP/HP rows) — at (16,24)/(GAME_WIDTH-16,24) they sat on top of the
     // window borders and the player/enemy names
     if (GameState.streak >= STREAK_MIN) {
-      this.add.pixelText(64, 168, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
+      this.add.pixelText(64, 170, `STREAK ${GameState.streak}`, retroStyle(6, "#fbbf24")).setDepth(120);
     }
 
     // live combo counter, filled in by updateCombo() on every fight/heal turn
@@ -994,23 +1013,23 @@ export class BattleScene extends Phaser.Scene {
     this.window(GAME_WIDTH - 496, 24, 464, 176);
 
     this.add.pixelText(64, 40, GameState.player.name, retroStyle(7, "#ffd166")).setOrigin(0, 0).setDepth(STAT_DEPTH);
+    // The hero's rows, top to bottom: the name (y 40..68), the LIMIT gauge
+    // (70..86), HP's figures (88..112) and bar (114..122), MP's (128..152,
+    // 154..162), and STREAK (170..194) under them.
     this.playerHpText = this.add
-      .pixelText(64, 88, "HP " + GameState.player.hp + "/" + GameState.effMaxHp(), retroStyle(6, "#ffffff"))
+      .pixelText(64, HP_ROW_Y, "HP " + GameState.player.hp + "/" + GameState.effMaxHp(), retroStyle(6, "#ffffff"))
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
     this.playerMpText = this.add
-      .pixelText(64, 136, "MP " + GameState.player.mp + "/" + GameState.player.maxMp, retroStyle(6, "#8ecbff"))
+      .pixelText(64, MP_ROW_Y, "MP " + GameState.player.mp + "/" + GameState.player.maxMp, retroStyle(6, "#8ecbff"))
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
 
-    // scaled to the HP the hero brings in, as updatePlayerStats() keeps it
+    // scaled to what the hero brings in, as updatePlayerStats() keeps them
     // after every change: a fight entered hurt used to open on a full bar
     // over its true "HP 21/30" until the first blow redrew it
-    this.playerHpBar = this.add
-      .rectangle(64, 124, 176, 16, 0x22c55e)
-      .setOrigin(0, 0.5)
-      .setDepth(STAT_DEPTH)
-      .setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
+    this.playerHpBar = this.statBar(64, HP_ROW_Y, HP_COLOR);
+    this.playerMpBar = this.statBar(64, MP_ROW_Y, MP_COLOR);
     this.addLimitGauge();
 
     this.add
@@ -1038,14 +1057,11 @@ export class BattleScene extends Phaser.Scene {
       .pixelText(GAME_WIDTH - 464, 88, "HP " + this.enemy.curHp + "/" + this.enemy.hp, retroStyle(6, "#ffffff"))
       .setOrigin(0, 0)
       .setDepth(STAT_DEPTH);
-    this.enemyHpBar = this.add
-      .rectangle(GAME_WIDTH - 464, 124, 176, 16, 0xef4444)
-      .setOrigin(0, 0.5)
-      .setDepth(STAT_DEPTH);
+    this.enemyHpBar = this.statBar(GAME_WIDTH - 464, HP_ROW_Y, 0xef4444);
     // The foe's weakness worded and coloured as the bestiary has it
     // (BestiaryUI's "WEAK:FIRE"), once an earlier fight has put the species
     // there; "WEAK:?" the first time, the book having nothing either, and
-    // "WEAK:-" for one with none. Between the HP bar (to y=132) and the COMBO
+    // "WEAK:-" for one with none. Between the HP bar (to y=122) and the COMBO
     // line (from 168), y 140..160; "WEAK:FIRE" is 9 x 20 = 180px from x=816,
     // clear of the status tags' third row (from x=1076).
     const weak = this.enemy.weakness;
@@ -1065,10 +1081,11 @@ export class BattleScene extends Phaser.Scene {
     this.frozenText = this.add.pixelText(0, 90, "FRZ", retroStyle(5, "#67e8f9")).setOrigin(1, 0).setDepth(STAT_DEPTH);
     this.wardText = this.add.pixelText(0, 90, "WRD", retroStyle(5, "#93c5fd")).setOrigin(1, 0).setDepth(STAT_DEPTH);
     // the meal's tag and battles left, this one counted, on the MP row
-    // right-aligned in the window: "MP 999/999" ends at x=304, the longest
-    // tag "GRILL 5" (140px) starts at 336
+    // right-aligned in the window: "MP 999/999" and its bar end at x=304, the
+    // longest tag "GRILL 5" (140px) starts at 336; y 136..156, 2px under the
+    // status tags' second row (to 134) and 16px over the blessing's
     if (this.meal)
-      this.add.pixelText(476, 140, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0).setDepth(STAT_DEPTH);
+      this.add.pixelText(476, 136, `${this.meal.def.tag} ${this.meal.left}`, retroStyle(5, "#fdba74")).setOrigin(1, 0).setDepth(STAT_DEPTH);
     // the blessing's the same on the STREAK row under it: "STREAK 999" ends
     // at x=304, "STONE 6" (140px) starts at 336, y 172..192 in the window's 200
     if (this.blessing)
@@ -4115,7 +4132,7 @@ export class BattleScene extends Phaser.Scene {
 
   private updateEnemyHp(): void {
     this.enemyHpText.setText(`HP ${this.enemy.curHp}/${this.enemy.hp}`);
-    this.enemyHpBar.setScale(Math.max(0, this.enemy.curHp / this.enemy.hp), 1);
+    this.enemyHpBar.setScale(barShare(this.enemy.curHp, this.enemy.hp, STAT_BAR_W), 1);
     this.syncLimit();
   }
 
@@ -4155,32 +4172,51 @@ export class BattleScene extends Phaser.Scene {
   private updatePlayerStats(): void {
     this.playerHpText.setText(`HP ${GameState.player.hp}/${GameState.effMaxHp()}`);
     this.playerMpText.setText(`MP ${GameState.player.mp}/${GameState.player.maxMp}`);
-    this.playerHpBar.setScale(Math.max(0, GameState.player.hp / GameState.effMaxHp()), 1);
+    this.playerHpBar.setScale(barShare(GameState.player.hp, GameState.effMaxHp(), STAT_BAR_W), 1);
+    this.playerMpBar.setScale(barShare(GameState.player.mp, GameState.player.maxMp, STAT_BAR_W), 1);
     this.syncLimit();
   }
 
-  // The LIMIT gauge (limit.ts) in the hero's window, in the strip between
-  // the name (to y 68) and the HP row (from 88): a bar as wide as the HP
-  // bar's, x 64..240, y 74..82, and its label from x 252 at retroStyle(4),
-  // y 70..86. "L:LIMIT!" is 8 x 16 = 128px, to x 380, inside the window's
-  // 476; the status tags start a row lower (y 90). Full, the bar turns gold,
-  // the label says the key (LIMIT! on touch, where the two are the button,
-  // LIMIT_TAP) and both blink.
+  // the bar of the figures at (x, y): its dark track, and the fill returned
+  // (still to be scaled: update*Stats / updateEnemyHp)
+  private statBar(x: number, y: number, color: number): Phaser.GameObjects.Rectangle {
+    const top = y + 26;
+    this.add.rectangle(x, top, STAT_BAR_W, STAT_BAR_H, BAR_TRACK).setOrigin(0, 0).setDepth(STAT_DEPTH);
+    return this.add.rectangle(x, top, STAT_BAR_W, STAT_BAR_H, color).setOrigin(0, 0).setDepth(STAT_DEPTH);
+  }
+
+  // The LIMIT gauge (limit.ts) in the hero's window, on a row of its own
+  // between the name (to y 68) and the HP row (from 88), y 70..86 at
+  // retroStyle(4): "LIMIT" (x 64..144), its bar (156..276, y 74..82) and how
+  // full it is ("100%" to x 352). The label leads the bar and three notches
+  // cut it into quarters, so it reads as a charge of its own: as a bare bar
+  // with its label after it, it sat over "HP" as HP's bar would. Full, the
+  // row turns gold, the figure becomes the key and what it does ("L:BREAK!",
+  // touch "TAP:BREAK!" to x 448, where the row is the button, LIMIT_TAP) and
+  // bar and figure blink. Inside the window's 476; the status tags start a
+  // row lower (y 90).
   private addLimitGauge(): void {
     this.limit = this.practice ? LIMIT_MAX : GameState.limit;
     this.limitKill = false;
     this.limitSeen = { foe: this.enemy.curHp, hero: GameState.player.hp };
-    this.add.rectangle(64, 78, 176, 8, 0x2a2a4a).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
-    this.limitBar = this.add.rectangle(64, 78, 176, 8, LIMIT_COLOR).setOrigin(0, 0.5).setDepth(STAT_DEPTH);
-    this.limitText = this.add.pixelText(252, 70, "", retroStyle(4, DIM_TEXT)).setDepth(STAT_DEPTH);
+    this.limitLabel = this.add.pixelText(64, 70, "LIMIT", retroStyle(4, "#f9a8d4")).setDepth(STAT_DEPTH);
+    this.add.rectangle(LIMIT_BAR_X, 74, LIMIT_BAR_W, STAT_BAR_H, BAR_TRACK).setOrigin(0, 0).setDepth(STAT_DEPTH);
+    this.limitBar = this.add.rectangle(LIMIT_BAR_X, 74, LIMIT_BAR_W, STAT_BAR_H, LIMIT_COLOR).setOrigin(0, 0).setDepth(STAT_DEPTH);
+    for (const q of [1, 2, 3]) {
+      this.add
+        .rectangle(LIMIT_BAR_X + (q * LIMIT_BAR_W) / 4 - ART_PX / 2, 74, ART_PX, STAT_BAR_H, 0x0b0b2b)
+        .setOrigin(0, 0)
+        .setDepth(STAT_DEPTH);
+    }
+    this.limitText = this.add.pixelText(LIMIT_NOTE_X, 70, "", retroStyle(4, DIM_TEXT)).setDepth(STAT_DEPTH);
     this.tweens.add({ targets: [this.limitBar, this.limitText], alpha: 0.45, duration: 420, yoyo: true, repeat: -1, paused: true });
     this.drawLimit();
   }
 
   private drawLimit(): void {
     const full = limitFull(this.limit);
-    // the bar's end on the 2px grid
-    this.limitBar.setScale(Math.round((this.limit / LIMIT_MAX) * 88) / 88, 1).setFillStyle(full ? LIMIT_FULL_COLOR : LIMIT_COLOR);
+    this.limitBar.setScale(barShare(this.limit, LIMIT_MAX, LIMIT_BAR_W), 1).setFillStyle(full ? LIMIT_FULL_COLOR : LIMIT_COLOR);
+    this.limitLabel.setColor(full ? "#fde047" : "#f9a8d4");
     this.limitText
       .setText(full ? keyHint("L:LIMIT!", "LIMIT!", { table: "battle" }) || "LIMIT!" : "LIMIT")
       .setColor(full ? "#fde047" : DIM_TEXT);
