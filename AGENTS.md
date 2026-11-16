@@ -399,6 +399,14 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   `scripts/sim-battle.ts` 의 같은 자리(cast·choose 등 BattleScene 을 옮긴 곳)도 고친다(실제 사례: CHAIN,
   DEFEND). 강타 예고(`BOSS_TELLS`)를 보스 아닌 몬스터에 붙일 때는 `chance` 로 확률을 낮추고, `mult` 는 지역
   입장 레벨에서 막지 않은 강타가 최대 HP 15~25% 가 되게 잰다(밤 x1.25 ATK 가 그대로 곱해진다).
+- PARRY 는 BattleScene `enemyLunge` 하나에 있다: 무작위 멈춤(`PARRY_HOLD_MS`) → 뒤로 빼기(`PARRY_BACK_MS`, 큐, BATTLE
+  SPEED 와 무관한 실제 ms) → 돌진, 닿는 순간에 그 사이의 첫 입력(`parryPress`, 키는 `onKey`·탭은 `onPointerDown` 의
+  `parryInput`)이 마지막 `PARRY_WINDOW_MS` 안이었는지 본다. 피해는 `guardHit` 뒤에 `battleRules.parriedDamage` 를 곱하고
+  독·빙결을 건너뛴다. 적의 새 공격이 몸으로 치는 것이면 `enemyLunge` 의 반환값을 받아 같은 식으로 쓰고, 숨결·원거리는
+  부르지 않는다. 큐에서 타격까지는 반응 시간(200~330ms)보다 길게 둔다. 실제 사례: 뒤로 빼기 180ms 는 큐 270ms 뒤에
+  닿아 큐를 보고 누르면 늦었다(지금 260ms, 큐 350ms 뒤·속도 2 에서 305ms). 멈춤의 최소값은 연타 간격(약 120ms)보다
+  길게 둬 연타의 첫 입력이 늘 창보다 이르게 한다. 플레이어 실력이라 `sim-battle.ts` 에는 없다. 하네스로 잴 때
+  `s.msgText.text` 는 PixelText 객체라 evaluate 가 멈춘다(`s.msgText.wrapped` 를 읽는다).
 - 정예(`src/elite.ts`)는 전투가 시작될 때 `BattleScene.init` 이 굴린다(`rollElite`, 필드 씬의 조우 굴림은 모른다). 수치는 `battleRules.scaleEnemy` 의 `elite` 옵션이 종의 HP·ATK·골드·EXP 에 먼저 곱하고(`eliteDef`), 그 위에 밤·HARD MODE 가 얹힌다. 이름은 바꾸지 않는다: 도감·퀘스트·드롭표·결산 줄이 모두 이름으로 종을 찾고 이름 길이로 폭을 쟀기 때문이다. 표시는 적 창 이름 색과 WEAK 줄 오른쪽 태그(6글자까지, x 1108..1228), 전투 첫 줄의 접두와 둘째 줄 `ELITE: <note>!`(note 13글자까지, WELL RESTED 문구와 한 줄 51글자)다. SWIFT 의 두 번째 행동은 `runBattle` 이 `enemyTurn` 을 한 번 더 부르는 것이고, 묶인 턴(`stuck`)과 방금 기를 모은 턴(`charging`)에는 없다. 새 정예는 `ELITES` 한 줄과 README 표, 수치는 `bun run sim:battle --foe <키> --elite <종류> --level <입장 레벨> --gear <무기,방어구>` 로 그 지역 입장 레벨의 SOLO+GEAR 승률·잃는 HP 를 본다(지금 값: 일반 전투의 약 3배 HP 를 잃고, 설원 입장 Lv13 의 FIERCE YETI 가 97%·최대 HP 만큼으로 가장 빡빡하다). `scaleEnemy` 를 부르는 곳(`scripts/sim-battle.ts`)도 같은 옵션을 받는다.
 - 전투 화면에는 `TouchControls` 가 없다(메뉴를 바로 탭한다). 그래서 전투에서 키(ESC 등)에만
   묶인 동작은 탭 경로를 함께 만든다. 실제 사례: 아이템 목록을 닫는 길이 ESC 뿐이라 터치에서는
