@@ -1,3 +1,4 @@
+import { WEAPON_NATURE } from "./battleRules";
 import { isRefinable, MATERIAL_KEYS, MATERIALS, type MaterialKey, REFINE_STEP } from "./drops";
 import {
   EQUIP_BONUS,
@@ -40,6 +41,12 @@ function equipInfo(key: EquipmentKey, refine = 0): string {
   else for (const r of resists) parts.push(`BLOCKS ${RESIST_NAME[r]}`);
   const hp = EQUIP_MAXHP[key];
   if (hp) parts.push(`MAX HP +${hp}`);
+  // a sword's nature (battleRules WEAPON_NATURE). The longest line with it,
+  // the bag's "IRON SWORD+5: WEAPON, ATK +9 (+5), HEAVY: CUTS HALF DEF", is
+  // 55 glyphs of bodyStyle(22), 770px, in the bag's and the shop's 1160px
+  // panels (195px a side to spare); the BLACKSMITH's 960 shows recipes only
+  const nature = WEAPON_NATURE[key];
+  if (nature) parts.push(`${nature.name}: ${nature.info}`);
   return parts.join(", ");
 }
 

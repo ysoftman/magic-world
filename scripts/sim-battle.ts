@@ -61,7 +61,7 @@
 // stuck foe) happen whenever a cast meets the status, in every run; only the
 // --skills / --greedy hero counts one's damage when it picks its move.
 
-import type { Skill, Spell } from "../src/battleRules";
+import type { Edge, Skill, Spell } from "../src/battleRules";
 import type { EquipmentKey } from "../src/gameState";
 
 // gameState.ts reads localStorage inside its save/load helpers; nothing here
@@ -100,7 +100,10 @@ const {
   defendedDamage,
   reactionDamage,
   reactionOf,
+  CRIT_CHANCE,
   CRIT_MULT,
+  edgedDef,
+  edgeOf,
   guardedDamage,
   parriedDamage,
   perfectDamage,
@@ -301,6 +304,7 @@ interface Hero {
   spells: Spell[];
   skills: Skill[]; // only with --skills
   resists: { poison: boolean; freeze: boolean };
+  edge: Edge; // the worn sword's nature (battleRules WEAPON_NATURE)
 }
 
 // A hero of `level`: reset()'s Lv1 stats with every level-up applied —
@@ -330,6 +334,7 @@ function makeHero(level: number, gear: BossCase["gear"] | null): Hero {
     spells: SPELLS.filter((s) => level >= s.learnLevel),
     skills: SKILLS_ON ? SKILLS.filter((s) => level >= s.learnLevel) : [],
     resists: { poison: GameState.resists("poison"), freeze: GameState.resists("freeze") },
+    edge: edgeOf(GameState.equipped.weapon),
   };
 }
 
@@ -347,11 +352,11 @@ function spellMean(spell: Spell, weak: boolean): number {
 // a move, ATK, DEF, weakness and flier; `weak` gives the foe the move's
 // element as its weakness
 const skillMeans = new Map<string, number>();
-function skillMean(skill: Skill, atk: number, def: number, weak: boolean, flying = false): number {
-  const key = `${skill.name}:${atk}:${def}:${weak}:${flying}`;
+function skillMean(skill: Skill, atk: number, def: number, weak: boolean, flying = false, edge: Edge = edgeOf(null)): number {
+  const key = `${skill.name}:${atk}:${def}:${weak}:${flying}:${edge.defShare}:${edge.crit}`;
   let mean = skillMeans.get(key);
   if (mean === undefined) {
-    const target = { atk, def, weakness: weak ? skill.element : undefined, flying };
+    const target = { atk, def, weakness: weak ? skill.element : undefined, flying, edge };
     let sum = 0;
     for (let i = 0; i < 20000; i++) for (let h = 0; h < skill.hits; h++) sum += skillHit(skill, target).dmg;
     mean = sum / 20000;
@@ -363,12 +368,12 @@ function skillMean(skill: Skill, atk: number, def: number, weak: boolean, flying
 // a FIGHT's damage, crits counted, before the combo (rollDamage), sampled
 // once an ATK and DEF
 const fightMeans = new Map<string, number>();
-function fightMean(atk: number, def: number): number {
-  const key = `${atk}:${def}`;
+function fightMean(atk: number, def: number, crit = CRIT_CHANCE): number {
+  const key = `${atk}:${def}:${crit}`;
   let mean = fightMeans.get(key);
   if (mean === undefined) {
     let sum = 0;
-    for (let i = 0; i < 20000; i++) sum += rollDamage(atk, def).dmg;
+    for (let i = 0; i < 20000; i++) sum += rollDamage(atk, def, Math.random, crit).dmg;
     mean = sum / 20000;
     fightMeans.set(key, mean);
   }
@@ -543,7 +548,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   };
   const greedy = (): Action => {
     let best: Action = { kind: "fight" };
-    let most = fightMean(hero.atk, foe.def) * (1 + comboBonus(combo + 1) * (1 + perk("flow")));
+    let most = fightMean(hero.atk, edgedDef(foe.def, hero.edge), hero.edge.crit) * (1 + comboBonus(combo + 1) * (1 + perk("flow")));
     for (const spell of hero.spells) {
       if (spell.kind !== "attack" || mp < spell.cost) continue;
       const weak = spell.element !== undefined && spell.element === foe.weakness;
@@ -553,7 +558,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     for (const skill of hero.skills) {
       if (mp < skillCost(skill, hero.maxMp) || (skill.grounded && foe.flying)) continue;
       const weak = skill.element !== undefined && skill.element === foe.weakness;
-      const value = reacted(skillMean(skill, hero.atk, foe.def, weak, !!foe.flying), skill.element) + dotValue(skill.effect, weak);
+      const value =
+        reacted(skillMean(skill, hero.atk, foe.def, weak, !!foe.flying, hero.edge), skill.element) + dotValue(skill.effect, weak);
       if (value > most) [best, most] = [{ kind: "skill", skill }, value];
     }
     return best;
@@ -563,7 +569,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   const playerAttack = (): void => {
     combo += 1;
     // a stuck foe takes it as a crit
-    const roll = rollDamage(hero.atk, foe.def);
+    const roll = rollDamage(hero.atk, edgedDef(foe.def, hero.edge), Math.random, hero.edge.crit);
     const dmg = roll.crit || !stuck ? roll.dmg : roll.dmg * CRIT_MULT;
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow")))));
     foe.curHp = Math.max(0, foe.curHp - (Math.random() < PERFECT ? perfectDamage(total) : total));
@@ -626,7 +632,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     let total = 0;
     let reaction: { mult: number; extra: number } | undefined;
     for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
-      const rolled = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying }).dmg;
+      const rolled = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying, edge: hero.edge }).dmg;
       reaction ??= react(skill.element);
       const dmg = Math.round(rolled * reaction.mult) + (i === 0 ? reaction.extra : 0);
       foe.curHp = Math.max(0, foe.curHp - dmg);

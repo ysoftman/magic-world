@@ -1,7 +1,7 @@
 import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale, boutDepth } from "./abyss";
 import { ARENA_GOLD_SHARE } from "./arena";
 import { type EliteKind, eliteDef } from "./elite";
-import type { GameState } from "./gameState";
+import type { EquipmentKey, GameState } from "./gameState";
 import { type Element, ENEMIES, type EnemyDef, type EnemyMove } from "./monsters";
 
 // The battle's rules without the battle: every constant, table and formula
@@ -715,7 +715,40 @@ export interface SkillTarget {
   def: number;
   weakness?: Element;
   flying?: boolean;
+  /** the worn weapon's (edgeOf), a weapon tech's alone */
+  edge?: Edge;
 }
+
+// ---- a sword's own nature (EQUIP_BONUS is its ATK; this is what else it does) ----
+// Each sword has one, so the tier under the one worn is still a choice: the
+// tiers are 2 ATK apart, and a nature is worth about that where it applies
+// and nothing where it doesn't. It works on FIGHT and the weapon techs (the
+// SKILL list's "weapon" style), never on a spell, a blow tech or LIMIT. A
+// REFINE keeps the sword and so its nature.
+// - HEAVY (IRON SWORD): the blade goes by half the foe's DEF, whatever put it
+//   there. A HARDEN, CRUST or ARMOR had only spells for an answer.
+// - KEEN (MYTHRIL SWORD): FIGHT and a one-hit weapon tech crit twice as often
+//   (a tech with odds of its own keeps the better of the two).
+export interface Edge {
+  /** the share of the foe's DEF the blade meets */
+  defShare: number;
+  /** FIGHT's crit odds */
+  crit: number;
+}
+export const HEAVY_DEF_SHARE = 0.5;
+export const KEEN_CRIT = 0.2;
+export const WEAPON_NATURE: Partial<Record<EquipmentKey, { name: string; info: string; edge: Partial<Edge> }>> = {
+  ironSword: { name: "HEAVY", info: "CUTS HALF DEF", edge: { defShare: HEAVY_DEF_SHARE } },
+  mythrilSword: { name: "KEEN", info: "CRIT X2", edge: { crit: KEEN_CRIT } },
+};
+/** The worn weapon's edge; a bare hand's or a plain sword's changes nothing. */
+export const edgeOf = (weapon: EquipmentKey | null): Edge => ({
+  defShare: 1,
+  crit: CRIT_CHANCE,
+  ...(weapon ? WEAPON_NATURE[weapon]?.edge : undefined),
+});
+/** The foe's DEF as FIGHT's blade meets it. */
+export const edgedDef = (def: number, edge: Edge): number => Math.round(def * edge.defShare);
 
 /**
  * One hit of a move (see the styles above), x1.5 on the weakness. A blow:
@@ -736,7 +769,8 @@ export function skillHit(
     const roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
     return { dmg: Math.floor(roll * w), crit: false, weak };
   }
-  const odds = skill.hits > 1 ? 0 : skill.style === "weapon" ? (skill.crit ?? CRIT_CHANCE) : CRIT_CHANCE;
+  const keen = target.edge?.crit ?? CRIT_CHANCE;
+  const odds = skill.hits > 1 ? 0 : skill.style === "weapon" ? Math.max(skill.crit ?? CRIT_CHANCE, keen) : CRIT_CHANCE;
   const crit = odds > 0 && rand() < odds;
   let roll: number;
   let def: number;
@@ -746,7 +780,7 @@ export function skillHit(
   } else {
     const mult = skill.mult * (target.flying ? (skill.flierMult ?? 1) : 1);
     roll = Math.floor(target.atk * mult * (0.8 + rand() * 0.4));
-    def = Math.round(target.def * (skill.defShare ?? 1));
+    def = Math.round(target.def * (skill.defShare ?? 1) * (target.edge?.defShare ?? 1));
   }
   const hit = Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - def);
   return { dmg: Math.floor((crit ? hit * CRIT_MULT : hit) * w), crit, weak };
@@ -763,8 +797,13 @@ export const ENEMY_HP_MAX = 999;
  * hero again; the floor is applied before the crit so a crit still doubles.
  * `rand` is called twice, crit first, as the battle always has.
  */
-export function rollDamage(atk: number, def: number, rand: () => number = Math.random): { dmg: number; crit: boolean } {
-  const crit = rand() < CRIT_CHANCE;
+export function rollDamage(
+  atk: number,
+  def: number,
+  rand: () => number = Math.random,
+  critChance = CRIT_CHANCE,
+): { dmg: number; crit: boolean } {
+  const crit = rand() < critChance;
   const raw = Math.floor(atk * (0.8 + rand() * 0.4));
   const hit = Math.max(Math.ceil(raw * MIN_DAMAGE_SHARE), raw - def);
   return { dmg: crit ? hit * CRIT_MULT : hit, crit };

@@ -20,6 +20,8 @@ import {
   defendedDamage,
   ENRAGE_ATK_MULT,
   ENRAGE_HP_SHARE,
+  edgedDef,
+  edgeOf,
   FREEZE_GRACE_TURNS,
   guardedDamage,
   hardenDef,
@@ -1998,7 +2000,9 @@ export class BattleScene extends Phaser.Scene {
     this.addCombo();
     const comboBonus = this.comboBonus();
     // a foe that can't move (stunned, webbed) takes it as a crit
-    const roll = rollDamage(this.heroAtk(), this.enemy.def);
+    // the worn sword's nature (battleRules WEAPON_NATURE): HEAVY's share of the DEF, KEEN's odds
+    const edge = edgeOf(GameState.equipped.weapon);
+    const roll = rollDamage(this.heroAtk(), edgedDef(this.enemy.def, edge), Math.random, edge.crit);
     const crit = roll.crit || this.stuck !== null;
     const dmg = roll.crit || !this.stuck ? roll.dmg : roll.dmg * CRIT_MULT;
     let total = Math.max(1, Math.floor(dmg * (1 + comboBonus)));
@@ -2045,7 +2049,11 @@ export class BattleScene extends Phaser.Scene {
       // its line types from the contact on, while the hero walks home: after
       // the walk it was 160ms more of every FIGHT with nothing new to see
       const comboNote = comboBonus > 0 ? ` COMBO x${this.combo}!` : "";
-      line = this.say(crit ? `CRITICAL HIT! You strike for ${total}!${comboNote}` : `You strike for ${total}!${comboNote}`);
+      // HEAVY cutting through a HARDEN, CRUST or ARMOR says so: the one time
+      // the sword's nature shows. "CRITICAL HIT! You strike for 516! COMBO
+      // x99! HEAVY!" is 50 glyphs of a row's 54.
+      const heavy = edge.defShare < 1 && this.foeBuff === "DEF+" ? " HEAVY!" : "";
+      line = this.say(`${crit ? "CRITICAL HIT! " : ""}You strike for ${total}!${comboNote}${heavy}`);
     };
     let line: Promise<void> | undefined;
     await this.lunge(crit, onContact, hold);
@@ -2193,6 +2201,7 @@ export class BattleScene extends Phaser.Scene {
         def: this.enemy.def,
         weakness: this.enemy.weakness,
         flying: this.enemy.flying,
+        edge: edgeOf(GameState.equipped.weapon),
       });
       // a reaction goes off as the first hit lands, its multiplier on every
       // hit of the cast and what it adds on that first one
