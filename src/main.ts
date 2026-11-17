@@ -56,9 +56,11 @@ const config: Phaser.Types.Core.GameConfig = {
     // a phone held sideways is 304..355 CSS px tall under its address bar, so
     // the step below 360 is 180, a quarter of the game, every glyph 0.6..1.1mm
     // (an iPhone's Safari at 844x340 drew 320x180 where it had room for
-    // 604x340). Unsnapped, a game pixel is 1.27..1.42 device pixels there and
-    // a stroke 1 or 2 of them, 0.06mm apart at 416..460ppi. Read once, as
-    // every scene reads isTouchDevice() once.
+    // 604x340). Unsnapped, a game pixel is 1.27..1.42 device pixels there, so
+    // a 2px dot is 2 or 3 of them by turns: 0.06mm at 416..460ppi, about the
+    // angle the MacBook's 2.19 mixed (seen zoomed in), taken for twice the
+    // size; a whole-device-pixel snap is smaller still (AGENTS.md). Read once,
+    // as every scene reads isTouchDevice() once.
     snap: isTouchDevice() ? undefined : { width: 320, height: 180 },
   },
   // three touches at once (the mouse has its own pointer besides): the d-pad
