@@ -57,8 +57,9 @@ const TOAST_NAME = "__toast";
 // read off StatusHud, which imports this file.
 export const FIELD_TOAST_Y = 176;
 // at most this many wait behind the toast on screen; past that the oldest
-// waiting one is dropped, so a burst can't trail stale news for seconds
-// (each toast is up ~1.3s: 200ms in, 900ms hold, 200ms out)
+// waiting status line is dropped (the oldest news only when all that waits
+// is news), so a burst can't trail stale lines for seconds (each toast is up
+// ~1.3s: 200ms in, 900ms hold, 200ms out)
 const TOAST_MAX_WAITING = 3;
 
 interface ToastEntry {
@@ -205,7 +206,16 @@ export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
   else state.waiting.push(entry);
   // nothing up and nothing holding it: the line's head goes now
   if (!held && !state.showing) playToast(scene, t, state, state.waiting.shift() as ToastEntry);
-  if (state.waiting.length > TOAST_MAX_WAITING) state.waiting.shift();
+  // Over the line's length a status line goes first: it is only ever its
+  // latest value, while news must be seen. A sweep of overruns puts up a
+  // status line a foe ("OVERRUN x2: ...", "OVERRUN x3: ...", topics of their
+  // own, so none supersedes another); dropped by age, three of them pushed
+  // out the news queued ahead of them (2026-11, a headless test).
+  if (state.waiting.length > TOAST_MAX_WAITING) {
+    const stale = state.waiting.findIndex((e) => !isNews(e.text));
+    // none (-1, all of it news): the oldest
+    state.waiting.splice(Math.max(stale, 0), 1);
+  }
 }
 
 function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: ToastEntry): void {
