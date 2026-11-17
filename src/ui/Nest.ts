@@ -169,8 +169,9 @@ export class Nest {
 
   // Between two fights, as the field comes back: on, or out with the purse
   // so far. ESC is LEAVE (the last choice): the way out that loses nothing
-  // held. "1 OF 3 DOWN. LEAVE NOW WITH 10 G, OR" / "FIGHT ON FOR IT ALL." is
-  // two of the touch box's 42-glyph rows, the question its own page there.
+  // held. "2 of 3 down. Leave now with 270 G," (34 glyphs, the longest) / "or
+  // fight on for it all." is two of the touch box's 42-glyph rows, the
+  // question its own page there.
   private askOn(wins: number): void {
     this.asking = null;
     this.found?.();
@@ -191,7 +192,7 @@ export class Nest {
   }
 
   // The run over: paid by its wins (nest.ts payNest), said in a toast.
-  // "NEST CLEARED! +300 G, 3 FROST SCALE" is 35 glyphs, 700px.
+  // "NEST CLEARED! +450 G, 3 FROST SCALE" is 35 glyphs, 700px.
   private end(wins: number): void {
     const def = NESTS[this.region];
     const paid = payNest(GameState, this.region, wins);
@@ -224,7 +225,7 @@ export class Nest {
       return true;
     }
     Sfx.buy();
-    // The longest second line ("Win all three for 300 G and 3 FROST SCALE.")
+    // The longest second line ("Win all three for 450 G and 3 FROST SCALE.")
     // is 42 glyphs, the touch box's row; the lines wrap together into four
     // rows there, the question its own page
     this.dialogue.ask(

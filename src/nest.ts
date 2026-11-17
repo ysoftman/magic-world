@@ -53,10 +53,14 @@ import type { KeeperBout } from "./seals";
 // x2/x1.4; summed, a run buys no level on the way, and in the game all 40
 // runs at the field's level were cleared with 62, 60, 53 and 34% left.
 // The cave's opens with the ELITE_MIN_BATTLES wins a Lv2-3 hero has.
-// Gold: the three fights pay as elites (x2.5 their species': 62, 175, 340 and
-// 485 G), the purse on top (40, 120, 300, 340), together about a quarter of
+// Gold: the three fights pay as elites (x2.5 their species': 63, 175, 340 and
+// 485 G), the purse on top (60, 180, 450, 340), together about a third of
 // what the field's hunt makes in a day's 24 minutes (ui/Runner.ts's table:
-// 380, 1200, 2590, 3290 G), and the three pieces are the prize.
+// 380, 1200, 2590, 3290 G; the volcano's a quarter), and the three pieces
+// are the prize. The cave's, the forest's and the snow's purse went up half
+// again with their third foe (a run there lost about one in ten, where none
+// had been, 2026-11), what a run left at one or two wins pays with it,
+// rounded to the gold: the volcano's third, untouched, keeps its purse.
 export type NestRegion = "dungeon" | "forest" | "snow" | "volcano";
 
 type Cell = readonly [number, number];
@@ -99,19 +103,19 @@ export const NESTS: Record<NestRegion, NestDef> = {
   dungeon: {
     at: [13, 14],
     fights: fights(["bat", 1.3, 1.2], ["goblin", 1.5, 1.3], ["bat", 4.5, 1.7]),
-    purse: [10, 25, 40],
+    purse: [15, 38, 60],
     material: "batWing",
   },
   forest: {
     at: [12, 16],
     fights: fights(["wasp", 1.3, 1.2], ["orc", 1.2, 1.1], ["spider", 3.6, 1.5]),
-    purse: [30, 75, 120],
+    purse: [45, 113, 180],
     material: "spiderSilk",
   },
   snow: {
     at: [12, 14],
     fights: fights(["frostMoth", 1.3, 1.2], ["yeti", 1, 1], ["frostMoth", 3.5, 1.7]),
-    purse: [75, 180, 300],
+    purse: [113, 270, 450],
     material: "frostScale",
   },
   volcano: {

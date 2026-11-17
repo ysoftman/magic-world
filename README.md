@@ -224,9 +224,9 @@
 
   | 지역 | 세 적(종의 HP·ATK 에 곱하는 값, 정예 배율 앞)                                              | 1승·2승에 물러남 | 완주                 |
   | ---- | ------------------------------------------------------------------------------------------ | ---------------- | -------------------- |
-  | 동굴 | FIERCE BAT x1.3·x1.2 → FIERCE GOBLIN x1.5·x1.3 → STURDY BAT x4.5·x1.7                      | 10G · 25G        | 40G + BAT WING 3     |
-  | 숲   | FIERCE WASP x1.3·x1.2 → FIERCE ORC x1.2·x1.1 → STURDY SPIDER x3.6·x1.5                     | 30G · 75G        | 120G + SPIDER SILK 3 |
-  | 설원 | FIERCE FROST MOTH x1.3·x1.2 → FIERCE YETI x1·x1 → STURDY FROST MOTH x3.5·x1.7              | 75G · 180G       | 300G + FROST SCALE 3 |
+  | 동굴 | FIERCE BAT x1.3·x1.2 → FIERCE GOBLIN x1.5·x1.3 → STURDY BAT x4.5·x1.7                      | 15G · 38G        | 60G + BAT WING 3     |
+  | 숲   | FIERCE WASP x1.3·x1.2 → FIERCE ORC x1.2·x1.1 → STURDY SPIDER x3.6·x1.5                     | 45G · 113G       | 180G + SPIDER SILK 3 |
+  | 설원 | FIERCE FROST MOTH x1.3·x1.2 → FIERCE YETI x1·x1 → STURDY FROST MOTH x3.5·x1.7              | 113G · 270G      | 450G + FROST SCALE 3 |
   | 화산 | FIERCE MAGMA SLIME x1.3·x1.2 → FIERCE FIRE IMP x1.5·x1.3 → STURDY SALAMANDER x2.5·x1.4     | 85G · 210G       | 340G + MAGMA CORE 3  |
 
 - 바운티 종류: BOUNTY BOARD 의 일일 바운티는 절반은 처치 의뢰(3~6마리), 절반은 아래 일곱 중 하나다(하루 하나, 게시판을 읽은 뒤에 한 것만 센다. 전투에서 세는 것은 훈련장에서는 안 센다). 보상은 열린 지역 몬스터의 평균 골드 x 1.5 에 표의 배수를 곱한 값(처치 의뢰는 평균 4.5마리분). CATCH A RUNNER 가 걸려 있는 동안은 필드에 들어설 때 러너가 서 있을 확률이 12% 대신 50%다. 그날의 이변이 게시판을 기울인다: 과제가 나오는 날의 절반은 이변에 맞는 과제(WILD HUNT → FELL AN ELITE, CALM DAY → CATCH A RUNNER, HOLY DAY → SHRINE PRAYER)이고 GOLD RUSH 는 처치 의뢰의 절반을 그 필드의 종으로 돌린다. 맞으면 게시판이 `THE OMEN FAVORS IT.` 라고 덧붙인다
