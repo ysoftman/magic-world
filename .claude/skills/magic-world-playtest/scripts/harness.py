@@ -116,7 +116,7 @@ AUDIT_JS = """() => {
     for (const o of discs)
       for (const it of items.filter((i) => !i.fixed)) {
         const nx = Math.max(it.x, Math.min(o.x, it.x + it.w)), ny = Math.max(it.y, Math.min(o.y, it.y + it.h));
-        // a tag stepped back on purpose (the town's SHOP/BLACKSMITH under the d-pad, alpha 0.2) says so
+        // a tag stepped back on purpose says so: every map tag a disc touches (TAG_UNDER_BUTTON_ALPHA 0.2)
         if (Math.hypot(nx - o.x, ny - o.y) < o.radius - 2) out.touchMap.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"${it.a < 1 ? ` alpha ${it.a}` : ""}`);
       }
   }

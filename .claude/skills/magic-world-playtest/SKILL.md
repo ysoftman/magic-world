@@ -68,7 +68,7 @@ finally:
 - `audit()` 는 화면에 고정된 글자만 잰다: scrollFactor 0 인 글자와, 카메라가 아무것도 따라가지 않고 0,0 에 있는 씬(전투·타이틀·엔딩)의 모든 글자. 예전에는 scrollFactor 0 만 봐서 전투 글자(scrollFactor 1)가 통째로 빠졌고, 그때의 전투 화면 "audit 0" 보고는 아무것도 재지 않은 값이었다(실제 사례: 적 창 태그가 `WEAK` 줄을 덮은 것을 못 잡았다). 전투에서는 떠오르는 피해 숫자·상태 팝업도 글자라 떠 있는 동안 겹침으로 나온다.
 - `audit()` 는 불투명 패널(alpha 1 로 채운 큰 사각형)보다 깊이가 낮고 그 안에 통째로 들어가는 글자는 가려진 것으로 보고 겹침에서 뺀다. 패널이 일부만 덮는 글자(가방이 반쯤 덮는 HUD 2행 등), 반투명 패널 밑의 글자, 같은 깊이의 글자는 여전히 겹침으로 나오니 스크린샷으로 거른다.
 - 터치: `has_touch` 만으로는 `(pointer: coarse)` 가 켜지지 않아 하네스가 `matchMedia` 를 덮는다. 전투에는 화면 버튼이 없다(메뉴를 바로 탭).
-- `audit()` 의 `touch`·`touchMap` 은 원판을 `TouchControls` 의 Graphics(깊이 250, `input.hitArea` 원)로 찾고 원과 글자 상자를 견준다. 원판이 Arc 에서 Graphics 로 바뀐 뒤 Arc 를 찾던 동안(2026-11-17 고침 전)의 `touch`·`touchMap` 0 은 아무것도 재지 않은 값이다. 실제 사례: 그동안 새 게임 마을의 BLACKSMITH 가 d-pad 원판 셋 밑에 있었는데 0 이었다. 일부러 흐린 이름표(마을 SHOP·BLACKSMITH 가 d-pad 밑에서 0.2)는 줄 끝에 `alpha 0.2` 가 붙는다.
+- `audit()` 의 `touch`·`touchMap` 은 원판을 `TouchControls` 의 Graphics(깊이 250, `input.hitArea` 원)로 찾고 원과 글자 상자를 견준다. 원판이 Arc 에서 Graphics 로 바뀐 뒤 Arc 를 찾던 동안(2026-11-17 고침 전)의 `touch`·`touchMap` 0 은 아무것도 재지 않은 값이다. 실제 사례: 그동안 새 게임 마을의 BLACKSMITH 가 d-pad 원판 셋 밑에 있었는데 0 이었다. 일부러 흐린 이름표(원판에 닿은 모든 맵 이름표, `TAG_UNDER_BUTTON_ALPHA` 0.2)는 줄 끝에 `alpha 0.2` 가 붙는다. 그래서 터치에서 원판에 닿은 이름표는 늘 `alpha 0.2` 로 나오고, alpha 1 로 나오면 물러나지 않은 것이다.
 - 이름 창: `keyboard.type` 은 신뢰된 이벤트라 글자로 들어가고, 패드·터치의 합성 Z 는 칸 선택이다.
 - 골드 9999 에서는 상점 판매가 "Gold is full!" 로 막힌다. 판매를 볼 때는 골드를 낮춘다.
 
