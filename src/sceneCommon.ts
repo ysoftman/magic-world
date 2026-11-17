@@ -27,7 +27,17 @@ import { nestOpen } from "./nest";
 import { enterField, leaveFields, OMEN_REGION_NAMES, OMENS, omenEliteExtra, omenHere, omenOn } from "./omen";
 import { meet, overrunLines, settleOverrun } from "./overrun";
 import { peddlerRegion, peddlerSold } from "./peddler";
-import { ART_PX, FIELD_TOAST_Y, holdToastsWhile, makeTexture, pumpToasts, readableCanvas, retroStyle, showToast } from "./pixelart";
+import {
+  ART_PX,
+  FIELD_TOAST_Y,
+  holdToastsWhile,
+  makeTexture,
+  pumpToasts,
+  readableCanvas,
+  retroStyle,
+  showToast,
+  toastShowing,
+} from "./pixelart";
 import { PixelText } from "./pixelText";
 import { TILE_VARIANTS } from "./scenes/BootScene";
 import { SHARDS_PER_REGION, type ShardRegion, shardsFound } from "./shards";
@@ -1698,7 +1708,50 @@ const OVERRUN_PUFF_DEPTH = 9.9;
 // up ("OVERRUN x6: +760G +524EXP  +2 ITEMS", 40 glyphs at most): each line
 // alone was gone 0.6-1.3s later under the next, the sum never read
 const OVERRUN_CHAIN_MS = 3000;
+// The first overrun a save ever sees (GameState.seenTips "overrun", as the
+// battle's first-time lines) says what it was and where it is turned off:
+// before, the status line alone came up and the name was only on a settings
+// row. News (a "!"); 50 glyphs, x 140..1140 at retroStyle(5), clear of the
+// touch MENU column (x>=1222) on a field's line. It waits for an empty toast
+// row (OVERRUN_TIP_POLL_MS), so it comes after the status line and its news:
+// put in the line behind them, a sweep's status lines (one every 0.35s,
+// each its own topic) pushed it off the front of the three that wait, and
+// a five-slime sweep showed x2, x4 and x5 but never the tip. Marked seen
+// only once shown, so a fight or an exit before then leaves it for the next.
+// The first status line is up 1.3s, so the tip follows it by about 0.5s.
+const OVERRUN_TIP = "OVERRUN! WEAK FOES FALL AT A TOUCH. TURN OFF IN O.";
+const OVERRUN_TIP_POLL_MS = 200;
+// the scenes with the tip waiting to go up
+const overrunTipWaits = new WeakSet<Phaser.Scene>();
+
 let sweep: { scene: string; at: number; count: number; gold: number; exp: number; items: number } | null = null;
+
+function tellOverrunOnce(scene: Phaser.Scene, toasts: FieldToasts): void {
+  if (!GameState.seenTips || GameState.seenTips.includes("overrun") || overrunTipWaits.has(scene)) return;
+  overrunTipWaits.add(scene);
+  // the scene's clock goes at SHUTDOWN and its instance is reused: clear the mark with it
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => overrunTipWaits.delete(scene));
+  // two polls in a row with the row empty: between two toasts it is empty
+  // for a frame while the next waits its turn, and the tip must go up at
+  // once rather than wait in that line (a toast up is never pushed off; the
+  // next status line waits behind it)
+  let idle = 0;
+  const poll = scene.time.addEvent({
+    delay: OVERRUN_TIP_POLL_MS,
+    loop: true,
+    callback: () => {
+      idle = toastShowing(scene) ? 0 : idle + 1;
+      if (idle < 2) return;
+      poll.remove();
+      overrunTipWaits.delete(scene);
+      const seen = GameState.seenTips;
+      if (!seen || seen.includes("overrun")) return;
+      seen.push("overrun");
+      toasts.quietSave();
+      toasts.toast(OVERRUN_TIP);
+    },
+  });
+}
 
 /**
  * A foe of `kind` met in the open (a roamer touched, or the grass's roll):
@@ -1748,6 +1801,7 @@ export function meetFoe(
   const items = sweep.items > 0 ? `  +${sweep.items} ITEM${sweep.items > 1 ? "S" : ""}` : "";
   toasts.toast(sweep.count === 1 ? status : `OVERRUN x${sweep.count}: +${sweep.gold}G +${sweep.exp}EXP${items}`);
   for (const line of news) toasts.toast(line);
+  tellOverrunOnce(scene, toasts);
   if (result.levels) Sfx.levelup();
   else {
     Sfx.strike();
