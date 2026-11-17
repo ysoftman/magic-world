@@ -34,7 +34,6 @@
 | PURSE | 전투와 상자의 골드 +20% (3개)                 |
 | CLOAK | 걷다가 만나는 전투 확률 -30% (2개)            |
 
-
 ### 전투
 
 - 영웅 → 동료 → 적 순서의 턴제. 연속 FIGHT 는 콤보로 피해 +10%씩(최대 +80%), 크리티컬 10%(x2), 약점 원소 x1.5
@@ -48,12 +47,14 @@
   | SWIFT  | HP x1.3, 턴마다 50% 로 한 번 더 행동         |
 
 - 검의 성질: 검마다 타고난 성질이 하나 있다(가방·상점의 설명 줄에 나온다). HEAVY·KEEN 은 FIGHT 와 무기 기술에, QUICK·SEAR 는 FIGHT 에만 듣고 주문·LIMIT 에는 없다. 강화(REFINE)해도 그대로다. 산 검은 가방에 남으니 상대에 맞춰 바꿔 낀다(I 의 2쪽).
+
   | 검            | ATK | 성질  | 효과                                                                 |
   | ------------- | --- | ----- | -------------------------------------------------------------------- |
   | SWORD         | +2  | QUICK | 그 전투의 첫 FIGHT 가 x1.5(`QUICK!`). 짧은 전투와 한 방 남은 적용     |
   | IRON SWORD    | +4  | HEAVY | 적 DEF 의 절반을 무시. HARDEN·CRUST·ARMOR 로 오른 DEF 를 벨 때 `HEAVY!` |
   | MYTHRIL SWORD | +6  | KEEN  | 치명타 10% → 20%(FIGHT 와 한 번 치는 무기 기술)                       |
   | DRAKE BLADE   | +8  | SEAR  | 적이 버틴 FIGHT 마다 15% 로 화상(불 종·이미 화상/독인 적 제외, `BURN!`) |
+
   - DEF 6 이하인 적에게는 MYTHRIL SWORD 가, DEF 8(FLAME DRAKE)에서는 둘이 비슷하고, DEF 가 오른 적(CRUST 뒤 MAGMA SLIME, ARMOR 중인 GLACIER GOLEM)에게는 IRON SWORD 가 FIGHT 한 번에 2~6 더 준다.
 - 압도(OVERRUN): 한참 약한 적은 필드에서 닿는 순간 전투 화면 없이 쓰러지고, 화면 위에 `OVERRUN SLIME: +4G +6EXP` 한 줄이 뜬다(3초 안에 이어 쓰러뜨리면 `OVERRUN x6: +760G +524EXP` 처럼 합계로 바뀐다). 세이브의 첫 압도에는 그 결과 줄들이 지나간 뒤 `OVERRUN! WEAK FOES FALL AT A TOUCH. TURN OFF IN O.` 안내가 한 번 뜬다. 조건은 둘 다다: 내 FIGHT 의 평균 피해(치명타·콤보·PERFECT 없이, 요리·축복의 ATK 포함)가 그 적의 최대 HP(밤·HARD MODE 반영) 이상이고, 그 적의 가장 센 치명타가 내 최대 HP 의 10% 이하. 의도 장비 기준으로 SLIME 은 Lv9(밤 12), BAT 11(14), GOBLIN 14(18), WASP 18(25), WOLF 20(28)부터이고 그보다 센 종은 거의 해당되지 않는다. 보스·거인·희귀 몬스터(도망치는 것 포함)·봉인의 강적·정예는 늘 싸우고(정예 확률 8% 는 그대로다), 도감에 없는 종은 처음 한 번은 싸운다. 아레나·심연·훈련장·둥지에는 없다.
   - 받는 것: 골드·EXP x0.8(연승 보너스와 TRADE·STUDY 포함), 포션류·소재·보물 지도는 각각 x0.8 확률. 연승, 퀘스트·처치 바운티, 전투 수는 센다.
@@ -227,6 +228,7 @@
   | 숲   | FIERCE WASP x1.3·x1.2 → FIERCE ORC x1.2·x1.1 → STURDY SPIDER x2·x1.3                       | 30G · 75G        | 120G + SPIDER SILK 3 |
   | 설원 | FIERCE FROST MOTH x1.3·x1.2 → FIERCE YETI x1·x1 → STURDY FROST MOTH x2·x1.4                | 75G · 180G       | 300G + FROST SCALE 3 |
   | 화산 | FIERCE MAGMA SLIME x1.3·x1.2 → FIERCE FIRE IMP x1.5·x1.3 → STURDY SALAMANDER x2.5·x1.4     | 85G · 210G       | 340G + MAGMA CORE 3  |
+
 - 바운티 종류: BOUNTY BOARD 의 일일 바운티는 절반은 처치 의뢰(3~6마리), 절반은 아래 일곱 중 하나다(하루 하나, 게시판을 읽은 뒤에 한 것만 센다. 전투에서 세는 것은 훈련장에서는 안 센다). 보상은 열린 지역 몬스터의 평균 골드 x 1.5 에 표의 배수를 곱한 값(처치 의뢰는 평균 4.5마리분). CATCH A RUNNER 가 걸려 있는 동안은 필드에 들어설 때 러너가 서 있을 확률이 12% 대신 50%다. 그날의 이변이 게시판을 기울인다: 과제가 나오는 날의 절반은 이변에 맞는 과제(WILD HUNT → FELL AN ELITE, CALM DAY → CATCH A RUNNER, HOLY DAY → SHRINE PRAYER)이고 GOLD RUSH 는 처치 의뢰의 절반을 그 필드의 종으로 돌린다. 맞으면 게시판이 `THE OMEN FAVORS IT.` 라고 덧붙인다
 
   | 바운티         | 할 일                                   | 배수 |
@@ -238,6 +240,7 @@
   | PERFECT HITS   | FIGHT 의 PERFECT 5~8번                  | 5    |
   | REACTIONS      | 원소 반응 2~3번(Lv4 부터 나옴)          | 6    |
   | LIMIT FINISH   | LIMIT BREAK 로 적 1마리 마무리(5승 뒤)  | 4.5  |
+
 - 3승·8승 뒤 마을에서 한 번씩 토스트로 알려 준다: `STAR SHARDS AND SEALS HIDE IN EVERY FIELD!`, `A PEDDLER ROAMS THE FIELDS: SEE THE JOURNAL!`
 - 동굴·숲·설원·화산에 들어서면 지역 제목 아래에 그 지역에 오늘 남은 것이 한 줄로 뜬다(예: `GOLD RUSH   STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`: 그날 이변이 걸린 필드면 그 이름, 못 찾은 별 조각, 안 푼 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지, 오늘 거기 서 있는 상인). 다 했으면 줄이 없고, 별 조각·봉인·상인은 위 토스트가 나온 뒤부터 나온다
 - 업적(A), 도감(B): 도감은 본/잡은 몬스터와 약점(WEAK)·능력(CAN: 독·빙결·재생·격노)을 보여 주고, 잡을 수 있는 13종 중 잡은 종 20%마다 ATK/DEF +1(최대 +5). 희귀 몬스터(GOLDEN SLIME·CURSED GOBLIN·NIGHT WISP·SILVER WASP·AURORA MOTH·GILDED IMP)와 보스는 13종에 들지 않아 세지 않는다. 희귀 몬스터는 골드·EXP 가 크고(SILVER WASP·AURORA MOTH 는 숲·설원에서 같은 계열 몬스터 대신 3.5% 로 나오며 그 지역 소재 2개를 꼭 남긴다), CANDY 로 잡을 수는 있지만 도감 완성에는 필요 없다. HUD 의 CAUGHT 도 이 13종 중 잡은 종 수다
