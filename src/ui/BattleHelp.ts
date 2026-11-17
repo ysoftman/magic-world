@@ -51,7 +51,7 @@ const rows = (): [string, string][] => [
   ["PSN BRN", "Tick each turn. CHL: the foe's ATK is down."],
   ["REACTION", "BRN+ICE, CHL+BOLT, PSN+FIRE: the status bursts."],
   ["WEAK", "Its weak element (x1.5), once you fought one."],
-  ["AMBUSH!", "Touch its back: a free FIGHT. OFF GUARD!: yours."],
+  ["AMBUSH!", "Its back: a free FIGHT. OFF GUARD!: it hits first."],
   ["ELITE", "FIERCE, STURDY or SWIFT: tougher, richer loot."],
   ["SWORDS", "Each has a nature: see its line in ITEMS."],
 ];

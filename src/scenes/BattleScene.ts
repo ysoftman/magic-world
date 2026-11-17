@@ -164,6 +164,17 @@ const PERFECT_GRACE_MS = 40;
 // CUE_FROM to CUE_HALF about the foe's middle, on the 2px grid
 const CUE_FROM = 120;
 const CUE_HALF = 56;
+// FIRST STRIKE's word (openingBlow), centred between the fighters a row (60px)
+// over the timed notes (timedNote, y 306). Over the one caught, as it was, it
+// lay across the blow's own damage number (from 80px over its middle, 40px
+// right: an AMBUSH! hit for 7 read "AMBU7H!"). At x 640 in size 8, AMBUSH!
+// (224px, x 528..752) and OFF GUARD! (320px, 480..800) clear the foe's
+// numbers (a crit's "516!" from x 888) and the hero's (to 472), and the stat
+// windows (to y 200: it rises to 232, its top at POPUP_TOP). PERFECT! or
+// PARRY! under it pops as the blow lands, 0.34s on at the soonest, and rises
+// as fast: its top reaches this one's bottom 0.63s later (0.42s at BATTLE
+// SPEED 2), when this has been gone 0.07s (0.16s).
+const OPENING_WORD_Y = 246;
 // breathing (idleBob): how far a fighter rises and falls, two of its 2px cells
 const IDLE_BOB_PX = 4;
 // a flier's breathing is a hover: higher and quicker, wings at work
@@ -2084,13 +2095,14 @@ export class BattleScene extends Phaser.Scene {
   // FIRST STRIKE: the blow before the fight's first turn. The hero's is a
   // FIGHT as any other (its PERFECT too), the foe's its plain blow (a PARRY
   // answers it): no move, no wind-up, nothing rolled for its turn. Its word
-  // pops over whoever was caught; the fight's opening line comes after.
+  // pops between the fighters (OPENING_WORD_Y); the fight's opening line
+  // comes after.
   private async openingBlow(who: "hero" | "foe"): Promise<void> {
     if (who === "hero") {
-      this.flashStatus("AMBUSH!", "#fde047", this.enemySprite.x, this.enemySprite.y - 80);
+      this.flashStatus("AMBUSH!", "#fde047", GAME_WIDTH / 2, OPENING_WORD_Y, 8);
       return this.playerAttack();
     }
-    this.flashStatus("OFF GUARD!", "#f87171");
+    this.flashStatus("OFF GUARD!", "#f87171", GAME_WIDTH / 2, OPENING_WORD_Y, 8);
     await this.tip("parry");
     const { dmg, crit, note } = await this.enemyBlow();
     await this.say(crit ? `CRITICAL! ${this.enemy.name} strikes for ${dmg}!${note}` : `${this.enemy.name} attacks for ${dmg}!${note}`);
