@@ -607,7 +607,11 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   - 들어서기: `sceneCommon` 의 `fadeAreaTitle(scene, title, region)` 이 `enterField` 를 부르고 토스트(`GOLD RUSH: FIGHTS HERE PAY
     30% MORE GOLD TODAY!` 46글자)를 낸다. 제목과 같은 조건(입장 때만)이라 전투에서 돌아와도 붙잡은 이변이 그대로다.
   - 마을: `FieldToasts` 가 `tip: "town"` 으로 만들어질 때 `leaveFields`, update 에서 그날 한 번(세션 변수 `omenToldDay`)
-    `TODAY: GOLD RUSH OVER THE VOLCANO!` 를 낸다(해금 팁이 나온 claim 은 다음으로 미룸).
+    `TODAY: GOLD RUSH OVER THE VOLCANO!` 를 낸다(해금 팁이 나온 claim 은 다음으로 미룸). 해금 팁 `fields`(3승, 일지의 이변
+    줄과 같은 조건)를 본 뒤부터다. 실제 사례: 새 게임은 늘 0일(CALM DAY OVER THE CAVE, MARKET DAY)이라 마을에 들어서자 2초
+    안에 이 줄과 장날 토스트가 함께 떴는데, 이변도 동굴도 아직 아무 말도 듣지 못한 단어였다. 그날 팁을 보면 다음 claim 에
+    나온다. 마을 이벤트 토스트(TownScene `update` 의 `announcedDay`)는 첫 승리(`GameState.battles` > 0) 뒤부터다: 새 게임은
+    0 G 라 할인·더비·수확·룰렛이 아직 뜻이 없고, 첫 전투에서 돌아오는 길에 같은 날 나온다.
   - 마을 토스트는 토스트 줄이 비었을 때만 낸다(대기 줄은 셋까지라 소식이 몰린 날 하나를 밀어낼 수 있다). 실측: 해금 팁 여섯과
     업적이 한꺼번에 뜬 마을 진입에서 여덟 줄 뒤 10.4초에 떴고 빠진 줄은 없었다.
   - 효과: 골드는 `payout.ts` `settleWin` 의 `mealGold` 합에 `omenGold()`(요리·축복·TRADE 와 더해짐, 재대결·심연 제외, 압도의

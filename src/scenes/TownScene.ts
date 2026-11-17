@@ -1306,9 +1306,13 @@ export class TownScene extends Phaser.Scene {
     // turns the day over here. Held back while a panel is up so it doesn't
     // land on one. Its longest line, "FISHING DERBY! POND CATCHES PAY x1.5
     // TODAY", is 42 x 20 = 840px (x 220..1060) under the HUD, clear of the
-    // touch menu strip (x>=1222).
+    // touch menu strip (x>=1222). Not before the first win: a new game has
+    // 0 G, so a sale, a derby, a harvest or a kinder wheel is nothing to it
+    // yet, and every new game is day 0, a MARKET DAY, said in its first two
+    // seconds over the goal (SLIMES 0/5). Held, it comes on the walk back
+    // from that fight, the same day.
     const day = econDay();
-    if (day !== announcedDay && !this.eventToastPending && !this.uiBlocking()) {
+    if (day !== announcedDay && GameState.battles > 0 && !this.eventToastPending && !this.uiBlocking()) {
       const event = eventToday();
       if (!event) {
         announcedDay = day;

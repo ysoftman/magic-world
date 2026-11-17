@@ -1634,8 +1634,13 @@ export class FieldToasts {
     // of this claim: "TODAY: GOLD RUSH OVER THE VOLCANO!" 34 glyphs
     // ...and only onto an empty toast row: the queue behind a toast holds
     // three, and a new hero's first day has tips and trophies enough to push
-    // one of them out
-    if (this.tip === "town" && !tipped && omenToldDay !== econDay() && !toastOver(this.scene, 0)) {
+    // one of them out. Not before the town's tip on what the fields hold
+    // (unlockTips.ts "fields", 3 wins; the journal's omen line waits for it
+    // too, ui/QuestLog.ts): a new game's town said "TODAY: CALM DAY OVER THE
+    // CAVE!" in its first two seconds, an omen and a field no word had named.
+    // Held, it comes the day the tip is seen, a claim after it.
+    const toldFields = GameState.seenTips?.includes("fields") ?? true;
+    if (this.tip === "town" && toldFields && !tipped && omenToldDay !== econDay() && !toastOver(this.scene, 0)) {
       omenToldDay = econDay();
       const omen = omenOn(omenToldDay, GameState.quest);
       showToast(this.scene, `TODAY: ${OMENS[omen.kind].name} OVER THE ${OMEN_REGION_NAMES[omen.region]}!`, this.toastY);
