@@ -24,6 +24,7 @@ import { TitleScene } from "./scenes/TitleScene";
 import { TownScene } from "./scenes/TownScene";
 import { VolcanoScene } from "./scenes/VolcanoScene";
 import { startGamepad } from "./ui/Gamepad";
+import { isTouchDevice } from "./ui/TouchControls";
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) Sfx.suspendBgmForHiddenTab();
@@ -51,8 +52,14 @@ const config: Phaser.Types.Core.GameConfig = {
     // pixel is a whole number of CSS pixels: a MacBook (DPR 2) shows the game
     // at exactly 2 device pixels per game pixel rather than 2.19, where the
     // same glyph stroke came out 16, 17 or 18 device pixels wide. It costs at
-    // most one step of size (91% of the width there)
-    snap: { width: 320, height: 180 },
+    // most one step of size (91% of the width there). Not on a touch screen:
+    // a phone held sideways is 304..355 CSS px tall under its address bar, so
+    // the step below 360 is 180, a quarter of the game, every glyph 0.6..1.1mm
+    // (an iPhone's Safari at 844x340 drew 320x180 where it had room for
+    // 604x340). Unsnapped, a game pixel is 1.27..1.42 device pixels there and
+    // a stroke 1 or 2 of them, 0.06mm apart at 416..460ppi. Read once, as
+    // every scene reads isTouchDevice() once.
+    snap: isTouchDevice() ? undefined : { width: 320, height: 180 },
   },
   // three touches at once (the mouse has its own pointer besides): the d-pad
   // held while Z is tapped, and one to spare (TouchControls). Set here once;
