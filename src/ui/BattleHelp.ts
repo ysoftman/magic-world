@@ -46,7 +46,7 @@ const rows = (): [string, string][] => [
   ],
   ["DEFEND", `A CHG strike or a blast does ${pct(DEFEND_HEAVY_MULT)}; you COUNTER.`],
   [">MOVE", "Blinks in the foe's window: its next move."],
-  ["CHG", "Big hit next turn: DEFEND, or PARRY it: it reels."],
+  ["CHG", "Big hit next: DEFEND; PARRY (no breath): it reels."],
   ["ATK+ DEF+", "The foe's buff. Spells go through a DEF+."],
   ["PSN BRN", "Tick each turn. CHL: the foe's ATK is down."],
   ["REACTION", "BRN+ICE, CHL+BOLT, PSN+FIRE: the status bursts."],
