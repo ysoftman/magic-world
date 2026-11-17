@@ -363,10 +363,21 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.hard.setText(GameState.ngPlus > 0 ? `HARD ${GameState.ngPlus}` : "");
-    this.stars.setText(`STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}`);
+    // Each corner line once the town's tip has said what it counts (unlockTips.ts,
+    // as the fields' area line, sceneCommon areaLeft): the shards and seals and
+    // the day's omen after "STAR SHARDS AND SEALS HIDE IN EVERY FIELD!" (3 wins),
+    // the PEDDLER after his own (8). The omen's tag ("CALM: CAVE") names what
+    // its toast on the way in says the field holds, shards and runes among it,
+    // and in a new game's first journal it stood beside three counters nothing
+    // had named yet. A save from before the tips (seenTips null) has seen them.
+    const told = (tip: string): boolean => GameState.seenTips?.includes(tip) ?? true;
+    const fields = told("fields");
+    this.stars.setText(
+      fields ? `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}` : "",
+    );
     const omen = omenOn(econDay(), GameState.quest);
-    this.peddler.setText(`PEDDLER: ${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}`);
-    this.omen.setText(`${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}`);
+    this.peddler.setText(told("peddler") ? `PEDDLER: ${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}` : "");
+    this.omen.setText(fields ? `${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}` : "");
     const taken = GameState.perks;
     this.perks
       .setText(
