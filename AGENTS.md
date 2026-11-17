@@ -152,8 +152,11 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   `whilePanelUp(scene, () => this.uiBlocking())`, 모든 필드 씬). 반투명 패널 뒤로 이름표가
   유령 글자처럼 비쳤기 때문이다. 새 필드 씬도 같은 줄을 넣는다.
 - 같은 `whilePanelUp` 이 그동안 토스트도 붙잡는다. `!` 가 들어간 소식(업적·해금 팁·
-  `MARKET DAY! ...`)은 패널이 닫힌 뒤 순서대로 나오고, 패널이 열릴 때 떠 있던 토스트는 내린다
-  (소식은 다시 줄 맨 앞에, `SAVED` 같은 상태 줄은 버림). 패널 안에서 누른 키의 답(`SOUND: OFF`,
+  `MARKET DAY! ...`)은 패널이 닫힌 뒤 순서대로 나오고, 패널이 닫히는 그 프레임에 새로 온 소식도 그 뒤에
+  선다(`pixelart.ts` 의 `showToast`). 패널이 열릴 때 떠 있던 토스트는 내린다(뜬 지 `TOAST_SEEN_MS` 0.6초 안의 소식은 다시
+  줄 맨 앞에, 그보다 오래 뜬 소식은 읽은 것으로 보고 버림, `SAVED` 같은 상태 줄은 버림). 실제 사례: 특성 두 개를
+  잇달아 고르자 대화가 닫히는 프레임에 나온 `PERK: VIGOR!` 가 먼저 기다리던 `PERK: MIGHT!` 를 앞질렀고, 둥지를 깬 뒤의
+  업적 토스트는 제단·봉인 대화를 열 때마다 처음부터 다시 떠 세 번 보였다. 패널 안에서 누른 키의 답(`SOUND: OFF`,
   `SLOT 1 CODE COPIED`, `INVALID CODE`)과 `SAVE FAILED: STORAGE FULL`·`STORAGE BLOCKED` 는 `!` 없는 상태 줄이라
   패널 위에 바로 보인다(수확·요리·구매 저장이 패널 안에서 일어난다). 실제 사례: 해금 팁
   `THE FOREST GATE IS OPEN!` 이 ITEMS 제목 위에 겹쳐 둘 다 못 읽었다. 그래서 소식 토스트에는

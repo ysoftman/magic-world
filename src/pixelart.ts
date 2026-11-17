@@ -71,10 +71,18 @@ interface ToastEntry {
 
 interface ToastState {
   showing: boolean;
-  // the toast up now, while `showing`
+  // the toast up now, while `showing`, and when it went up (scene clock)
   current: ToastEntry | null;
+  since: number;
   waiting: ToastEntry[];
 }
+
+// News a panel takes down after this long up is not put back in the line: it
+// has faded in (200ms) and held at full for 400ms of its 900, read. Sooner it
+// goes back to the front. Put back however long it had been up, one
+// achievement came three times over a nest's end, the shrine's talk and the
+// seal's stone, each panel opened while it was up again (2026-11).
+const TOAST_SEEN_MS = 600;
 
 // per toast Text, so a scene restart (which destroys the Text) starts clean
 const toastStates = new WeakMap<PixelText, ToastState>();
@@ -83,11 +91,12 @@ const toastStates = new WeakMap<PixelText, ToastState>();
 // An unlock tip or an achievement printed over a panel's title covered it
 // and was unreadable itself ("THE FOREST GATE IS OPEN!" on ITEMS). News (a
 // line with a "!": achievements, tips, "MARKET DAY! ...") comes out in order
-// once the panel closes; one already up when a panel opens goes back to the
-// front of the line. A status line already up then (SAVED from just before)
-// is put away, stale. One put up under the panel is pinned and shows: it
-// answers a key pressed there. A scene that holds must call pumpToasts()
-// every frame.
+// once the panel closes, ahead of any put up after; one already up when a
+// panel opens goes back to the front of the line unless it had been up
+// TOAST_SEEN_MS, when it counts as read and goes. A status line already up
+// then (SAVED from just before) is put away, stale. One put up under the
+// panel is pinned and shows: it answers a key pressed there. A scene that
+// holds must call pumpToasts() every frame.
 const toastHolds = new WeakMap<Phaser.Scene, () => boolean>();
 const toastsHeld = (scene: Phaser.Scene): boolean => toastHolds.get(scene)?.() === true;
 const isNews = (text: string): boolean => text.includes("!");
@@ -106,7 +115,7 @@ export function pumpToasts(scene: Phaser.Scene): void {
       t.setAlpha(0);
       state.showing = false;
       state.waiting = state.waiting.filter((e) => e.pinned || isNews(e.text));
-      if (state.current && isNews(state.current.text)) state.waiting.unshift(state.current);
+      if (state.current && isNews(state.current.text) && scene.time.now - state.since < TOAST_SEEN_MS) state.waiting.unshift(state.current);
       state.current = null;
     }
     const pinned = state.showing ? -1 : state.waiting.findIndex((e) => e.pinned);
@@ -175,22 +184,27 @@ export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
   }
   let state = toastStates.get(t);
   if (!state) {
-    state = { showing: false, current: null, waiting: [] };
+    state = { showing: false, current: null, since: 0, waiting: [] };
     toastStates.set(t, state);
   }
   const held = toastsHeld(scene);
   const entry: ToastEntry = { text, y, pinned: held && !isNews(text) };
-  const waits = held && !entry.pinned;
-  if (!waits && (!state.showing || supersedes(text, t.text))) {
+  // up at once: one that supersedes the toast up, a status line under a
+  // panel (the news waiting there is held), or anything with no line ahead
+  // of it. News a panel held is still ahead the frame it closes, before
+  // pumpToasts(): a perk taken as the ELDER's talk shut ("PERK: VIGOR!") was
+  // put up over the one taken a question earlier ("PERK: MIGHT!"), out of
+  // order (2026-11).
+  const free = !held || entry.pinned;
+  if (free && (state.showing ? supersedes(text, t.text) : entry.pinned || state.waiting.length === 0)) {
     playToast(scene, t, state, entry);
     return;
   }
   const same = state.waiting.findIndex((e) => supersedes(text, e.text));
-  if (same >= 0) {
-    state.waiting[same] = entry;
-    return;
-  }
-  state.waiting.push(entry);
+  if (same >= 0) state.waiting[same] = entry;
+  else state.waiting.push(entry);
+  // nothing up and nothing holding it: the line's head goes now
+  if (!held && !state.showing) playToast(scene, t, state, state.waiting.shift() as ToastEntry);
   if (state.waiting.length > TOAST_MAX_WAITING) state.waiting.shift();
 }
 
@@ -200,6 +214,7 @@ function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: 
   scene.tweens.killTweensOf(t);
   state.showing = true;
   state.current = entry;
+  state.since = scene.time.now;
   if (entry.y !== undefined) t.setY(entry.y);
   t.setText(entry.text).setAlpha(0);
   scene.tweens.add({
