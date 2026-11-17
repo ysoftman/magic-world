@@ -84,7 +84,7 @@ AUDIT_JS = """() => {
         const b = o.getBounds();
         const fixed = still || (o.scrollFactorX ?? 1) === 0 || (o.parentContainer && (o.parentContainer.scrollFactorX ?? 1) === 0);
         items.push({ t: o.text.replace(/\\n/g, "|").slice(0, 48), x: fixed ? b.x : b.x - cam.scrollX, y: fixed ? b.y : b.y - cam.scrollY,
-          w: b.width, h: b.height, fixed, depth });
+          w: b.width, h: b.height, fixed, depth, a: Math.round((o.alpha ?? 1) * 100) / 100 });
       }
     };
     walk(s.children.list, true);
@@ -100,21 +100,25 @@ AUDIT_JS = """() => {
         const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
         if (ix > 3 && iy > 3 && a.t !== b.t) out.overlap.push(`${s.scene.key} "${a.t}" [${r(a.x)},${r(a.y)} d${a.depth}] x "${b.t}" [${r(b.x)},${r(b.y)} d${b.depth}]`);
       }
-    // TouchControls' discs (depth 250) over any text under them
-    for (const o of s.children.list)
-      if (o.type === "Arc" && o.depth === 250 && o.visible)
-        for (const it of fx) {
-          const ix = Math.min(o.x + o.radius, it.x + it.w) - Math.max(o.x - o.radius, it.x);
-          const iy = Math.min(o.y + o.radius, it.y + it.h) - Math.max(o.y - o.radius, it.y);
-          if (ix > 4 && iy > 4) out.touch.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"`);
-        }
+    // TouchControls' discs: a Graphics each at depth 250 (drawDisc's 2px rows), its hit area the disc's
+    // circle. They were Arcs once; looked for as Arcs after that, none was found and touch/touchMap came back
+    // empty whatever lay under them
+    const discs = s.children.list
+      .filter((o) => o.type === "Graphics" && o.depth === 250 && o.visible && o.input && o.input.hitArea && o.input.hitArea.radius > 0)
+      .map((o) => ({ x: o.x, y: o.y, radius: o.input.hitArea.radius }));
+    // ...over any screen-fixed text under them (the circle against the text's box)
+    for (const o of discs)
+      for (const it of fx) {
+        const nx = Math.max(it.x, Math.min(o.x, it.x + it.w)), ny = Math.max(it.y, Math.min(o.y, it.y + it.h));
+        if (Math.hypot(nx - o.x, ny - o.y) < o.radius - 2) out.touch.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"`);
+      }
     // ...and over the map's own tags (not screen-fixed), where the camera is now
-    for (const o of s.children.list)
-      if (o.type === "Arc" && o.depth === 250 && o.visible)
-        for (const it of items.filter((i) => !i.fixed)) {
-          const nx = Math.max(it.x, Math.min(o.x, it.x + it.w)), ny = Math.max(it.y, Math.min(o.y, it.y + it.h));
-          if (Math.hypot(nx - o.x, ny - o.y) < o.radius - 2) out.touchMap.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"`);
-        }
+    for (const o of discs)
+      for (const it of items.filter((i) => !i.fixed)) {
+        const nx = Math.max(it.x, Math.min(o.x, it.x + it.w)), ny = Math.max(it.y, Math.min(o.y, it.y + it.h));
+        // a tag stepped back on purpose (the town's SHOP/BLACKSMITH under the d-pad, alpha 0.2) says so
+        if (Math.hypot(nx - o.x, ny - o.y) < o.radius - 2) out.touchMap.push(`${s.scene.key} disc@${r(o.x)},${r(o.y)} x "${it.t}"${it.a < 1 ? ` alpha ${it.a}` : ""}`);
+      }
   }
   return out;
 }"""
