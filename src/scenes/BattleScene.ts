@@ -482,10 +482,9 @@ const TOUCH_ITEM_HINT = "TAP:SELECT  TAP AGAIN:USE  TAP OUTSIDE:BACK";
 
 // The SKILL list (X) works as the item list does, on the backdrop under the
 // fighters, the 26 moves in the order they are learned, in pages of three
-// columns by four rows: rows 32px apart from y 488, so y 474..598, where the
-// item list's info line and hint were. Those two go into the message box (y
-// 604..716) while the list is up, over the battle's last line, hidden till
-// it closes. Four columns of 24px glyphs don't fit the longest names (DAGGER
+// columns by four rows: rows 32px apart from y 488, so y 474..598. Its info
+// line and key hint go into the message box (y 604..716), as the item list's
+// do, over the battle's last line, hidden till it closes. Four columns of 24px glyphs don't fit the longest names (DAGGER
 // FLURRY 13, FLAME PILLAR / FIRE TORNADO / HEAVY CLEAVE / DOUBLE SLASH 12
 // each in a column of their own: 49 glyphs and four cursors, 1320px), and four
 // rows are all there is room for, so 12 a page (3 pages at Lv29). Columns a
@@ -497,9 +496,10 @@ const SKILL_ROWS = 4;
 const SKILLS_PER_PAGE = SKILLS_PER_ROW * SKILL_ROWS;
 const SKILL_COL_X = [24, 434, 844];
 const SKILL_ROW_Y = [488, 520, 552, 584];
-// In the message box: the cursor's skill on the battle line's own row
-// ("DOUBLE SLASH  14 MP  Two quick cuts of your weapon." in the message's own
-// size, 54 glyphs at most: battleRules MoveBase.info), the key hint under it,
+// In the message box, for either list: the cursor's skill or item on the
+// battle line's own row ("DOUBLE SLASH  14 MP  Two quick cuts of your
+// weapon." in the message's own size, 54 glyphs at most: battleRules
+// MoveBase.info; an item's "NAME: INFO" 40 at most), the key hint under it,
 // 16px glyphs at y 682..698, and with more than one page "< 1/3 >" right of
 // it (tapped on a half to turn back or on; where, see msgLayout). The touch hint,
 // TOUCH_ITEM_HINT, is 688px, x 296..984.
@@ -633,6 +633,7 @@ export class BattleScene extends Phaser.Scene {
   private itemTexts: PixelText[] = [];
   private itemCursor!: PixelText;
   private itemInfoText!: PixelText;
+  private itemHintText!: PixelText;
 
   // the SKILL list (X), one text per skill known this battle
   private inSkills = false;
@@ -1269,16 +1270,18 @@ export class BattleScene extends Phaser.Scene {
       .setStroke("#0b0b2b", 4)
       .setOrigin(0, 0.5)
       .setVisible(false);
-    // what the cursor's item does, as the shop and the bag word it
-    // (itemInfo.ts). Size 4 is all that fits between the second item row
-    // (size 6 at y=528, to 544) and the hint (from 566): y 544..564. The
-    // longest, "CANDY: THROW TO CATCH A WEAKENED MONSTER", is 40 glyphs =
-    // 640px, x 320..960. Outlined like the hint: it sits on the backdrop.
-    this.itemInfoText = this.add
-      .pixelText(GAME_WIDTH / 2, GAME_HEIGHT - 166, "", retroStyle(4, "#ffd166"))
-      .setStroke("#0b0b2b", 4)
+    // What the cursor's item does, as the shop and the bag word it
+    // (itemInfo.ts), and the list's key hint: in the message box as the SKILL
+    // list's are (SKILL_INFO_Y), the battle's line hidden behind them. They
+    // were on the backdrop under the list, the info in size 4 (16px, the
+    // smallest glyphs in the battle) at y 544..564, while the box below
+    // still showed the last line ("ORC blocks your way!"). The longest,
+    // "CANDY: THROW TO CATCH A WEAKENED MONSTER", is 40 glyphs: 560px of the
+    // keyboard's 840 (60 glyphs), 840px of the touch row's 1152 (54).
+    this.itemInfoText = this.add.pixelText(msg.x, SKILL_INFO_Y, "", bodyStyle(msg.size, "#ffd166")).setVisible(false);
+    this.itemHintText = this.add
+      .pixelText(GAME_WIDTH / 2, SKILL_HINT_Y, "", retroStyle(4, "#9f9fd0"))
       .setOrigin(0.5)
-      .setDepth(30)
       .setVisible(false);
 
     // the SKILL list, outlined as the item list is (see SKILL_COL_X), each
@@ -1771,6 +1774,8 @@ export class BattleScene extends Phaser.Scene {
     for (const t of this.itemTexts) t.setVisible(false);
     this.itemCursor.setVisible(false);
     this.itemInfoText.setVisible(false);
+    this.itemHintText.setVisible(false);
+    this.msgText.setVisible(true);
   }
 
   // back from the item list to the menu, no turn spent
@@ -1784,10 +1789,12 @@ export class BattleScene extends Phaser.Scene {
     return ITEM_SLOTS.some((s) => GameState.inventory[s.key] > 0);
   }
 
+  // The list, each item white when there is one, else dim; the cursor's
+  // in the message box with what it does and the list's keys under it, the
+  // battle's line hidden behind them (as renderSkills)
   private renderItems(): void {
     // The list's first row (y 474..502) starts just under the companion's
-    // shadow (to y 472, COMPANION_GROUND_Y): no room to move the list down,
-    // as the info line, the hint and the message box fill the 116px under it.
+    // shadow (to y 472, COMPANION_GROUND_Y); its two rows end at y 542.
     for (let i = 0; i < ITEM_SLOTS.length; i++) {
       this.itemTexts[i].setVisible(true);
       const count = GameState.inventory[ITEM_SLOTS[i].key];
@@ -1799,8 +1806,11 @@ export class BattleScene extends Phaser.Scene {
     this.itemCursor.setX(target.x - ITEM_TEXT_OFFSET);
     this.itemCursor.setY(target.y);
     const slot = ITEM_SLOTS[this.itemIndex];
+    this.hintText.setText("");
+    this.msgText.setVisible(false);
     this.itemInfoText.setText(`${slot.label}: ${ITEM_INFO[slot.key]}`).setVisible(true);
-    bindKeyHint(this.hintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
+    this.itemHintText.setVisible(true);
+    bindKeyHint(this.itemHintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
   }
 
   private knownSpells(): Spell[] {
