@@ -736,24 +736,68 @@ export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titl
  *
  * Toasts: an unlock tip or achievement printed over a panel's title hid
  * both; news now comes out once the panel closes (pixelart's toastHolds).
+ *
+ * With no panel up, a toast dims the tags on its line as it comes in (to
+ * 1 - its alpha, after `shown`) and gives them back as it goes: a tag text
+ * whose box meets the toast's, widened two of its glyphs a side (closer than
+ * that, two lines on one row read as one phrase). Its line is fixed on the
+ * screen and the map scrolls under it, so where the camera stood a tag sat
+ * in it: the town's line (y 100..124) ran over BLACKSMITH as "BLAOVERRUN
+ * SLIME", and FISHING, half under the HUD, met "TODAY: CALM DAY ...". Every
+ * field's line (y 176) is the same toast, so one place covers them all. The
+ * town's HOME bubble, a container, steps aside on its own (TownScene).
  */
 type MapTag = PixelText | Phaser.GameObjects.Container;
 const isText = (o: Phaser.GameObjects.GameObject): o is PixelText => o instanceof PixelText;
 const isMapTag = (o: Phaser.GameObjects.GameObject): o is MapTag =>
   (isText(o) && o.scrollFactorX === 1) || (o instanceof Phaser.GameObjects.Container && o.scrollFactorX === 1 && o.list.some(isText));
+// two of the toast's retroStyle(5) glyphs, and a little over and under
+const TOAST_TAG_PAD_X = 40;
+const TOAST_TAG_PAD_Y = 4;
+
+// the tags on the toast's line now, with the alpha each may show at most
+function tagsUnderToast(scene: Phaser.Scene, tags: MapTag[]): Map<PixelText, number> {
+  const under = new Map<PixelText, number>();
+  const toast = scene.children.getByName("__toast") as PixelText | null;
+  if (!toast?.visible || toast.alpha <= 0 || !toast.text) return under;
+  // the toast is fixed to the screen; a tag's box is in the world
+  const cam = scene.cameras.main;
+  const line = toast.getBounds();
+  const left = line.x - TOAST_TAG_PAD_X + cam.scrollX;
+  const right = line.right + TOAST_TAG_PAD_X + cam.scrollX;
+  const top = line.y - TOAST_TAG_PAD_Y + cam.scrollY;
+  const bottom = line.bottom + TOAST_TAG_PAD_Y + cam.scrollY;
+  for (const tag of tags) {
+    if (!isText(tag) || !tag.visible) continue;
+    const b = tag.getBounds();
+    if (b.right > left && b.x < right && b.bottom > top && b.y < bottom) under.set(tag, 1 - toast.alpha);
+  }
+  return under;
+}
 
 export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () => void): void {
   holdToastsWhile(scene, up);
   let tags: MapTag[] | null = null;
   let off = false;
+  // the tags a toast dimmed last frame
+  let dimmed = new Set<PixelText>();
   const step = (): void => {
     tags ??= scene.children.list.filter(isMapTag);
     const hide = up();
     if (hide || off) {
       off = hide;
       for (const t of tags) t.setAlpha(hide ? 0 : 1);
+      dimmed.clear();
     }
-    if (!hide) shown?.();
+    if (!hide) {
+      // back to full first, so the scene's fades (`shown`) set their own
+      // alpha and the toast's dimming goes on top of it each frame
+      for (const t of dimmed) t.setAlpha(1);
+      shown?.();
+      const under = tagsUnderToast(scene, tags);
+      for (const [t, most] of under) t.setAlpha(Math.min(t.alpha, most));
+      dimmed = new Set(under.keys());
+    }
     pumpToasts(scene);
   };
   // after the physics step has moved the hero, whatever else update() did
