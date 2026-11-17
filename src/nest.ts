@@ -29,34 +29,29 @@ import type { KeeperBout } from "./seals";
 // - The arena, the ABYSS and the yard never start one, and nothing of it is
 //   read in them.
 //
-// Numbers. The sizing (sim:battle with the bout's multipliers put on the
-// species first, WOLF and the region's intended gear, no potions): the share
-// of max HP a fight takes at the level a hero comes to the field with, and
-// the sum of the three less what two wins mend (+5 HP each). It took the run
-// for a sum, one fight at a time, with no level bought on the way.
-//            level, gear              1st  2nd  3rd   sum - mended
-//   cave      Lv3, SWORD + SHIELD     13%  34%  51%   98 - 25 = 73%   (Lv2 147, Lv4 58)
-//   forest    Lv8, SWORD + IRON SH.   10%  36%  45%   91 - 15 = 76%   (Lv7 129, Lv9 67)
-//   snow     Lv13, IRON + IRON        20%  28%  41%   89 - 11 = 78%   (Lv12 105, Lv14 61)
-//   volcano  Lv19, MYTHRIL + MYTHRIL   7%  23%  56%   86 -  8 = 78%   (Lv18 103, Lv20 76)
-// But the first two fights' EXP (elites, x2.5: 65, 180, 383, 463 against
-// 45, 122, 225, 381 to the next level) always buy a level before the third,
-// a level up a hero no worse than the sim's (+1 ATK, +1 DEF, +5 max HP), so
-// the runs measured in the game (headless, that hero and gear, exp 0 into
-// its level, FIGHT / HEAL under 35% / DEFEND a CHG / the weakness spell, no
-// LIMIT or PARRY, 10 runs a field) fall short of the sum. With the level's
-// mend kept to what it adds (2026-11):
-//            cleared  HP into the 3rd   lowest in the 3rd    HP left
-//   cave      10/10     81% (min 60)      51% (min 16)      62% (min 27)
-//   forest    10/10     81% (min 70)      40% (min 24)      60% (min 49)
-//   snow      10/10     69% (min 61)      35% (min 26)      53% (min 49)
-//   volcano   10/10     85% (min 81)      30% (min 10)      34% (min 14)
-// A level under (Lv2, 7, 12, 18, 6 runs each) the same EXP buys it too:
-// 6, 6, 6 and 4 of 6 cleared (the two volcano runs lost in the third), HP
-// left 47, 61, 52 and 27%. While the level mended to full all 40 above and
-// 21 of 21 a level under were cleared. Not the quarter left and one run in
-// five lost the sum promised: the third foe would have to take about twice
-// its share in the cave, the forest and the snow for that.
+// Numbers, measured in the game (headless: the hero of the level one walks
+// into the field with, reset()'s Lv1 and every level-up since, exp 0 into it,
+// the region's intended gear, WOLF, no potions; FIGHT, HEAL under 35% HP,
+// DEFEND a CHG, the weakness spell when the MP is there; no LIMIT or PARRY).
+// The first two fights' EXP (elites, x2.5: 65, 180, 383, 463 against 45,
+// 122, 225, 381 to the next level) always buy a level before the third,
+// which mends only what it adds (nestFightOn). Only the third foe is sized
+// to the run, to end it with about a third of max HP and lose one in ten
+// (2026-11):
+//            3rd x HP, ATK  runs  lost  HP into 3rd  lowest in 3rd  HP left   a level under
+//   cave      x4.5, x1.7     20     3    84% (69)     22% (0)        37% (13)  5 of 6 lost
+//   forest    x3.6, x1.5     25     3    78% (57)     15% (0)        33% (15)  3 of 6
+//   snow      x3.5, x1.7     25     2    65% (44)     16% (0)        38% (15)  4 of 6
+//   volcano   x2.5, x1.4     10     0    85% (81)     30% (10)       34% (14)  2 of 6
+// (HP left is the cleared runs', after the last win's +5.) A HEAL holds the
+// HP of the forest's and the snow's heroes up, once under 35%, for as long as
+// the MP lasts, so there the third is long (about 10 rounds against the
+// cave's 7) and what loses a run is the MP running dry. Their first sizing
+// (sim:battle, the bout's multipliers on the species, one fight at a time)
+// was the sum of the three less two wins' +5 HP, 73-78% for every field, with
+// the cave's, the forest's and the snow's third at x2.5/x1.5, x2/x1.3 and
+// x2/x1.4; summed, a run buys no level on the way, and in the game all 40
+// runs at the field's level were cleared with 62, 60, 53 and 34% left.
 // The cave's opens with the ELITE_MIN_BATTLES wins a Lv2-3 hero has.
 // Gold: the three fights pay as elites (x2.5 their species': 62, 175, 340 and
 // 485 G), the purse on top (40, 120, 300, 340), together about a quarter of
@@ -103,19 +98,19 @@ const fights = (first: [string, number, number], second: [string, number, number
 export const NESTS: Record<NestRegion, NestDef> = {
   dungeon: {
     at: [13, 14],
-    fights: fights(["bat", 1.3, 1.2], ["goblin", 1.5, 1.3], ["bat", 2.5, 1.5]),
+    fights: fights(["bat", 1.3, 1.2], ["goblin", 1.5, 1.3], ["bat", 4.5, 1.7]),
     purse: [10, 25, 40],
     material: "batWing",
   },
   forest: {
     at: [12, 16],
-    fights: fights(["wasp", 1.3, 1.2], ["orc", 1.2, 1.1], ["spider", 2, 1.3]),
+    fights: fights(["wasp", 1.3, 1.2], ["orc", 1.2, 1.1], ["spider", 3.6, 1.5]),
     purse: [30, 75, 120],
     material: "spiderSilk",
   },
   snow: {
     at: [12, 14],
-    fights: fights(["frostMoth", 1.3, 1.2], ["yeti", 1, 1], ["frostMoth", 2, 1.4]),
+    fights: fights(["frostMoth", 1.3, 1.2], ["yeti", 1, 1], ["frostMoth", 3.5, 1.7]),
     purse: [75, 180, 300],
     material: "frostScale",
   },
