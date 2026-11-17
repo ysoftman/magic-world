@@ -140,6 +140,11 @@ const RECOIL_MS = 90;
 // 270ms after the cue, sooner than most reactions. The beat is 150ms at
 // least, so a press 150ms after the one that advanced the last line (mashing)
 // is still 100ms early. A press up to PARRY_LATE_MS after the blow is told so.
+// The hint (ANY KEY:PARRY) comes up with the cue, not with the beat: up at the
+// beat's start, a press 150-350ms after seeing it was early 18 times in 26
+// (PARRY 6, LATE 2), the hint itself read as the signal. With the cue, a bot
+// pressing 150-350ms after it parried 84 times in 102 (EARLY 18, every one
+// under 180ms). Presses still count from the beat's start, so mashing is early.
 const PARRY_HOLD_MS: [number, number] = [150, 450];
 const PARRY_BACK_MS = 260;
 const PARRY_BACK_PX = 24;
@@ -3879,11 +3884,12 @@ export class BattleScene extends Phaser.Scene {
     const targetX = this.playerSprite.x + 80;
     const trail = this.ghostTrail(foe);
     this.timedLate = 0;
-    if (!this.thawing) {
-      bindKeyHint(this.hintText, () => keyHint("ANY KEY:PARRY", "TAP:PARRY", { table: "battle", pad: "Z:PARRY" }));
-      this.timedPress = null;
-    } else this.hintText.setText("");
+    // a press from here on counts (mashing through the beat is early), but
+    // the hint waits for the cue: see PARRY_HOLD_MS
+    if (!this.thawing) this.timedPress = null;
+    this.hintText.setText("");
     await this.wait(Phaser.Math.Between(...PARRY_HOLD_MS));
+    if (!this.thawing) bindKeyHint(this.hintText, () => keyHint("ANY KEY:PARRY", "TAP:PARRY", { table: "battle", pad: "Z:PARRY" }));
     await this.tweenPromise(foe, { x: startX + PARRY_BACK_PX }, PARRY_BACK_MS);
     await this.tweenPromise(foe, { x: targetX }, this.anim(LUNGE_OUT_MS), trail);
     const press = this.timedPress;
