@@ -200,7 +200,11 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
 - 터치 버튼 원판(`TouchControls` 의 `DISC_ALPHA` 0.5, 누르면 0.2)은 그 아래 맵 이름표의
   뒷판 역할도 한다. 실제 사례: 0.25 에서 새 게임 첫 화면의 `BLACKSMITH` 이름표가 D-pad 뒤로
   거의 그대로 비쳐 화살표와 섞였다(화살표 대비 약 2.7:1, 0.5 에서 약 5.5:1). 원판을 다시
-  옅게 하지 않는다.
+  옅게 하지 않는다. 그래도 원판 밑에 걸린 이름표는 버튼 글자와 이어 읽혀서, 모든 필드 씬에서 원판(d-pad·Z·ESC·MENU,
+  보이는 것만)에 닿은 맵 이름표는 0.2 로 물러난다(`sceneCommon` 의 `whilePanelUp` 이 매 프레임 `TouchControls` 의
+  `tagUnderTouchButton`·`TAG_UNDER_BUTTON_ALPHA` 로). 실제 사례: 마을 대화 자리에서 `SNOW PASS` 가 d-pad 의 < > 와
+  `SNOW<PASS` 로, `FOREST` 가 MENU 의 A 와 `FORESTA` 로, `CAVE` 가 U 와 `UCA` 로 읽혔다. 예전에는 마을의 SHOP·BLACKSMITH
+  만(`padTags`, d-pad 의 네모 범위) 이렇게 했다.
 - 크기: Press Start 2P 는 8px 격자라 `retroStyle(n)` 의 짝수 n(16·24·32px)이 글자 픽셀이 고른
   정수배다. 홀수 n 은 글자 픽셀이 반 픽셀에 걸려(`retroStyle(5)`, 20px 는 2.5px) 2px·3px 이
   번갈아 나온다. 선명하고 2칸 획은 늘 5px 지만 1칸 획은 굵기가 다르다. 패널·HUD 폭이 5 에 맞춰져

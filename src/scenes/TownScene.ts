@@ -273,8 +273,6 @@ export class TownScene extends Phaser.Scene {
   private workplaceLights: Array<{ landmark: string; light: NightLight }> = [];
   // the name tags that fade with the hero's distance (NPC_TAG_NEAR)
   private npcTags: Array<{ tag: PixelText; sprite: Phaser.GameObjects.Sprite }> = [];
-  // the always-up tags (SHOP, BLACKSMITH) a touch D-pad can sit over
-  private padTags: PixelText[] = [];
   private villagers!: Villagers;
   private level: number[][] = [];
   private editorQueued = false;
@@ -369,7 +367,6 @@ export class TownScene extends Phaser.Scene {
     this.fixedLabels = [];
     this.npcSprites = [];
     this.npcTags = [];
-    this.padTags = [];
     this.blockers = [];
     this.workplaceLights = [];
     this.wasNight = isNight();
@@ -569,20 +566,12 @@ export class TownScene extends Phaser.Scene {
     // No tag under a talk or a panel (the talk's name plate sat right on
     // them, a panel let them show through), and toasts wait for it to close —
     // but not under the map editor, which is all about where things stand.
-    // The people's tags fade with distance while the rest are up.
+    // The people's tags fade with distance while the rest are up (a tag
+    // under a touch button steps back there, as in every field).
     whilePanelUp(
       this,
       () => this.uiBlocking() && !this.mapEditor.isActive(),
       () => {
-        // an always-up tag under the touch D-pad (screen x 42..258, y 508..724) steps back
-        // so the arrows stay clear of it
-        const cam = this.cameras.main;
-        for (const tag of this.padTags) {
-          const b = tag.getBounds();
-          const under =
-            b.right - cam.scrollX > 42 && b.left - cam.scrollX < 258 && b.bottom - cam.scrollY > 508 && b.top - cam.scrollY < 724;
-          tag.setAlpha(under ? 0.2 : 1);
-        }
         for (const { tag, sprite } of this.npcTags) {
           const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, sprite.x, sprite.y);
           tag.setAlpha(Phaser.Math.Clamp((NPC_TAG_FAR - d) / (NPC_TAG_FAR - NPC_TAG_NEAR), 0, 1));
@@ -974,7 +963,6 @@ export class TownScene extends Phaser.Scene {
     );
     this.fixedLabels.push(rectOf(tag));
     if (!ALWAYS_TAGGED.has(label)) this.npcTags.push({ tag: tag.setAlpha(0), sprite });
-    else if (isTouchDevice()) this.padTags.push(tag);
   }
 
   // Where a person's tag goes: over their head; for a keeper with a workplace

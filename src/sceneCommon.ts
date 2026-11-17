@@ -50,7 +50,7 @@ import { helpOpen } from "./ui/HelpPopup";
 import { placeHeroGear } from "./ui/HeroGear";
 import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
-import { isTouchDevice } from "./ui/TouchControls";
+import { hasTouchButtons, isTouchDevice, TAG_UNDER_BUTTON_ALPHA, tagUnderTouchButton } from "./ui/TouchControls";
 import { type WarpWalker, warmWarp, warping, warpOut } from "./ui/warpFx";
 import { showUnlockTip, type TipPlace } from "./unlockTips";
 import type { Weather } from "./weather";
@@ -756,6 +756,11 @@ export function addTownExitLabel(scene: Phaser.Scene, x: number, y: number, titl
  * SLIME", and FISHING, half under the HUD, met "TODAY: CALM DAY ...". Every
  * field's line (y 176) is the same toast, so one place covers them all. The
  * town's HOME bubble, a container, steps aside on its own (TownScene).
+ *
+ * On a touch screen a tag under one of its buttons (the d-pad, Z, ESC, the
+ * MENU column) steps back the same way, to TAG_UNDER_BUTTON_ALPHA
+ * (ui/TouchControls.ts, where the cases are): the disc's own 0.5 black left
+ * it reading into the button's glyph.
  */
 type MapTag = PixelText | Phaser.GameObjects.Container;
 const isText = (o: Phaser.GameObjects.GameObject): o is PixelText => o instanceof PixelText;
@@ -785,11 +790,23 @@ function tagsUnderToast(scene: Phaser.Scene, tags: MapTag[]): Map<PixelText, num
   return under;
 }
 
+// ...and those under a touch button now, at most TAG_UNDER_BUTTON_ALPHA (none on a keyboard)
+function tagsUnderButtons(scene: Phaser.Scene, tags: MapTag[], under: Map<PixelText, number>): void {
+  if (!hasTouchButtons(scene)) return;
+  const cam = scene.cameras.main;
+  for (const tag of tags) {
+    if (!isText(tag) || !tag.visible) continue;
+    const b = tag.getBounds();
+    if (!tagUnderTouchButton(scene, b.x - cam.scrollX, b.y - cam.scrollY, b.width, b.height)) continue;
+    under.set(tag, Math.min(under.get(tag) ?? 1, TAG_UNDER_BUTTON_ALPHA));
+  }
+}
+
 export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () => void): void {
   holdToastsWhile(scene, up);
   let tags: MapTag[] | null = null;
   let off = false;
-  // the tags a toast dimmed last frame
+  // the tags a toast or a touch button dimmed last frame
   let dimmed = new Set<PixelText>();
   const step = (): void => {
     tags ??= scene.children.list.filter(isMapTag);
@@ -801,10 +818,11 @@ export function whilePanelUp(scene: Phaser.Scene, up: () => boolean, shown?: () 
     }
     if (!hide) {
       // back to full first, so the scene's fades (`shown`) set their own
-      // alpha and the toast's dimming goes on top of it each frame
+      // alpha and the toast's and the buttons' dimming go on top of it each frame
       for (const t of dimmed) t.setAlpha(1);
       shown?.();
       const under = tagsUnderToast(scene, tags);
+      tagsUnderButtons(scene, tags, under);
       for (const [t, most] of under) t.setAlpha(Math.min(t.alpha, most));
       dimmed = new Set(under.keys());
     }

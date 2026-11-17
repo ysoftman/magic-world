@@ -106,6 +106,39 @@ interface TouchButton {
   text: PixelText;
   groups: TouchGroup[];
   release: () => void;
+  r: number;
+}
+
+// A map tag under a button steps back to this (sceneCommon's whilePanelUp
+// asks tagUnderTouchButton every frame), on every field scene and under
+// every button: the d-pad, Z, ESC and the MENU column. The disc's 0.5 black
+// alone left it reading into the button's glyphs: the town's SNOW PASS ran
+// into the d-pad's < and > as "SNOW<PASS", FOREST into the column's A as
+// "FORESTA" and CAVE out of its U as "UCA", each from a keeper's talking
+// spot. At 0.2 under the disc it is a shadow of the ground, the arrows
+// clear of it. The town had this for SHOP and BLACKSMITH alone (padTags).
+export const TAG_UNDER_BUTTON_ALPHA = 0.2;
+// each scene's buttons, while its TouchControls stands (a touch device only)
+const sceneButtons = new WeakMap<Phaser.Scene, TouchButton[]>();
+
+/** Whether `scene` has touch buttons up: none on a keyboard, so a caller can skip its per-tag work. */
+export function hasTouchButtons(scene: Phaser.Scene): boolean {
+  return (sceneButtons.get(scene)?.length ?? 0) > 0;
+}
+
+/**
+ * Whether the screen box (x, y, w, h) reaches into a shown button's disc: its
+ * nearest point more than 2px inside the circle, as the playtest audit's
+ * touchMap counts it. A hidden button (the d-pad under a talk) doesn't count.
+ */
+export function tagUnderTouchButton(scene: Phaser.Scene, x: number, y: number, w: number, h: number): boolean {
+  for (const b of sceneButtons.get(scene) ?? []) {
+    if (!b.ring.visible) continue;
+    const nx = Math.max(x, Math.min(b.ring.x, x + w));
+    const ny = Math.max(y, Math.min(b.ring.y, y + h));
+    if (Math.hypot(nx - b.ring.x, ny - b.ring.y) < b.r - 2) return true;
+  }
+  return false;
 }
 
 // Replays one key into the window; the gamepad (Gamepad.ts) sends its
@@ -139,10 +172,12 @@ export class TouchControls {
     this.button(scene, 1000, 668, 40, "ESC", "Escape");
     this.menu(scene);
     scene.events.on(HIDE_EVENT, this.hide, this);
+    sceneButtons.set(scene, this.buttons);
   }
 
   destroy(): void {
     this.scene.events.off(HIDE_EVENT, this.hide, this);
+    sceneButtons.delete(this.scene);
     for (const b of this.buttons) {
       b.ring.destroy();
       b.text.destroy();
@@ -229,7 +264,7 @@ export class TouchControls {
     };
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, release);
     ring.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, release);
-    const button = { ring, text, groups, release };
+    const button = { ring, text, groups, release, r };
     this.buttons.push(button);
     return button;
   }
