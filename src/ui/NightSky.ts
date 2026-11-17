@@ -166,15 +166,19 @@ const QUIET_MS = 3;
 
 function bake(scene: Phaser.Scene): void {
   if (scene.textures.exists("sky-veil")) return;
-  // the fireworks' veil: the night's navy in 8px steps, opaque at the top
-  // (the image's alpha scales it) and clear at the bottom
+  // the fireworks' veil: the night's navy, opaque behind the HUD (the image's
+  // alpha scales it), then in 8px steps clear at the bottom. It starts at the
+  // screen's top, not under the HUD: with the HUD hidden (S) a veil from y 88
+  // drew a hard edge there, the map tinted below it as if under cellophane.
   const g = scene.add.graphics();
+  g.fillStyle(0x0e0e30, 1);
+  g.fillRect(0, 0, 4, STATUS_HUD_HEIGHT);
   const steps = FIREWORK_VEIL_H / 8;
   for (let i = 0; i < steps; i++) {
     g.fillStyle(0x0e0e30, (1 - i / steps) ** 1.2);
-    g.fillRect(0, i * 8, 4, 8);
+    g.fillRect(0, STATUS_HUD_HEIGHT + i * 8, 4, 8);
   }
-  g.generateTexture("sky-veil", 4, FIREWORK_VEIL_H);
+  g.generateTexture("sky-veil", 4, STATUS_HUD_HEIGHT + FIREWORK_VEIL_H);
   g.destroy();
 }
 
@@ -241,9 +245,9 @@ function addFireworks(scene: Phaser.Scene): void {
     },
   });
 
-  const veil = fixed(scene.add.image(0, STATUS_HUD_HEIGHT, "sky-veil"))
+  const veil = fixed(scene.add.image(0, 0, "sky-veil"))
     .setOrigin(0, 0)
-    .setDisplaySize(GAME_WIDTH, FIREWORK_VEIL_H)
+    .setDisplaySize(GAME_WIDTH, STATUS_HUD_HEIGHT + FIREWORK_VEIL_H)
     .setDepth(SKY_DEPTH - 0.08)
     .setAlpha(0);
   const festive = (): boolean => {
