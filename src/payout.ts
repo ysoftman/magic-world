@@ -11,6 +11,7 @@ import { ELITE_DROP_MULT, type EliteKind } from "./elite";
 import { noteWin } from "./feats";
 import { expToNext, GameState } from "./gameState";
 import { ENEMIES, type EnemyDef } from "./monsters";
+import { nestFightOn } from "./nest";
 import { omenGold } from "./omen";
 import { recordRank } from "./ranking";
 import { relicWinHeal } from "./relics";
@@ -142,20 +143,28 @@ export function settleWin(win: Win, rand: () => number = Math.random): Payout {
   return { gold, streakBonus, exp, found, mealHeal };
 }
 
-/** The levels the EXP now held buys, each with its stats and a full HP and MP; null for none. */
+/**
+ * The levels the EXP now held buys, each with its stats and a full HP and MP;
+ * null for none. In a nest's fight (nest.ts nestFightOn) a level mends HP and
+ * MP only by what their maximums grew: the run's stake is the HP it has cost.
+ */
 export function settleLevels(): LevelUp | null {
   const p = GameState.player;
   const from = p.level;
+  const mend = !nestFightOn();
   let rank = 0;
   while (p.level < MAX_LEVEL && p.exp >= expToNext(p.level)) {
+    const hpWas = GameState.effMaxHp();
+    const mpWas = p.maxMp;
     p.exp -= expToNext(p.level);
     p.level += 1;
     p.maxHp = Math.min(MAX_HP, p.maxHp + 5);
     p.maxMp = Math.min(MAX_MP, p.maxMp + 2);
     p.atk += 1;
     p.def += 1;
-    p.hp = GameState.effMaxHp();
-    p.mp = p.maxMp;
+    const hpMax = GameState.effMaxHp();
+    p.hp = mend ? hpMax : Math.min(hpMax, p.hp + hpMax - hpWas);
+    p.mp = mend ? p.maxMp : Math.min(p.maxMp, p.mp + p.maxMp - mpWas);
     const r = recordRank(p.name, p.level);
     if (r > 0) rank = r;
   }

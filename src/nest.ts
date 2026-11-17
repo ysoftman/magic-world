@@ -6,7 +6,8 @@ import type { KeeperBout } from "./seals";
 // asks once; each fight won, the hero is asked again whether to go on or
 // leave with what is banked so far. Nothing mends between them but a win's
 // own +5 HP and +2 MP: no walk to a bed, no bag opened in the field (the
-// question comes up as the field does). All three won pays the purse and
+// question comes up as the field does), and a level bought in a fight mends
+// only what it adds (nestFightOn below). All three won pays the purse and
 // NEST_PIECES of the field's material; leaving early pays the smaller purse
 // and no material; a fall is any fall. Once a day (econDay), the day spent
 // as the hero goes in, so a reload mid-run forfeits it.
@@ -28,19 +29,34 @@ import type { KeeperBout } from "./seals";
 // - The arena, the ABYSS and the yard never start one, and nothing of it is
 //   read in them.
 //
-// Numbers (sim:battle with the bout's multipliers put on the species first,
-// WOLF and the region's intended gear, no potions): the share of max HP a
-// fight takes at the level a hero comes to the field with, and the levels
-// either side. A run is the three in a row less what two wins mend (+5 HP
-// each), so a hero who drinks nothing ends near a quarter of its HP on
-// average and falls about one run in five (taking each fight's spread as
-// half its mean; the sim fights one fight at a time, so this is a sum, not a
-// run). A level under, most runs are lost; a level over, it is safe.
+// Numbers. The sizing (sim:battle with the bout's multipliers put on the
+// species first, WOLF and the region's intended gear, no potions): the share
+// of max HP a fight takes at the level a hero comes to the field with, and
+// the sum of the three less what two wins mend (+5 HP each). It took the run
+// for a sum, one fight at a time, with no level bought on the way.
 //            level, gear              1st  2nd  3rd   sum - mended
 //   cave      Lv3, SWORD + SHIELD     13%  34%  51%   98 - 25 = 73%   (Lv2 147, Lv4 58)
 //   forest    Lv8, SWORD + IRON SH.   10%  36%  45%   91 - 15 = 76%   (Lv7 129, Lv9 67)
 //   snow     Lv13, IRON + IRON        20%  28%  41%   89 - 11 = 78%   (Lv12 105, Lv14 61)
 //   volcano  Lv19, MYTHRIL + MYTHRIL   7%  23%  56%   86 -  8 = 78%   (Lv18 103, Lv20 76)
+// But the first two fights' EXP (elites, x2.5: 65, 180, 383, 463 against
+// 45, 122, 225, 381 to the next level) always buy a level before the third,
+// a level up a hero no worse than the sim's (+1 ATK, +1 DEF, +5 max HP), so
+// the runs measured in the game (headless, that hero and gear, exp 0 into
+// its level, FIGHT / HEAL under 35% / DEFEND a CHG / the weakness spell, no
+// LIMIT or PARRY, 10 runs a field) fall short of the sum. With the level's
+// mend kept to what it adds (2026-11):
+//            cleared  HP into the 3rd   lowest in the 3rd    HP left
+//   cave      10/10     81% (min 60)      51% (min 16)      62% (min 27)
+//   forest    10/10     81% (min 70)      40% (min 24)      60% (min 49)
+//   snow      10/10     69% (min 61)      35% (min 26)      53% (min 49)
+//   volcano   10/10     85% (min 81)      30% (min 10)      34% (min 14)
+// A level under (Lv2, 7, 12, 18, 6 runs each) the same EXP buys it too:
+// 6, 6, 6 and 4 of 6 cleared (the two volcano runs lost in the third), HP
+// left 47, 61, 52 and 27%. While the level mended to full all 40 above and
+// 21 of 21 a level under were cleared. Not the quarter left and one run in
+// five lost the sum promised: the third foe would have to take about twice
+// its share in the cave, the forest and the snow for that.
 // The cave's opens with the ELITE_MIN_BATTLES wins a Lv2-3 hero has.
 // Gold: the three fights pay as elites (x2.5 their species': 62, 175, 340 and
 // 485 G), the purse on top (40, 120, 300, 340), together about a quarter of
@@ -112,6 +128,24 @@ export const NESTS: Record<NestRegion, NestDef> = {
 };
 
 export const NEST_REGIONS = Object.keys(NESTS) as NestRegion[];
+
+// A run's fight under way: from its start (ui/Nest.ts, as each fight goes
+// out) until its battle shuts down, won, fled or fallen, or a field is built
+// again. While it is, a level the fight's EXP buys (payout.ts settleLevels)
+// raises the stats and the maximum HP and MP but mends HP and MP only by what
+// those maximums grew, not to full: nothing mends between the fights but a
+// win's +5 HP and +2 MP. The three are elites (x2.5 EXP), and at the level a
+// hero walks in with the first two always bought a level, whose full mend
+// sent the hero into the third, the hardest, at full HP: 40 runs of 40
+// cleared, none lower than 38% HP at the worst moment (2026-11). Not saved:
+// a reload ends the run (Nest.ts), and with it this.
+let fightOn = false;
+
+export const nestFightOn = (): boolean => fightOn;
+
+export function setNestFight(on: boolean): void {
+  fightOn = on;
+}
 
 // the day (econDay) each nest was last gone into; a save from before the
 // nests has none

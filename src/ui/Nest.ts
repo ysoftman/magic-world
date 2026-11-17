@@ -2,7 +2,17 @@ import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { materialName } from "../delivery";
 import { econDay, GameState } from "../gameState";
-import { NEST_FIGHTS, NEST_MIN_BATTLES, NEST_PIECES, NESTS, type NestFight, type NestRegion, nestSpent, payNest } from "../nest";
+import {
+  NEST_FIGHTS,
+  NEST_MIN_BATTLES,
+  NEST_PIECES,
+  NESTS,
+  type NestFight,
+  type NestRegion,
+  nestSpent,
+  payNest,
+  setNestFight,
+} from "../nest";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { justBackFromFight } from "../sceneCommon";
@@ -110,6 +120,9 @@ export class Nest {
     // the run is paid; fled, the run ends with what was banked
     const was = opts.back && run?.region === region ? run : null;
     run = null;
+    // and the fight's level-ups mend as any other's again (nest.ts), its
+    // battle's own shutdown having said so already unless it never started
+    setNestFight(false);
     if (was) {
       const won = GameState.battles > was.battles || GameState.caught.length > was.caught;
       const wins = was.wins + (won ? 1 : 0);
@@ -146,6 +159,11 @@ export class Nest {
   // the next fight out, the run noted for its return
   private fightOn(wins: number): void {
     run = { region: this.region, wins, battles: GameState.battles, caught: GameState.caught.length };
+    // its level-ups add only what they raise (nest.ts nestFightOn) until the
+    // battle shuts down, however it ends: back to this field, or a fall's
+    // walk to town, which builds no nest to clear it
+    setNestFight(true);
+    this.scene.scene.get("Battle").events.once(Phaser.Scenes.Events.SHUTDOWN, () => setNestFight(false));
     this.startFight(NESTS[this.region].fights[wins]);
   }
 
