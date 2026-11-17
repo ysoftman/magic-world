@@ -129,7 +129,10 @@ export class Shrine {
     // one run the cave's and the snow field's pairs broke as "GREED:" / "GOLD
     // +50%." on touch). Touch, 42 glyphs a row: the first line (36 at most),
     // then a blessing a row (25 at most), three rows; the question takes the
-    // choices' page alone there (DialogueBox). The keyboard's 54 hold both
+    // choices' page alone there, on its one row (DialogueBox), so with no
+    // "\n" before it: that put a blank row first and the question on the
+    // second, its caps at y 549..573, on the d-pad's < and > (y 572 on)
+    // that come back for the choices. The keyboard's 60 hold both
     // blessings on one row (43 at most): the first line, the pair and the
     // question are its three rows, all a page with choices has. On the
     // field's HOLY DAY (omen.ts) the first line says so, 53 glyphs: one row
@@ -137,14 +140,13 @@ export class Shrine {
     // must be a glyph under its width: the box counts the space after it.
     // ESC (pick 2, past both) walks away; N, the second, still meets the
     // YES/NO.
+    const touch = isTouchDevice();
     const first = holy
       ? `HOLY DAY: once a day, ${cost} G (half) blesses ${BLESSING_BATTLES} battles.`
       : `Once a day: ${cost} G blesses ${BLESSING_BATTLES} battles.`;
-    const pair = isTouchDevice()
-      ? [`\n${a.name}: ${a.info}.`, `\n${b.name}: ${b.info}.`]
-      : [`\n${a.name}: ${a.info}.`, `${b.name}: ${b.info}.`];
+    const pair = touch ? [`\n${a.name}: ${a.info}.`, `\n${b.name}: ${b.info}.`] : [`\n${a.name}: ${a.info}.`, `${b.name}: ${b.info}.`];
     this.dialogue.ask(
-      [first, ...pair, "\nWhich blessing?"],
+      [first, ...pair, touch ? "Which blessing?" : "\nWhich blessing?"],
       "SHRINE",
       [a.name, b.name],
       (i) => {
