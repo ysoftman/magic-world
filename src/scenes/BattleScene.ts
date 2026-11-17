@@ -725,6 +725,9 @@ export class BattleScene extends Phaser.Scene {
   private keeperName: string | null = null;
   // who strikes before the first turn (init's `opening`), if either
   private opening: "hero" | "foe" | null = null;
+  // a first-time tip said in this fight (tip()): PERFECT's waits for a fight
+  // without one
+  private tipped = false;
   private combo = 0;
   private comboText!: PixelText;
   // one successful steal per battle; failed attempts don't count against it
@@ -854,6 +857,7 @@ export class BattleScene extends Phaser.Scene {
     this.freezeGrace = 0;
     this.enraged = false;
     this.charging = false;
+    this.tipped = false;
     this.tellCooldown = 0;
     this.wardTurns = 0;
     // spent by this battle, whatever it is
@@ -1986,6 +1990,8 @@ export class BattleScene extends Phaser.Scene {
       // next fight's start: said at a round's end, most fights never did)
       await this.tip("limit");
       await this.tip("intent");
+      await this.tip("charge");
+      await this.tip("perfect");
       // a frozen hero forfeits this action (null matches no case below); the
       // companion and the enemy still take their turns
       let action = this.frozen ? null : await this.playerTurn();
@@ -2115,13 +2121,34 @@ export class BattleScene extends Phaser.Scene {
   // menu that has one; and what the foe's blinking tag is, before the first
   // menu under one. 52, 46 and 49 (">SNATCH", the longest) glyphs of a row's
   // 54 (touch: 42, 45, the same). Not in the yard, whose gauge is always full.
-  private async tip(id: "parry" | "limit" | "intent" | "react"): Promise<void> {
+  // The CHG tag's answers, before the first menu under one: 50 glyphs, 49 for
+  // a breath, which no PARRY meets (bossStrike). PERFECT's FIGHT timing,
+  // before the first menu of a later fight than PARRY's, and of one that has
+  // said no other yet: the first fight already stops for PARRY (and often
+  // the foe's tag), and its own hint, ANY KEY:PERFECT, has been up over
+  // every FIGHT since; 52 glyphs (touch 51), in the battle help's words.
+  private async tip(id: "parry" | "limit" | "intent" | "react" | "charge" | "perfect"): Promise<void> {
     const seen = GameState.seenTips;
     if (!seen || seen.includes(id) || this.practice || !this.running || GameState.player.hp <= 0) return;
     if (id === "limit" && !limitFull(this.limit)) return;
     if (id === "intent" && !this.intent) return;
     if (id === "react" && !this.reacted) return;
+    if (id === "charge" && !this.charging) return;
+    if (id === "perfect" && (this.tipped || !seen.includes("parry"))) return;
     seen.push(id);
+    this.tipped = true;
+    if (id === "charge")
+      return this.say(
+        BREATHS[this.enemy.name]
+          ? "TIP: CHG: DEFEND halves the breath and hits back."
+          : "TIP: CHG: DEFEND halves it; PARRY it and it reels.",
+        true,
+      );
+    if (id === "perfect")
+      return this.say(
+        keyHint("TIP: press any key as the frame shuts gold: PERFECT.", "TIP: tap as the frame shuts gold for a PERFECT hit."),
+        true,
+      );
     // 52 glyphs
     if (id === "react") return this.say("TIP: BRN+ice, CHL+bolt, PSN+fire: a status reacts!", true);
     if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`, true);
