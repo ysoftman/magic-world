@@ -480,6 +480,22 @@ const GAME_KIT: Record<string, SfxProgram> = {
       { at: 0.055, dur: 0.17, wave: "pulse12", freq: N("A6"), vol: 0.08, hold: 0.05 },
     ],
   },
+  "shard:near": {
+    id: "shard:near",
+    kind: "se",
+    // a star shard's hint (ui/StarShards.ts), every 0.7..3.3s while one is
+    // near and unseen, so the quietest thing in the field but the ambience:
+    // at its nearest level with the menu cursor (2dB under a BGM note), 4dB
+    // less at the hint's edge and 6dB at a CALM DAY's (StarShards' vol 0.64,
+    // 0.5); all of it over 1.5kHz like the cursor, where it stands 4..15dB
+    // over the BGM's notes. On the E of the shard's own pickup, an octave up
+    target: "a star shard nearby: one soft glassy E7 ping, a triangle with a 12.5% pulse glint on E8 for its first 50ms",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.32, wave: "triangle", freq: N("E7"), vol: 0.028, attack: 0.004, hold: 0.012, vib: { rate: 16, cents: 10 } },
+      { at: 0, dur: 0.05, wave: "pulse12", freq: N("E8"), vol: 0.007 },
+    ],
+  },
   chest: {
     id: "chest",
     kind: "se",

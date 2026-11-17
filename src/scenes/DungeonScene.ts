@@ -235,7 +235,10 @@ export class DungeonScene extends Phaser.Scene {
 
     this.spawnTreasures();
     // the field's three hidden star shards (shards.ts), taken by walking onto them
-    new StarShards(this, "dungeon", this.player, { found: () => this.holdFights() });
+    new StarShards(this, "dungeon", this.player, {
+      found: () => this.holdFights(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+    });
 
     // the stair down to the ABYSS (abyss.ts), once the FLAME DRAKE has fallen
     const abyss = abyssOpen(GameState.quest, GameState.ngPlus);

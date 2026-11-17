@@ -27,7 +27,8 @@
 //   scenes' checkEncounter; the roamers in their zones are as ever), and a
 //   runner stands there on OMEN_CALM_RUNNER of the walks in (ui/Runner.ts).
 //   A day for what is done on foot: the star shards, the seal's plates, a
-//   treasure map's X, the runner itself. Half the hunt's gold for who only
+//   treasure map's X, the runner itself; the shards' hint (ui/StarShards.ts)
+//   reaches OMEN_CALM_SHARD_REACH as far. Half the hunt's gold for who only
 //   hunts, which is the point of saying where it is.
 // - HOLY DAY: the field's shrine asks half its gold (shrine.ts shrineCost),
 //   still once a day. 15 to 100 G saved: a reason to pray there today, and
@@ -50,6 +51,7 @@ export const OMEN_GOLD = 0.3;
 export const OMEN_ELITE_MULT = 3;
 export const OMEN_CALM_FIGHTS = 0.5;
 export const OMEN_CALM_RUNNER = 0.3;
+export const OMEN_CALM_SHARD_REACH = 1.5;
 
 export const OMENS: Record<OmenKind, OmenDef> = {
   gold: { name: "GOLD RUSH", tag: "GOLD", says: "FIGHTS HERE PAY 30% MORE GOLD TODAY" },
@@ -125,3 +127,6 @@ export const omenFightRate = (): number => (here?.kind === "calm" ? OMEN_CALM_FI
 
 /** CALM DAY: the chance a runner stands in the field as the hero walks in, 0 without it. */
 export const omenRunner = (): number => (here?.kind === "calm" ? OMEN_CALM_RUNNER : 0);
+
+/** CALM DAY: what the star shards' hint reaches is multiplied by (ui/StarShards.ts), 1 without it. */
+export const omenShardReach = (): number => (here?.kind === "calm" ? OMEN_CALM_SHARD_REACH : 1);

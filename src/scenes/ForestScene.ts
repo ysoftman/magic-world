@@ -222,7 +222,10 @@ export class ForestScene extends Phaser.Scene {
 
     this.spawnTreasures();
     // the field's three hidden star shards (shards.ts), taken by walking onto them
-    new StarShards(this, "forest", this.player, { found: () => this.holdFights() });
+    new StarShards(this, "forest", this.player, {
+      found: () => this.holdFights(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+    });
 
     this.physics.add.overlap(this.player, this.roamerGroup, (_p, roamer) => {
       // nor on the way to the title, which would then race the battle's fade

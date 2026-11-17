@@ -228,7 +228,10 @@ export class SnowScene extends Phaser.Scene {
 
     this.spawnTreasures();
     // the field's three hidden star shards (shards.ts), taken by walking onto them
-    new StarShards(this, "snow", this.player, { found: () => this.holdFights() });
+    new StarShards(this, "snow", this.player, {
+      found: () => this.holdFights(),
+      blocked: () => this.quitting || this.fieldKeys.leaving() || this.uiBlocking(),
+    });
 
     this.add.image(SNOW_FISH_POS.x, SNOW_FISH_POS.y - TILE, "sign").setDepth(9);
     this.add
