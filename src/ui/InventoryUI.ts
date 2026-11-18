@@ -450,7 +450,12 @@ export class InventoryUI {
       .setVisible(false);
     // tapping the pager's left or right half turns the page, as in BestiaryUI
     this.pager.setInteractive({ useHandCursor: true }).on("pointerdown", (p: Phaser.Input.Pointer) => {
-      if (this.active) this.toColumn(SLOTS[this.index].col + (p.x < this.pager.x - this.pager.width / 2 ? -2 : 2));
+      // to the next page's first column, wrapping by pages: by two columns
+      // from the cursor's, an odd count of columns turned to the wrong page
+      // (from ACCESSORIES ">" went back to the first)
+      const pages = Math.ceil(COLUMNS.length / 2);
+      const turn = p.x < this.pager.x - this.pager.width / 2 ? -1 : 1;
+      if (this.active) this.toColumn(((this.page + turn + pages) % pages) * 2);
     });
 
     const kb = scene.input.keyboard!;
