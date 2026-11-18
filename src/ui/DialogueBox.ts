@@ -429,6 +429,11 @@ export class DialogueBox {
   }
 
   private close(): void {
+    // shut mid-line by ESC or an answer: left running, the page's timer typed
+    // the next talk at double speed and kept pushing its choices' guard back,
+    // so Z and taps on them were dropped for seconds
+    this.typing = false;
+    this.timer?.remove();
     this.active = false;
     this.choosing = false;
     this.choices = [];
