@@ -314,7 +314,9 @@ export class ForestScene extends Phaser.Scene {
     });
     // the field's seal (seals.ts): its stone, its three rune plates, its keeper
     new Seal(this, "forest", this.player, this.dialogue, {
-      back: !!back,
+      // (a season's turn rebuilds the forest about a hero who never left: the
+      // runes lit so far stay lit, as over a fight)
+      back: !!back || !!turn,
       // asked for, so no grace holds it off (a find's, an arrival's): a call
       // that started no fight would leave the seal waiting on the next win
       fight: () => {
