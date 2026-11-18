@@ -68,6 +68,8 @@ interface ToastEntry {
   // a status line put up under a panel: the answer to what the player just
   // did there (SLOT 1 CODE COPIED, SOUND: OFF), so it shows over the panel
   pinned?: boolean;
+  // run as the line goes up (see showToast's `shown`)
+  shown?: () => void;
 }
 
 interface ToastState {
@@ -160,8 +162,12 @@ const supersedes = (next: string, prev: string): boolean =>
  *
  * Under a held scene's panel (holdToastsWhile) news waits for it to close
  * and a status line shows over it (see toastHolds).
+ *
+ * `shown` runs as the line goes up on screen, which a line pushed out of
+ * the waiting ones (TOAST_MAX_WAITING) or left behind with its scene never
+ * does: for news that must not count as told until it was (unlockTips.ts).
  */
-export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
+export function showToast(scene: Phaser.Scene, text: string, y?: number, shown?: () => void): void {
   // Reuse one toast per scene instead of stacking a new Text on every call —
   // otherwise mashing the key that triggers it (e.g. mute) overlaps garbled
   // text from multiple in-flight instances.
@@ -189,7 +195,7 @@ export function showToast(scene: Phaser.Scene, text: string, y?: number): void {
     toastStates.set(t, state);
   }
   const held = toastsHeld(scene);
-  const entry: ToastEntry = { text, y, pinned: held && !isNews(text) };
+  const entry: ToastEntry = { text, y, pinned: held && !isNews(text), shown };
   // up at once: one that supersedes the toast up, a status line under a
   // panel (the news waiting there is held), or anything with no line ahead
   // of it. News a panel held is still ahead the frame it closes, before
@@ -226,6 +232,7 @@ function playToast(scene: Phaser.Scene, t: PixelText, state: ToastState, entry: 
   state.current = entry;
   state.since = scene.time.now;
   if (entry.y !== undefined) t.setY(entry.y);
+  entry.shown?.();
   t.setText(entry.text).setAlpha(0);
   scene.tweens.add({
     targets: t,

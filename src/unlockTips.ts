@@ -11,7 +11,12 @@ import { isWet, weatherToday } from "./weather";
 // One-time tips: the first time something opens up (or a kind of day first
 // comes round), a toast says so once, instead of the news living only in the
 // ELDER's lines. What has been shown is saved (GameState.seenTips), so a
-// re-entered scene or a reloaded save never repeats one.
+// re-entered scene or a reloaded save never repeats one. A tip is seen as
+// its toast goes up, not as it is handed over: on a day with much news the
+// toast row drops the oldest line waiting (pixelart.ts TOAST_MAX_WAITING),
+// and a tip dropped there, or left waiting as the hero walked out of town,
+// was marked seen and never said (the CANDY's, behind eight other lines;
+// for a field's tip the journal's line then stood unexplained).
 //
 // A new tip is one row: `place` is the scene that shows it (every region
 // entrance, the arena and the BLACKSMITH are in town), `when` the moment it
@@ -111,13 +116,19 @@ export function tipTold(id: string): boolean {
   return seen.includes(id);
 }
 
+// a tip's toast went up since the last showUnlockTip: seenTips is to be saved
+let toldSince = false;
+
 /**
- * Shows the next unseen tip for `place` whose moment has come, at most one a
- * call so a burst (the arena and the forest open together) queues a second
- * apart. A save from before the tips (seenTips null) is first seeded with
- * everything already true — or with every tip in HARD MODE, which has seen
- * them all — and shows nothing. True when seenTips changed, so the caller
- * saves (quietly, like a claimed achievement).
+ * Hands the toast row the next unseen tip for `place` whose moment has come,
+ * one at a time: the same tip each call until its toast is up (the row keeps
+ * one line of a text, so a tip still waiting stays where it is, and one the
+ * row dropped waits again), then the next, so a burst (the arena and the
+ * forest open together) comes a toast apart. A save from before the tips
+ * (seenTips null) is first seeded with everything already true — or with
+ * every tip in HARD MODE, which has seen them all — and shows nothing. True
+ * when seenTips changed (a tip's toast went up since the last call), so the
+ * caller saves (quietly, like a claimed achievement).
  */
 export function showUnlockTip(scene: Phaser.Scene, place: TipPlace, y: number): boolean {
   if (GameState.seenTips === null) {
@@ -127,8 +138,17 @@ export function showUnlockTip(scene: Phaser.Scene, place: TipPlace, y: number): 
   const seen = GameState.seenTips;
   carryOldTips(seen);
   const tip = UNLOCK_TIPS.find((t) => t.place === place && !seen.includes(t.id) && t.when());
-  if (!tip) return false;
-  seen.push(tip.id);
-  showToast(scene, tip.text, y);
-  return true;
+  if (tip) {
+    const { id } = tip;
+    showToast(scene, tip.text, y, () => {
+      // (a toast a panel took down goes up again; a save loaded since has its own list)
+      const now = GameState.seenTips;
+      if (!now || now.includes(id)) return;
+      now.push(id);
+      toldSince = true;
+    });
+  }
+  const told = toldSince;
+  toldSince = false;
+  return told;
 }
