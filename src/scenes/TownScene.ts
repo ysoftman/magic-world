@@ -1361,7 +1361,8 @@ export class TownScene extends Phaser.Scene {
     this.fieldKeys.takeMapKey(this.minimap, () => this.uiBlocking());
 
     if (this.uiBlocking()) {
-      this.zQueued = false;
+      // (C too: one pressed inside the look picker reopened it as it shut)
+      this.zQueued = this.cQueued = false;
       this.walk.halt();
       this.panels.update();
       wanderRoamers(this.roamers, delta);
