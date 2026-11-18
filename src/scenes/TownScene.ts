@@ -1464,7 +1464,7 @@ export class TownScene extends Phaser.Scene {
           const q = GameState.quest;
           this.dialogue.start(
             q.bossDefeated
-              ? ["The path to the forest", "is open. Be wary of", "the MOSS GOLEM!"]
+              ? ["The path to the forest", "is open. Its keeper, the", "MOSS GOLEM, went mad.", "Be wary, hero!"]
               : ["The forest is sealed.", "Defeat the KING SLIME", "first!"],
             "GUARD",
           );
@@ -1824,8 +1824,8 @@ export class TownScene extends Phaser.Scene {
       const gained = GameState.gainGold(30);
       Sfx.buy();
       // and the next errand with it, so the reward isn't a dead end
-      const next = q.bossDefeated ? [] : ["Now the KING SLIME", "waits in the cave", "up north!"];
-      this.dialogue.start(["Well done, hero!", "You hunted 5 slimes.", `Take these ${gained} gold!`, ...next], "ELDER");
+      const next = q.bossDefeated ? [] : ["They came fleeing the", "cave. A KING SLIME", "swells there, up north!"];
+      this.dialogue.start(["Well done, hero!", "That thins the swarm.", `Take these ${gained} gold!`, ...next], "ELDER");
       return;
     }
     if (!q.bossDefeated) {
@@ -1836,8 +1836,8 @@ export class TownScene extends Phaser.Scene {
         GameState.ngPlus > 0 ? ["You again, hero?", "The beasts have grown", "fiercer since your", "last journey."] : ["Welcome, hero!"];
       // the slime hunt only until it's reported
       const errand = q.slimeReward
-        ? ["The KING SLIME waits", "in the cave up north!"]
-        : ["Slimes lurk in the grass.", "Hunt 5 slimes first.", "Then face the KING SLIME", "in the cave up north!"];
+        ? ["Something warm stirs", "under the cave, and a", "KING SLIME grew fat on", "it. Fell it, up north!"]
+        : ["The ground grows warm,", "and slimes swarm the", "grass. Hunt 5 of them.", "Then face the KING SLIME", "in the cave up north!"];
       this.dialogue.start([...greeting, ...errand], "ELDER");
       return;
     }
@@ -1847,14 +1847,17 @@ export class TownScene extends Phaser.Scene {
       Sfx.buy();
       // the TROLL KING (TownScene's roaming giant) walks the meadows from
       // the KING SLIME's fall on (spawnMonsters), and hits harder than it did
-      const troll = q.trollDefeated ? [] : ["A crowned TROLL KING", "roams the grass too.", "RUN until you're strong!"];
+      const troll = q.trollDefeated ? [] : ["Driven from the woods,", "a TROLL KING roams the", "grass. RUN until", "you're strong!"];
       this.dialogue.start(
         [
           "You are our hero!",
           "The KING SLIME is gone.",
           `Take this ${gained} gold!`,
-          "The eastern woods hold",
-          "a deeper threat now.",
+          "Yet it was only a slime,",
+          "fed by a heat below.",
+          "That heat creeps east:",
+          "the woods' old keeper",
+          "has turned on us.",
           "The GUARD by the woods",
           "knows more.",
           ...troll,
@@ -1864,7 +1867,10 @@ export class TownScene extends Phaser.Scene {
       return;
     }
     if (!q.forestBoss) {
-      this.dialogue.start(["The eastern woods hold", "a deeper threat now.", "The GUARD by the woods", "knows more."], "ELDER");
+      this.dialogue.start(
+        ["The heat creeps east.", "The woods' old keeper", "has turned on us.", "The GUARD by the woods", "knows more."],
+        "ELDER",
+      );
       return;
     }
     if (!q.forestReward) {
@@ -1872,7 +1878,21 @@ export class TownScene extends Phaser.Scene {
       const gained = GameState.gainGold(200);
       GameState.inventory.mythrilSword += 1;
       Sfx.buy();
-      this.dialogue.start(["The forest is at peace!", `Take this ${gained} gold and`, "a MYTHRIL SWORD!"], "ELDER");
+      // the pass thaws with this fall (the town's snow gate), and the ending
+      // has just said a cold wind blows from it
+      this.dialogue.start(
+        [
+          "The forest is at peace!",
+          "Its keeper can rest now.",
+          `Take this ${gained} gold and`,
+          "a MYTHRIL SWORD!",
+          "The snow pass has thawed,",
+          "yet a cold wind blows.",
+          "Its GLACIER GOLEM wakes.",
+          "Go north, hero!",
+        ],
+        "ELDER",
+      );
       return;
     }
     if (!q.snowReward && q.snowBoss) {
@@ -1883,14 +1903,15 @@ export class TownScene extends Phaser.Scene {
       this.dialogue.start(
         [
           "The GLACIER GOLEM...",
-          "fallen? You are the",
-          "truest hero this realm",
-          "has ever known.",
+          "fallen? No hero has",
+          "done so much for us.",
           `${gained} gold and 2 ELIXIRS!`,
           // its frost was what held the crater shut (see the volcano gate)
-          "But with its frost gone,",
-          "the VOLCANO to the",
-          "south-east awakens...",
+          "But its frost held a",
+          "fire down. The VOLCANO",
+          "to the south-east wakes,",
+          "and a FLAME DRAKE",
+          "with it. Quench it, hero!",
         ],
         "ELDER",
       );
@@ -1910,6 +1931,10 @@ export class TownScene extends Phaser.Scene {
           "No hero will ever",
           "match your legend!",
           `${gained} gold and 3 ELIXIRS!`,
+          // the ABYSS opens on this fall (abyss.ts abyssOpen)
+          "But the pit it rose from",
+          "lies open by the cave:",
+          "the ABYSS. Go if you dare.",
         ],
         "ELDER",
       );
@@ -1973,7 +1998,10 @@ export class TownScene extends Phaser.Scene {
     const q = GameState.quest;
     if (!q.hunterBatsAccepted) {
       q.hunterBatsAccepted = true;
-      this.dialogue.start(["Psst, hero! BATS nest", "in the northern cave.", "Slay 4 of them and", "I will pay you well."], "HUNTER");
+      this.dialogue.start(
+        ["Psst, hero! The BATS in", "the north cave are wild", "of late. Slay 4 of them", "and I will pay you well."],
+        "HUNTER",
+      );
       return;
     }
     if (!q.hunterBatsReward) {
@@ -2018,7 +2046,7 @@ export class TownScene extends Phaser.Scene {
     if (!q.hunterYetiAccepted) {
       q.hunterYetiAccepted = true;
       this.dialogue.start(
-        ["One more job, hero:", "YETIS roam the snow", "pass to the north.", "Slay 3 and I'll pay", "handsomely."],
+        ["One more job, hero:", "the thaw sent YETIS down", "the north pass. Slay 3", "and I'll pay handsomely."],
         "HUNTER",
       );
       return;

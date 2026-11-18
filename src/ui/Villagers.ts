@@ -66,6 +66,10 @@ export const VILLAGERS: VillagerDef[] = [
       { lines: ["MOONFLOWER only grows", "at night. Plant it by", "dusk and it's ripe", "before dawn!"] },
       { lines: ["A night asleep at HOME", "still counts for the", "night crops. Handy!"] },
       { lines: ["BEANS come up fast,", "CORN pays more. Plant", "whatever fits your day."] },
+      // the story's thread (story.ts): the heat under the land, until the
+      // FLAME DRAKE falls
+      { lines: ["The soil's been warm", "all year, even under", "snow. It isn't right."], when: (q) => !q.volcanoBoss },
+      { lines: ["The soil's cool again.", "Whatever you did up", "that mountain, thanks!"], when: (q) => q.volcanoBoss },
     ],
   },
   {
@@ -78,6 +82,7 @@ export const VILLAGERS: VillagerDef[] = [
       { lines: ["Some fish only bite", "after dark. Cast at", "the pond after 20:00!"] },
       { lines: ["Hook a GOLDEN FISH and", "there's a POTION on", "the line with it."] },
       { lines: ["The snow field's ice", "hides a pale fish that", "only shows at night."], when: (q) => q.forestBoss },
+      { lines: ["The pond steams at dawn", "these days. The fish", "don't seem to mind."], when: (q) => !q.volcanoBoss },
     ],
   },
   {
@@ -100,6 +105,12 @@ export const VILLAGERS: VillagerDef[] = [
       { lines: ["WASPS and SPIDERS in", "the forest are poison.", "HEAL or a POTION", "cures it."], when: (q) => q.bossDefeated },
       { lines: ["Beasts of the snow can", "freeze you solid. You", "lose your next turn."], when: (q) => q.forestBoss },
       { lines: ["The VOLCANO's beasts", "are made of fire. Most", "of them fear ICE."], when: (q) => q.snowBoss },
+      // the story's thread (story.ts), a line a stretch: the cave before the
+      // KING SLIME, the pass while the GLACIER GOLEM holds it, the ABYSS's
+      // stair once the FLAME DRAKE has opened it
+      { lines: ["Slimes used to hide in", "the cave. Now they", "crowd the grass. Why?"], when: (q) => !q.bossDefeated },
+      { lines: ["Old tales say the snow", "pass was frozen shut", "to hold something in."], when: (q) => q.forestBoss && !q.snowBoss },
+      { lines: ["A stair under the cave", "goes down and down.", "Nobody knows how far."], when: (q) => q.volcanoBoss },
     ],
   },
 ];
