@@ -15,6 +15,8 @@
 // its bond bonus is min(5, floor(level / 4)) unless --bond says otherwise,
 // roughly the rounds a hero of that level has fought beside it.
 //
+// (--elixirs N carries ELIXIRs too: the bag's caps, itemCaps.ts, were sized
+// with --potions 9 --hipotions 5 --elixirs 2.)
 // The late-game options (--refine, --forged, --ng, --abyss, --hipotions,
 // --talisman, --meal; see --help) dress that hero for HARD MODE and the
 // ABYSS's GUARDIANs, as the BLACKSMITH's REFINE was sized with (drops.ts).
@@ -233,6 +235,7 @@ if (args.includes("--help") || args.includes("-h")) {
   --ng         HARD MODE cycle N (GameState.enemyScale)
   --abyss      the GUARDIAN of ABYSS floor FLOOR (a multiple of 5) instead, in the forged kit
   --hipotions  HI-POTIONs carried too, drunk before POTIONs
+  --elixirs    ELIXIRs carried too (full HP and MP), drunk before either
   --talisman   the TALISMAN worn: no poison, no freeze
   --meal       GRILLED FISH (atk, ATK +10%) or BEAN SOUP (def, DEF +15%)`);
   process.exit(0);
@@ -248,6 +251,7 @@ const REFINE = Number(opt("refine") ?? 0);
 const NG = Number(opt("ng") ?? 0);
 const ABYSS = opt("abyss") === undefined ? null : Number(opt("abyss"));
 const HIPOTIONS = Number(opt("hipotions") ?? 0);
+const ELIXIRS = Number(opt("elixirs") ?? 0);
 const TALISMAN = args.includes("--talisman");
 const MEAL = opt("meal");
 const MEAL_ATK = MEAL === "atk" ? 0.1 : 0;
@@ -423,6 +427,7 @@ type Action =
   | { kind: "fight" }
   | { kind: "potion" }
   | { kind: "hiPotion" }
+  | { kind: "elixir" }
   | { kind: "defend" }
   | { kind: "limit" }
   | { kind: "magic"; spell: Spell }
@@ -444,6 +449,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let mp = hero.maxMp;
   let potions = POTIONS;
   let hiPotions = HIPOTIONS;
+  let elixirs = ELIXIRS;
   // BattleScene's per-battle state (init())
   let combo = 0;
   let opened = false;
@@ -544,6 +550,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
 
   const choose = (): Action => {
     if (hp <= hero.maxHp * HP_LOW_SHARE) {
+      if (elixirs > 0) return { kind: "elixir" };
       if (hiPotions > 0) return { kind: "hiPotion" };
       if (potions > 0) return { kind: "potion" };
       const heal = hero.spells.find((s) => s.kind === "heal");
@@ -857,6 +864,12 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       } else if (action.kind === "defend") {
         // BattleScene defend(): the combo holds
         defending = true;
+      } else if (action.kind === "elixir") {
+        combo = 0;
+        elixirs -= 1;
+        hp = hero.maxHp;
+        mp = hero.maxMp;
+        poisonTurns = 0;
       } else if (action.kind === "hiPotion") {
         combo = 0;
         hiPotions -= 1;
@@ -1004,6 +1017,7 @@ const kit = [
   args.includes("--forged") && "forged kit",
   ABYSS !== null && `ABYSS B${ABYSS} (x${(ABYSS === null ? 1 : 1 + 0.06 * (ABYSS - 1)).toFixed(2)})`,
   HIPOTIONS > 0 && `${HIPOTIONS} HI-POTION(s)`,
+  ELIXIRS > 0 && `${ELIXIRS} ELIXIR(s)`,
   TALISMAN && "TALISMAN",
   MEAL && `meal ${MEAL}`,
   GREEDY && (SKILLS_ON ? "greedy, SKILLs" : "greedy, spells only"),

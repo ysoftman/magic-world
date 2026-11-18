@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { econDay, GameState } from "../gameState";
-import { buyFromPeddler, type PeddlerOffer, type PeddlerRegion, peddlerRegion, peddlerSold, peddlerStock } from "../peddler";
+import { buyFromPeddler, type PeddlerOffer, type PeddlerRegion, peddlerFits, peddlerRegion, peddlerSold, peddlerStock } from "../peddler";
 import { FIELD_TOAST_Y, retroStyle, showToast } from "../pixelart";
 import { justBackFromFight } from "../sceneCommon";
 import type { DialogueBox } from "./DialogueBox";
@@ -118,6 +118,12 @@ export class Peddler {
     if (GameState.gold < o.price) {
       Sfx.error();
       this.dialogue.start([`${o.price} G for those. You have ${GameState.gold}.`], "PEDDLER");
+      return;
+    }
+    // a bag at the item's cap (itemCaps.ts): refused before the question, 32 glyphs
+    if (!peddlerFits(GameState, o)) {
+      Sfx.error();
+      this.dialogue.start(["Your bag holds no more of those."], "PEDDLER");
       return;
     }
     // "2 FROST SCALE for 1170 G?" is 25 glyphs: the last page's one touch row

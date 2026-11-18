@@ -170,8 +170,8 @@ export function completeFavor(key: VillagerKey): { gold: number; elixir: boolean
   const gold = GameState.gainGold(step.gold);
   if (step.takes) GameState.inventory[step.takes] -= step.need;
   const next = stateOf(key).step + 1;
-  const elixir = next >= FAVORS[key].length;
-  if (elixir) GameState.inventory.elixir += 1;
+  // the last step's ELIXIR, unless the bag holds its cap of them (itemCaps.ts)
+  const elixir = next >= FAVORS[key].length && GameState.gainItem("elixir") > 0;
   GameState.favors[key] = { step: next, accepted: false, snap: 0 };
   return { gold, elixir };
 }

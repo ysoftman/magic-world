@@ -1,6 +1,7 @@
 import { deliveryPool, PIECE_GOLD } from "./delivery";
 import { MATERIALS, type MaterialKey } from "./drops";
 import { type FieldProgress, fieldOpen } from "./fieldGates";
+import { addItem, itemRoom } from "./itemCaps";
 
 // The PEDDLER: a travelling trader who comes once the MOSS GOLEM has fallen
 // (fieldGates.ts) and stands in one field a day (the cave, the forest, the
@@ -112,13 +113,18 @@ interface BuyState {
   inventory: Record<MaterialKey | DealKey, number>;
 }
 
+// Whether the bag takes all of an offer: a consumable's count stops at its
+// cap (itemCaps.ts), and a deal that would spill is refused whole, unpaid
+export const peddlerFits = (state: Pick<BuyState, "inventory">, offer: PeddlerOffer): boolean =>
+  itemRoom(state.inventory, offer.key) >= offer.count;
+
 // Offer `which` of `day`'s bought: the gold taken, the goods in the bag, the
 // offer gone for the day. False (and nothing taken) when it was bought
 // already or the gold is short.
 export function buyFromPeddler(state: BuyState, offer: PeddlerOffer, day: number, which: 0 | 1): boolean {
-  if (peddlerSold(state, day, which) || state.gold < offer.price) return false;
+  if (peddlerSold(state, day, which) || state.gold < offer.price || !peddlerFits(state, offer)) return false;
   state.gold -= offer.price;
-  state.inventory[offer.key] += offer.count;
+  addItem(state.inventory, offer.key, offer.count);
   const bought: [boolean, boolean] = state.peddler?.day === day ? [...state.peddler.bought] : [false, false];
   bought[which] = true;
   state.peddler = { day, bought };

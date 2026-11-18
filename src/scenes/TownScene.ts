@@ -10,6 +10,7 @@ import { acceptFavor, completeFavor, favorProgress, favorStatus, favorStep, mate
 import { encounterOut } from "../fx";
 import { cropProgress, type DeliveryState, econDay, FARM_PLOTS, FIRE_BEASTS, GameState, isNight, type VillagerKey } from "../gameState";
 import { BEDS_LEVEL, houseTexture } from "../home";
+import type { CappedItem } from "../itemCaps";
 import {
   ABYSS_GATE_POS,
   ARENA_POS,
@@ -1898,7 +1899,7 @@ export class TownScene extends Phaser.Scene {
     if (!q.snowReward && q.snowBoss) {
       q.snowReward = true;
       const gained = GameState.gainGold(300);
-      GameState.inventory.elixir += 2;
+      const full = this.giveItems("elixir", 2);
       Sfx.buy();
       this.dialogue.start(
         [
@@ -1912,6 +1913,7 @@ export class TownScene extends Phaser.Scene {
           "to the south-east wakes,",
           "and a FLAME DRAKE",
           "with it. Quench it, hero!",
+          ...full,
         ],
         "ELDER",
       );
@@ -1922,7 +1924,7 @@ export class TownScene extends Phaser.Scene {
     if (!q.volcanoReward && q.volcanoBoss) {
       q.volcanoReward = true;
       const gained = GameState.gainGold(400);
-      GameState.inventory.elixir += 3;
+      const full = this.giveItems("elixir", 3);
       Sfx.buy();
       this.dialogue.start(
         [
@@ -1935,6 +1937,7 @@ export class TownScene extends Phaser.Scene {
           "But the pit it rose from",
           "lies open by the cave:",
           "the ABYSS. Go if you dare.",
+          ...full,
         ],
         "ELDER",
       );
@@ -1943,11 +1946,18 @@ export class TownScene extends Phaser.Scene {
     if (!q.bestiaryReward && allSpeciesCaught(GameState.caught)) {
       q.bestiaryReward = true;
       const gained = GameState.gainGold(500);
-      GameState.inventory.elixir += 3;
+      const full = this.giveItems("elixir", 3);
       GameState.inventory.mythrilShield += 1;
       Sfx.buy();
       this.dialogue.start(
-        ["You caught every beast", "in the realm! A feat no", "hero has matched.", `${gained} gold, 3 ELIXIRS and`, "a MYTHRIL SHIELD!"],
+        [
+          "You caught every beast",
+          "in the realm! A feat no",
+          "hero has matched.",
+          `${gained} gold, 3 ELIXIRS and`,
+          "a MYTHRIL SHIELD!",
+          ...full,
+        ],
         "ELDER",
       );
       return;
@@ -2011,9 +2021,9 @@ export class TownScene extends Phaser.Scene {
       }
       q.hunterBatsReward = true;
       const gained = GameState.gainGold(40);
-      GameState.inventory.potion += 2;
+      const full = this.giveItems("potion", 2);
       Sfx.buy();
-      this.dialogue.start(["4 bats down! Take", `${gained} gold and 2 POTIONS.`], "HUNTER");
+      this.dialogue.start(["4 bats down! Take", `${gained} gold and 2 POTIONS.`, ...full], "HUNTER");
       return;
     }
     if (!q.hunterCatchAccepted) {
@@ -2033,9 +2043,9 @@ export class TownScene extends Phaser.Scene {
       }
       q.hunterCatchReward = true;
       const gained = GameState.gainGold(80);
-      GameState.inventory.ether += 2;
+      const full = this.giveItems("ether", 2);
       Sfx.buy();
-      this.dialogue.start(["A fine haul! Take", `${gained} gold and 2 ETHERS.`], "HUNTER");
+      this.dialogue.start(["A fine haul! Take", `${gained} gold and 2 ETHERS.`, ...full], "HUNTER");
       return;
     }
     if (this.silkJob()) return;
@@ -2058,9 +2068,9 @@ export class TownScene extends Phaser.Scene {
       }
       q.hunterYetiReward = true;
       const gained = GameState.gainGold(150);
-      GameState.inventory.hiPotion += 2;
+      const full = this.giveItems("hiPotion", 2);
       Sfx.buy();
-      this.dialogue.start(["3 yetis down! Take", `${gained} gold and 2`, "HI-POTIONS."], "HUNTER");
+      this.dialogue.start(["3 yetis down! Take", `${gained} gold and 2`, "HI-POTIONS.", ...full], "HUNTER");
       return;
     }
     // fourth job, once the GLACIER GOLEM falls and opens the volcano: a catch
@@ -2100,9 +2110,9 @@ export class TownScene extends Phaser.Scene {
       // the reward line reports what gainGold() actually credited, so a purse
       // at MAX_GOLD isn't promised gold it never got (see 6105867)
       const gained = GameState.gainGold(250);
-      GameState.inventory.elixir += 1;
+      const full = this.giveItems("elixir", 1);
       Sfx.buy();
-      this.dialogue.start(["The full set! Take", `${gained} gold and an`, "ELIXIR. Best hunter", "I've ever known."], "HUNTER");
+      this.dialogue.start(["The full set! Take", `${gained} gold and an`, "ELIXIR. Best hunter", "I've ever known.", ...full], "HUNTER");
       return;
     }
     this.dialogue.start(["The wilds are quieter", "thanks to you, hero."], "HUNTER");
@@ -2141,10 +2151,10 @@ export class TownScene extends Phaser.Scene {
       GameState.inventory.spiderSilk -= 3;
       q.hunterSilkReward = true;
       const gained = GameState.gainGold(110);
-      GameState.inventory.hiPotion += 2;
+      const full = this.giveItems("hiPotion", 2);
       GameState.save();
       Sfx.buy();
-      this.dialogue.start(["Fine silk! Take", `${gained} gold and 2`, "HI-POTIONS."], "HUNTER");
+      this.dialogue.start(["Fine silk! Take", `${gained} gold and 2`, "HI-POTIONS.", ...full], "HUNTER");
     });
     return true;
   }
@@ -2217,6 +2227,13 @@ export class TownScene extends Phaser.Scene {
   }
 
   // the board's YES: paid first, then the pieces go (delivery.ts deliver())
+  // A reward's items into the bag (GameState.gainItem), and the lines its
+  // dialogue ends on when the bag was at that item's cap (itemCaps.ts) and
+  // some were left behind: 18 glyphs each, inside the box's rows
+  private giveItems(key: CappedItem, n: number): string[] {
+    return GameState.gainItem(key, n) < n ? ["Your bag was full:", "not all of it fit."] : [];
+  }
+
   private handInDelivery(d: DeliveryState): void {
     const name = materialName(d.material);
     const paid = deliver(d);

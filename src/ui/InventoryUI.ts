@@ -4,6 +4,7 @@ import { Sfx } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH, PIXEL } from "../config";
 import { MATERIAL_KEYS, MATERIALS, type MaterialKey } from "../drops";
 import { type EquipmentKey, GameState, refinedName } from "../gameState";
+import { capNote } from "../itemCaps";
 import { ETHER_MP, HI_POTION_HP, itemInfo, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -692,7 +693,7 @@ export class InventoryUI {
     this.cursor.setPosition(target.x - ICON_DX - 26, target.y);
     const item = INVENTORY_ITEMS[this.index];
     if (item.kind !== "map") {
-      this.info.setText(`${item.label}: ${itemInfo(item.key)}`);
+      this.info.setText(`${item.label}: ${itemInfo(item.key)}${capNote(GameState.inventory, item.key)}`);
       this.mapView.setVisible(false);
       this.mapTitle.setVisible(false);
       return;

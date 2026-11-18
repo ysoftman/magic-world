@@ -4502,6 +4502,7 @@ export class BattleScene extends Phaser.Scene {
         exp,
         found,
         mealHeal,
+        lost,
       } = settleWin({
         enemy: this.enemy,
         rematch: this.rematch,
@@ -4540,7 +4541,11 @@ export class BattleScene extends Phaser.Scene {
         found.length > 0 && `Found ${found.join(" & ")}!`,
         mealHeal > 0 && this.meal && `${this.meal.def.name} +${mealHeal} HP`,
       ];
-      const second = finds.filter(Boolean).join("  ");
+      // a drop the bag was too full for (itemCaps.ts) is said where the row
+      // has the room: "NO ROOM: HI-POTION" is 18 glyphs
+      const row = finds.filter(Boolean).join("  ");
+      const full = lost ? `${row ? `${row}  ` : ""}NO ROOM: ${lost}` : row;
+      const second = full.length <= 54 ? full : row;
       await this.say(`${this.enemy.name} falls! +${goldGained}G${streak}  EXP +${exp}${second ? `\n${second}` : ""}`, true);
       const leveled = settleLevels();
       // a level up keeps a line of its own, the burst and the fanfare with it

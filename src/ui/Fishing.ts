@@ -536,8 +536,8 @@ export class FishingUI {
     // longest with the tag: "+180G (x1.5) +POTION", 20 x 24 = 480px
     let reward = `+${gold}G${derby ? ` (x${DERBY_MULT})` : ""}`;
     if (fish.bonusItem) {
-      GameState.inventory[fish.bonusItem] += 1;
-      reward += ` +${BONUS_LABEL[fish.bonusItem]}`;
+      // a bag at the item's cap (itemCaps.ts) lands the fish without it
+      if (GameState.gainItem(fish.bonusItem) > 0) reward += ` +${BONUS_LABEL[fish.bonusItem]}`;
     }
     this.status.setText(`CAUGHT: ${fish.name}!\n${reward}`);
     // under the reward, the ingredient for the kitchen (cooking.ts) and any

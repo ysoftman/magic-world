@@ -1,5 +1,6 @@
 import { MAX_HP } from "./config";
 import type { MaterialKey } from "./drops";
+import { addItem } from "./itemCaps";
 import { TILE } from "./levels";
 
 // Star shards: three lie in each field (the cave, the forest, the snow field,
@@ -100,7 +101,7 @@ export function takeShard(state: ShardState, region: ShardRegion, id: string): {
     state.player.maxHp += add;
     state.player.hp += add;
     state.inventory[STAR_MATERIAL[region]] += STAR_MATERIALS;
-    state.inventory.candy += 1;
+    addItem(state.inventory, "candy");
   }
   if (all) {
     state.player.atk += STARFALL_ATK;

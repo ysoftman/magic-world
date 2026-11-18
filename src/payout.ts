@@ -44,6 +44,8 @@ export interface Payout {
   exp: number;
   /** "a POTION", "2 SLIME GEL" */
   found: string[];
+  /** the item a full bag left behind (itemCaps.ts), bare ("HI-POTION"), or null */
+  lost: string | null;
   /** FISH STEW's HP */
   mealHeal: number;
 }
@@ -124,7 +126,10 @@ export function settleWin(win: Win, rand: () => number = Math.random): Payout {
           return roll < edge;
         });
   const loot = rolled && (share >= 1 || rand() < share) ? rolled : undefined;
-  if (loot) GameState.inventory[loot.key] += 1;
+  // a bag at the item's cap (itemCaps.ts) leaves it behind: not `found`, but
+  // named in `lost` for the line to say so
+  const kept = !!loot && GameState.gainItem(loot.key) > 0;
+  const lost = loot && !kept ? loot.name.replace(/^(a|an|some) /, "") : null;
   // monster materials for the BLACKSMITH (drops.ts), likelier after a
   // WEAK FINISH, more of them deep in the ABYSS (abyss.ts, at most x3)
   const dropped = rollDrop(enemy, false, rand, win.weakFinish);
@@ -135,13 +140,13 @@ export function settleWin(win: Win, rand: () => number = Math.random): Payout {
   // the KOI FEAST's doubling (cooking.ts), on top of the depth's
   if (drop) drop.count *= 1 + (meal?.effect.drops ?? 0);
   if (drop) GameState.inventory[drop.material] += drop.count;
-  const found = [loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(
+  const found = [kept && loot?.name, drop && `${drop.count > 1 ? drop.count : "a"} ${MATERIALS[drop.material].name}`].filter(
     (s): s is string => !!s,
   );
   const expBonus = (meal?.effect.exp ?? 0) + (blessing?.effect.exp ?? 0) + GameState.perk("study");
   const exp = Math.round(cut(enemy.exp) * (1 + expBonus));
   GameState.player.exp += exp;
-  return { gold, streakBonus, exp, found, mealHeal };
+  return { gold, streakBonus, exp, found, mealHeal, lost };
 }
 
 /**

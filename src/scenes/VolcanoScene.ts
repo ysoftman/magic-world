@@ -504,11 +504,9 @@ export class VolcanoScene extends Phaser.Scene {
     let loot = "";
     const r = Math.random();
     if (r < 0.35) {
-      GameState.inventory.hiPotion += 1;
-      loot = " HI-POTION!";
+      if (GameState.gainItem("hiPotion") > 0) loot = " HI-POTION!";
     } else if (r < 0.6) {
-      GameState.inventory.candy += 1;
-      loot = " CANDY!";
+      if (GameState.gainItem("candy") > 0) loot = " CANDY!";
     }
     if (loot) Sfx.pickup();
     const note = this.add

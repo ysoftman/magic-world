@@ -1,5 +1,6 @@
 import { MATERIALS, type MaterialKey } from "./drops";
 import type { QuestState } from "./gameState";
+import { addItem } from "./itemCaps";
 import {
   ABYSS_STAIRS_POS,
   buildDungeon,
@@ -341,12 +342,11 @@ export function digUp(map: TreasureMap, state: DigState, rand: () => number = Ma
       state.inventory[gear] += 1;
       found.push(`AN ${GEAR_NAME[gear]}`.replace(/^AN (?=[^AEIOU])/, "A "));
     } else {
-      state.inventory.hiPotion += 1;
-      found.push("A HI-POTION");
+      // nothing said of one a full bag left behind (itemCaps.ts): the line is the toast's width
+      if (addItem(state.inventory, "hiPotion") > 0) found.push("A HI-POTION");
     }
   } else if (r < GEAR_CHANCE + CANDY_CHANCE) {
-    state.inventory.candy += 1;
-    found.push("A CANDY");
+    if (addItem(state.inventory, "candy") > 0) found.push("A CANDY");
   }
   const all = [`${gold}G`, ...found];
   return `DUG UP ${all.length > 1 ? `${all.slice(0, -1).join(", ")} & ${all[all.length - 1]}` : all[0]}!`;

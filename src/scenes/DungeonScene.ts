@@ -611,11 +611,9 @@ export class DungeonScene extends Phaser.Scene {
     let loot = "";
     const r = Math.random();
     if (r < 0.4) {
-      GameState.inventory.potion += 1;
-      loot = " POTION!";
+      if (GameState.gainItem("potion") > 0) loot = " POTION!";
     } else if (r < 0.6) {
-      GameState.inventory.candy += 1;
-      loot = " CANDY!";
+      if (GameState.gainItem("candy") > 0) loot = " CANDY!";
     }
     if (loot) Sfx.pickup();
     const note = this.add

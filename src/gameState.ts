@@ -7,6 +7,7 @@ import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialK
 import { loadFeats, noFeats } from "./feats";
 import { fieldOpen } from "./fieldGates";
 import { MAX_HOUSE } from "./home";
+import { addItem, itemRoom } from "./itemCaps";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { loadNestDays, type NestDays } from "./nest";
 import { type OmenRegion, omenOn } from "./omen";
@@ -838,6 +839,14 @@ export const GameState = {
     const added = Math.min(MAX_GOLD, this.gold + n) - this.gold;
     this.gold += added;
     return added;
+  },
+  /** Puts up to `n` of `key` in the bag, a consumable stopping at its cap (itemCaps.ts); returns how many went in. */
+  gainItem(key: keyof InventoryState, n = 1): number {
+    return addItem(this.inventory, key, n);
+  },
+  /** How many more of `key` the bag takes. */
+  itemRoom(key: keyof InventoryState): number {
+    return itemRoom(this.inventory, key);
   },
   // The CATCHABLE species caught (monsters.ts): what the bestiary's CAUGHT,
   // the HUD's, the COLLECTOR achievement and the completion below all count.

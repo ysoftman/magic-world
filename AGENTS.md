@@ -1120,6 +1120,7 @@ BOUNTY BOARD 의 일(끝낸 바운티 + 넘긴 납품)이 쌓여 ROOKIE → SCOU
 
 ## 기타
 
+- 소모품 소지 한도는 `src/itemCaps.ts` 의 `ITEM_CAPS`(POTION 9, MPOTION 9, CANDY 9, HI-POTION 5, ETHER 5, BOMB 5, ELIXIR 3) 한 곳이다. 아이템을 주는 코드는 `inventory[key] += n` 을 직접 쓰지 않고 `GameState.gainItem(key, n)`(GameState 를 안 잡는 순수 모듈은 `addItem(state.inventory, key, n)`)을 지나고, 돌려받은 수(실제로 들어간 수)로 문구를 정한다. 새 소모품은 `ITEM_CAPS` 에 한 줄, 새 획득 경로(상점·드롭·상자·보상·상인·낚시 등)는 그 함수를 지나게 한다. 돈을 받고 파는 곳(상점, PEDDLER 의 `peddlerFits`)은 다 안 들어가면 통째로 거절하고 돈을 받지 않는다. 장비·소재는 한도가 없어 그대로 `+=` 다. 한도를 넘게 가진 옛 세이브는 깎지 않는다(불러올 때 자르는 코드를 넣지 않는다). 실제 사례: 화산 전투 한 번에 약 65G 인데 HI-POTION 이 30G 라 포션 더미로 보스의 예고 공격을 무시할 수 있었다. 한도를 바꾸면 `bun run sim:battle --potions 9 --hipotions 5 --elixirs 2 --nobrace` 로 의도 레벨의 SOLO·WOLF 승률을 잰다(지금 SOLO 51~85%, WOLF 64~88%. sim 영웅은 HP 35% 이하에서만 마셔 HI-POTION 3·ELIXIR 1 을 넘는 수량은 결과에 거의 안 보인다). 고정 수량을 주는 보상이 한도보다 크면 늘 넘친다(ELDER 의 ELIXIR 3개는 한도 2).
 - 빌드: `bun run build` (tsc + `scripts/build.ts` 의 `Bun.build` → dist/). Phaser 는 둘째 입구
   `src/vendor.ts` 덕에 따로 청크가 되어, 게임만 바꾼 배포에서는 해시가 그대로라 플레이어 캐시가
   남는다. dev 전용 코드는 `process.env.NODE_ENV !== "production"` 으로 가른다. Bun 은 dev 서버와

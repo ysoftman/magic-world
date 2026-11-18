@@ -5,6 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD, PIXEL } from "../config";
 import { isRefinable, REFINE_STEP } from "../drops";
 import { eventToday, MARKET_DISCOUNT, shopPrice } from "../events";
 import { EQUIP_BONUS, EQUIP_MAXHP, EQUIP_RESIST, EQUIP_SLOT, type EquipmentKey, econDay, GameState, refinedName } from "../gameState";
+import { capNote } from "../itemCaps";
 import { itemInfo } from "../itemInfo";
 import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -428,6 +429,12 @@ export class ShopUI {
       this.showMsg("Already owned!");
       return;
     }
+    // a consumable at its cap (itemCaps.ts): refused as a full purse's sale is
+    if (GameState.itemRoom(item.invKey) <= 0) {
+      Sfx.error();
+      this.showMsg("Bag is full!");
+      return;
+    }
     const price = shopPrice(item.price);
     if (GameState.gold < price) {
       Sfx.error();
@@ -435,7 +442,7 @@ export class ShopUI {
       return;
     }
     GameState.gold -= price;
-    GameState.inventory[item.invKey] += 1;
+    GameState.gainItem(item.invKey);
     // "Antidote Charm equipped!" and "Mythril Shield equipped!", the
     // longest, are 24 glyphs; the info line still says what it does
     const worn = item.key !== undefined && outclassesWorn(item.key);
@@ -542,16 +549,18 @@ export class ShopUI {
       }
       const locked = item.unlocked ? !item.unlocked() : false;
       const owned = item.key ? GameState.inventory[item.key] > 0 : false;
-      const color = locked ? "#8b5cf6" : owned ? DIM_TEXT : "#ffffff";
+      // a consumable the bag is full of (itemCaps.ts) dims as an owned piece does
+      const full = !locked && !owned && GameState.itemRoom(item.invKey) <= 0;
+      const color = locked ? "#8b5cf6" : owned || full ? DIM_TEXT : "#ffffff";
       this.items[i]
         .setFontSize(`${6 * PIXEL}px`)
         .setText(item.name)
         .setColor(color);
-      this.icons[i].setAlpha(locked || owned ? ICON_NONE_ALPHA : 1);
+      this.icons[i].setAlpha(locked || owned || full ? ICON_NONE_ALPHA : 1);
       // a market-day price is green, so the cut reads at a glance
       this.prices[i]
-        .setText(locked ? "LOCKED" : owned ? "SOLD" : `${shopPrice(item.price)}G`)
-        .setColor(market && !locked && !owned ? "#a3e635" : color);
+        .setText(locked ? "LOCKED" : owned ? "SOLD" : full ? "FULL" : `${shopPrice(item.price)}G`)
+        .setColor(market && !locked && !owned && !full ? "#a3e635" : color);
     }
     this.renderCursor();
   }
@@ -563,7 +572,7 @@ export class ShopUI {
     const target = this.items[this.index];
     this.cursor.setPosition(target.x - ICON_DX - 26, target.y);
     const item = SHOP_ITEMS[this.index];
-    this.info.setText(`${item.name}: ${itemInfo(item.invKey)}`);
+    this.info.setText(`${item.name}: ${itemInfo(item.invKey)}${capNote(GameState.inventory, item.invKey)}`);
   }
 
   private close(): void {

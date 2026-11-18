@@ -888,8 +888,8 @@ export class AbyssScene extends Phaser.Scene {
       edge += l.chance;
       return roll < edge;
     });
-    if (item) {
-      GameState.inventory[item.key] += 1;
+    // a bag at the item's cap (itemCaps.ts) leaves it in the chest, unsaid
+    if (item && GameState.gainItem(item.key) > 0) {
       found = ` ${item.name}!`;
       Sfx.pickup();
     }

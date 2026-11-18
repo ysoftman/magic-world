@@ -119,10 +119,11 @@ export function deliver(d: DeliveryState): { gold: number; bomb: boolean } | nul
   if (GameState.gold + reward.gold > MAX_GOLD) return null;
   const gold = GameState.gainGold(reward.gold);
   GameState.inventory[d.material] -= d.need;
-  if (reward.bomb) GameState.inventory.bomb += 1;
+  // a bag full of BOMBs (itemCaps.ts) takes no more: the gold alone is told
+  const bomb = reward.bomb && GameState.gainItem("bomb") > 0;
   d.done = true;
   GameState.deliveriesDone += 1;
-  return { gold, bomb: reward.bomb };
+  return { gold, bomb };
 }
 
 export const materialName = (k: MaterialKey): string => MATERIALS[k].name;
