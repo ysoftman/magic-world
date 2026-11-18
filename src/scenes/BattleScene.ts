@@ -467,6 +467,11 @@ interface MenuButton {
   enabled?: () => boolean;
 }
 
+// A key that is the battle's: not a browser shortcut (CMD+TAB would skip a
+// line unread), nor M, which only mutes (it advanced the line under it and
+// was taken as the PARRY's press)
+const plainKey = (e: KeyboardEvent): boolean => !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) && e.code !== "KeyM";
+
 interface ItemSlot {
   label: string;
   key: keyof typeof GameState.inventory;
@@ -1394,7 +1399,7 @@ export class BattleScene extends Phaser.Scene {
   // press whose down/up land in the same frame queue is silently dropped
   private onKey(e: KeyboardEvent): void {
     if (e.repeat) return;
-    if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) this.timedInput();
+    if (plainKey(e)) this.timedInput();
     if (!this.waitingAction) return;
     // the help over the menu (the menu's ends would show past its sides, so
     // the menu goes while it is up): any key shuts it and is not the menu's; "?"
@@ -4743,7 +4748,7 @@ export class BattleScene extends Phaser.Scene {
         shown(true);
       };
       const onKey = (e: KeyboardEvent): void => {
-        if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) rush();
+        if (plainKey(e)) rush();
       };
       const stop = (): void => {
         this.input.keyboard?.off("keydown", onKey);
@@ -4789,7 +4794,7 @@ export class BattleScene extends Phaser.Scene {
     // a tap advances too (below), and a touch screen has no keys
     bindKeyHint(this.hintText, () => keyHint("ANY KEY:CONTINUE", "TAP:CONTINUE", { table: "battle", pad: "Z:CONTINUE" }));
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) done();
+      if (plainKey(e)) done();
     };
     const done = () => {
       this.input.keyboard?.off("keydown", onKey);
