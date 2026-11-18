@@ -28,6 +28,8 @@ import type { OmenKind } from "./omen";
 // the LIMIT), 249 (parries, PERFECTs), 274 (an elite), 299 (reactions), 349
 // (a runner). Each region's opening scales both alike (the average is 9.3,
 // 15.3, 22.8, 33.3 G).
+// The board's rank adds a tenth to both for each rank handed over
+// (boardRank.ts boardPay): these figures are a ROOKIE's.
 //
 // Three are counted inside the battle (feats.ts, one line each in
 // BattleScene): PERFECTs, reactions and a foe finished by the LIMIT BREAK.

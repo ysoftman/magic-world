@@ -233,7 +233,7 @@ export class TitleScene extends Phaser.Scene {
             damaged
               ? "CAN'T LOAD"
               : save
-                ? `LV ${save.level} ${questLabel(save.quest, save.caught)}`
+                ? `LV ${save.level} ${questLabel(save.quest, save.caught, null)}`
                 : kept > 1
                   ? `${kept} DAMAGED COPIES`
                   : kept

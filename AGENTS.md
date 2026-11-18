@@ -1004,6 +1004,45 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
 - 별 조각·봉인·상인의 존재는 `unlockTips.ts` 의 두 줄(3승·8승 뒤 마을 토스트)로 알린다. ELDER·HUNTER 대사는 건드리지
   않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).
 
+## 게시판 등급 (`src/boardRank.ts`)
+
+BOUNTY BOARD 의 일(끝낸 바운티 + 넘긴 납품)이 쌓여 ROOKIE → SCOUT → RANGER → VETERAN → CHAMPION → LEGEND 로 오른다(2·6·12·20·30건,
+`BOARD_RANKS`). 등급은 게시판이 한 번씩 건네고(`takeBoardRank`, 받은 수는 `GameState.boardRank`, 옛 세이브 0, HARD MODE 유지) 그때 능력치를
+`player` 에 바로 더한다(최대 HP +5 / 최대 MP +5 / ATK +1 / DEF +1 / ATK +2·DEF +2). 등급마다 그 뒤에 걸리는 바운티의 골드가 10%씩 는다
+(`boardPay`, `gameState.ts` `rollBountyIfStale` 의 두 `reward` 줄. 이미 걸린 바운티는 그대로).
+
+- 만든 이유(실제 사례): 메인·HUNTER 의뢰를 다 끝낸 세이브는 HUD 칸이 `QUEST DONE` 이고 일지에 일일 바운티·납품·주민 부탁만 남았는데, 그
+  보상이 골드뿐이라 9999G 상한에서는 할 이유가 없었다. 등급은 그 일일 과제가 쌓이는 곳이다.
+- 건수는 새 카운터가 아니다: `boardJobs` = `bountiesDone` + 오늘 받은 바운티(`bounty.claimed`, 업적 BOUNTY HUNTER 와 같은 셈) + `deliveriesDone`.
+  그래서 전투·필드에 훅이 없고, 등급 전 세이브는 그동안의 건수가 밀려 있다(일지 `READY`, HUD `SEE BOUNTY`). 게시판은 대화 한 번에 한
+  등급만 건넨다(결정: 줄 수를 늘리지 않고 등급마다 한 번씩 보상을 읽게). 주민 부탁은 세지 않는다(게시판의 일이 아니다).
+- 속도: 보상일(`econDay`, 24분) 하루에 바운티 하나·납품 하나이고 납품은 남는 소재가 있어야 해 하루 약 1.5건이다. SCOUT 는 둘째 날,
+  LEGEND 는 20일쯤(약 8시간). 문턱을 바꾸면 이 줄과 README 표를 고친다.
+- 능력치 합(최대 HP +5·최대 MP +5·ATK +3·DEF +3)은 별 조각(최대 HP +20·ATK/DEF +2)·봉인(최대 MP +17)보다 작게 두었고 ATK·DEF 의 마지막
+  2 는 LEGEND 에만 있다. `sim-battle.ts` 에는 없다(별 조각·봉인도 없다).
+- 골드 배율은 바운티에만 건다. 납품에 +50% 를 걸면 상인의 PIECES(납품 단가의 1.5배, "떠돌이 상인" 절)를 사서 납품해도 본전이라 되팔이
+  규칙이 깨진다. 바운티는 LEGEND 에서 처치 의뢰 최고 720 → 1080G, 과제 최고 349 → 524G 다("바운티의 과제" 절의 수치는 등급 0 기준).
+  네 자리 보상은 게시판의 `BOUNTY: <이름> 0/9 REWARD: 1080 GOLD.` 를 터치에서 두 줄로 넘기고 대화창이 쪽을 다시 나눈다. 일지 힌트는
+  원래 `- 9999G` 로 쟀다.
+- 이름: 화면에는 `BOUNTY RANK`·`JOBS`·`SEE BOUNTY` 로 쓰고 `RANK`·`BOARD` 만으로는 쓰지 않는다. 실제 사례: 첫 시안의 HUD `RANK 21/30`·
+  `SEE BOARD` 는 마을의 `RANK BOARD`(영웅 레벨 순위 표지판) 이름표와 한 화면에 떠 그쪽을 가리키는 말로 읽혔다.
+- 알리는 곳은 넷이다.
+  - 게시판 대화(`TownScene.boardRankUp`): 바운티를 받거나 납품한 그 대화에 제 줄로 `RANGER IN 2 MORE JOBS.`(최장 25글자), 건수가 찼으면
+    `RANK UP! YOU ARE NOW A CHAMPION.`(32) + `ATK +2 DEF +2. BOUNTIES PAY +50%.`(33). 각각 터치 한 줄 42 안이고, 키보드 60글자 줄에서는
+    LEGEND 만 두 줄(64글자)이다. 일이 없던 대화에는 아무 줄도 더하지 않는다(매일 읽는 대화라 쪽을 늘리지 않는다). 밀린 등급은 어떤
+    대화에서든 바운티 줄 뒤에 먼저 건넨다. 등급이 오르면 `Sfx.levelup()`, 아니면 예전의 `Sfx.buy()`.
+  - 일지(`QuestLog`): 납품 행 다음 `BOUNTY RANK: SCOUT`(최장 `BOUNTY RANK: CHAMPION` 21글자, 한도 23) `2/6`, 힌트 `RANGER: MAX MP +5,
+    BOUNTIES +10%`(최장 LEGEND 36글자, 한도 37). 받을 등급이 있으면 `READY`·`REPORT TO THE BOUNTY BOARD`, LEGEND 면 COMPLETED 로 간다.
+    주민 부탁 앞이라 넘칠 때는 부탁이 먼저 `+N MORE` 로 물러난다(IN PROGRESS 최악 9행은 ELDER 다섯 단계가 한꺼번에 열려 있을 때뿐).
+  - HUD 칸(`objective.ts` `currentObjective`): 두 의뢰 줄이 다 끝난 뒤에만 `JOBS 12/20`(최장 10글자), 받을 등급이 있으면 `SEE BOUNTY` 와
+    안내 화살표·미니맵 고리가 게시판(`ObjectiveSpot` 의 `board`, `due` 일 때만 가리킴). LEGEND 뒤에는 다시 `QUEST DONE`. 타이틀의 세이브
+    카드는 건수를 모르므로 `questLabel(..., null)` 로 예전처럼 `QUEST DONE` 이다.
+  - 도움말의 목표 줄(`objectiveLine`): `GOAL: JOBS 12/20 - BOUNTY BOARD`(31글자), `GOAL: SEE BOUNTY - A RANK AWAITS`(32, 한도 36).
+- 새 등급은 `BOARD_RANKS` 한 줄이다. 이름 8글자까지, `boardGift` 13글자까지(일지 힌트 37), 저장값은 `MAX_BOARD_RANK` 로 자른다.
+- 실측(헤드리스, 키보드·터치): 새 게임에서 바운티 하나와 납품 하나로 SCOUT(최대 HP 30 → 35, 다음 바운티 x1.1), 20건이 밀린 세이브는 대화
+  네 번에 CHAMPION, 30건에서 LEGEND(ATK +3·DEF +3 합), `beginNewGamePlus` 뒤에도 등급·건수 유지, `boardRank` 없는 세이브는 0 으로 불러온다.
+  일지·게시판 대화·HUD 의 `audit()` 는 겹침·이탈 0.
+
 ## 작업 완료 후 중간 산출물 정리
 
 - 작업 중 생성한 **중간 산출물**(디버그 스크린샷 png, 검증용 임시 파일, 임시 훅 등)은 작업이 끝나면 반드시 정리한다.

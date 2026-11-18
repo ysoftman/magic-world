@@ -1,7 +1,9 @@
 import { abyssOpen } from "./abyss";
+import { type BoardState, boardJobs, boardRankDue, nextBoardRank } from "./boardRank";
 import { FIRE_BEASTS, fireBeastsCaughtIn, GameState, type QuestState } from "./gameState";
 import {
   ABYSS_STAIRS_POS,
+  BOUNTY_BOARD_POS,
   CAVE_POS,
   DUNGEON_ENTRY,
   DUNGEON_ZONES,
@@ -27,6 +29,9 @@ type FieldRegion = Exclude<Region, "town">;
 export type ObjectiveSpot =
   | { kind: "npc"; who: "ELDER" | "HUNTER" }
   | { kind: "slimes" }
+  // the BOUNTY BOARD: `due` with a rank to hand over (boardRank.ts), else
+  // only named as where the jobs count, with nothing to point at
+  | { kind: "board"; due: boolean }
   | { kind: "boss"; region: FieldRegion }
   // somewhere in a region with no one spot to name (a HUNTER job's hunting ground)
   | { kind: "region"; region: FieldRegion };
@@ -176,8 +181,21 @@ const JOB_GOAL: Partial<Record<QuestStepId, [string, FieldRegion | null]>> = {
  * Every label is capped at 10 chars: the slot starts at x=24 and CAUGHT at
  * x=248, so 10 x 20px ends at 224 with a 24px gap -- counters are clamped for
  * the same reason (an unclamped "SLIMES 12/5" ran 20px past that).
+ *
+ * With both chains paid the slot turns to the BOUNTY BOARD's rank
+ * (boardRank.ts): the jobs toward the next one ("JOBS 12/20", 10 chars at its
+ * widest), or SEE BOUNTY while one waits to be handed over. It read QUEST
+ * DONE from the last HUNTER job on, over a journal of dailies. The slot says
+ * JOBS and BOUNTY, not RANK and BOARD: the town's RANK BOARD is the sign with
+ * the heroes' levels. `board` is the
+ * live game's standing; the title's save cards pass null (a card knows only
+ * its save's quest and catches) and keep QUEST DONE, as LEGEND does.
  */
-export function currentObjective(q: QuestState, caught: readonly string[] = GameState.caught): Objective {
+export function currentObjective(
+  q: QuestState,
+  caught: readonly string[] = GameState.caught,
+  board: BoardState | null = GameState,
+): Objective {
   const steps = questSteps(q, caught);
   const step = (id: QuestStepId): QuestStep => steps.find((s) => s.id === id) as QuestStep;
   const count = (s: QuestStep): string => `${Math.min(s.have, s.need)}/${s.need}`;
@@ -198,6 +216,11 @@ export function currentObjective(q: QuestState, caught: readonly string[] = Game
   if (job && goal) {
     const [word, region] = goal;
     return { label: `${word} ${count(job)}`, spot: job.met ? HUNTER : region ? area(region) : null };
+  }
+  const rank = board && nextBoardRank(board);
+  if (board && rank) {
+    if (boardRankDue(board)) return { label: "SEE BOUNTY", spot: { kind: "board", due: true } };
+    return { label: `JOBS ${boardJobs(board)}/${rank.jobs}`, spot: { kind: "board", due: false } };
   }
   return { label: "QUEST DONE", spot: null };
 }
@@ -225,9 +248,13 @@ export function objectiveLine(q: QuestState, caught: readonly string[] = GameSta
         : `SEE THE ${spot.who}`
       : spot?.kind === "slimes"
         ? "IN THE TALL GRASS"
-        : spot
-          ? `IN ${REGION_NAME[spot.region]}`
-          : "";
+        : spot?.kind === "board"
+          ? spot.due
+            ? "A RANK AWAITS"
+            : "BOUNTY BOARD"
+          : spot
+            ? `IN ${REGION_NAME[spot.region]}`
+            : "";
   return where ? `GOAL: ${label} - ${where}` : `GOAL: ${label}`;
 }
 
@@ -259,6 +286,7 @@ const ZONES: Record<FieldRegion, readonly MonsterZone[]> = {
  */
 export function objectivePoints(spot: ObjectiveSpot | null, region: Region): Array<{ x: number; y: number }> {
   if (!spot) return [];
+  if (spot.kind === "board" && !spot.due) return [];
   if (region !== "town") {
     if (spot.kind === "boss" && spot.region === region) {
       // a boss zone is the one zone with a single occupant
@@ -270,6 +298,7 @@ export function objectivePoints(spot: ObjectiveSpot | null, region: Region): Arr
     return [EXIT[region]];
   }
   if (spot.kind === "npc") return [spot.who === "ELDER" ? NPC_POS : HUNTER_POS];
+  if (spot.kind === "board") return [BOUNTY_BOARD_POS];
   // the slime meadows: the town's zones without a named kind
   if (spot.kind === "slimes") return MONSTER_ZONES.filter((z) => !z.kind).map((z) => ({ x: z.cx, y: z.cy }));
   return [ENTRANCE[spot.region]];

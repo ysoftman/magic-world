@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import type { BoardState } from "../boardRank";
 import { GAME_WIDTH } from "../config";
 import { MEALS } from "../cooking";
 import { clock, expToNext, GameState, isNight, type QuestState } from "../gameState";
@@ -65,9 +66,10 @@ export function coverHudUnder(scene: Phaser.Scene, dim: Phaser.GameObjects.Recta
 // The single quest slot shows whichever chapter is currently open: the label
 // of objective.ts's current step, the same walk of the chain the minimap's
 // marker follows. Exported for the title screen's save card, which passes the
-// save's own caught list rather than the live one.
-export function questLabel(q: QuestState, caught: readonly string[] = GameState.caught): string {
-  return currentObjective(q, caught).label;
+// save's own caught list rather than the live one, and null for the board's
+// standing, which a card doesn't know (objective.ts).
+export function questLabel(q: QuestState, caught: readonly string[] = GameState.caught, board: BoardState | null = GameState): string {
+  return currentObjective(q, caught, board).label;
 }
 
 const COLORS = {

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { abyssOpen } from "../abyss";
 import { ARENA_RECOVER_PCT, type ArenaRun, arenaLineup, arenaOpen } from "../arena";
 import { OVERWORLD_THEME, Sfx } from "../audio";
+import { boardRankLines, takeBoardRank } from "../boardRank";
 import { GAME_HEIGHT, GAME_WIDTH, MAX_GOLD } from "../config";
 import { canDeliver, deliver, deliveryReward, materialName, rollDeliveryIfStale } from "../delivery";
 import { eventToday } from "../events";
@@ -2132,6 +2133,12 @@ export class TownScene extends Phaser.Scene {
   // with the omen's "THE OMEN FAVORS IT."; "DELIVER 4 SPIDER SILK FOR 1560
   // GOLD + A BOMB. YOU HAVE 5." 2) and the question gets a page of its own
   // over the choices.
+  //
+  // A job done is a step up the board's ranks (boardRank.ts): the talk that
+  // pays a bounty or takes a delivery says how far the next rank is, or
+  // hands it over, on a row of its own after the job's lines. A rank that
+  // was already waiting (a save from before the ranks) is handed over by
+  // any talk, one a talk.
   private startBountyDialogue(): void {
     GameState.rollBountyIfStale();
     const b = GameState.bounty;
@@ -2139,6 +2146,8 @@ export class TownScene extends Phaser.Scene {
     const d = rollDeliveryIfStale();
     const name = materialName(d.material);
     const lines: string[] = [];
+    // a rank already waiting comes first, before today's jobs
+    const waiting = this.boardRankUp(false);
     if (b.claimed) {
       lines.push("BOUNTY CLAIMED TODAY.");
     } else if (b.have < b.need) {
@@ -2155,10 +2164,10 @@ export class TownScene extends Phaser.Scene {
     } else {
       const gained = GameState.gainGold(b.reward);
       b.claimed = true;
-      Sfx.buy();
+      lines.push("BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`, ...(waiting.length > 0 ? [] : this.boardRankUp(true)));
       GameState.save();
-      lines.push("BOUNTY COMPLETE!", `TAKE ${gained} GOLD.`);
     }
+    lines.push(...waiting);
     if (d.done) {
       lines.push("\nDELIVERY DONE TODAY.");
     } else {
@@ -2187,9 +2196,25 @@ export class TownScene extends Phaser.Scene {
       this.dialogue.start(["YOUR PURSE IS TOO FULL.", "COME BACK WITH ROOM."], "BOUNTY BOARD");
       return;
     }
-    Sfx.buy();
+    const rank = this.boardRankUp(true);
     GameState.save();
-    this.dialogue.start([`DELIVERED ${d.need} ${name}!`, `TAKE ${paid.gold} GOLD${paid.bomb ? " AND A BOMB" : ""}.`], "BOUNTY BOARD");
+    this.dialogue.start(
+      [`DELIVERED ${d.need} ${name}!`, `TAKE ${paid.gold} GOLD${paid.bomb ? " AND A BOMB" : ""}.`, ...rank],
+      "BOUNTY BOARD",
+    );
+  }
+
+  // The board's rank lines (boardRank.ts), each talk's on a row of their own:
+  // the next rank handed over if its jobs are done, and with `paid` (a job
+  // was just paid) how far it is otherwise. Sounds the talk either way: the
+  // level-up's jingle for a rank, the purse's for a job paid.
+  private boardRankUp(paid: boolean): string[] {
+    const promoted = takeBoardRank(GameState);
+    if (promoted) Sfx.levelup();
+    else if (paid) Sfx.buy();
+    if (promoted) GameState.save();
+    const lines = promoted || paid ? boardRankLines(GameState, promoted) : [];
+    return lines.map((l, i) => (i === 0 ? `\n${l}` : l));
   }
 
   // A treasure map's dig gets the grace a fight's return does, so a roamer

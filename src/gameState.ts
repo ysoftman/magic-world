@@ -1,4 +1,5 @@
 import { ABYSS_FLOOR_MAX } from "./abyss";
+import { boardPay, MAX_BOARD_RANK } from "./boardRank";
 import { type BountyKind, DEEDS, type DeedCounters, deedProgress, isBountyKind, OMEN_DEED, OMEN_FAVOR, rollDeed } from "./bounties";
 import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
@@ -694,6 +695,8 @@ export const GameState = {
   mealsCooked: 0,
   bountiesDone: 0,
   deliveriesDone: 0,
+  // the BOUNTY BOARD's ranks handed over, 0..MAX_BOARD_RANK (boardRank.ts)
+  boardRank: 0,
   jackpots: 0,
   farm: Array.from({ length: FARM_PLOTS }, () => null) as Array<FarmPlot | null>,
   achievements: [] as string[],
@@ -980,7 +983,7 @@ export const GameState = {
         target: DEEDS[deed.kind].label,
         need: deed.need,
         have: 0,
-        reward: Math.round(DEEDS[deed.kind].pay * avg * BOUNTY_MULT),
+        reward: Math.round(DEEDS[deed.kind].pay * avg * BOUNTY_MULT * boardPay(this.boardRank)),
         day: econDay(),
         claimed: false,
         kind: deed.kind,
@@ -997,7 +1000,7 @@ export const GameState = {
       target: target.name,
       need,
       have: 0,
-      reward: Math.round(need * target.gold * BOUNTY_MULT),
+      reward: Math.round(need * target.gold * BOUNTY_MULT * boardPay(this.boardRank)),
       day: econDay(),
       claimed: false,
     };
@@ -1141,6 +1144,7 @@ export const GameState = {
       mealsCooked: this.mealsCooked,
       bountiesDone: this.bountiesDone,
       deliveriesDone: this.deliveriesDone,
+      boardRank: this.boardRank,
       jackpots: this.jackpots,
       // the house is the hero's for good; its garden starts the new day over
       houseLevel: this.houseLevel,
@@ -1209,6 +1213,7 @@ export const GameState = {
     this.mealsCooked = 0;
     this.bountiesDone = 0;
     this.deliveriesDone = 0;
+    this.boardRank = 0;
     this.jackpots = 0;
     this.farm = Array.from({ length: FARM_PLOTS }, () => null);
     this.achievements = [];
@@ -1335,6 +1340,7 @@ export const GameState = {
           mealsCooked: this.mealsCooked,
           bountiesDone: this.bountiesDone,
           deliveriesDone: this.deliveriesDone,
+          boardRank: this.boardRank,
           jackpots: this.jackpots,
           farm: this.farm,
           achievements: this.achievements,
@@ -1447,6 +1453,7 @@ export const GameState = {
       this.mealsCooked = Number.isInteger(data.mealsCooked) && data.mealsCooked > 0 ? data.mealsCooked : 0;
       this.bountiesDone = Number.isInteger(data.bountiesDone) && data.bountiesDone > 0 ? data.bountiesDone : 0;
       this.deliveriesDone = Number.isInteger(data.deliveriesDone) && data.deliveriesDone > 0 ? data.deliveriesDone : 0;
+      this.boardRank = Number.isInteger(data.boardRank) ? Math.min(MAX_BOARD_RANK, Math.max(0, data.boardRank)) : 0;
       this.jackpots = Number.isInteger(data.jackpots) && data.jackpots > 0 ? data.jackpots : 0;
       // rebuilt slot by slot so an old save (no farm), a shorter array or an
       // unknown crop key can't leave a plot the farm panel would read as

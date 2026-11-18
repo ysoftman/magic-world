@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { BOARD_PAY_STEP, boardGift, boardJobs, boardRankDue, boardRankName, nextBoardRank } from "../boardRank";
 import { DEEDS } from "../bounties";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { canDeliver, deliveryReward, materialName, todaysDelivery } from "../delivery";
@@ -27,7 +28,10 @@ import { hideTouchButtons } from "./TouchControls";
 // that (up to 3 taken on plus one "need help" row, 3 finished chains): they
 // have no deadline, so when a column overflows they are what gives way to a
 // last "+N MORE" row. A new quest line needs these (and the gaps below, or
-// PANEL_H) bumped, or has to sit behind the favors.
+// PANEL_H) bumped, or has to sit behind the favors. The board's rank
+// (boardRank.ts) sits after the delivery, ahead of the favors: with it the
+// worst case is 9, and only that one (five ELDER steps open at once) puts
+// the rank itself behind "+N MORE".
 const ACTIVE_ROWS = 8;
 const DONE_ROWS = 13;
 
@@ -173,6 +177,19 @@ function objectives(): Objective[] {
     progress: count(GameState.inventory[d.material], d.need),
     giver: "BOUNTY BOARD",
     hint: `PAYS ${pay.gold}G${pay.bomb ? " + BOMB" : ""} - TODAY ONLY`,
+  });
+  // the board's rank (boardRank.ts): what the two rows above add up to. The
+  // title is at most 21 glyphs ("BOUNTY RANK: CHAMPION"), the hint 36
+  // ("LEGEND: ATK +2 DEF +2, BOUNTIES +10%"); READY when the board has the
+  // next rank to hand over, COMPLETED at LEGEND.
+  const rank = nextBoardRank(GameState);
+  list.push({
+    title: `BOUNTY RANK: ${boardRankName(GameState.boardRank)}`,
+    done: !rank,
+    ready: boardRankDue(GameState),
+    progress: rank ? count(boardJobs(GameState), rank.jobs) : "",
+    giver: "BOUNTY BOARD",
+    hint: rank ? `${rank.name}: ${boardGift(rank)}, BOUNTIES +${Math.round(BOARD_PAY_STEP * 100)}%` : "",
   });
   // the townsfolk (favors.ts): each favor taken on, a finished chain, and
   // one row for whoever still has one to offer ("ASK BY DAY: FARMER, FISHER,
