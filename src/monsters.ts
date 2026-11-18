@@ -18,6 +18,10 @@ export interface EnemySpecial {
 // bestiary's CAN note: 6 glyphs at most (the tag's row holds 7 with the ">").
 // No ordinary species with a wind-up (battleRules BOSS_TELLS) has one: one
 // warning a foe. A jackpot has its kind's status move and no other.
+// Seven species have a second (`move2`), so a region's fights don't all ask
+// for the same answer: each turn one of the two that are ready is picked at
+// even odds and then rolled at its own chance (battleRules nextMove), so a
+// foe still shows a move in about one fight in three.
 //   drain   a blow that heals it by what it dealt
 //   howl    its ATK up for the rest of the fight, once, then its blow
 //   snatch  a weak blow that takes gold, handed back when it falls
@@ -33,12 +37,17 @@ export interface EnemySpecial {
 //   armor   no blow: its DEF up for `turns` of its turns
 //   afflict a blow that leaves `status` on the hero unless parried; `name` is
 //           the status ("POISON", "FREEZE"), as the bestiary's CAN note had it
+//   flee    no blow: it runs with the gold its SNATCH took (only then), and
+//           the fight ends unpaid. Fell it, or stop its turn, before it goes
+//   evade   no blow: the next hit the hero throws at it misses (a multi-hit
+//           move loses only its first; LIMIT and the companion never miss)
+//   sap     a blow that burns MP (battleRules sapMp) unless parried
 // A boss's or giant's is its second pattern beside its wind-up: not rolled
 // each turn (`chance` 0) but announced as its HP first falls to each share
 // in `at`, so a fight has that many however long it runs, and it comes on
 // top of that turn's action, not in place of it.
 export interface EnemyMove {
-  kind: "drain" | "howl" | "snatch" | "harden" | "flurry" | "blast" | "armor" | "afflict";
+  kind: "drain" | "howl" | "snatch" | "harden" | "flurry" | "blast" | "armor" | "afflict" | "flee" | "evade" | "sap";
   name: string;
   chance: number;
   at?: number[];
@@ -64,12 +73,14 @@ export interface EnemyDef {
   flying?: boolean; // hovers over its shadow in battle; everything else stands on the ground (BattleScene)
   special?: EnemySpecial;
   move?: EnemyMove;
+  move2?: EnemyMove; // an ordinary species' second move (see EnemyMove)
 }
 
 // An ordinary fight is over in about two rounds (sim-battle --foe), so the
 // foe acts once or twice: at 0.35 a move shows in one fight in three, rolled
 // before the first turn too so it is announced from the opening menu.
 const MOVE_CHANCE = 0.35;
+const FLEE_CHANCE = 0.6;
 
 export const ENEMIES: Record<string, EnemyDef> = {
   slime: {
@@ -103,6 +114,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 9,
     weakness: "bolt",
     move: { kind: "snatch", name: "SNATCH", chance: MOVE_CHANCE },
+    // likelier than a move is: once it holds the gold it wants out
+    move2: { kind: "flee", name: "FLEE", chance: FLEE_CHANCE },
   },
   cursedGoblin: {
     name: "CURSED GOBLIN",
@@ -129,6 +142,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     weakness: "ice",
     flying: true,
     move: { kind: "drain", name: "DRAIN", chance: MOVE_CHANCE },
+    move2: { kind: "evade", name: "EVADE", chance: MOVE_CHANCE },
   },
   wolf: {
     name: "WOLF",
@@ -197,6 +211,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     weakness: "bolt",
     flying: true,
     move: { kind: "afflict", name: "POISON", chance: MOVE_CHANCE, status: "poison" },
+    move2: { kind: "flurry", name: "STINGS", chance: MOVE_CHANCE },
   },
   // The forest's jackpot, as the GOLDEN SLIME is the town's: a WASP in its
   // own silver palette, 3.5% of the wasps (ForestScene), scaled as the other
@@ -224,6 +239,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 22,
     weakness: "fire",
     move: { kind: "afflict", name: "POISON", chance: MOVE_CHANCE, status: "poison" },
+    move2: { kind: "sap", name: "SIPHON", chance: MOVE_CHANCE },
   },
   orc: { name: "ORC", texture: "orc", hp: 52, atk: 13, def: 3, exp: 50, gold: 34, weakness: "ice" },
   mossGolem: {
@@ -262,6 +278,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     weakness: "fire",
     flying: true,
     move: { kind: "afflict", name: "FREEZE", chance: MOVE_CHANCE, status: "freeze" },
+    move2: { kind: "sap", name: "DUST", chance: MOVE_CHANCE },
   },
   // the snow field's jackpot, 3.5% of the frost moths (SnowScene), scaled
   // as SILVER WASP is
@@ -320,6 +337,10 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 48,
     weakness: "ice",
     move: { kind: "harden", name: "CRUST", chance: MOVE_CHANCE },
+    // a burst no PARRY meets (DEFEND halves it and strikes back): x2.2 before
+    // DEF is 4-17% of max HP on the Lv18 hero who walks in (MYTHRIL, 115 HP),
+    // where its plain blow is 3-4%
+    move2: { kind: "blast", name: "ERUPT", chance: MOVE_CHANCE, mult: 2.2 },
   },
   fireImp: {
     name: "FIRE IMP",
@@ -331,6 +352,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 66,
     weakness: "ice",
     move: { kind: "flurry", name: "FLURRY", chance: MOVE_CHANCE },
+    move2: { kind: "evade", name: "BLINK", chance: MOVE_CHANCE },
   },
   // the volcano's jackpot, scaled off the FIRE IMP as SILVER WASP is off the
   // WASP but for its gold, x8 rather than x12: it is met only as the

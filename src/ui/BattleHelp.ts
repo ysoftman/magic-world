@@ -48,6 +48,7 @@ const rows = (): [string, string][] => [
   [">MOVE", "Blinks in the foe's window: its next move."],
   ["CHG", "Big hit next: DEFEND; PARRY (no breath): it reels."],
   ["ATK+ DEF+", "The foe's buff. Spells go through a DEF+."],
+  ["EVADE", "Your next hit will miss: a multi-hit one loses 1."],
   ["PSN BRN", "Tick each turn. CHL: the foe's ATK is down."],
   ["REACTION", "BRN+ICE, CHL+BOLT, PSN+FIRE: the status bursts."],
   ["WEAK", "Its weak element (x1.5), once you fought one."],

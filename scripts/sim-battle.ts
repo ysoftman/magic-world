@@ -22,6 +22,9 @@
 // ABYSS's GUARDIANs, as the BLACKSMITH's REFINE was sized with (drops.ts).
 // Left out, the run is the one above.
 //
+// (A species' second move, monsters.ts move2, is rolled as the game does;
+// the hero answers none of them: it FIGHTs into an EVADE, and a GOBLIN that
+// FLEEs with the gold is a fight lost.)
 // --foe KEY fights any ENEMIES entry instead of the bosses (in --gear
 // weapon,armor, SWORD and SHIELD if not given; the GEAR columns), and
 // --elite fierce|sturdy|swift makes the foe that elite (elite.ts): how its
@@ -123,8 +126,8 @@ const {
   MOVE_HOWL_ATK,
   MOVE_SNATCH_MULT,
   moveDamage,
-  moveDue,
-  moveReady,
+  nextMove,
+  sapMp,
   regenAmount,
   rollDamage,
   scaleEnemy,
@@ -497,13 +500,25 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   let snatched = false;
   let movesUsed = 0;
   let armor: { def: number; turns: number } | null = null;
+  // the one announced (battleRules nextMove: a species' first or second)
+  let intentMove: ReturnType<typeof nextMove> = null;
+  // EVADE up (BattleScene foeBuff "EVADE", dodged()): the hero's next hit misses
+  let evading = false;
+  // FLEE: the foe ran with the gold; the fight ends unwon (counted as lost)
+  let fled = false;
+  const dodged = (): boolean => {
+    if (!evading) return false;
+    evading = false;
+    buffed = false;
+    return true;
+  };
   const rollIntent = (): void => {
-    const move = foe.move;
-    const immune = move?.status === "poison" ? poisonTurns > 0 : frozen || freezeGrace > 0;
-    const ready = moveReady(move, { moved, buffed, snatched, gold: 1, immune });
+    const immune = (status?: "poison" | "freeze"): boolean => (status === "poison" ? poisonTurns > 0 : frozen || freezeGrace > 0);
+    const state = { moved, buffed, snatched, gold: 1, immune, mp, field: ABYSS === null };
     moved = false;
-    intent = ready && !charging && moveDue(move, { used: movesUsed, curHp: foe.curHp, hp: foe.hp });
-    if (intent && move?.at) movesUsed += 1;
+    intentMove = charging ? null : nextMove(foe, state, { used: movesUsed, curHp: foe.curHp, hp: foe.hp });
+    intent = intentMove !== null;
+    if (intentMove?.at) movesUsed += 1;
   };
   rollIntent();
   let rounds = 0;
@@ -558,7 +573,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     }
     const ward = hero.spells.find((s) => s.kind === "ward");
     // a boss's announced blast or flurry is braced for as its wind-up is
-    const brace = !NOBRACE && (charging || (BRACE && intent && !!foe.move?.at && foe.move.kind === "blast"));
+    const brace = !NOBRACE && (charging || (BRACE && intent && intentMove?.kind === "blast"));
     if (brace && ward && !NOWARD && mp >= ward.cost && wardTurns === 0) return { kind: "magic", spell: ward };
     if (brace && wardTurns === 0) return { kind: "defend" };
     if (LIMIT !== null && !limitSpent && LIMIT + gauge() >= LIMIT_MAX) return { kind: "limit" };
@@ -618,6 +633,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     // QUICK's first FIGHT, SEAR's burn (battleRules WEAPON_NATURE)
     const opener = opened ? 1 : hero.edge.opener;
     opened = true;
+    if (dodged()) return;
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow"))) * opener));
     const perfect = Math.random() < PERFECT;
     foe.curHp = Math.max(0, foe.curHp - (perfect ? perfectDamage(total) : total));
@@ -640,6 +656,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     if (spell.kind === "ward") {
       combo = 0;
       wardTurns = WARD_TURNS;
+      return;
+    }
+    if (dodged()) {
+      combo = 0;
       return;
     }
     const { dmg, weak } = spellRoll(spell, foe.weakness, hero.level);
@@ -685,6 +705,8 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     let total = 0;
     let reaction: { mult: number; extra: number } | undefined;
     for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
+      // BattleScene castSkill(): an EVADE takes the first hit
+      if (i === 0 && dodged()) continue;
       const rolled = skillHit(skill, {
         atk: hero.atk,
         def: foe.def,
@@ -755,11 +777,13 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       staggered = false;
       return;
     }
-    if (intent && foe.move) {
+    const move = intentMove;
+    if (intent && move) {
       intent = false;
+      intentMove = null;
       moved = true;
       if (freezeGrace > 0) freezeGrace -= 1;
-      const kind = foe.move.kind;
+      const kind = move.kind;
       if (kind === "howl") {
         foe.atk = Math.round(foe.atk * MOVE_HOWL_ATK);
         buffed = true;
@@ -768,24 +792,33 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         const def = hardenDef(foe.atk);
         foe.def += def;
         buffed = true;
-        if (kind === "armor") armor = { def, turns: foe.move.turns ?? 2 };
+        if (kind === "armor") armor = { def, turns: move.turns ?? 2 };
       } else if (kind === "flurry") {
         // a boss's blows stop at their share of the move's cap
-        const hits = foe.move.hits ?? 2;
-        const cap = foe.move.at ? flurryCap(hero.maxHp, hits) : Number.POSITIVE_INFINITY;
+        const hits = move.hits ?? 2;
+        const cap = move.at ? flurryCap(hero.maxHp, hits) : Number.POSITIVE_INFINITY;
         for (let i = 0; i < hits && hp > 0; i++)
-          blow(Math.min(cap, moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? MOVE_FLURRY_MULT)));
+          blow(Math.min(cap, moveDamage(rollDamage(foe.atk, hero.def).dmg, move.mult ?? MOVE_FLURRY_MULT)));
       } else if (kind === "afflict") {
         if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) {
-          if (foe.move.status === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
-          else if (foe.move.status === "freeze" && !hero.resists.freeze) frozen = true;
+          if (move.status === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
+          else if (move.status === "freeze" && !hero.resists.freeze) frozen = true;
         }
       } else if (kind === "blast") {
         // BattleScene enemyBlast(): no PARRY, the guard as ever
-        hurt(guard(bossBlastDamage(foe.atk, (foe.move.mult ?? 1) * foe.heavy, hero.def, hero.maxHp), true));
-        if (foe.move.poison && hp > 0 && poisonTurns === 0 && !hero.resists.poison) poisonTurns = POISON_TURNS;
+        hurt(guard(bossBlastDamage(foe.atk, (move.mult ?? 1) * foe.heavy, hero.def, hero.maxHp), true));
+        if (move.poison && hp > 0 && poisonTurns === 0 && !hero.resists.poison) poisonTurns = POISON_TURNS;
         riposte();
         if (foe.curHp <= 0) return;
+      } else if (kind === "flee") {
+        // BattleScene enemyFlee(): gone, and the fight with it
+        fled = true;
+        return;
+      } else if (kind === "evade") {
+        evading = true;
+        buffed = true;
+      } else if (kind === "sap") {
+        if (!blow(rollDamage(foe.atk, hero.def).dmg)) mp -= sapMp(mp, hero.maxMp);
       } else if (kind === "snatch") {
         if (!blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, MOVE_SNATCH_MULT))) snatched = true;
       } else {
@@ -793,7 +826,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) foe.curHp += Math.min(before - hp, foe.hp - foe.curHp);
       }
       // a boss's is on top of its turn
-      if (!foe.move.at || hp <= 0) return;
+      if (!move.at || hp <= 0) return;
     }
     if (tell && charging) {
       const canFreeze = !!tell.freezes && !frozen && freezeGrace === 0;
@@ -890,7 +923,10 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     // BattleScene runBattle(): a SWIFT elite may act again
     const again = !stuck && !staggered && actsAgain(eliteKind);
     foeTurn();
+    // the foe ran with the gold (FLEE): no win
+    if (fled) return done(false);
     if (again && !charging && !staggered && hp > 0 && foe.curHp > 0) foeTurn();
+    if (fled) return done(false);
     // felled by a COUNTER
     if (foe.curHp <= 0 && hp > 0) return done(true);
     defending = false;

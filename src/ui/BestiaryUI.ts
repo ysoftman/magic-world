@@ -135,14 +135,20 @@ const CAN_DX = 160;
 // caught species can be one, and its CAN part ends by 320 ("CAN:POISON",
 // "CAN:FREEZE", "CAN:ENRAGE" past a WEAK one), 24px short of the tag.
 const PARTNER_COLOR = "#ffd166";
-function speciesNotes(def: EnemyDef): { weak: string; can: string } {
+function speciesNotes(def: EnemyDef, partner = false): { weak: string; can: string } {
+  // Two moves (monsters.ts `move2`): "CAN:POISON,STINGS" and
+  // "CAN:POISON,SIPHON", the longest, are "CAN:FREEZE,ENRAGE"'s 17 glyphs. A
+  // PARTNER's line has only 11 before its tag (x 344 past a WEAK part), so
+  // there the second is a "+": "CAN:POISON+".
+  const moves = [def.move?.name, def.move2?.name].filter(Boolean);
+  const moveNote = moves.length > 1 && partner ? `${moves[0]}+` : moves.join(",");
   const can = [
     def.special ? SPECIAL_NOTE[def.special.kind] : "",
     // its move, by the name its battle tag shows (monsters.ts EnemyMove); no
     // ordinary species has a special as well, and "CAN:HARDEN" is
     // "CAN:POISON"'s 10. A boss's is left out: "CAN:REGEN,SPORES,ENRAGE" would
     // be 368px, past the name column.
-    (!def.boss && !def.giant && def.move?.name) || "",
+    (!def.boss && !def.giant && moveNote) || "",
     // every boss/giant enrages once at low HP (BattleScene.enemyTurn)
     def.boss || def.giant ? "ENRAGE" : "",
   ].filter(Boolean);
@@ -540,8 +546,8 @@ export class BestiaryUI {
       const isCompanion = rowCaught > 0 && def.name === GameState.companion;
       // every foe's art at ICON_SCALE, its cells a px whatever its size
       icon.setTexture(def.texture).setScale(ICON_SCALE).setVisible(rowSeen);
-      const { weak, can } = rowSeen ? speciesNotes(def) : { weak: "", can: "" };
       const partner = rowCaught > 0 && GameState.isPartner(def.name);
+      const { weak, can } = rowSeen ? speciesNotes(def, partner) : { weak: "", can: "" };
       // a row without a note (unseen, or a plain SLIME) keeps its name
       // centered on the icon instead of floating above an empty line
       row.setY(slotY(s) + (weak || can || partner ? NAME_DY : 0)).setColor(!rowSeen ? DIM_TEXT : isCompanion ? "#4ade80" : "#ffffff");

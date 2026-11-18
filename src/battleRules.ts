@@ -1043,6 +1043,11 @@ export const hardenDef = (atk: number): number => Math.max(2, Math.floor(atk * 0
 // most what the hero carries), handed back when the foe falls or is caught
 export const MOVE_SNATCH_MULT = 0.5;
 export const snatchGold = (heroGold: number, foeGold: number): number => Math.min(heroGold, foeGold);
+// SIPHON / DUST: a blow that also burns this share of max MP (2 at least,
+// never more than is held) unless parried: at Lv9 4 of 28 MP, a FIRE and
+// more; at Lv13 5 of 36
+export const MOVE_SAP_MP_SHARE = 0.15;
+export const sapMp = (mp: number, maxMp: number): number => Math.min(mp, Math.max(2, Math.round(maxMp * MOVE_SAP_MP_SHARE)));
 // FLURRY: two blows at this share each, 1.2 blows in all if neither is parried
 export const MOVE_FLURRY_MULT = 0.6;
 // a share of a rolled blow, never below 1
@@ -1050,20 +1055,55 @@ export const moveDamage = (dmg: number, mult: number): number => Math.max(1, Mat
 /**
  * Whether a foe may announce its move for its next turn: not twice running
  * (`moved`: it used it last turn), a buff only once at a time (`buffed`),
- * SNATCH once and only from a purse (`snatched`, `gold`), a status only
- * where it could land (`immune`: poisoned already, or frozen or inside the
- * grace after a freeze). DRAIN and FLURRY any time: the hero strikes first,
+ * SNATCH once and only from a purse (`snatched`, `gold`), FLEE only once it has (it
+ * runs with that gold), a status only where it could land (`immune`), EVADE
+ * not while one is still up, a SIPHON only with MP to burn. DRAIN and FLURRY
+ * any time: the hero strikes first,
  * so there is something to drain by then.
  */
-export function moveReady(
-  move: EnemyMove | undefined,
-  s: { moved: boolean; buffed: boolean; snatched: boolean; gold: number; immune: boolean },
-): move is EnemyMove {
+export interface MoveState {
+  moved: boolean;
+  buffed: boolean;
+  snatched: boolean;
+  gold: number;
+  /** poisoned already (a poison move), frozen or inside the grace (a freeze) */
+  immune: (status: EnemyMove["status"]) => boolean;
+  /** the hero's MP: SIPHON and DUST want some to burn */
+  mp: number;
+  /**
+   * An ordinary field fight, the only kind a foe may FLEE: in a nest's run, a
+   * seal's keeper's bout, the ARENA, the yard or the ABYSS its going would
+   * end something the hero staked a day or a dive on, through no fault of
+   * theirs (the cave nest's second foe is a FIERCE GOBLIN).
+   */
+  field: boolean;
+}
+export function moveReady(move: EnemyMove | undefined, s: MoveState): move is EnemyMove {
   if (!move || s.moved) return false;
-  if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor") return !s.buffed;
+  if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor" || move.kind === "evade") return !s.buffed;
   if (move.kind === "snatch") return !s.snatched && s.gold > 0;
-  if (move.kind === "afflict") return !s.immune;
+  if (move.kind === "flee") return s.snatched && s.field;
+  if (move.kind === "afflict") return !s.immune(move.status);
+  if (move.kind === "sap") return s.mp > 0;
   return true;
+}
+/**
+ * The move a foe announces for its next turn, or null: of its one or two
+ * (monsters.ts `move`, `move2`) one that is ready, picked at even odds, and
+ * then only if it is due (moveDue: its chance, a boss's HP mark). A species
+ * with two announces nothing while a tag its move left is up (DEF+, EVADE):
+ * the two tags never share the window, as when a species had one move.
+ */
+export function nextMove(
+  foe: { move?: EnemyMove; move2?: EnemyMove },
+  s: MoveState,
+  due: { used: number; curHp: number; hp: number },
+  rand: () => number = Math.random,
+): EnemyMove | null {
+  const ready = [foe.move, foe.move2].filter((m): m is EnemyMove => moveReady(m, s));
+  if (ready.length === 0 || (foe.move2 && s.buffed)) return null;
+  const move = ready.length > 1 ? ready[Math.floor(rand() * ready.length)] : ready[0];
+  return moveDue(move, due, rand) ? move : null;
 }
 /**
  * Whether a ready move is announced now: an ordinary foe's at its chance, a

@@ -32,8 +32,7 @@ import {
   MOVE_HOWL_ATK,
   MOVE_SNATCH_MULT,
   moveDamage,
-  moveDue,
-  moveReady,
+  nextMove,
   POISON_TURNS,
   parriedDamage,
   perfectDamage,
@@ -54,6 +53,7 @@ import {
   STEAL_CHANCE,
   STEAL_GOLD_PCT,
   STREAK_MIN,
+  sapMp,
   scaleEnemy,
   skillCost,
   skillHit,
@@ -83,6 +83,7 @@ import { RESTED_WARD_TURNS } from "../home";
 import { BOMB_DAMAGE, ETHER_MP, HI_POTION_HP, ITEM_INFO, MPOTION_MP, POTION_HP } from "../itemInfo";
 import { chargeLimit, LIMIT_MAX, LIMIT_PARRY, limitDamage, limitDealt, limitFull, limitTaken } from "../limit";
 import { ENEMIES, type EnemyDef, type EnemyMove, type EnemySpecial } from "../monsters";
+import { nestFightOn } from "../nest";
 import { settleLevels, settleWin } from "../payout";
 import { perkOpened } from "../perks";
 import { ART_PX, bodyStyle, DIM_TEXT, gridOutline, retroStyle, showToast, texelsOf } from "../pixelart";
@@ -774,7 +775,9 @@ export class BattleScene extends Phaser.Scene {
   // and what an ARMOR has left: the DEF it put on and the foe's turns to go
   private movesUsed = 0;
   private armor: { def: number; turns: number } | null = null;
-  private foeBuff: "ATK+" | "DEF+" | null = null;
+  private foeBuff: "ATK+" | "DEF+" | "EVADE" | null = null;
+  // the move `intent` announces (the species' first or second: battleRules nextMove)
+  private intentMove: EnemyMove | null = null;
   private snatched = 0;
   private intentText!: PixelText;
   private eliteText!: PixelText;
@@ -866,6 +869,7 @@ export class BattleScene extends Phaser.Scene {
     this.poisonTurns = 0;
     this.frozen = false;
     this.intent = false;
+    this.intentMove = null;
     this.moved = false;
     this.movesUsed = 0;
     this.armor = null;
@@ -938,7 +942,7 @@ export class BattleScene extends Phaser.Scene {
     // is battleRules.scaleEnemy's.
     this.night = isNight() && !this.abyss;
     this.rematch = !this.arena && !this.abyss && !!ARENA_BOSSES.find((b) => b.key === data?.enemy)?.beaten();
-    const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
+    const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss };
     this.elite = data?.keeper?.elite ?? (data && "elite" in data ? (data.elite ?? null) : rollElite(def, fought));
     this.keeperName = data?.keeper?.name ?? null;
     const plain = !!this.arena || !!this.abyss || !!this.practice || !!data?.keeper || !!this.elite || this.rematch;
@@ -2124,6 +2128,8 @@ export class BattleScene extends Phaser.Scene {
         this.flashStatus("AGAIN!", ELITES.swift.color, this.enemySprite.x - 180, this.enemySprite.y - 56, 8);
         await this.enemyTurn();
       }
+      // the foe ran (enemyMove "flee"): the fight is over, end() is under way
+      if (!this.running) return;
       this.defending = false;
       this.thawing = false;
       // felled by a COUNTER
@@ -2186,7 +2192,7 @@ export class BattleScene extends Phaser.Scene {
       );
     // 52 glyphs
     if (id === "react") return this.say("TIP: BRN+ice, CHL+bolt, PSN+fire: a status reacts!", true);
-    if (id === "intent") return this.say(`TIP: the blinking >${this.enemy.move?.name} is the foe's next move.`, true);
+    if (id === "intent") return this.say(`TIP: the blinking >${this.intentMove?.name} is the foe's next move.`, true);
     await this.say(
       id === "parry"
         ? keyHint("TIP: press any key just as a blow lands to PARRY it.", "TIP: tap just as a blow lands to PARRY it.")
@@ -2240,6 +2246,11 @@ export class BattleScene extends Phaser.Scene {
       this.timedPress = undefined;
       this.hintText.setText("");
       endCue();
+      // an EVADE up: the blow meets air, timed or not
+      if (this.dodged()) {
+        line = this.say(`${this.enemy.name} slips aside: your blow misses!`);
+        return;
+      }
       const now = performance.now();
       if (press != null && now - press <= PERFECT_WINDOW_MS) {
         total = perfectDamage(total);
@@ -2386,6 +2397,11 @@ export class BattleScene extends Phaser.Scene {
       fx && this.spellEffectCanLand(fx.kind) && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
     if (spell.ultimate) await this.castNova(spell);
     else await this.castProjectile(spell);
+    if (this.dodged()) {
+      this.resetCombo();
+      await this.say(`${spell.name}! ${this.enemy.name} slips aside: a miss!`);
+      return;
+    }
     const reaction = this.react(spell.element);
     const dmg = Math.round(rolled * reaction.mult) + reaction.extra;
     this.enemy.curHp = Math.max(0, this.enemy.curHp - dmg);
@@ -2442,6 +2458,11 @@ export class BattleScene extends Phaser.Scene {
       if (over || blows >= skill.hits) return;
       const i = blows++;
       if (this.enemy.curHp <= 0) return;
+      // an EVADE up takes the cast's first hit: "MISSILES! 0+9+9 damage!"
+      if (i === 0 && this.dodged()) {
+        dealt.push(0);
+        return;
+      }
       const rolled = skillHit(skill, {
         atk: this.heroAtk(),
         def: this.enemy.def,
@@ -3298,19 +3319,23 @@ export class BattleScene extends Phaser.Scene {
   // Whether the foe's next turn is its move, shown from now on. A practice
   // bout has no gold to take.
   private rollIntent(): void {
-    const move = this.enemy.move;
-    const ready = moveReady(move, {
+    const state = {
       moved: this.moved,
       buffed: this.foeBuff !== null,
       snatched: this.snatched > 0,
       gold: this.practice ? 0 : GameState.gold,
-      immune: move?.status === "poison" ? this.poisonTurns > 0 : this.frozen || this.freezeGrace > 0,
-    });
+      immune: (status: EnemyMove["status"]) => (status === "poison" ? this.poisonTurns > 0 : this.frozen || this.freezeGrace > 0),
+      mp: GameState.player.mp,
+      field: !this.arena && !this.practice && !this.abyss && !this.keeperName && !nestFightOn(),
+    };
     this.moved = false;
     // a boss winding up has its CHG up: one warning at a time, and the mark
     // its HP has passed is announced after the strike
-    this.intent = ready && !this.charging && moveDue(move, { used: this.movesUsed, curHp: this.enemy.curHp, hp: this.enemy.hp });
-    if (this.intent && move?.at) this.movesUsed += 1;
+    this.intentMove = this.charging
+      ? null
+      : nextMove(this.enemy, state, { used: this.movesUsed, curHp: this.enemy.curHp, hp: this.enemy.hp });
+    this.intent = this.intentMove !== null;
+    if (this.intentMove?.at) this.movesUsed += 1;
     this.updateEnemyStatus();
   }
 
@@ -3342,20 +3367,22 @@ export class BattleScene extends Phaser.Scene {
     }
     // its announced move, an ordinary foe's in place of everything below (a
     // turn lost above keeps it for the next)
-    if (this.intent && this.enemy.move) {
+    const move = this.intentMove;
+    if (this.intent && move) {
       this.intent = false;
+      this.intentMove = null;
       this.moved = true;
       this.updateEnemyStatus();
       // the turns since a thaw count through a move's turn as any other's
       // (a boss's move rides on its turn, which counts it below: counted here
       // too, GLACIER GOLEM's ARMOR turn spent two of the thaw's turns and its
       // next FROST BREATH froze the hero again)
-      if (this.freezeGrace > 0 && !this.enemy.move.at) this.freezeGrace -= 1;
-      await this.enemyMove(this.enemy.move);
+      if (this.freezeGrace > 0 && !move.at) this.freezeGrace -= 1;
+      await this.enemyMove(move);
       // a boss's is on top of its turn, not in place of it: in its place it
       // took the turn's blow or wind-up with it and the fight got easier
       // (KING SLIME Lv6 solo: 83% of max HP lost became 76%)
-      if (!this.enemy.move.at || !this.running || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
+      if (!move.at || !this.running || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
     }
     // a wound-up strike lands before anything else this turn could; a fresh
     // wind-up only once the cooldown has run out (see BOSS_TELLS)
@@ -3441,6 +3468,19 @@ export class BattleScene extends Phaser.Scene {
   private async enemyMove(move: EnemyMove): Promise<void> {
     const name = this.enemy.name;
     if (move.kind === "blast") return this.enemyBlast(move);
+    if (move.kind === "flee") return this.enemyFlee();
+    if (move.kind === "evade") {
+      // No blow: it gets set to slip the next hit (dodged()). Its tag takes
+      // the buff's place, and nothing is announced while it is up (nextMove).
+      // "FIRE IMP uses BLINK! Your next hit will miss." is 44 glyphs.
+      this.foeBuff = "EVADE";
+      this.updateEnemyStatus();
+      Sfx.run();
+      this.pulseEnemy(1.08, 160);
+      this.flashStatus("EVADE", "#cbd5e1", this.enemySprite.x - 200, this.enemySprite.y);
+      await this.say(`${name} uses ${move.name}! Your next hit will miss.`);
+      return;
+    }
     if (move.kind === "howl" || move.kind === "harden" || move.kind === "armor") {
       const howl = move.kind === "howl";
       const def = hardenDef(this.enemy.atk);
@@ -3494,7 +3534,7 @@ export class BattleScene extends Phaser.Scene {
       }
       // "TROLL KING strikes 3 times: 99, 99 and 99! (DEFEND)" is 51 glyphs
       const list = dealt.length > 1 ? `${dealt.slice(0, -1).join(", ")} and ${dealt[dealt.length - 1]}` : `${dealt[0]}`;
-      const verb = hits === 2 ? "claws twice:" : `strikes ${dealt.length} times:`;
+      const verb = hits === 2 ? (move.name === "STINGS" ? "stings twice:" : "claws twice:") : `strikes ${dealt.length} times:`;
       await this.say(dealt.length > 1 ? `${name} ${verb} ${list}!${note}` : `${name} strikes for ${list}!${note}`);
       this.setPlayerTint(undefined);
       return;
@@ -3506,6 +3546,22 @@ export class BattleScene extends Phaser.Scene {
       await this.say(crit ? `CRITICAL! ${name} strikes for ${dmg}!${note}` : `${name} attacks for ${dmg}!${note}`);
       this.setPlayerTint(undefined);
       if (landed && move.status) await this.afflict(move.status);
+      return;
+    }
+    if (move.kind === "sap") {
+      // "FROST MOTH's SIPHON hits for 999, -99 MP! (DEFEND)" is 50 glyphs
+      const p = GameState.player;
+      const mp = landed && !this.practice ? sapMp(p.mp, p.maxMp) : 0;
+      if (mp > 0) {
+        p.mp -= mp;
+        this.updatePlayerStats();
+        // where SNATCH's "-9G" goes, in the MP line's blue
+        this.flashStatus(`-${mp}MP`, "#8ecbff", this.playerSprite.x - 170, this.playerSprite.y - 80, 8);
+      }
+      await this.say(
+        mp > 0 ? `${name}'s ${move.name} hits for ${dmg}, -${mp} MP!${note}` : `${name}'s ${move.name} hits for ${dmg}!${note}`,
+      );
+      this.setPlayerTint(undefined);
       return;
     }
     if (move.kind === "drain") {
@@ -3529,6 +3585,32 @@ export class BattleScene extends Phaser.Scene {
       await this.say(gold > 0 ? `${name} hits for ${dmg} and snatches ${gold}G!${note}` : `${name} hits for ${dmg}!${note}`);
     }
     this.setPlayerTint(undefined);
+  }
+
+  // FLEE (the GOBLIN's, once its SNATCH has the gold): it runs off the right
+  // edge with it and the fight ends as a RUN does, nothing paid, the streak
+  // kept (the hero didn't run). "CURSED GOBLIN flees with your 9999G!" is 36
+  // glyphs.
+  private async enemyFlee(): Promise<void> {
+    const gold = this.snatched;
+    this.snatched = 0;
+    Sfx.run();
+    this.tweens.add({ targets: this.enemySprite, x: GAME_WIDTH + 200, alpha: 0, duration: this.anim(420), ease: "Quad.easeIn" });
+    await this.say(`${this.enemy.name} flees with your ${gold}G!`, true);
+    GameState.save();
+    this.end();
+  }
+
+  // Whether the foe slips this hit (EVADE, BLINK): the one hit, then the tag
+  // is gone. FIGHT, a spell and a skill's first hit ask; LIMIT and the
+  // companion don't.
+  private dodged(): boolean {
+    if (this.foeBuff !== "EVADE") return false;
+    this.foeBuff = null;
+    this.updateEnemyStatus();
+    Sfx.run();
+    this.flashStatus("MISS", "#cbd5e1", this.enemySprite.x, this.enemySprite.y - 90, 8);
+    return true;
   }
 
   // A blast (EnemyMove "blast"): no lunge and so no PARRY. Its sheet (MOVE_FX)
@@ -3842,6 +3924,7 @@ export class BattleScene extends Phaser.Scene {
   private updateEnemyStatus(): void {
     if (this.enemyDot) this.dotText.setText(this.enemyDot.label).setColor(DOT_COLOR[this.enemyDot.label]);
     if (this.foeBuff) this.buffText.setText(this.foeBuff).setColor(this.foeBuff === "ATK+" ? "#fca5a5" : "#cbd5e1");
+    if (this.intentMove) this.intentText.setText(`>${this.intentMove.name}`);
     this.layoutTags(
       [
         // first, so an incoming strike always holds the top row
@@ -4136,7 +4219,7 @@ export class BattleScene extends Phaser.Scene {
     const hero = this.playerSprite;
     const { name, special } = this.enemy;
     // a status the foe's move leaves (monsters.ts "afflict") or its special
-    const status = this.enemy.move?.status ?? special?.kind;
+    const status = this.enemy.move?.status ?? this.enemy.move2?.status ?? special?.kind;
     const big = this.enemy.boss || this.enemy.giant;
     const spells = this.knownSpells();
     const skills = this.knownSkills();
