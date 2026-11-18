@@ -5,6 +5,7 @@ import { MAX_GOLD, MAX_HP, MAX_LEVEL, MAX_MP } from "./config";
 import { loadMeal, loadPantry, type Meal, newPantry } from "./cooking";
 import { type CraftedKey, isRefinable, MATERIAL_KEYS, MAX_REFINE, type MaterialKey, RECIPES, REFINE_STEP, type RefineKey } from "./drops";
 import { loadFeats, noFeats } from "./feats";
+import { fieldOpen } from "./fieldGates";
 import { MAX_HOUSE } from "./home";
 import { CATCHABLE, ENEMIES, type EnemyDef } from "./monsters";
 import { loadNestDays, type NestDays } from "./nest";
@@ -933,6 +934,7 @@ export const GameState = {
       shrinesLeft: SHRINE_GATES.filter(([region, open]) => open(this.quest) && !shrineSpent(this, region, econDay())).length,
       battles: this.battles,
       level: this.player.level,
+      elites: fieldOpen("elite", this),
     };
   },
   // A deed bounty's `have` brought up to its counter. Run by every save and
@@ -947,7 +949,8 @@ export const GameState = {
   // field for a kill bounty): the board's "THE OMEN FAVORS IT."
   omenFavors(b: BountyState): boolean {
     if (b.day !== econDay()) return false;
-    const omen = omenOn(b.day, this.quest);
+    const omen = omenOn(b.day, this);
+    if (!omen) return false;
     if (b.kind) return OMEN_DEED[omen.kind] === b.kind;
     return omen.kind === "gold" && OMEN_FIELD_MONSTERS[omen.region].has(b.target);
   },
@@ -974,9 +977,9 @@ export const GameState = {
     // today's claimed one on top, so the trophy lands at the board)
     if (this.bounty && (this.bounty.claimed || this.bounty.have >= this.bounty.need)) this.bountiesDone += 1;
     const pool = this.bountyPool();
-    // the day's omen leans the board its way (bounties.ts OMEN_FAVOR)
-    const omen = omenOn(econDay(), this.quest);
-    const deed = rollDeed(this.deedCounters(), Math.random, OMEN_DEED[omen.kind]);
+    // the day's omen, once there is one, leans the board its way (bounties.ts OMEN_FAVOR)
+    const omen = omenOn(econDay(), this);
+    const deed = rollDeed(this.deedCounters(), Math.random, omen ? OMEN_DEED[omen.kind] : undefined);
     if (deed) {
       const avg = pool.reduce((sum, e) => sum + e.gold, 0) / pool.length;
       this.bounty = {
@@ -992,7 +995,7 @@ export const GameState = {
       return;
     }
     // ...a GOLD RUSH toward a species of its field, whose kills pay more today
-    const rush = omen.kind === "gold" ? pool.filter((e) => OMEN_FIELD_MONSTERS[omen.region].has(e.name)) : [];
+    const rush = omen?.kind === "gold" ? pool.filter((e) => OMEN_FIELD_MONSTERS[omen.region].has(e.name)) : [];
     const from = rush.length > 0 && Math.random() < OMEN_FAVOR ? rush : pool;
     const target = from[Math.floor(Math.random() * from.length)];
     const need = 3 + Math.floor(Math.random() * 4); // 3-6 inclusive

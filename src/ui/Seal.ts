@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
+import { fieldOpen } from "../fieldGates";
 import { GameState } from "../gameState";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
@@ -77,6 +78,9 @@ let litKept: { region: SealRegion; lit: number } | null = null;
  * the stone's order breaks the seal; Z by the stone is its riddle while it
  * is shut, the keeper's challenge (YES/NO, then `fight()`, the scene's own
  * battle start) once it is broken, and nothing much when the keeper is gone.
+ * Until the seals wake (fieldGates.ts, the MOSS GOLEM felled) a shut one's
+ * plates take no step and its stone says only to wait, as a nest does; one
+ * a save broke before that gate is its keeper's still.
  *
  * `back`: the field is being built on a fight's return, which is when a
  * felled keeper pays out. `dialogue`, `ownKey` and `blocked` are as
@@ -183,7 +187,7 @@ export class Seal {
 
   // a plate newly stepped on while the seal is shut
   private walkPlates(): void {
-    if (this.stage() !== "shut") return;
+    if (this.stage() !== "shut" || !fieldOpen("seal")) return;
     this.plates.forEach((p, i) => {
       const on = Math.hypot(p.x - this.hero.x, p.y + 16 - this.hero.y) <= STEP_RADIUS;
       const stepped = on && !p.on;
@@ -227,6 +231,8 @@ export class Seal {
     const stage = this.stage();
     if (stage === "done") {
       this.dialogue.start(["The stone is cold. Whatever it held is gone."], "SEAL");
+    } else if (stage === "shut" && !fieldOpen("seal")) {
+      this.dialogue.start(["The runes lie dark and cold.", "Not yet: fell the MOSS GOLEM first."], "SEAL");
     } else if (stage === "shut") {
       Sfx.buy();
       this.dialogue.start([...def.riddle, "A wrong step puts them all to sleep again."], "SEAL");

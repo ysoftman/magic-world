@@ -1,4 +1,3 @@
-import { ELITE_MIN_BATTLES } from "./elite";
 import type { OmenKind } from "./omen";
 
 // The BOUNTY BOARD's other bounties. Half the days the board asks for kills
@@ -60,9 +59,11 @@ export interface DeedCounters {
   runnersCaught: number;
   // open fields whose shrine has not had today's offering
   shrinesLeft: number;
-  // wins so far and the hero's level, for what a hero can be asked yet
+  // wins so far, the hero's level and whether elites turn up yet
+  // (fieldGates.ts), for what a hero can be asked yet
   battles: number;
   level: number;
+  elites: boolean;
 }
 
 interface DeedDef {
@@ -80,14 +81,14 @@ interface DeedDef {
 }
 
 export const DEEDS: Record<BountyKind, DeedDef> = {
-  // an elite turns up in 8% of the fields' fights once ELITE_MIN_BATTLES are
-  // won: one in a day's hunt, most days
+  // an elite turns up in 8% of the fields' fights once the KING SLIME has
+  // fallen (fieldGates.ts): one in a day's hunt, most days
   elite: {
     label: "FELL AN ELITE",
     need: [1, 1],
     pay: 5.5,
     hint: "A FOE WITH A COLORED TAG",
-    open: (c) => c.battles >= ELITE_MIN_BATTLES,
+    open: (c) => c.elites,
     count: (c) => c.eliteWins,
   },
   parry: {

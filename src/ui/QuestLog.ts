@@ -14,6 +14,7 @@ import { bodyStyle, DIM_TEXT, gridOutline, retroStyle } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { SEAL_REGIONS, sealsDone } from "../seals";
 import { SHARDS_TOTAL } from "../shards";
+import { tipTold } from "../unlockTips";
 import { bindKeyHint, keyHint } from "./Gamepad";
 import { hudRow2Cover, showHudRow2Cover } from "./StatusHud";
 import { hideTouchButtons } from "./TouchControls";
@@ -383,21 +384,24 @@ export class QuestLog {
     // a replay's chapters read the same as the first run's, so the cycle is
     // the one thing that tells the two journals apart
     this.hard.setText(GameState.ngPlus > 0 ? `HARD ${GameState.ngPlus}` : "");
-    // Each corner line once the town's tip has said what it counts (unlockTips.ts,
-    // as the fields' area line, sceneCommon areaLeft): the shards and seals and
-    // the day's omen after "STAR SHARDS AND SEALS HIDE IN EVERY FIELD!" (3 wins),
-    // the PEDDLER after his own (8). The omen's tag ("CALM: CAVE") names what
-    // its toast on the way in says the field holds, shards and runes among it,
-    // and in a new game's first journal it stood beside three counters nothing
-    // had named yet. A save from before the tips (seenTips null) has seen them.
-    const told = (tip: string): boolean => GameState.seenTips?.includes(tip) ?? true;
-    const fields = told("fields");
+    // Each corner line once what it counts has opened and the town's tip has
+    // said so (fieldGates.ts, unlockTips.ts tipTold, as the fields' area line,
+    // sceneCommon areaLeft): the shards after 3 wins, the seals and the
+    // PEDDLER after the MOSS GOLEM (one tip, "seals"), the day's omen after the
+    // GLACIER GOLEM. In a new game's first journal they stood as counters and
+    // a field's name that nothing had named yet.
     this.stars.setText(
-      fields ? `STARS ${GameState.shards.length}/${SHARDS_TOTAL}\nSEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}` : "",
+      [
+        tipTold("shards") ? `STARS ${GameState.shards.length}/${SHARDS_TOTAL}` : "",
+        tipTold("seals") ? `SEALS ${sealsDone(GameState.seals)}/${SEAL_REGIONS.length}` : "",
+      ]
+        .filter((line) => line)
+        .join("\n"),
     );
-    const omen = omenOn(econDay(), GameState.quest);
-    this.peddler.setText(told("peddler") ? `PEDDLER: ${PEDDLER_REGION_NAMES[peddlerRegion(econDay(), GameState.quest)]}` : "");
-    this.omen.setText(fields ? `${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}` : "");
+    const peddler = tipTold("seals") ? peddlerRegion(econDay(), GameState) : null;
+    this.peddler.setText(peddler ? `PEDDLER: ${PEDDLER_REGION_NAMES[peddler]}` : "");
+    const omen = tipTold("omens") ? omenOn(econDay(), GameState) : null;
+    this.omen.setText(omen ? `${OMENS[omen.kind].tag}: ${OMEN_REGION_NAMES[omen.region]}` : "");
     const taken = GameState.perks;
     this.perks
       .setText(

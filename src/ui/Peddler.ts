@@ -39,7 +39,7 @@ export class Peddler {
 
   /** Whether he stands in `region` today. */
   static here(region: PeddlerRegion): boolean {
-    return peddlerRegion(econDay(), GameState.quest) === region;
+    return peddlerRegion(econDay(), GameState) === region;
   }
 
   constructor(

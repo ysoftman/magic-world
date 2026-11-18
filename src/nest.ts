@@ -1,5 +1,4 @@
 import type { MaterialKey } from "./drops";
-import { ELITE_MIN_BATTLES } from "./elite";
 import type { KeeperBout } from "./seals";
 
 // NEST: a den in a field where three fights come back to back. Z beside it
@@ -52,7 +51,8 @@ import type { KeeperBout } from "./seals";
 // the cave's, the forest's and the snow's third at x2.5/x1.5, x2/x1.3 and
 // x2/x1.4; summed, a run buys no level on the way, and in the game all 40
 // runs at the field's level were cleared with 62, 60, 53 and 34% left.
-// The cave's opens with the ELITE_MIN_BATTLES wins a Lv2-3 hero has.
+// Every nest opens as the KING SLIME falls (fieldGates.ts), with the forest:
+// the cave's is then a walk back for a hero past the level it was sized at.
 // Gold: the three fights pay as elites (x2.5 their species': 63, 175, 340 and
 // 485 G), the purse on top (60, 180, 450, 340), together about a third of
 // what the field's hunt makes in a day's 24 minutes (ui/Runner.ts's table:
@@ -82,8 +82,6 @@ export interface NestDef {
 
 export const NEST_FIGHTS = 3;
 export const NEST_PIECES = 3;
-// the fights are elites: not before a hero would meet one (elite.ts)
-export const NEST_MIN_BATTLES = ELITE_MIN_BATTLES;
 
 // Each stands off its field's road, far from the way in: open floor more
 // than a tile clear of every zone, 180px or more from the way in, the chests,
@@ -161,10 +159,6 @@ export function loadNestDays(data: unknown): NestDays {
 }
 
 export const nestSpent = (state: { nestDays: NestDays }, region: NestRegion, day: number): boolean => state.nestDays[region] === day;
-
-/** Whether the hero may go in today: old enough in fights, and not been in. */
-export const nestOpen = (state: { nestDays: NestDays; battles: number }, region: NestRegion, day: number): boolean =>
-  state.battles >= NEST_MIN_BATTLES && !nestSpent(state, region, day);
 
 interface NestState {
   inventory: Record<MaterialKey, number>;

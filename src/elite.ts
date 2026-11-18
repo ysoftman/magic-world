@@ -1,3 +1,4 @@
+import { fieldOpen } from "./fieldGates";
 import type { EnemyDef } from "./monsters";
 
 // ELITES: now and then an ordinary foe of the fields, the cave, the forest,
@@ -9,8 +10,9 @@ import type { EnemyDef } from "./monsters";
 // - Ordinary foes only: no boss or giant (gates and set pieces, tuned as
 //   they are), no rare jackpot (its payout already assumes its odds), and
 //   not in the ARENA, the TRAINING YARD or the ABYSS, whose depth scaling and
-//   cursed chests are its own risk and reward. Nor before the hero's first
-//   ELITE_MIN_BATTLES wins: the first fights teach the menu.
+//   cursed chests are its own risk and reward. Nor before the KING SLIME
+//   has fallen (fieldGates.ts): the cave's fights teach the menu, and the
+//   elites are the forest's news.
 // - The species stays what it is: the same name, so the bestiary, the
 //   quests' counts, the drop table and every line sized for a name are
 //   untouched. The kind shows as a tag in the foe's window and in its colour
@@ -41,7 +43,6 @@ export const ELITES: Record<EliteKind, EliteDef> = {
 };
 
 export const ELITE_CHANCE = 0.08;
-export const ELITE_MIN_BATTLES = 5;
 export const ELITE_LOOT_MULT = 2.5;
 export const ELITE_DROP_MULT = 2;
 
@@ -50,11 +51,11 @@ const KINDS = Object.keys(ELITES) as EliteKind[];
 /** The elite kind this fight's foe turns up as, or null (nearly always). */
 export function rollElite(
   def: Pick<EnemyDef, "boss" | "giant" | "rare">,
-  bout: { arena: boolean; practice: boolean; abyss: boolean; battles: number },
+  bout: { arena: boolean; practice: boolean; abyss: boolean },
   rand: () => number = Math.random,
 ): EliteKind | null {
   if (def.boss || def.giant || def.rare) return null;
-  if (bout.arena || bout.practice || bout.abyss || bout.battles < ELITE_MIN_BATTLES) return null;
+  if (bout.arena || bout.practice || bout.abyss || !fieldOpen("elite")) return null;
   if (rand() >= ELITE_CHANCE) return null;
   return KINDS[Math.floor(rand() * KINDS.length)];
 }

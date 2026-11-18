@@ -1,8 +1,10 @@
 import { deliveryPool, PIECE_GOLD } from "./delivery";
 import { MATERIALS, type MaterialKey } from "./drops";
+import { type FieldProgress, fieldOpen } from "./fieldGates";
 
-// The PEDDLER: a travelling trader who stands in one field a day (the cave,
-// and the forest, the snow field and the volcano once each is open), a
+// The PEDDLER: a travelling trader who comes once the MOSS GOLEM has fallen
+// (fieldGates.ts) and stands in one field a day (the cave, the forest, the
+// snow field, and the volcano once it is open), a
 // different one most days, by a hash of the day (econDay) as the weather and
 // the bounty board go. Z beside him offers two things, each once that day:
 //
@@ -22,11 +24,7 @@ export type PeddlerRegion = "dungeon" | "forest" | "snow" | "volcano";
 // the journal's and his own line's name for each field; 7 glyphs at most
 export const PEDDLER_REGION_NAMES: Record<PeddlerRegion, string> = { dungeon: "CAVE", forest: "FOREST", snow: "SNOW", volcano: "VOLCANO" };
 
-interface Gates {
-  bossDefeated: boolean;
-  forestBoss: boolean;
-  snowBoss: boolean;
-}
+type Gates = FieldProgress["quest"];
 
 const OPEN: Record<PeddlerRegion, (q: Gates) => boolean> = {
   dungeon: () => true,
@@ -45,9 +43,13 @@ function mix(n: number): number {
   return h >>> 0;
 }
 
-/** The field he stands in on `day`, of those open: the same day and gates, the same answer. */
-export function peddlerRegion(day: number, q: Gates): PeddlerRegion {
-  const open = (Object.keys(OPEN) as PeddlerRegion[]).filter((r) => OPEN[r](q));
+/**
+ * The field he stands in on `day`, of those open: the same day and gates,
+ * the same answer. Null before he has come at all (fieldGates.ts).
+ */
+export function peddlerRegion(day: number, s: FieldProgress): PeddlerRegion | null {
+  if (!fieldOpen("peddler", s)) return null;
+  const open = (Object.keys(OPEN) as PeddlerRegion[]).filter((r) => OPEN[r](s.quest));
   return open[mix(day) % open.length];
 }
 

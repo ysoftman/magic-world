@@ -191,9 +191,9 @@ Phaser 4 API 를 쓰거나 고칠 때는 프로젝트에 설치된 Phaser 공식
   묻혔고, 제목이 사라지는 0.6초 동안 함께 들어오던 `TOWN` 이름표와 겹쳐 둘 다 반쯤 비쳤다.
 - 동굴·숲·설원·화산의 지역 제목 아래에는 그 지역에 오늘 남은 것 한 줄이 같이 떴다 사라진다(`sceneCommon` 의
   `fadeAreaTitle(scene, title, region)` → `areaLeft`: `STARS 1/3   SEAL   SHRINE   NEST   PEDDLER`, 남은 것만, 없으면 줄 없음).
-  못 찾은 별 조각, 강적을 아직 못 이긴 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지(5승 뒤부터), 오늘 그 지역에 서 있고 살 것이
+  못 찾은 별 조각, 강적을 아직 못 이긴 봉인, 오늘 안 바친 제단, 오늘 안 들어간 둥지, 오늘 그 지역에 서 있고 살 것이
   남은 상인을 센다. 별
-  조각·봉인·상인은 마을 해금 팁(`seenTips` 의 `fields`·`peddler`)이 나온 뒤에만 넣는다. 제목과 같은 조건(입장 때만,
+  조각·둥지·봉인·상인은 열리고(`fieldGates.ts`) 마을 해금 팁이 나온 뒤에만 넣는다(`unlockTips.ts` `tipTold`: 별 조각 `shards`, 둥지 `nests`, 봉인·상인 `seals`). 제목과 같은 조건(입장 때만,
   전투에서 돌아올 때는 없음)이고 저장하는 것은 없다. 이변이 걸린 필드면 맨 앞에 그 이름(`GOLD RUSH   STARS ...`, "오늘의 이변" 절)이 붙는다. retroStyle(4) 최장 54글자
   864px(x 208..1072), y 208..224 로 날씨
   캡션(144..164)·토스트 줄(176..196) 아래다. 토스트가 두 줄로 넘어와 이 줄에 닿으면 그동안 숨는다. 실제 사례: 입장
@@ -672,8 +672,8 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   - 들어서기: `sceneCommon` 의 `fadeAreaTitle(scene, title, region)` 이 `enterField` 를 부르고 토스트(`GOLD RUSH: FIGHTS HERE PAY
     30% MORE GOLD TODAY!` 46글자)를 낸다. 제목과 같은 조건(입장 때만)이라 전투에서 돌아와도 붙잡은 이변이 그대로다.
   - 마을: `FieldToasts` 가 `tip: "town"` 으로 만들어질 때 `leaveFields`, update 에서 그날 한 번(세션 변수 `omenToldDay`)
-    `TODAY: GOLD RUSH OVER THE VOLCANO!` 를 낸다(해금 팁이 나온 claim 은 다음으로 미룸). 해금 팁 `fields`(3승, 일지의 이변
-    줄과 같은 조건)를 본 뒤부터다. 실제 사례: 새 게임은 늘 0일(CALM DAY OVER THE CAVE, MARKET DAY)이라 마을에 들어서자 2초
+    `TODAY: GOLD RUSH OVER THE VOLCANO!` 를 낸다(해금 팁이 나온 claim 은 다음으로 미룸). 해금 팁 `omens`(GLACIER GOLEM 처치, 일지의 이변
+    줄과 같은 조건)를 본 뒤부터다. 그 전에는 `omenOn` 이 null 을 돌려줘 이변도 그 효과도 없다. 실제 사례: 새 게임은 늘 0일(CALM DAY OVER THE CAVE, MARKET DAY)이라 마을에 들어서자 2초
     안에 이 줄과 장날 토스트가 함께 떴는데, 이변도 동굴도 아직 아무 말도 듣지 못한 단어였다. 그날 팁을 보면 다음 claim 에
     나온다. 마을 이벤트 토스트(TownScene `update` 의 `announcedDay`)는 첫 승리(`GameState.battles` > 0) 뒤부터다: 새 게임은
     0 G 라 할인·더비·수확·룰렛이 아직 뜻이 없고, 첫 전투에서 돌아오는 길에 같은 날 나온다.
@@ -681,7 +681,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
     업적이 한꺼번에 뜬 마을 진입에서 여덟 줄 뒤 10.4초에 떴고 빠진 줄은 없었다.
   - 효과: 골드는 `payout.ts` `settleWin` 의 `mealGold` 합에 `omenGold()`(요리·축복·TRADE 와 더해짐, 재대결·심연 제외, 압도의
     몫에도 같이), 정예는 `sceneCommon` `meetFoe` 맨 앞의 추가 굴림(`omenEliteExtra()`, `rollElite` 의 규칙 그대로: 희귀종·보스·
-    5승 전은 안 됨. 걸리면 그 정예로 바로 전투, 정예는 원래 압도되지 않는다).
+    KING SLIME 처치 전(`fieldGates.ts`)은 안 됨. 걸리면 그 정예로 바로 전투, 정예는 원래 압도되지 않는다).
 - 다른 기능과의 관계: 압도는 GOLD RUSH 의 +30% 를 몫(x0.8)과 함께 받고, WILD HUNT 의 추가 굴림은 압도 판정보다 먼저다.
   기습은 그대로(정예 여부와 무관). 둥지·봉인 강적은 `meetFoe` 를 안 거쳐 WILD HUNT 와 무관하지만 필드 전투라 GOLD RUSH 의
   +30% 는 그 전투 골드에 붙는다(둥지의 purse·봉인의 골드는 `settleWin` 밖이라 그대로). 러너는 희귀종이라 정예가 안 되고 골드는
@@ -691,7 +691,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   줄과 README 를 고친다.
 - 알리는 곳: 퀘스트 일지 왼쪽 위 둘째 줄 `GOLD: VOLCANO`(태그 GOLD·WILD·CALM·HOLY 4글자 + 지역 7글자 = 13글자 208px, x 84..292, y 36..52.
   상인 줄 y 10..26 아래, perks 줄 66..82 위. 제목 `QUEST JOURNAL` 은 x 432..848 이고 회차의 `HARD n` 은 제목 뒤 작은 태그(x 864~)라 왼쪽 줄과 140px 떨어진다), 지역 제목 아래 줄 맨 앞의 이름, 위 두 토스트. 새 이변은 이름 9글자·태그
-  4글자·토스트 문구(`<이름>: <says>!` 52글자) 한도를 지킨다. 일지의 이 줄은 별 조각·봉인 줄과 같이 해금 팁 `fields`(3승) 뒤부터
+  4글자·토스트 문구(`<이름>: <says>!` 52글자) 한도를 지킨다. 일지의 이 줄은 해금 팁 `omens`(GLACIER GOLEM 처치) 뒤부터
   나온다(`QuestLog.refresh`). 실제 사례: 새 게임의 첫 일지에 `CALM: CAVE` 가 아직 아무것도 설명하지 않은 `STARS 0/12`·
   `SEALS 0/4`·`PEDDLER: CAVE` 옆에 섰다. 이변 토스트(`CALM DAY: ... SEEK SHARDS AND RUNES!`)가 그 팁이 소개하는 것을 말한다.
 - 새 이변을 넣으면 `OmenKind`·`OMENS` 와 읽는 곳 한 줄(`omenHere()` 또는 전용 getter)을 넣는다. 종류 수가 바뀌면 날짜별
@@ -831,7 +831,7 @@ HARD MODE 에서 조각은 `reset()` 으로 다시 놓인다.
 - 진행은 퀘스트 일지 제목 줄 오른쪽 첫 줄 `STARS 12/12`(`QuestLog`, retroStyle(4) 176px, x 1020..1196, y 10..26, 그 아래
   y 36..52 는 봉인 줄)이고, 지역별 개수는 그 지역 제목 아래 줄(`STARS 1/3`)에 나온다. 실제 사례: 일지에 `C3 F3 S3 V3` 줄까지
   세 줄을 20px 간격으로 쌓았을 때는 양옆이 작은 글자 덩어리로 읽혀 양쪽 두 줄·26px 간격으로 줄였다. 전부 모으면 업적 STARGAZER(`achievements.ts`)다.
-  일지의 두 줄(`STARS`·`SEALS`)은 지역 제목 아래 줄과 같은 조건, 해금 팁 `fields` 뒤부터 나온다.
+  일지의 두 줄(`STARS`·`SEALS`)은 지역 제목 아래 줄과 같은 조건, 각각 해금 팁 `shards`(3승)·`seals`(MOSS GOLEM 처치) 뒤부터 나온다(`STARS` 한 줄만 있을 때는 첫 줄 자리에 선다).
 - 토스트는 소식(`!`)이다: `STAR SHARD 2/3!`, 셋째는 `VOLCANO STAR WHOLE! MAX HP +5, 2 MAGMA CORE, CANDY`(49글자,
   980px), 열두째는 그 뒤에 `STARFALL! ALL 12 SHARDS: ATK +2 DEF +2`. 지역 이름(`SHARD_REGION_NAMES`)은 7글자까지.
 - 첫 판(커밋 하나 동안)은 지역마다 ATK +1·DEF +1 이었다. 그때 별을 완성한 세이브는 그 능력치를 그대로 갖고 새 보상은
@@ -854,7 +854,8 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 - 날짜는 씬을 만든 날로 고정한다. 필드 안에서 자정이 지나도 그날 물건을 그대로 판다.
 - 오늘 있는 곳은 퀘스트 일지 제목 줄 왼쪽 첫 줄 `PEDDLER: VOLCANO`(16글자 256px, x 84..340, y 10..26, 제목 왼쪽 끝 432 에서
   92px)에 나온다. 실제 사례: 회차 표시가 제목 안(`QUEST JOURNAL  HARD 9`, x 304~)에 있을 때는 이 줄이 제목 위로 겹쳐 들어가 `HARD n` 을 제목 뒤 태그로 뺐다. 그 아래 둘째 줄(y 36..52)은 오늘의 이변이다("오늘의 이변" 절). 지역 이름(`PEDDLER_REGION_NAMES`)은 7글자까지, 물건 라벨은 13글자까지(`2 SPIDER SILK`)다. 이 줄은 지역 제목
-  아래 줄과 같은 조건, 해금 팁 `peddler`(8승) 뒤부터 나온다.
+  아래 줄과 같은 조건, 해금 팁 `seals`(MOSS GOLEM 처치, 봉인과 같은 팁) 뒤부터 나온다. 그 전에는 `peddlerRegion` 이 null 을
+  돌려줘 상인이 어느 필드에도 서지 않는다.
 - 터치 MENU 줄·원판과 겹치지 않게 네 자리 모두 맵 가운데 쪽 길가에 뒀다. 옮기면 제단처럼 화면 좌표로 다시 본다.
 
 ## 필드 봉인 (`src/seals.ts`, `src/ui/Seal.ts`)
@@ -898,7 +899,10 @@ PIECES, 소모품 묶음 DEAL)를 하나씩 한 번 판다(`GameState.peddler` =
 - 발판도 터치 원판 계산("필드 제단" 절)을 한다. 실제 사례: 화산 발판 2 는 (4,7)에서 입장 화면의 D-pad 위 원판 밑에
   있어 (3,6)(서쪽 용암이 꺾인 자리, 수수께끼 문구 그대로)으로 옮겼다. 화산 발판 1 (22,5)은 입장 화면 오른쪽 끝에서
   MENU 줄 밑에 반쯤 걸린 채다: 비키는 칸 (20,6)은 "동쪽 벽" 문구가 틀려져 그대로 뒀다(결정).
-- 진행은 퀘스트 일지 오른쪽 위 둘째 줄 `SEALS 4/4`(`QuestLog`, 별 조각 줄 아래, y 36..52, 해금 팁 `fields` 뒤부터)다.
+- 진행은 퀘스트 일지 오른쪽 위 둘째 줄 `SEALS 4/4`(`QuestLog`, 별 조각 줄 아래, y 36..52, 해금 팁 `seals` 뒤부터)다.
+- MOSS GOLEM 처치(`fieldOpen("seal")`) 뒤부터 깨어난다. 그 전에는 닫힌 봉인의 발판이 반응하지 않고 돌은
+  `Not yet: fell the MOSS GOLEM first.` 라고만 한다(둥지의 잠긴 대사와 같은 방식, 돌과 발판은 보인다). 그 전에 이미 깬
+  봉인(옛 세이브)은 강적을 그대로 부를 수 있다.
 - 돌은 제단 격자(`SHRINE_TILE`)의 붉은 팔레트(`seal`)이고 풀린 뒤에는 `shrine-spent` 다. 발판 그림은 `Seal.ts` 안의
   격자를 `scene` 인자로 굽는다(check:art 대상 아님). 발판 깊이 3.6(바닥 위, glint·별 조각 4.5 아래).
 
@@ -910,7 +914,8 @@ NEST 는 필드의 굴에서 세 전투를 연달아 하는 곳이다(동굴·�
 +5 HP·+2 MP 뿐이다(필드에서 가방을 열 틈이 없다: 질문이 필드와 함께 뜬다). 연전 중에 오른 레벨도 능력치와 최대 HP·MP 만
 올리고 HP·MP 는 늘어난 만큼만 채운다(아래). 하루 한 번(`GameState.nestDays`, shrineDays 와
 같은 꼴, 옛 세이브는 빈 값, HARD MODE 의 `reset()` 이 비운다)이고 들어가는 순간 그날을 쓴 것으로 저장해 도중에
-새로고침하면 그날은 끝이다. 정예와 같은 5승(`NEST_MIN_BATTLES`) 뒤부터 열린다.
+새로고침하면 그날은 끝이다. 정예와 같이 KING SLIME 처치(`fieldOpen("nest")`) 뒤부터 열린다. 그 전에는
+굴이 보이되 `Not yet: fell the KING SLIME first.` 라고만 한다.
 
 - 연전 질문의 답은 복귀 뒤 1.2초(`justBackFromFight`) 동안 답으로 치지 않고 같은 질문을 다시 띄운다. 실제 사례: 결산을
   넘기던 Z 가 타이핑을 넘기고 다음 Z 가 ON 을 눌러 원치 않는 다음 전투가 시작됐다.
@@ -1022,7 +1027,7 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
   `limitBreak` 의 `limitKill` 다음 줄(어떤 적이든 센다. 업적 FINISHER 의 `limitFinishes` 는 보스·거인만이라 따로다).
   넷 다 훈련장(`practice`)에서는 안 세고 아레나·심연에서는 센다. 정예는 `victory()` 의 `noteWin` 이라 쓰러뜨린 것만 센다
   (잡으면 안 셈).
-- 나오는 조건(`open`): 정예는 5승 뒤, LIMIT FINISH 는 5승 뒤(게이지가 한 번은 찼을 때), REACTIONS 는 Lv4 부터(THORNS 의
+- 나오는 조건(`open`): 정예는 KING SLIME 처치 뒤(`DeedCounters.elites`), LIMIT FINISH 는 5승 뒤(게이지가 한 번은 찼을 때), REACTIONS 는 Lv4 부터(THORNS 의
   독 뒤 FIRE 로 혼자 DETONATE 를 낼 수 있는 레벨, `REACTION_MIN_LEVEL`). THORNS 의 learnLevel 이나 반응 표
   (`battleRules.ts` 의 `reactionOf`)를 바꾸면 이 레벨과 힌트(`FIRE ON POISON, ICE ON BURN`)를 다시 맞춘다.
 - SHRINE PRAYER 는 오늘 안 바친 열린 제단이 하나라도 있을 때만 나온다(`deedCounters().shrinesLeft`, `gameState.ts` 의
@@ -1053,8 +1058,12 @@ BOUNTY BOARD 의 일일 바운티는 `DEED_SHARE`(절반)로 처치 의뢰 대�
   `encounterCooldown` 을 0 으로 한 뒤 `startBattle` 의 반환값(시작했으면 true)을 돌려주고, `Runner.ts` 는 true 일 때만
   `tagged`·`runnersCaught` 를 올린다. 실제 사례: 상자·기도 뒤의 유예(`holdFights`, 1.2초) 중에 닿으면 `startBattle` 이
   조용히 거절해 전투 없이 카운터만 올랐고 러너는 달아났다. 저장 전에 일지를 열면 `have` 가 한 박자 늦을 수 있다.
-- 별 조각·봉인·상인의 존재는 `unlockTips.ts` 의 두 줄(3승·8승 뒤 마을 토스트)로 알린다. ELDER·HUNTER 대사는 건드리지
-  않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).
+- 필드의 부가 요소는 차례로 열리고 그 존재는 `unlockTips.ts` 의 네 줄(마을 토스트)로 알린다: `shards`(3승, 별 조각),
+  `nests`(KING SLIME 처치, 둥지·정예), `seals`(MOSS GOLEM 처치, 봉인·상인), `omens`(GLACIER GOLEM 처치, 이변).
+  ELDER·HUNTER 대사는 건드리지 않았다(결정: TownScene 대화 줄 폭 계산을 다시 하지 않아도 되는 쪽).
+- 게이트 판정은 `src/fieldGates.ts` `fieldOpen` 한 곳이다(HARD MODE 는 `ngPlus > 0` 이면 전부 열림, 저장하는 것은 없다).
+  필드 시스템을 새로 넣으면 `fieldGates.ts` 에 게이트를, `unlockTips.ts` 에 팁(44글자 이내)을 넣고 일지·필드 줄은
+  `tipTold` 로 가린다. 옛 팁 `fields` 를 본 세이브는 `carryOldTips` 가 지금 열린 것의 새 id 로 바꿔 준다.
 
 ## 게시판 등급 (`src/boardRank.ts`)
 

@@ -23,7 +23,7 @@ import {
   TILE,
 } from "./levels";
 import { ENEMIES } from "./monsters";
-import { nestOpen } from "./nest";
+import { nestSpent } from "./nest";
 import { enterField, leaveFields, OMEN_REGION_NAMES, OMENS, omenEliteExtra, omenHere, omenOn } from "./omen";
 import { meet, overrunLines, settleOverrun } from "./overrun";
 import { peddlerRegion, peddlerSold } from "./peddler";
@@ -53,7 +53,7 @@ import type { Minimap } from "./ui/Minimap";
 import { STATUS_HUD_HEIGHT, type StatusHud } from "./ui/StatusHud";
 import { hasTouchButtons, isTouchDevice, TAG_UNDER_BUTTON_ALPHA, tagUnderTouchButton } from "./ui/TouchControls";
 import { type WarpWalker, warmWarp, warping, warpOut } from "./ui/warpFx";
-import { showUnlockTip, type TipPlace } from "./unlockTips";
+import { showUnlockTip, type TipPlace, tipTold } from "./unlockTips";
 import type { Weather } from "./weather";
 
 type LastMove = "down" | "up" | "right" | "left";
@@ -1046,7 +1046,7 @@ export function fadeAreaTitle(scene: Phaser.Scene, title: PixelText, region?: Sh
   scene.tweens.add({ targets: title, alpha: 0, delay: AREA_TITLE_HOLD_MS, duration: AREA_TITLE_FADE_MS });
   // the field's omen, if today's lies here (omen.ts): held from this walk in,
   // and said once in a toast as the title shows
-  const omen = region ? enterField(region, econDay(), GameState.quest) : null;
+  const omen = region ? enterField(region, econDay(), GameState) : null;
   if (omen) showToast(scene, `${OMENS[omen].name}: ${OMENS[omen].says}!`, FIELD_TOAST_Y);
   const left = region ? areaLeft(region) : "";
   if (!left) return;
@@ -1095,26 +1095,24 @@ function toastOver(scene: Phaser.Scene, y: number): boolean {
  * "GOLD RUSH   STARS 1/3   SEAL   SHRINE   NEST   PEDDLER", the day's omen
  * if it lies here (omen.ts) and then each part only while it is
  * left (a shard unfound, the seal's keeper unbeaten, the shrine not prayed at
- * today, the nest not gone into today and open to this hero, the PEDDLER here
- * with something unsold), "" when nothing is. The shards,
- * the seal and the PEDDLER are named only once the town's tip has told of
- * them (unlockTips.ts "fields" and "peddler"; a save from before the tips
- * knows them all); the shrine stands in plain sight.
+ * today, the nest not gone into today, the PEDDLER here with something
+ * unsold), "" when nothing is. The shards, the seal, the nest and the
+ * PEDDLER are named only once each has opened and the town's tip has told of
+ * it (fieldGates.ts, unlockTips.ts tipTold); the shrine stands in plain sight.
  */
 export function areaLeft(region: ShardRegion): string {
-  const told = (tip: string): boolean => GameState.seenTips?.includes(tip) ?? true;
   const day = econDay();
   // the omen first, by its name: fadeAreaTitle has just entered the field
   const omen = omenHere();
   const parts: string[] = omen ? [OMENS[omen].name] : [];
-  if (told("fields")) {
-    const stars = shardsFound(GameState.shards, region);
-    if (stars < SHARDS_PER_REGION) parts.push(`STARS ${stars}/${SHARDS_PER_REGION}`);
-    if (GameState.seals[region] !== "done") parts.push("SEAL");
-  }
+  const stars = shardsFound(GameState.shards, region);
+  if (tipTold("shards") && stars < SHARDS_PER_REGION) parts.push(`STARS ${stars}/${SHARDS_PER_REGION}`);
+  // (the seals' tip is the PEDDLER's too)
+  const seals = tipTold("seals");
+  if (seals && GameState.seals[region] !== "done") parts.push("SEAL");
   if (!shrineSpent(GameState, region, day)) parts.push("SHRINE");
-  if (nestOpen(GameState, region, day)) parts.push("NEST");
-  const peddlerHere = told("peddler") && peddlerRegion(day, GameState.quest) === region;
+  if (tipTold("nests") && !nestSpent(GameState, region, day)) parts.push("NEST");
+  const peddlerHere = seals && peddlerRegion(day, GameState) === region;
   if (peddlerHere && !(peddlerSold(GameState, day, 0) && peddlerSold(GameState, day, 1))) parts.push("PEDDLER");
   return parts.join("   ");
 }
@@ -1875,15 +1873,15 @@ export class FieldToasts {
     // of this claim: "TODAY: GOLD RUSH OVER THE VOLCANO!" 34 glyphs
     // ...and only onto an empty toast row: the queue behind a toast holds
     // three, and a new hero's first day has tips and trophies enough to push
-    // one of them out. Not before the town's tip on what the fields hold
-    // (unlockTips.ts "fields", 3 wins; the journal's omen line waits for it
-    // too, ui/QuestLog.ts): a new game's town said "TODAY: CALM DAY OVER THE
-    // CAVE!" in its first two seconds, an omen and a field no word had named.
-    // Held, it comes the day the tip is seen, a claim after it.
-    const toldFields = GameState.seenTips?.includes("fields") ?? true;
-    if (this.tip === "town" && toldFields && !tipped && omenToldDay !== econDay() && !toastOver(this.scene, 0)) {
+    // one of them out. Not before the omens have come and the town's tip
+    // has said so (fieldGates.ts, unlockTips.ts "omens"; the journal's omen
+    // line waits for it too, ui/QuestLog.ts): a new game's town said "TODAY:
+    // CALM DAY OVER THE CAVE!" in its first two seconds, an omen and a field
+    // no word had named. Held, it comes the day the tip is seen, a claim
+    // after it.
+    const omen = tipTold("omens") ? omenOn(econDay(), GameState) : null;
+    if (this.tip === "town" && omen && !tipped && omenToldDay !== econDay() && !toastOver(this.scene, 0)) {
       omenToldDay = econDay();
-      const omen = omenOn(omenToldDay, GameState.quest);
       showToast(this.scene, `TODAY: ${OMENS[omen.kind].name} OVER THE ${OMEN_REGION_NAMES[omen.region]}!`, this.toastY);
     }
     if (tipped || earned.length > 0) this.quietSave();
@@ -2024,11 +2022,7 @@ export function meetFoe(
   if (Math.random() < omenEliteExtra()) {
     const draws = [0];
     const rand = (): number => draws.pop() ?? Math.random();
-    const forced = rollElite(
-      ENEMIES[kind] ?? ENEMIES.slime,
-      { arena: false, practice: false, abyss: false, battles: GameState.battles },
-      rand,
-    );
+    const forced = rollElite(ENEMIES[kind] ?? ENEMIES.slime, { arena: false, practice: false, abyss: false }, rand);
     if (forced) return forced;
   }
   const met = meet(kind, GameState.overrun);

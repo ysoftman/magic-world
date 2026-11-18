@@ -99,7 +99,7 @@ export type Meeting =
  */
 export function meet(key: string, on: boolean, rand: () => number = Math.random): Meeting {
   const def = ENEMIES[key] ?? ENEMIES.slime;
-  const elite = rollElite(def, { arena: false, practice: false, abyss: false, battles: GameState.battles }, rand);
+  const elite = rollElite(def, { arena: false, practice: false, abyss: false }, rand);
   const fight: Meeting = { overrun: false, elite };
   if (!on || elite) return fight;
   const enemy = weakling(def);

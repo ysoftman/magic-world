@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import { abyssOpen } from "./abyss";
 import { arenaOpen } from "./arena";
 import { MATERIAL_KEYS } from "./drops";
+import { fieldOpen } from "./fieldGates";
 import { GameState } from "./gameState";
 import { showToast } from "./pixelart";
 import { keyNames } from "./ui/Gamepad";
@@ -70,15 +71,45 @@ export const UNLOCK_TIPS: UnlockTip[] = [
     },
     when: () => !GameState.meal && Object.values(GameState.pantry).some((n) => n > 0),
   },
-  // What the fields hold besides fights, which nothing in town says: told
-  // once the first fights are won, a walk back apart so the two don't come
-  // as one burst. The quest journal counts the shards and the seals and
-  // names the PEDDLER's field (ui/QuestLog.ts). 42 and 43 glyphs.
-  { id: "fields", place: "town", text: "STAR SHARDS AND SEALS HIDE IN EVERY FIELD!", when: () => GameState.battles >= 3 },
-  { id: "peddler", place: "town", text: "A PEDDLER ROAMS THE FIELDS: SEE THE JOURNAL!", when: () => GameState.battles >= 8 },
+  // What the fields hold besides fights, which nothing in town says: each
+  // told as it opens (fieldGates.ts), the shards once the first fights are
+  // won and the rest a boss apart, after that boss's own region tip above.
+  // The quest journal's and the fields' lines for each wait on its tip
+  // (tipTold below). 32, 42, 42 and 44 glyphs.
+  { id: "shards", place: "town", text: "STAR SHARDS HIDE IN EVERY FIELD!", when: () => fieldOpen("shards") },
+  { id: "nests", place: "town", text: "NESTS OPEN AND ELITE FOES ROAM THE FIELDS!", when: () => fieldOpen("nest") },
+  { id: "seals", place: "town", text: "SEALS WAKE AND A PEDDLER ROAMS THE FIELDS!", when: () => fieldOpen("seal") },
+  { id: "omens", place: "town", text: "A DAILY OMEN MARKS A FIELD: SEE THE JOURNAL!", when: () => fieldOpen("omen") },
   { id: "rain", place: "town", text: "RAINY DAY: FISH BITE FASTER, CROPS PAY MORE!", when: () => isWet(weatherToday("town")) },
   { id: "blizzard", place: "snow", text: "BLIZZARD: THE ICE HOLE BITES SLOWER!", when: () => weatherToday("snow") === "blizzard" },
 ];
+
+// A save from when one tip ("fields", at 3 wins) told of the shards and the
+// seals together, and wins alone opened the rest: it has had that news, so
+// what is open for it now is told already, and only what a boss still to
+// fall opens will be news.
+const OLD_FIELDS_TIP = "fields";
+const FIELD_TIPS = ["shards", "nests", "seals", "omens"];
+
+function carryOldTips(seen: string[]): void {
+  const at = seen.indexOf(OLD_FIELDS_TIP);
+  if (at < 0) return;
+  const open = UNLOCK_TIPS.filter((t) => FIELD_TIPS.includes(t.id) && !seen.includes(t.id) && t.when()).map((t) => t.id);
+  seen.splice(at, 1, ...open);
+}
+
+/**
+ * Whether the town's tip `id` has been shown: what the quest journal's and
+ * the fields' lines on the shards, the seals, the PEDDLER and the omen wait
+ * for, so none names a thing no word has. A save from before the tips
+ * (seenTips null) has seen all that is true for it.
+ */
+export function tipTold(id: string): boolean {
+  const seen = GameState.seenTips;
+  if (seen === null) return UNLOCK_TIPS.find((t) => t.id === id)?.when() ?? false;
+  carryOldTips(seen);
+  return seen.includes(id);
+}
 
 /**
  * Shows the next unseen tip for `place` whose moment has come, at most one a
@@ -94,6 +125,7 @@ export function showUnlockTip(scene: Phaser.Scene, place: TipPlace, y: number): 
     return true;
   }
   const seen = GameState.seenTips;
+  carryOldTips(seen);
   const tip = UNLOCK_TIPS.find((t) => t.place === place && !seen.includes(t.id) && t.when());
   if (!tip) return false;
   seen.push(tip.id);

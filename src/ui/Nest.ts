@@ -1,18 +1,9 @@
 import Phaser from "phaser";
 import { Sfx } from "../audio";
 import { materialName } from "../delivery";
+import { fieldOpen } from "../fieldGates";
 import { econDay, GameState } from "../gameState";
-import {
-  NEST_FIGHTS,
-  NEST_MIN_BATTLES,
-  NEST_PIECES,
-  NESTS,
-  type NestFight,
-  type NestRegion,
-  nestSpent,
-  payNest,
-  setNestFight,
-} from "../nest";
+import { NEST_FIGHTS, NEST_PIECES, NESTS, type NestFight, type NestRegion, nestSpent, payNest, setNestFight } from "../nest";
 import { ART_PX, FIELD_TOAST_Y, makeTexture, retroStyle, showToast } from "../pixelart";
 import type { PixelText } from "../pixelText";
 import { justBackFromFight } from "../sceneCommon";
@@ -220,8 +211,9 @@ export class Nest {
       this.dialogue.start(["The nest is still.", "Whatever lives here will be back tomorrow."], "NEST");
       return true;
     }
-    if (GameState.battles < NEST_MIN_BATTLES) {
-      this.dialogue.start(["Eyes watch you from the dark.", "Not yet: win a few more fights first."], "NEST");
+    // shut until the KING SLIME has fallen (fieldGates.ts)
+    if (!fieldOpen("nest")) {
+      this.dialogue.start(["Eyes watch you from the dark.", "Not yet: fell the KING SLIME first."], "NEST");
       return true;
     }
     Sfx.buy();

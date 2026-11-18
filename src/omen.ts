@@ -21,8 +21,7 @@
 //   ordinary fights (elite.ts ELITE_CHANCE 8% -> 24%; sceneCommon meetFoe).
 //   An elite pays x2.5, so +12% gold and EXP over a hunt becomes +36%, for
 //   fights that run longer and hit harder; the BOUNTY BOARD's FELL AN ELITE
-//   is quickest there. Never the rare ones, the bosses, nor before the
-//   ELITE_MIN_BATTLES wins (rollElite's own rules).
+//   is quickest there. Never the rare ones nor the bosses (rollElite's own rules).
 // - CALM DAY: the field's random fights come OMEN_CALM_FIGHTS as often (the
 //   scenes' checkEncounter; the roamers in their zones are as ever), and a
 //   runner stands there on OMEN_CALM_RUNNER of the walks in (ui/Runner.ts).
@@ -34,6 +33,7 @@
 //   still once a day. 15 to 100 G saved: a reason to pray there today, and
 //   the BOUNTY BOARD's SHRINE PRAYER at half its cost.
 import { ELITE_CHANCE } from "./elite";
+import { type FieldProgress, fieldOpen } from "./fieldGates";
 
 export type OmenRegion = "dungeon" | "forest" | "snow" | "volcano";
 export type OmenKind = "gold" | "wild" | "calm" | "holy";
@@ -64,11 +64,7 @@ const KINDS = Object.keys(OMENS) as OmenKind[];
 // the journal's and the toasts' name for each field; 7 glyphs at most
 export const OMEN_REGION_NAMES: Record<OmenRegion, string> = { dungeon: "CAVE", forest: "FOREST", snow: "SNOW", volcano: "VOLCANO" };
 
-interface Gates {
-  bossDefeated: boolean;
-  forestBoss: boolean;
-  snowBoss: boolean;
-}
+type Gates = FieldProgress["quest"];
 // the flags that open each field (the PEDDLER's and the bounty pool's gates)
 const OPEN: Record<OmenRegion, (q: Gates) => boolean> = {
   dungeon: () => true,
@@ -87,9 +83,15 @@ function mix(n: number): number {
   return h >>> 0;
 }
 
-/** The day's omen and the open field it lies on: the same day and gates, the same answer. */
-export function omenOn(day: number, q: Gates): { region: OmenRegion; kind: OmenKind } {
-  const open = (Object.keys(OPEN) as OmenRegion[]).filter((r) => OPEN[r](q));
+/**
+ * The day's omen and the open field it lies on: the same day and gates, the
+ * same answer. Null until the omens come (fieldGates.ts, the GLACIER GOLEM
+ * felled): no toast, no journal line, no lean on the board, nothing held in
+ * a field.
+ */
+export function omenOn(day: number, s: FieldProgress): { region: OmenRegion; kind: OmenKind } | null {
+  if (!fieldOpen("omen", s)) return null;
+  const open = (Object.keys(OPEN) as OmenRegion[]).filter((r) => OPEN[r](s.quest));
   const h = mix(day);
   return { region: open[h % open.length], kind: KINDS[(h >>> 8) % KINDS.length] };
 }
@@ -98,9 +100,9 @@ export function omenOn(day: number, q: Gates): { region: OmenRegion; kind: OmenK
 let here: { region: OmenRegion; kind: OmenKind | null } | null = null;
 
 /** The hero walks into `region` on `day`: its omen, if today's lies there, held till the town. */
-export function enterField(region: OmenRegion, day: number, q: Gates): OmenKind | null {
-  const omen = omenOn(day, q);
-  here = { region, kind: omen.region === region ? omen.kind : null };
+export function enterField(region: OmenRegion, day: number, s: FieldProgress): OmenKind | null {
+  const omen = omenOn(day, s);
+  here = { region, kind: omen?.region === region ? omen.kind : null };
   return here.kind;
 }
 
