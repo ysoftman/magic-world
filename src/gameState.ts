@@ -1097,6 +1097,15 @@ export const GameState = {
   // The monster materials stay, like the pantry and the treasure maps below:
   // the hero gathered them, no quest hands them out again.
   beginNewGamePlus(): void {
+    // today's bounty goes with the cleared run: settled first, as the day's
+    // turn would have (rollBountyIfStale), or a finished one was neither paid
+    // nor counted for BOUNTY HUNTER
+    this.syncBounty();
+    if (this.bounty && (this.bounty.claimed || this.bounty.have >= this.bounty.need)) {
+      if (!this.bounty.claimed) this.gainGold(this.bounty.reward);
+      this.bountiesDone += 1;
+      this.bounty = null;
+    }
     const gear = Object.fromEntries((Object.keys(EQUIP_SLOT) as EquipmentKey[]).map((k) => [k, this.inventory[k]]));
     const materials = Object.fromEntries(MATERIAL_KEYS.map((k) => [k, this.inventory[k]]));
     const records = Object.fromEntries(NG_KEEP_QUEST.map((k) => [k, this.quest[k]]));
