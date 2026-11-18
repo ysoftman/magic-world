@@ -1837,7 +1837,7 @@ export class TownScene extends Phaser.Scene {
         GameState.ngPlus > 0 ? ["You again, hero?", "The beasts have grown", "fiercer since your", "last journey."] : ["Welcome, hero!"];
       // the slime hunt only until it's reported
       const errand = q.slimeReward
-        ? ["Something warm stirs", "under the cave, and a", "KING SLIME grew fat on", "it. Fell it, up north!"]
+        ? ["The cave runs warm.", "A KING SLIME feeds on it.", "Fell it, up north!"]
         : ["The ground grows warm,", "and slimes swarm the", "grass. Hunt 5 of them.", "Then face the KING SLIME", "in the cave up north!"];
       this.dialogue.start([...greeting, ...errand], "ELDER");
       return;
@@ -1848,30 +1848,26 @@ export class TownScene extends Phaser.Scene {
       Sfx.buy();
       // the TROLL KING (TownScene's roaming giant) walks the meadows from
       // the KING SLIME's fall on (spawnMonsters), and hits harder than it did
-      const troll = q.trollDefeated ? [] : ["Driven from the woods,", "a TROLL KING roams the", "grass. RUN until", "you're strong!"];
+      // Every string here is a whole sentence, so wherever the box turns the
+      // page (4 rows of 60 glyphs, 42 on touch) it turns between sentences.
+      const troll = q.trollDefeated ? [] : ["A TROLL KING fled here.", "RUN until you're strong!"];
       this.dialogue.start(
         [
           "You are our hero!",
           "The KING SLIME is gone.",
           `Take this ${gained} gold!`,
-          "Yet it was only a slime,",
-          "fed by a heat below.",
-          "That heat creeps east:",
-          "the woods' old keeper",
-          "has turned on us.",
-          "The GUARD by the woods",
-          "knows more.",
+          "Yet a heat below fed it.",
+          "Now that heat creeps east.",
+          "The woods' keeper is mad.",
           ...troll,
+          "Ask the GUARD out east.",
         ],
         "ELDER",
       );
       return;
     }
     if (!q.forestBoss) {
-      this.dialogue.start(
-        ["The heat creeps east.", "The woods' old keeper", "has turned on us.", "The GUARD by the woods", "knows more."],
-        "ELDER",
-      );
+      this.dialogue.start(["The heat creeps east.", "The woods' keeper is mad.", "Ask the GUARD out east."], "ELDER");
       return;
     }
     if (!q.forestReward) {
@@ -1903,16 +1899,14 @@ export class TownScene extends Phaser.Scene {
       Sfx.buy();
       this.dialogue.start(
         [
-          "The GLACIER GOLEM...",
-          "fallen? No hero has",
-          "done so much for us.",
+          "The GLACIER GOLEM, fallen?",
+          "No hero did more for us.",
           `${gained} gold and 2 ELIXIRS!`,
           // its frost was what held the crater shut (see the volcano gate)
-          "But its frost held a",
-          "fire down. The VOLCANO",
-          "to the south-east wakes,",
-          "and a FLAME DRAKE",
-          "with it. Quench it, hero!",
+          "But its frost held a fire.",
+          "Now the VOLCANO wakes.",
+          "A FLAME DRAKE rises there.",
+          "Go south-east. Quench it!",
           ...full,
         ],
         "ELDER",
@@ -1935,8 +1929,8 @@ export class TownScene extends Phaser.Scene {
           `${gained} gold and 3 ELIXIRS!`,
           // the ABYSS opens on this fall (abyss.ts abyssOpen)
           "But the pit it rose from",
-          "lies open by the cave:",
-          "the ABYSS. Go if you dare.",
+          "lies open by the cave.",
+          "They call it the ABYSS.",
           ...full,
         ],
         "ELDER",
