@@ -500,15 +500,17 @@ const GAME_KIT: Record<string, SfxProgram> = {
     id: "roamer:alert",
     kind: "se",
     // a field's roamer has seen the hero and is coming (sceneCommon alert,
-    // temper.ts): at most one in 400ms however many saw. A warning, so
-    // under the battle's blows and in the cursor's band over the BGM
+    // temper.ts): at most one in 400ms however many saw. A warning that can
+    // come every few seconds by a zone, so with the confirms (buy) and under
+    // the pickup's chirp and every blow: at vol 0.045/0.03 it measured with
+    // MAGIC, over ATTACK
     target: "a roamer spots the hero: two staccato square barks on one note, D5 with D6 over it, not the pickup's rising chirp",
     pitch: "key",
     steps: [
-      { at: 0, dur: 0.045, wave: "square", freq: N("D5"), vol: 0.045, hold: 0.03 },
-      { at: 0, dur: 0.045, wave: "pulse25", freq: N("D6"), vol: 0.03, hold: 0.03 },
-      { at: 0.085, dur: 0.06, wave: "square", freq: N("D5"), vol: 0.045, hold: 0.035 },
-      { at: 0.085, dur: 0.06, wave: "pulse25", freq: N("D6"), vol: 0.03, hold: 0.035 },
+      { at: 0, dur: 0.045, wave: "square", freq: N("D5"), vol: 0.034, hold: 0.03 },
+      { at: 0, dur: 0.045, wave: "pulse25", freq: N("D6"), vol: 0.022, hold: 0.03 },
+      { at: 0.085, dur: 0.06, wave: "square", freq: N("D5"), vol: 0.034, hold: 0.035 },
+      { at: 0.085, dur: 0.06, wave: "pulse25", freq: N("D6"), vol: 0.022, hold: 0.035 },
     ],
   },
   chest: {
