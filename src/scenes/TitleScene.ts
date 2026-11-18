@@ -168,7 +168,7 @@ export class TitleScene extends Phaser.Scene {
       this.add.container(cardX(slot), CARD_Y, [bg, ...lines, ...hero]);
       bg.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
         Sfx.ensure();
-        if (settings.isActive()) return;
+        if (settings.isActive() || this.started) return;
         if (mode !== "menu") showMenu();
         else if (slot === GameState.saveSlot) enter();
         else pickSlot(slot);
@@ -281,7 +281,7 @@ export class TitleScene extends Phaser.Scene {
           b.on("pointerout", () => b.setColor("#8ecbff"));
           b.on("pointerdown", () => {
             Sfx.ensure();
-            if (!settings.isActive()) run();
+            if (!settings.isActive() && !this.started) run();
           });
           return b;
         }),
@@ -479,6 +479,9 @@ export class TitleScene extends Phaser.Scene {
       // holding Q through the world's save-and-quit would land repeat Q
       // events here and delete the save that was just written
       if (e.repeat) return;
+      // the game is starting (its 400ms fade): U then Y here restored the
+      // save just set aside, for the new game's first save to overwrite
+      if (this.started) return;
       Sfx.ensure();
       if (settings.isActive() || picker.isActive() || nameEntry.isActive()) return;
       const key = e.key.toLowerCase();
@@ -521,7 +524,7 @@ export class TitleScene extends Phaser.Scene {
     // start fresh when there is none. During a Y/N it backs out instead.
     this.input.on("pointerdown", (_pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       Sfx.ensure();
-      if (settings.isActive() || picker.isActive() || nameEntry.isActive() || over.length > 0) return;
+      if (settings.isActive() || picker.isActive() || nameEntry.isActive() || over.length > 0 || this.started) return;
       if (mode !== "menu") showMenu();
       else enter();
     });
