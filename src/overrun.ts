@@ -101,10 +101,23 @@ export function meet(key: string, on: boolean, rand: () => number = Math.random)
   const def = ENEMIES[key] ?? ENEMIES.slime;
   const elite = rollElite(def, { arena: false, practice: false, abyss: false, battles: GameState.battles }, rand);
   const fight: Meeting = { overrun: false, elite };
-  if (!on || elite || def.boss || def.giant || def.rare) return fight;
-  if (!GameState.seenMonsters.includes(def.name)) return fight;
+  if (!on || elite) return fight;
+  const enemy = weakling(def);
+  return enemy ? { overrun: true, enemy } : fight;
+}
+
+// `def` as this hour scales it if the hero overruns it now, else null
+function weakling(def: (typeof ENEMIES)[string]): ReturnType<typeof scaleEnemy> | null {
+  if (def.boss || def.giant || def.rare) return null;
+  if (!GameState.seenMonsters.includes(def.name)) return null;
   const enemy = scaleEnemy(def, { night: isNight(), arena: false, abyss: null, ng: GameState.enemyScale() });
-  return outmatched(heroNow(), enemy) ? { overrun: true, enemy } : fight;
+  return outmatched(heroNow(), enemy) ? enemy : null;
+}
+
+/** Whether a `key` met now would be overrun, its elite roll aside: a roamer that knows it keeps its temper to itself (temper.ts). */
+export function overruns(key: string): boolean {
+  const def = ENEMIES[key];
+  return !!def && weakling(def) !== null;
 }
 
 export interface Overrun {

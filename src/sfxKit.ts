@@ -496,6 +496,21 @@ const GAME_KIT: Record<string, SfxProgram> = {
       { at: 0, dur: 0.05, wave: "pulse12", freq: N("E8"), vol: 0.007 },
     ],
   },
+  "roamer:alert": {
+    id: "roamer:alert",
+    kind: "se",
+    // a field's roamer has seen the hero and is coming (sceneCommon alert,
+    // temper.ts): at most one in 400ms however many saw. A warning, so
+    // under the battle's blows and in the cursor's band over the BGM
+    target: "a roamer spots the hero: two staccato square barks on one note, D5 with D6 over it, not the pickup's rising chirp",
+    pitch: "key",
+    steps: [
+      { at: 0, dur: 0.045, wave: "square", freq: N("D5"), vol: 0.045, hold: 0.03 },
+      { at: 0, dur: 0.045, wave: "pulse25", freq: N("D6"), vol: 0.03, hold: 0.03 },
+      { at: 0.085, dur: 0.06, wave: "square", freq: N("D5"), vol: 0.045, hold: 0.035 },
+      { at: 0.085, dur: 0.06, wave: "pulse25", freq: N("D6"), vol: 0.03, hold: 0.035 },
+    ],
+  },
   chest: {
     id: "chest",
     kind: "se",

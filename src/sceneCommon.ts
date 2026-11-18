@@ -44,6 +44,7 @@ import { SHARDS_PER_REGION, type ShardRegion, shardsFound } from "./shards";
 import { shrineSpent } from "./shrine";
 import { SKILL_SHEET_KEYS } from "./skillFx";
 import { TECH_SHEET_KEYS } from "./techFx";
+import { TEMPER_CALM_MS, TEMPER_HAVEN, TEMPER_LEASH, TEMPER_LOSE, type Temper, temperOf } from "./temper";
 import type { CompanionSprite } from "./ui/CompanionSprite";
 import type { DialogueBox } from "./ui/DialogueBox";
 import { helpOpen } from "./ui/HelpPopup";
@@ -1189,6 +1190,26 @@ export interface Roamer<K extends string = string> {
   // back while it stands (firstStrike)
   headX: number;
   headY: number;
+  // what it does about the hero and where that has got to (temper.ts);
+  // none for one that walks its box whoever is by
+  stalk?: Stalk;
+}
+
+/** A roamer with a temper's dealings with the hero (wanderRoamers). */
+interface Stalk {
+  temper: Temper;
+  // walking its box ("roam"), stood under its "!" ("alert"), after the hero
+  // or off from it ("chase", "flee"), spent and walking back ("home")
+  mode: "roam" | "alert" | "chase" | "flee" | "home";
+  // ms: left of the mode it is in (up, in "home"), and till it can see again
+  clock: number;
+  calm: number;
+  // a charge's line (Temper.locked)
+  dirX: number;
+  dirY: number;
+  // over the map's walls: it flies (monsters.ts `flying`)
+  flies: boolean;
+  mark: PixelText | null;
 }
 
 /**
@@ -1230,6 +1251,22 @@ export function addRoamer<K extends string>(
     headX: 0,
     headY: 0,
   };
+  const temper = boss ? null : temperOf(kind);
+  if (temper) {
+    const stalk: Stalk = {
+      temper,
+      mode: "roam",
+      clock: 0,
+      calm: TEMPER_CALM_MS + Math.random() * 1000,
+      dirX: 0,
+      dirY: 0,
+      flies: !!ENEMIES[kind]?.flying,
+      mark: null,
+    };
+    roamer.stalk = stalk;
+    // the "!" goes with it, should it fall mid-chase (an OVERRUN)
+    sprite.once(Phaser.GameObjects.Events.DESTROY, () => stalk.mark?.destroy());
+  }
   hop(scene, sprite);
   return roamer;
 }
@@ -1266,15 +1303,57 @@ export function hop(scene: Phaser.Scene, sprite: Phaser.Physics.Arcade.Sprite): 
   sprite.once(Phaser.GameObjects.Events.DESTROY, () => tween.remove());
 }
 
+/** What the roamers hunt, and the ground they do it over (wanderRoamers). */
+export interface Hunt {
+  hero: { x: number; y: number };
+  level: readonly (readonly number[])[];
+  // the way in, about which the hero is not seen (TEMPER_HAVEN)
+  haven?: { x: number; y: number };
+}
+
+// a roamer's feet under its sprite's middle, for the cell it stands in
+const ROAMER_FEET_DY = 16;
+// the "!" over one that has seen the hero: red for one coming, the runner's
+// yellow for one going (ui/Runner.ts)
+const MARK_DY = 40;
+const MARK_COLORS: Record<Temper["way"], string> = { bold: "#f87171", shy: "#fde047" };
+// it stays over the first of the chase, so a 200ms windup still shows it
+const MARK_OVER_MS = 350;
+// one spent walks home at this (px a second) or its own pace, and after
+// HOME_STUCK_MS on the way goes over whatever it was walking round
+const HOME_SPEED = 100;
+const HOME_STUCK_MS = 3000;
+// the same sound from a whole pack that saw the hero at once
+const ALERT_SFX_GAP_MS = 400;
+let alertSfxAt = 0;
+
 /**
  * A frame of every roamer's wander: a pause, then a walk at its speed to a
  * new spot in its box, kept inside the box whatever pushed it. The scenes
  * run it under a panel and on the way out as well: a roamer left on its
  * last velocity walked off across the map until the title came.
+ *
+ * With a `hunt` the kinds with a temper (temper.ts) look out for the hero
+ * as they go: the scenes pass it only while the hero is free to walk, and
+ * without it whatever was chasing goes home.
  */
-export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
+export function wanderRoamers(roamers: readonly Roamer[], delta: number, hunt?: Hunt): void {
   for (const r of roamers) {
+    const st = r.stalk;
+    if (st && st.mode !== "roam") {
+      if (hunt) pursue(r, st, delta, hunt);
+      else if (st.mode === "home") goHome(r, st, delta);
+      else spend(r, st);
+      continue;
+    }
     const s = r.sprite;
+    if (st) {
+      st.calm -= delta;
+      if (hunt && st.calm <= 0 && !sheltered(hunt) && sees(r, st.temper, hunt.hero)) {
+        alert(r, st, hunt.hero);
+        continue;
+      }
+    }
     if (r.wait > 0) {
       r.wait -= delta;
       if (r.wait <= 0) {
@@ -1297,6 +1376,137 @@ export function wanderRoamers(roamers: readonly Roamer[], delta: number): void {
     s.x = Phaser.Math.Clamp(s.x, r.minX, r.maxX);
     s.y = Phaser.Math.Clamp(s.y, r.minY, r.maxY);
   }
+}
+
+function sheltered(hunt: Hunt): boolean {
+  return !!hunt.haven && Math.hypot(hunt.hero.x - hunt.haven.x, hunt.hero.y - hunt.haven.y) < TEMPER_HAVEN;
+}
+
+// Within its notice and not behind it: the cone at its back is the one an
+// AMBUSH comes from (firstStrike), so what the hero can walk up on unseen
+// is exactly what it can strike first. One yet to take a step has no back.
+function sees(r: Roamer, temper: Temper, hero: { x: number; y: number }): boolean {
+  const dx = hero.x - r.sprite.x;
+  const dy = hero.y - r.sprite.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist >= temper.notice) return false;
+  return dist === 0 || (r.headX * dx + r.headY * dy) / dist > -FIRST_STRIKE_COS;
+}
+
+function alert(r: Roamer, st: Stalk, hero: { x: number; y: number }): void {
+  const s = r.sprite;
+  const way = st.temper.way;
+  s.setVelocity(0, 0);
+  st.mode = "alert";
+  st.clock = st.temper.windup;
+  // turned to the hero, or away to run: no back to walk into from here on
+  const dx = hero.x - s.x;
+  const dy = hero.y - s.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const sign = way === "bold" ? 1 : -1;
+  r.headX = (sign * dx) / dist;
+  r.headY = (sign * dy) / dist;
+  st.mark = s.scene.add
+    .pixelText(s.x, s.y - MARK_DY, "!", retroStyle(6, MARK_COLORS[way]))
+    .setOrigin(0.5, 1)
+    .setStroke("#1a1028", 4)
+    .setDepth(11);
+  const now = s.scene.game.loop.time;
+  if (way === "bold" && now - alertSfxAt >= ALERT_SFX_GAP_MS) {
+    alertSfxAt = now;
+    Sfx.emit("roamer:alert");
+  }
+}
+
+// a frame of one that has seen the hero: its windup, its chase or flight, its walk home
+function pursue(r: Roamer, st: Stalk, delta: number, hunt: Hunt): void {
+  const s = r.sprite;
+  const temper = st.temper;
+  if (st.mode === "home") {
+    goHome(r, st, delta, hunt.level);
+    return;
+  }
+  st.clock -= delta;
+  const dx = hunt.hero.x - s.x;
+  const dy = hunt.hero.y - s.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  if (st.mode === "alert") {
+    st.mark?.setPosition(s.x, s.y - MARK_DY);
+    if (st.clock > 0) return;
+    st.mode = temper.way === "bold" ? "chase" : "flee";
+    st.clock = temper.grit;
+    st.dirX = dx / dist;
+    st.dirY = dy / dist;
+  }
+  if (st.clock <= 0 || dist > temper.notice * TEMPER_LOSE) {
+    spend(r, st);
+    return;
+  }
+  if (st.mark && temper.grit - st.clock > MARK_OVER_MS) dropMark(st);
+  const sign = st.mode === "chase" ? 1 : -1;
+  const [ux, uy] = temper.locked ? [st.dirX, st.dirY] : [(sign * dx) / dist, (sign * dy) / dist];
+  r.headX = ux;
+  r.headY = uy;
+  const moved = walkRoamer(r, ux * temper.speed, uy * temper.speed, delta, st.flies ? undefined : hunt.level);
+  // a charge that has run into something is over
+  if (temper.locked && !moved) spend(r, st);
+  // one with nowhere left to run turns on the hero: no back to strike
+  else if (st.mode === "flee" && !moved) {
+    r.headX = -ux;
+    r.headY = -uy;
+  }
+  st.mark?.setPosition(s.x, s.y - MARK_DY);
+}
+
+// Sets the roamer's velocity for this frame, less whatever of it would take
+// its feet into a wall of `level` (none for one that flies) or past its
+// leash; whether any is left.
+function walkRoamer(r: Roamer, vx: number, vy: number, delta: number, level?: readonly (readonly number[])[]): boolean {
+  const s = r.sprite;
+  const dt = delta / 1000;
+  const open = (x: number, y: number): boolean =>
+    x >= r.minX - TEMPER_LEASH &&
+    x <= r.maxX + TEMPER_LEASH &&
+    y >= r.minY - TEMPER_LEASH &&
+    y <= r.maxY + TEMPER_LEASH &&
+    (!level || isWalkableCell(level, Math.floor(x / TILE), Math.floor((y + ROAMER_FEET_DY) / TILE)));
+  if (!open(s.x + vx * dt, s.y)) vx = 0;
+  if (!open(s.x + vx * dt, s.y + vy * dt)) vy = 0;
+  s.setVelocity(vx, vy);
+  return vx !== 0 || vy !== 0;
+}
+
+function dropMark(st: Stalk): void {
+  st.mark?.destroy();
+  st.mark = null;
+}
+
+// done with the hero: home to a spot in its box, seeing nothing on the way
+function spend(r: Roamer, st: Stalk): void {
+  dropMark(st);
+  st.mode = "home";
+  st.clock = 0;
+  r.targetX = r.minX + Math.random() * (r.maxX - r.minX);
+  r.targetY = r.minY + Math.random() * (r.maxY - r.minY);
+}
+
+function goHome(r: Roamer, st: Stalk, delta: number, level?: readonly (readonly number[])[]): void {
+  const s = r.sprite;
+  st.clock += delta;
+  const dx = r.targetX - s.x;
+  const dy = r.targetY - s.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 4) {
+    s.setVelocity(0, 0);
+    st.mode = "roam";
+    r.wait = 300 + Math.random() * 600;
+    st.calm = TEMPER_CALM_MS;
+    return;
+  }
+  const speed = Math.max(HOME_SPEED, r.speed);
+  r.headX = dx / dist;
+  r.headY = dy / dist;
+  walkRoamer(r, r.headX * speed, r.headY * speed, delta, st.flies || st.clock > HOME_STUCK_MS ? undefined : level);
 }
 
 // FIRST STRIKE: who gets a blow in before the battle's first turn, by how a

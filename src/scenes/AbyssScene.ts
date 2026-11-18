@@ -641,7 +641,9 @@ export class AbyssScene extends Phaser.Scene {
     }
 
     const moving = this.walk.step(this.leaving);
-    wanderRoamers(this.roamers, delta);
+    // the roamers with a temper (temper.ts) look out for a hero free to walk
+    const hunted = !this.leaving && !this.fieldKeys.leaving();
+    wanderRoamers(this.roamers, delta, hunted ? { hero: this.player, level: this.floor.tiles } : undefined);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);

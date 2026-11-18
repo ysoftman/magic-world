@@ -439,7 +439,9 @@ export class SnowScene extends Phaser.Scene {
     // could land on the exit, which took the hero back to town the moment the
     // battle returned
     const moving = this.walk.step(this.exitingSnow);
-    wanderRoamers(this.roamers, delta);
+    // the roamers with a temper (temper.ts) look out for a hero free to walk
+    const hunted = !this.exitingSnow && !this.fieldKeys.leaving();
+    wanderRoamers(this.roamers, delta, hunted ? { hero: this.player, level: this.level, haven: SNOW_ENTRY } : undefined);
     const nightFade = this.night.update();
     this.fireflies.emitting = nightFade > 0.05;
     this.fireflies.setAlpha(nightFade);

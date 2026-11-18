@@ -458,7 +458,9 @@ export class DungeonScene extends Phaser.Scene {
     // could land on the exit or the ABYSS stair, which took the hero there
     // (the stair at B1, unasked) the moment the battle returned
     const moving = this.walk.step(this.exitingDungeon);
-    wanderRoamers(this.roamers, delta);
+    // the roamers with a temper (temper.ts) look out for a hero free to walk
+    const hunted = !this.exitingDungeon && !this.fieldKeys.leaving();
+    wanderRoamers(this.roamers, delta, hunted ? { hero: this.player, level: this.level, haven: DUNGEON_ENTRY } : undefined);
     this.night.update();
     this.minimap.update();
     this.checkEncounter(delta, moving);
