@@ -3310,7 +3310,10 @@ export class BattleScene extends Phaser.Scene {
       this.moved = true;
       this.updateEnemyStatus();
       // the turns since a thaw count through a move's turn as any other's
-      if (this.freezeGrace > 0) this.freezeGrace -= 1;
+      // (a boss's move rides on its turn, which counts it below: counted here
+      // too, GLACIER GOLEM's ARMOR turn spent two of the thaw's turns and its
+      // next FROST BREATH froze the hero again)
+      if (this.freezeGrace > 0 && !this.enemy.move.at) this.freezeGrace -= 1;
       await this.enemyMove(this.enemy.move);
       // a boss's is on top of its turn, not in place of it: in its place it
       // took the turn's blow or wind-up with it and the fight got easier
