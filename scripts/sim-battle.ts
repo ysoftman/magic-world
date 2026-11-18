@@ -95,7 +95,9 @@ const {
   SPELL_EFFECT_WEAK_MULT,
   WARD_TURNS,
   WEAKNESS_MULT,
+  bossBlastDamage,
   bossStrikeDamage,
+  flurryCap,
   comboBonus,
   companionAtk,
   defendedDamage,
@@ -166,6 +168,10 @@ type Elem = Spell["element"];
 // parried wind-up's strike then cost the foe its next turn (staggered):
 // with might, might+vigor at KING/TROLL/MOSS, alone, 43/39/43% became
 // 41/37/39% at --parry 0.4 and 39/35/40% became 35/32/34% at 0.8.
+// The announced blows were then raised so that answering them decides the
+// fight (battleRules BOSS_TELLS note has the table: --nobrace 70/69/47/57/43%
+// beside the WOLF, the default 98/99/80/100/84%, the answering hero 100%),
+// which is the target a retune is held to now, not the 95% alone above.
 // A boss falling before
 // its intended level is seen, not tuned: those comments aim at a threat, not
 // a win rate, and HARD MODE is the challenge. An unarmed Lv8 hero beats the
@@ -214,6 +220,9 @@ if (args.includes("--help") || args.includes("-h")) {
   --skills     the hero casts SKILLs too, greedily (the header comment)
   --greedy     that greedy pick from the spells alone, to set --skills against
   --skill-table  each attack spell's and skill's damage a cast, and per MP, then exits
+  --nobrace    the hero answers no wind-up (no WARD or DEFEND for a CHG)
+  --brace      the hero braces a boss's announced blast too (SPLASH, SPORES, SWEEP), not only its wind-up
+  --noward     the braces are DEFENDs, WARD never cast
   late-game kits (none changes the default run):
   --refine     the GEAR columns' weapon and armor at BLACKSMITH REFINE +N
   --forged     the GEAR columns in DRAKE BLADE + GLACIER MAIL, not the intended gear
@@ -733,8 +742,11 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         buffed = true;
         if (kind === "armor") armor = { def, turns: foe.move.turns ?? 2 };
       } else if (kind === "flurry") {
-        for (let i = 0; i < (foe.move.hits ?? 2) && hp > 0; i++)
-          blow(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? MOVE_FLURRY_MULT));
+        // a boss's blows stop at their share of the move's cap
+        const hits = foe.move.hits ?? 2;
+        const cap = foe.move.at ? flurryCap(hero.maxHp, hits) : Number.POSITIVE_INFINITY;
+        for (let i = 0; i < hits && hp > 0; i++)
+          blow(Math.min(cap, moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? MOVE_FLURRY_MULT)));
       } else if (kind === "afflict") {
         if (!blow(rollDamage(foe.atk, hero.def).dmg) && hp > 0) {
           if (foe.move.status === "poison" && !hero.resists.poison) poisonTurns = POISON_TURNS;
@@ -742,7 +754,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
         }
       } else if (kind === "blast") {
         // BattleScene enemyBlast(): no PARRY, the guard as ever
-        hurt(guard(moveDamage(rollDamage(foe.atk, hero.def).dmg, foe.move.mult ?? 1), true));
+        hurt(guard(bossBlastDamage(foe.atk, (foe.move.mult ?? 1) * foe.heavy, hero.def, hero.maxHp), true));
         if (foe.move.poison && hp > 0 && poisonTurns === 0 && !hero.resists.poison) poisonTurns = POISON_TURNS;
         riposte();
         if (foe.curHp <= 0) return;
@@ -760,7 +772,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (freezeGrace > 0) freezeGrace -= 1;
       charging = false;
       tellCooldown = BOSS_TELL_COOLDOWN;
-      const raw = bossStrikeDamage(foe.atk, tell.mult, hero.def, hero.maxHp);
+      const raw = bossStrikeDamage(foe.atk, tell.mult * foe.heavy, hero.def, hero.maxHp);
       let parried = false;
       if (breath) hurt(guard(raw, true));
       else parried = blow(raw, true);
@@ -770,7 +782,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       return;
     }
     if (tell && tellCooldown > 0) tellCooldown -= 1;
-    else if (tell && !frozen && Math.random() < BOSS_TELL_CHANCE) {
+    else if (tell && !frozen && Math.random() < (tell.chance ?? BOSS_TELL_CHANCE)) {
       if (freezeGrace > 0) freezeGrace -= 1;
       charging = true;
       return;

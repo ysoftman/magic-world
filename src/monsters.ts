@@ -24,8 +24,12 @@ export interface EnemySpecial {
 //   harden  no blow: its DEF up for the rest of the fight, once
 //   flurry  `hits` blows (2) at `mult` (battleRules MOVE_FLURRY_MULT) each,
 //           each its own PARRY
-//   blast   one hit at `mult` that no PARRY meets (a wave, a cloud: nothing
-//           to time), WARD and DEFEND as ever; `poison` leaves the hero's
+//   blast   one hit that no PARRY meets (a wave, a cloud: nothing to time),
+//           rolled as a wind-up's strike is: ATK x `mult` before DEF, no
+//           crit, capped (battleRules bossBlastDamage); it was the plain
+//           roll x `mult` after DEF, which a hero's DEF cut to a scratch
+//           (SPLASH 5-8 of a Lv6 hero's 55 HP). WARD and DEFEND as ever;
+//           `poison` leaves the hero's
 //   armor   no blow: its DEF up for `turns` of its turns
 //   afflict a blow that leaves `status` on the hero unless parried; `name` is
 //           the status ("POISON", "FREEZE"), as the bestiary's CAN note had it
@@ -147,7 +151,12 @@ export const ENEMIES: Record<string, EnemyDef> = {
     // ATK 9 -> 10 keeps the threat the shorter fight lost: ~62% of max HP
     // gone solo, as at 120 / 9 (Lv6, SWORD + SHIELD). With its SPLASH (below)
     // and DEFEND's COUNTER since: 85% solo bracing its wind-ups, 70% its
-    // SPLASH too, 102% neither (sim-battle's header).
+    // SPLASH too, 102% neither (sim-battle's header). Its BODY SLAM and
+    // SPLASH were then raised until answering them decides the fight
+    // (battleRules BOSS_TELLS note); HP and ATK stayed. The first boss is
+    // met without a companion more than any other, so its SPLASH is the
+    // lightest blast: a hero alone who braces only the wind-ups wins 71%
+    // (57% at x2.7).
     hp: 100,
     atk: 10,
     def: 2,
@@ -155,7 +164,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 120,
     boss: true,
     weakness: "bolt",
-    move: { kind: "blast", name: "SPLASH", chance: 0, at: [0.7, 0.35], mult: 2.5 },
+    move: { kind: "blast", name: "SPLASH", chance: 0, at: [0.7, 0.35], mult: 2.3 },
   },
   troll: {
     name: "TROLL KING",
@@ -165,7 +174,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     // WOLF at x0.8 (never under 3), and ATK 13 -> 14 for the threat: 57% of
     // max HP lost solo where 74% was, 39% with the WOLF where 35% was. With
     // its FRENZY (below) and DEFEND's COUNTER since: 90% solo, 46% with the
-    // WOLF (sim-battle's header).
+    // WOLF (sim-battle's header). FRENZY's blows x0.9 -> x2 since (3-4 of
+    // 65 HP each was nothing to PARRY for), each capped (battleRules
+    // flurryCap) so the three can't take over half of max HP by night.
     hp: 110,
     atk: 14,
     def: 3,
@@ -173,7 +184,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 200,
     giant: true,
     weakness: "fire",
-    move: { kind: "flurry", name: "FRENZY", chance: 0, at: [0.7, 0.35], hits: 3, mult: 0.9 },
+    move: { kind: "flurry", name: "FRENZY", chance: 0, at: [0.7, 0.35], hits: 3, mult: 2 },
   },
   wasp: {
     name: "WASP",
@@ -226,7 +237,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     boss: true, // FOREST story boss: same flag/uncatchable path as KING SLIME
     weakness: "fire", // a mossy plant body burns
     special: { kind: "regen", chance: 0.25 }, // regrows its moss: rewards bursting it down
-    move: { kind: "blast", name: "SPORES", chance: 0, at: [0.7, 0.35], mult: 1.3, poison: true },
+    move: { kind: "blast", name: "SPORES", chance: 0, at: [0.7, 0.35], mult: 2.4, poison: true },
   },
   wisp: {
     name: "NIGHT WISP",
@@ -347,7 +358,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     gold: 700,
     boss: true, // VOLCANO superboss: the last region, past the GLACIER GOLEM
     weakness: "ice",
-    move: { kind: "blast", name: "SWEEP", chance: 0, at: [0.75, 0.5, 0.25], mult: 3 },
+    move: { kind: "blast", name: "SWEEP", chance: 0, at: [0.75, 0.5, 0.25], mult: 2.6 },
   },
 };
 

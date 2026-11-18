@@ -9,6 +9,7 @@ import {
   BOSS_TELLS,
   type BossTell,
   BURN_PROOF,
+  bossBlastDamage,
   bossStrikeDamage,
   CHILL_PROOF,
   COMBO_CAP,
@@ -23,6 +24,7 @@ import {
   edgedDef,
   edgeOf,
   FREEZE_GRACE_TURNS,
+  flurryCap,
   guardedDamage,
   hardenDef,
   MOVE_FLURRY_MULT,
@@ -634,7 +636,7 @@ const REGION_BATTLE_THEMES: Record<string, typeof BATTLE_THEME> = {
 };
 
 export class BattleScene extends Phaser.Scene {
-  private enemy!: EnemyDef & { curHp: number };
+  private enemy!: EnemyDef & { curHp: number; heavy: number };
   private enemySprite!: Phaser.GameObjects.Sprite;
   private playerSprite!: Phaser.GameObjects.Sprite;
   private weaponOverlay!: Phaser.GameObjects.Sprite;
@@ -3394,13 +3396,17 @@ export class BattleScene extends Phaser.Scene {
   // One blow of the foe's on the hero, all but its line: the lunge (and its
   // PARRY), the damage at `mult` of the roll through WARD/GUARD/DEFEND, the
   // sparks (`club`: the TROLL KING's burst of dust instead) and the knock-back.
-  private async enemyBlow(mult = 1, club = false): Promise<{ dmg: number; crit: boolean; parried: boolean; note: string }> {
+  private async enemyBlow(
+    mult = 1,
+    club = false,
+    cap = Number.POSITIVE_INFINITY,
+  ): Promise<{ dmg: number; crit: boolean; parried: boolean; note: string }> {
     const parried = await this.enemyLunge();
     // impact thud lands with the damage, not at the wind-up
     if (!parried) Sfx.hit();
     const hit = rollDamage(this.enemy.atk, this.heroDef());
     const crit = hit.crit;
-    const guard = this.guardHit(mult === 1 ? hit.dmg : moveDamage(hit.dmg, mult));
+    const guard = this.guardHit(Math.min(cap, mult === 1 ? hit.dmg : moveDamage(hit.dmg, mult)));
     const { note, braced } = guard;
     const dmg = parried ? parriedDamage(guard.dmg) : guard.dmg;
     if (crit) Sfx.critical();
@@ -3472,7 +3478,8 @@ export class BattleScene extends Phaser.Scene {
       for (let i = 0; i < hits && GameState.player.hp > 0; i++) {
         // home before it comes again: the next lunge starts from where it stands
         if (i > 0) await this.wait(this.anim(LUNGE_BACK_MS) + 20);
-        const blow = await this.enemyBlow(mult, !!move.at);
+        // a boss's blows stop at their share of the move's cap
+        const blow = await this.enemyBlow(mult, !!move.at, move.at ? flurryCap(GameState.effMaxHp(), hits) : undefined);
         dealt.push(blow.dmg);
         note = blow.note || note;
       }
@@ -3530,7 +3537,7 @@ export class BattleScene extends Phaser.Scene {
     Sfx.hit();
     Sfx.critical();
     const { dmg, note, braced, countered } = this.guardHit(
-      moveDamage(rollDamage(this.enemy.atk, this.heroDef()).dmg, move.mult ?? 1),
+      bossBlastDamage(this.enemy.atk, (move.mult ?? 1) * this.enemy.heavy, this.heroDef(), GameState.effMaxHp()),
       true,
     );
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);
@@ -3652,7 +3659,7 @@ export class BattleScene extends Phaser.Scene {
     const parried = !breath && (await this.enemyLunge());
     if (!parried) Sfx.hit();
     Sfx.critical();
-    const guard = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult, this.heroDef(), GameState.effMaxHp()), true);
+    const guard = this.guardHit(bossStrikeDamage(this.enemy.atk, tell.mult * this.enemy.heavy, this.heroDef(), GameState.effMaxHp()), true);
     const { note, braced } = guard;
     const dmg = parried ? parriedDamage(guard.dmg) : guard.dmg;
     GameState.player.hp = Math.max(0, GameState.player.hp - dmg);

@@ -73,14 +73,33 @@ export const REGEN_PCT = 0.12;
 //   after DEF would only double a scratch. No crit roll: the telegraph is the
 //   big moment. At each boss's intended level and gear (KING Lv6 + SHIELD,
 //   TROLL Lv8 + IRON SHIELD, MOSS Lv12 + IRON, GLACIER Lv18 + MYTHRIL, DRAKE
-//   Lv24 + MYTHRIL, small bestiary DEF), an unanswered strike costs 13-42% of
-//   max HP, and up to 48-58% enraged. Bosses take no night stat bump (see
-//   init); only the wild TROLL KING can stack night on enrage (both multiply
-//   ATK), which would reach 82% but stops at the cap below. WARD halves that
-//   to at most 35%, and so does a DEFEND now (DEFEND_HEAVY_MULT), which
+//   Lv24 + MYTHRIL, small bestiary DEF), an unanswered strike costs 20-65% of
+//   max HP (the TROLL KING's up to the cap below), and the cap once enraged
+//   (DRAKE up to 60%). Bosses take no
+//   night stat bump (see init); the wild TROLL KING can stack night on
+//   enrage (both multiply ATK) and stops at the cap too. WARD halves that
+//   to at most 35%, and so does a DEFEND (DEFEND_HEAVY_MULT), which
 //   strikes back as well.
+//   The bosses' mults were 2.4-2.8 (13-42% of max HP), under which the
+//   story's bosses fell to a hero who answered nothing: 100% wins beside a
+//   WOLF with or without a DEFEND, so PARRY, DEFEND and WARD had no use.
+//   Sized now (with each boss's blast, monsters.ts) so that answering is
+//   what wins, 4000 fights a cell at the intended level and gear, KING/
+//   TROLL/MOSS/GLACIER/DRAKE, beside a WOLF and alone: nothing answered
+//   (sim-battle --nobrace) 70/69/47/57/43% and 21/15/5/7/18%; wind-ups
+//   braced, blasts not (its default) 98/99/80/100/84% and 71/59/54/72/57%;
+//   blasts braced too with --parry 0.4 --perfect 0.4 --limit 50 and the
+//   level's perks 100% all five and 99/94/99/98/93%. Two levels up the
+//   default is 100/100/95/100/95% beside the WOLF. The fights are no longer
+//   (--greedy/--skills rounds within 2 of before).
 // - BOSS_STRIKE_MAX_HP_SHARE: the strike never takes more than this share of
 //   max HP before WARD, so from full HP it can't kill, whatever stacks
+// - HEAVY_SCALED_SHARE (heavyShare): HARD MODE and the ABYSS scale a foe's
+//   ATK, which these mults multiply before DEF, so there a strike or blast
+//   keeps only that share of its mult (the whole of it until the scale
+//   passes 1 / share). Without it the mults above took HARD 1's FLAME DRAKE
+//   from 92% to 43% beside a WOLF and the B15 GUARDIAN from 100% to 88%
+//   (Lv30, forged kit, 3 HI-POTIONs); with it 87% and 100%, B20 90 -> 86%.
 // - BossTell.chance: a big ordinary foe's own odds (ORC, YETI, SALAMANDER),
 //   so the regions between the bosses ask for DEFEND too. Their fights last
 //   1.5-2.5 rounds, so a wind-up mostly asks whether to finish the foe
@@ -99,6 +118,9 @@ export const REGEN_PCT = 0.12;
 export const BOSS_TELL_CHANCE = 0.5;
 export const BOSS_TELL_COOLDOWN = 2;
 export const BOSS_STRIKE_MAX_HP_SHARE = 0.7;
+// a boss's second pattern (a blast, a flurry's blows together) stops lower:
+// it comes on top of that turn's blow or wind-up, which needs the room
+export const BOSS_MOVE_MAX_HP_SHARE = 0.5;
 
 export interface BossTell {
   warn: string; // the wind-up's line, <= 54 glyphs (one battle message row)
@@ -110,11 +132,11 @@ export interface BossTell {
 }
 
 export const BOSS_TELLS: Record<string, BossTell> = {
-  [ENEMIES.king.name]: { warn: "KING SLIME puffs up to pounce!", strike: "BODY SLAM", mult: 2.4, color: 0xffd166 },
-  [ENEMIES.troll.name]: { warn: "TROLL KING raises its club!", strike: "CLUB SMASH", mult: 2.4, color: 0xfbbf24 },
-  [ENEMIES.mossGolem.name]: { warn: "MOSS GOLEM's roots creep closer!", strike: "ROOT CRUSH", mult: 2.6, color: 0x86efac },
-  [ENEMIES.iceGolem.name]: { warn: "GLACIER GOLEM draws in frost...", strike: "FROST BREATH", mult: 2.6, color: 0x67e8f9, freezes: true },
-  [ENEMIES.flameDrake.name]: { warn: "FLAME DRAKE takes a deep breath...", strike: "INFERNO", mult: 2.8, color: 0xf97316 },
+  [ENEMIES.king.name]: { warn: "KING SLIME puffs up to pounce!", strike: "BODY SLAM", mult: 4, color: 0xffd166 },
+  [ENEMIES.troll.name]: { warn: "TROLL KING raises its club!", strike: "CLUB SMASH", mult: 3.8, color: 0xfbbf24 },
+  [ENEMIES.mossGolem.name]: { warn: "MOSS GOLEM's roots creep closer!", strike: "ROOT CRUSH", mult: 4, color: 0x86efac },
+  [ENEMIES.iceGolem.name]: { warn: "GLACIER GOLEM draws in frost...", strike: "FROST BREATH", mult: 3.6, color: 0x67e8f9, freezes: true },
+  [ENEMIES.flameDrake.name]: { warn: "FLAME DRAKE takes a deep breath...", strike: "INFERNO", mult: 3, color: 0xf97316 },
   [ENEMIES.orc.name]: { warn: "ORC raises its club high!", strike: "CLUB SMASH", mult: 2, color: 0xfca5a5, chance: 0.25 },
   [ENEMIES.yeti.name]: { warn: "YETI rears up, roaring!", strike: "MAUL", mult: 2.2, color: 0xe0f2fe, chance: 0.25 },
   [ENEMIES.salamander.name]: { warn: "SALAMANDER's throat glows red...", strike: "FLAME SPIT", mult: 2.2, color: 0xfb923c, chance: 0.25 },
@@ -852,11 +874,34 @@ export function captureChance(curHp: number, hp: number): number {
 
 // a telegraphed strike before WARD: ATK x mult x 0.8-1.2 less DEF, with the
 // usual floor, never over BOSS_STRIKE_MAX_HP_SHARE of max HP, at least 1
-export function bossStrikeDamage(atk: number, mult: number, def: number, maxHp: number, rand: () => number = Math.random): number {
+export function bossStrikeDamage(
+  atk: number,
+  mult: number,
+  def: number,
+  maxHp: number,
+  rand: () => number = Math.random,
+  share = BOSS_STRIKE_MAX_HP_SHARE,
+): number {
   const roll = Math.floor(atk * mult * (0.8 + rand() * 0.4));
-  const raw = Math.min(Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - def), Math.floor(maxHp * BOSS_STRIKE_MAX_HP_SHARE));
+  const raw = Math.min(Math.max(Math.ceil(roll * MIN_DAMAGE_SHARE), roll - def), Math.floor(maxHp * share));
   return Math.max(1, raw);
 }
+
+// A boss's blast (SPLASH, SPORES, SWEEP) is rolled as a strike is, ATK x
+// mult before DEF with no crit, and stops at BOSS_MOVE_MAX_HP_SHARE of max HP
+export const bossBlastDamage = (atk: number, mult: number, def: number, maxHp: number, rand: () => number = Math.random): number =>
+  bossStrikeDamage(atk, mult, def, maxHp, rand, BOSS_MOVE_MAX_HP_SHARE);
+
+// the most one blow of a boss's flurry (FRENZY) takes: the move's cap shared
+// out over its hits, at least 1
+export const flurryCap = (maxHp: number, hits: number): number => Math.max(1, Math.floor((maxHp * BOSS_MOVE_MAX_HP_SHARE) / hits));
+
+// The share of its mult an announced blow (a wind-up's strike, a boss's
+// blast) keeps on a foe whose stats are scaled by `stat` (HARD MODE, the
+// ABYSS): the scale already multiplies the ATK the mult is taken of, before
+// DEF, so the two together outgrew the hero.
+export const HEAVY_SCALED_SHARE = 0.78;
+export const heavyShare = (stat: number): number => (stat > 1 ? Math.max(HEAVY_SCALED_SHARE, 1 / stat) : 1);
 
 // a hit through WARD or BULWARK: halved, never below 1
 export const guardedDamage = (raw: number, halved: boolean): number => (halved ? Math.max(1, Math.ceil(raw * WARD_MULT)) : raw);
@@ -998,11 +1043,11 @@ export function scaleEnemy(
     rematch?: boolean;
     elite?: EliteKind | null;
   },
-): EnemyDef & { curHp: number } {
+): EnemyDef & { curHp: number; heavy: number } {
   // an elite (elite.ts) is its species with more HP, ATK, gold and EXP,
   // before anything below scales it
   const def = opts.elite ? eliteDef(species, opts.elite) : species;
-  const enemy = { ...def, curHp: def.hp };
+  const enemy = { ...def, curHp: def.hp, heavy: 1 };
   if (opts.night && !opts.arena) {
     if (!def.boss) {
       enemy.hp = Math.round(def.hp * NIGHT_STAT_MULT);
@@ -1016,6 +1061,8 @@ export function scaleEnemy(
   enemy.hp = Math.min(ENEMY_HP_MAX, Math.round(enemy.hp * ng.stat));
   enemy.curHp = enemy.hp;
   enemy.atk = Math.round(enemy.atk * ng.stat);
+  // bosses and giants only: an ORC's, YETI's or SALAMANDER's strike keeps its mult
+  if (def.boss || def.giant) enemy.heavy = heavyShare(ng.stat);
   enemy.exp = Math.round(enemy.exp * ng.loot);
   enemy.gold = Math.round(enemy.gold * ng.loot);
   if (opts.abyss?.guardian) enemy.gold = Math.round(enemy.gold * ABYSS_GUARDIAN_GOLD_SHARE);
