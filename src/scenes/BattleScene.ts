@@ -2283,7 +2283,7 @@ export class BattleScene extends Phaser.Scene {
   // A PERFECT's MP back (battleRules perfectMp), popped in the MP line's blue
   // under the PERFECT! label, right of its middle: "+5MP" is 96px, x 712..808
   // before a foe at 960, clear of a COUNTER! still fading to its left (to
-  // 708) and of the hero out at the foe (from 816, a boss's from 784). The MP
+  // 660) and of the hero out at the foe (from 816, a boss's from 784). The MP
   // figures blink white as they change. Nothing at full MP or in the yard
   // (refillHero keeps it full there).
   private mpBack(): void {
@@ -3592,7 +3592,11 @@ export class BattleScene extends Phaser.Scene {
   // come (all three a row higher): over the hero's head it lay on the number.
   private async counter(): Promise<void> {
     if (!this.running || this.frozen || GameState.player.hp <= 0 || this.enemy.curHp <= 0) return;
-    this.flashStatus("COUNTER!", "#fde047", this.playerSprite.x + 260, this.playerSprite.y - 20, 8);
+    // x 404..660: right of the hero at home (its sword tip at 400), and 52px
+    // (two of the popup's glyphs) short of a PERFECT's "+2MP" (mpBack, from 712),
+    // which pops on its row while it still fades: from 452, 4px apart, the
+    // two read as one phrase, "COUNTER! +2MP"
+    this.flashStatus("COUNTER!", "#fde047", this.playerSprite.x + 212, this.playerSprite.y - 20, 8);
     await this.playerAttack();
   }
 
