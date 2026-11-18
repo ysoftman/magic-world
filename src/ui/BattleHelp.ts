@@ -35,8 +35,8 @@ const rows = (): [string, string][] => [
   [
     "PERFECT",
     keyHint(
-      `Any key as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}.`,
-      `Tap as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}.`,
+      `Any key as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}, +MP.`,
+      `Tap as FIGHT's frame shuts gold: +${pct(PERFECT_MULT - 1)}, +MP.`,
     ),
   ],
   ["COMBO", `FIGHTs in a row: +${pct(COMBO_PCT)} each, up to +${pct(COMBO_PCT * COMBO_CAP)}.`],

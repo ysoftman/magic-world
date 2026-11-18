@@ -34,6 +34,7 @@ import {
   POISON_TURNS,
   parriedDamage,
   perfectDamage,
+  perfectMp,
   poisonTickDamage,
   REACTIONS,
   reactionDamage,
@@ -2149,7 +2150,8 @@ export class BattleScene extends Phaser.Scene {
   // before the first menu of a later fight than PARRY's, and of one that has
   // said no other yet: the first fight already stops for PARRY (and often
   // the foe's tag), and its own hint, ANY KEY:PERFECT, has been up over
-  // every FIGHT since; 52 glyphs (touch 51), in the battle help's words.
+  // every FIGHT since; 51 glyphs (touch 47), in the battle help's words,
+  // the MP a PERFECT gives back with them.
   private async tip(id: "parry" | "limit" | "intent" | "react" | "charge" | "perfect"): Promise<void> {
     const seen = GameState.seenTips;
     if (!seen || seen.includes(id) || this.practice || !this.running || GameState.player.hp <= 0) return;
@@ -2169,7 +2171,7 @@ export class BattleScene extends Phaser.Scene {
       );
     if (id === "perfect")
       return this.say(
-        keyHint("TIP: press any key as the frame shuts gold: PERFECT.", "TIP: tap as the frame shuts gold for a PERFECT hit."),
+        keyHint("TIP: any key as the frame shuts gold: PERFECT, +MP.", "TIP: tap as the frame shuts gold: PERFECT, +MP."),
         true,
       );
     // 52 glyphs
@@ -2236,6 +2238,7 @@ export class BattleScene extends Phaser.Scene {
         this.glowBurst.setPosition(this.enemySprite.x, this.enemySprite.y);
         this.glowBurst.explode(12);
         this.timedNote("PERFECT!", true);
+        this.mpBack();
       } else if (press != null) this.timedNote("EARLY", true);
       else {
         this.timedLate = now + PARRY_LATE_MS;
@@ -2275,6 +2278,23 @@ export class BattleScene extends Phaser.Scene {
     await this.lunge(crit, onContact, hold);
     await line;
     this.restoreEnemyTint();
+  }
+
+  // A PERFECT's MP back (battleRules perfectMp), popped in the MP line's blue
+  // under the PERFECT! label, right of its middle: "+5MP" is 96px, x 712..808
+  // before a foe at 960, clear of a COUNTER! still fading to its left (to
+  // 708) and of the hero out at the foe (from 816, a boss's from 784). The MP
+  // figures blink white as they change. Nothing at full MP or in the yard
+  // (refillHero keeps it full there).
+  private mpBack(): void {
+    const p = GameState.player;
+    const mp = this.practice ? 0 : Math.min(perfectMp(p.maxMp), p.maxMp - p.mp);
+    if (mp <= 0) return;
+    p.mp += mp;
+    this.updatePlayerStats();
+    this.flashStatus(`+${mp}MP`, "#8ecbff", this.enemySprite.x - 200, this.playerSprite.y - 54, 6);
+    this.playerMpText.setColor("#ffffff");
+    this.time.delayedCall(250, () => this.playerMpText.setColor("#8ecbff"));
   }
 
   // a struck fighter's knock-back along the ground (dir 1 pushes it right)

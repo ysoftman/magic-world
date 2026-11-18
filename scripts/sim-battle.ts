@@ -35,7 +35,8 @@
 // --parry P and --perfect P are the share (0..1) of the foe's blows the
 // player PARRIES and of FIGHTs timed PERFECT (BattleScene enemyLunge,
 // playerAttack; battleRules parriedDamage, perfectDamage): a parried blow
-// brings no poison or freeze either, and fills LIMIT_PARRY of the gauge.
+// brings no poison or freeze either, and fills LIMIT_PARRY of the gauge;
+// a PERFECT gives back perfectMp of the hero's MP.
 // 0.4 is a player who tries, 0.8 one who has it down; left out, none.
 //
 // --perks a,b,... gives the hero those perks (perks.ts keys, whatever its
@@ -107,6 +108,7 @@ const {
   guardedDamage,
   parriedDamage,
   perfectDamage,
+  perfectMp,
   poisonTickDamage,
   hardenDef,
   MOVE_FLURRY_MULT,
@@ -587,7 +589,9 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     const opener = opened ? 1 : hero.edge.opener;
     opened = true;
     const total = Math.max(1, Math.floor(dmg * (1 + comboBonus(combo) * (1 + perk("flow"))) * opener));
-    foe.curHp = Math.max(0, foe.curHp - (Math.random() < PERFECT ? perfectDamage(total) : total));
+    const perfect = Math.random() < PERFECT;
+    foe.curHp = Math.max(0, foe.curHp - (perfect ? perfectDamage(total) : total));
+    if (perfect) mp = Math.min(hero.maxMp, mp + perfectMp(hero.maxMp));
     if (foe.curHp > 0 && enemyDot === null && !BURN_PROOF.includes(foe.name) && Math.random() < hero.edge.burn) {
       enemyDot = COMPANION_DOT_TURNS;
       dotKind = "BRN";

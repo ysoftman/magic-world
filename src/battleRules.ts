@@ -965,6 +965,13 @@ export function moveDue(move: EnemyMove, s: { used: number; curHp: number; hp: n
 export const PERFECT_MULT = 1.25;
 export const perfectDamage = (dmg: number): number => Math.max(dmg + 1, Math.round(dmg * PERFECT_MULT));
 
+// A PERFECT also hands back this share of the hero's max MP (at least 1):
+// four of them pay for a weapon technique (20% of max MP). A win's +2 MP was
+// all an ordinary fight returned, so the skill list stayed shut outside boss
+// fights; this lets timing pay for it. Not in the training yard.
+export const PERFECT_MP_SHARE = 0.05;
+export const perfectMp = (maxMp: number): number => Math.max(1, Math.round(maxMp * PERFECT_MP_SHARE));
+
 // a round's poison tick on the hero, which never takes the last HP
 export const poisonTickDamage = (maxHp: number, hp: number): number => Math.min(Math.max(1, Math.floor(maxHp * POISON_PCT)), hp - 1);
 
