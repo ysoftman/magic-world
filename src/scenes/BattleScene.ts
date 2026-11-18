@@ -95,6 +95,7 @@ import { playSkill, SKILL_HITS, SKILL_SHEET_KEYS, type SkillStage } from "../ski
 import { playSkillSfx, skillSfxHits } from "../skillSfx";
 import { playSoul, warmSoul } from "../soulFx";
 import { breakOf, StatusFx, type StatusKind } from "../statusFx";
+import { type BossStory, bossStory } from "../story";
 import { playTech, TECH_HITS, TECH_MELEE, TECH_SHEET_KEYS } from "../techFx";
 import { rollTreasureMap } from "../treasure";
 import { BattleHelp } from "../ui/BattleHelp";
@@ -737,6 +738,10 @@ export class BattleScene extends Phaser.Scene {
   private elite: EliteKind | null = null;
   // a seal's keeper (seals.ts): the name the opening line gives it
   private keeperName: string | null = null;
+  // the boss's story lines (story.ts) for its opening and its fall: only in
+  // its own lair and until it first falls (a rematch, an ARENA round, an
+  // ABYSS GUARDIAN, a seal's keeper and the yard keep the plain lines)
+  private story: BossStory | null = null;
   // who strikes before the first turn (init's `opening`), if either
   private opening: "hero" | "foe" | null = null;
   // a first-time tip said in this fight (tip()): PERFECT's waits for a fight
@@ -936,6 +941,8 @@ export class BattleScene extends Phaser.Scene {
     const fought = { arena: !!this.arena, practice: !!this.practice, abyss: !!this.abyss, battles: GameState.battles };
     this.elite = data?.keeper?.elite ?? (data && "elite" in data ? (data.elite ?? null) : rollElite(def, fought));
     this.keeperName = data?.keeper?.name ?? null;
+    const plain = !!this.arena || !!this.abyss || !!this.practice || !!data?.keeper || !!this.elite || this.rematch;
+    this.story = plain ? null : bossStory(data?.enemy ?? "");
     this.opening = data?.opening ?? null;
     this.enemy = scaleEnemy(def, {
       night: this.night,
@@ -1991,7 +1998,7 @@ export class BattleScene extends Phaser.Scene {
     // every fight. It stays in the box until the first action's line.
     const intro = this.arena
       ? `ROUND ${this.arena.round + 1}: ${this.enemy.name}!`
-      : `${this.keeperName ?? this.enemy.name} ${this.keeperName ? "rises" : "blocks your way"}!`;
+      : (this.story?.intro ?? `${this.keeperName ?? this.enemy.name} ${this.keeperName ? "rises" : "blocks your way"}!`);
     // An elite (elite.ts) is named in the line and says what it does under it,
     // beside the rest's note: "ELITE: much tougher!  Well rested: your WARD
     // is up!" is 51 of a row's 54 glyphs, "STURDY MAGMA SLIME blocks your
@@ -4563,7 +4570,9 @@ export class BattleScene extends Phaser.Scene {
         this.fxOn(this.playerSprite, "fx-levelup", 1100);
         await this.say("You found a TREASURE MAP!\nRead it in ITEMS (I), page 3.", true);
       }
-      if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`, true);
+      // the TROLL KING, a giant, has a line only through its story
+      if (this.story) await this.say(this.story.fall, true);
+      else if (this.enemy.boss) await this.say(`The ${this.enemy.name} is no more!`, true);
     }
     GameState.save();
     // the forest boss closes the story's first part: the ending's TO BE
