@@ -933,7 +933,8 @@ export const GameState = {
   // the day's turn) reads it as a kill bounty's.
   syncBounty(): void {
     const b = this.bounty;
-    if (b && isBountyKind(b.kind) && !b.claimed) b.have = deedProgress(b.kind, b.snap ?? 0, this.deedCounters());
+    // (while it is still its day, as a kill bounty's count: payout.ts)
+    if (b && isBountyKind(b.kind) && !b.claimed && b.day === econDay()) b.have = deedProgress(b.kind, b.snap ?? 0, this.deedCounters());
   },
   // Whether today's omen favors `b` (bounties.ts OMEN_DEED, or a GOLD RUSH's
   // field for a kill bounty): the board's "THE OMEN FAVORS IT."

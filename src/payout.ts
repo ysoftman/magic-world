@@ -9,7 +9,7 @@ import type { MealDef } from "./cooking";
 import { MATERIALS, rollDrop } from "./drops";
 import { ELITE_DROP_MULT, type EliteKind } from "./elite";
 import { noteWin } from "./feats";
-import { expToNext, GameState } from "./gameState";
+import { econDay, expToNext, GameState } from "./gameState";
 import { ENEMIES, type EnemyDef } from "./monsters";
 import { nestFightOn } from "./nest";
 import { omenGold } from "./omen";
@@ -64,8 +64,9 @@ function tallyQuestKill(enemy: Win["enemy"]): void {
   if (enemy.name === "BAT") GameState.quest.batsSlain += 1;
   if (enemy.name === ENEMIES.yeti.name) GameState.quest.yetisSlain += 1;
   // daily bounty board: unbounded like the counters above, only ever
-  // compared/clamped at display time
-  if (GameState.bounty && enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
+  // compared/clamped at display time. Today's only: a board left unread kept
+  // an old bounty filling for days, and paid it whole at the next reading
+  if (GameState.bounty?.day === econDay() && enemy.name === GameState.bounty.target) GameState.bounty.have += 1;
   // two story bosses share the `boss` flag; each sets its own quest gate
   if (enemy.boss) {
     if (enemy.name === ENEMIES.mossGolem.name) GameState.quest.forestBoss = true;
