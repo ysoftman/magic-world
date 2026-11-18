@@ -3297,7 +3297,8 @@ export class BattleScene extends Phaser.Scene {
       this.stuck = null;
       await this.say(`${this.enemy.name} ${line}`);
       // the stars stay round its head for the line that spends the turn
-      this.hideStun();
+      // (and on, over a foe that is off balance too and loses the next)
+      if (!this.staggered) this.hideStun();
       return;
     }
     // ...as does a parried wind-up's strike (bossStrike); an announced move
