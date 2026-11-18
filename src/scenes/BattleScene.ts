@@ -25,6 +25,7 @@ import {
   edgeOf,
   FREEZE_GRACE_TURNS,
   flurryCap,
+  grownCost,
   guardedDamage,
   hardenDef,
   MOVE_FLURRY_MULT,
@@ -1865,7 +1866,7 @@ export class BattleScene extends Phaser.Scene {
 
   // its MP now (a weapon tech's grows with max MP: battleRules skillCost)
   private skillCost(skill: Skill): number {
-    return skillCost(skill, GameState.player.maxMp);
+    return skillCost(skill, GameState.player.maxMp, GameState.player.level);
   }
 
   // the MP for it, and a foe it can reach (QUAKE never reaches a flier)
@@ -2327,7 +2328,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private canCast(spell: Spell): boolean {
-    if (GameState.player.mp < spell.cost) return false;
+    if (GameState.player.mp < grownCost(spell, GameState.player.level)) return false;
     return !(spell.kind === "heal" && this.hpFull());
   }
 
@@ -2351,7 +2352,7 @@ export class BattleScene extends Phaser.Scene {
     if (spell.kind === "ward") Sfx.ward();
     else if (spell.ultimate) Sfx.nova();
     else Sfx.magic();
-    GameState.player.mp -= spell.cost;
+    GameState.player.mp -= grownCost(spell, GameState.player.level);
     this.updatePlayerStats();
     if (spell.kind === "heal") {
       const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, spell.power);
@@ -2372,7 +2373,7 @@ export class BattleScene extends Phaser.Scene {
       await this.say(refreshed ? `WARD renewed for ${WARD_TURNS} turns!` : `A WARD halves damage for ${WARD_TURNS} turns!`);
       return;
     }
-    const { dmg: rolled, weak } = spellRoll(spell, this.enemy.weakness);
+    const { dmg: rolled, weak } = spellRoll(spell, this.enemy.weakness, GameState.player.level);
     const fx = spell.effect;
     const effect =
       fx && this.spellEffectCanLand(fx.kind) && Math.random() < fx.chance * (weak ? SPELL_EFFECT_WEAK_MULT : 1) ? fx.kind : null;
@@ -2437,6 +2438,7 @@ export class BattleScene extends Phaser.Scene {
       const rolled = skillHit(skill, {
         atk: this.heroAtk(),
         def: this.enemy.def,
+        level: GameState.player.level,
         weakness: this.enemy.weakness,
         flying: this.enemy.flying,
         edge: edgeOf(GameState.equipped.weapon),

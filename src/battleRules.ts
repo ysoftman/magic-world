@@ -1,5 +1,6 @@
 import { ABYSS_GUARDIAN_GOLD_SHARE, type AbyssBout, abyssScale, boutDepth } from "./abyss";
 import { ARENA_GOLD_SHARE } from "./arena";
+import { MAX_LEVEL } from "./config";
 import { type EliteKind, eliteDef } from "./elite";
 import type { EquipmentKey, GameState } from "./gameState";
 import { type Element, ENEMIES, type EnemyDef, type EnemyMove } from "./monsters";
@@ -349,8 +350,10 @@ export const SPELLS: Spell[] = [
 // Lv30 (ATK 47, DEF 5). A spell gains 1.2-1.7 a MP at its level; so do the
 // moves: blows 1.1-1.7 (FLAME PILLAR 0.7 off a fire weakness, 1.9 on one),
 // weapon techs 1.3-1.6, spell techs 1.2-1.8, THORNS and EMP less for their
-// poison and stun, SOUL DRAIN 0.8 and its healing. At Lv30 a FIGHT outgrows
-// every flat move but the biggest (NOVA 1.2, VOID 1.4, BLACK HOLE 1.5); the
+// poison and stun, SOUL DRAIN 0.8 and its healing. At Lv30 a FIGHT outgrew
+// every flat move but the biggest (NOVA 1.2, VOID 1.4, BLACK HOLE 1.5), so
+// past Lv24 the spells, blows and spell techs grow (grownPower's note): 1.2-
+// 2.0 of a FIGHT a cast there and 0.5-1.5 a MP over one; the
 // weapon techs keep 1.3-1.7 there, as their MP grows with max MP. On a
 // weakness no move beats its element's spell per MP (FIRE 6.0, ICE 5.5,
 // BOLT 5.5 against FIRE TORNADO 5.3, ICE SPIKES 5.3, FROST NOVA 4.5 ...).
@@ -420,6 +423,7 @@ export interface BlowSkill extends MoveBase {
   cost: number;
   power: number; // each hit's
   pierce?: boolean; // rolled against DEF 0
+  flat?: boolean; // power and MP as learned, whatever the level (MAGIC_GROWTH)
 }
 export interface WeaponTech extends MoveBase {
   style: "weapon";
@@ -469,6 +473,7 @@ export const SKILLS: Skill[] = [
     power: 6,
     hits: 1,
     color: 0x84cc16,
+    flat: true,
     effect: { kind: "poison", chance: 0.5 },
     info: "A light hit. Poisons 50% (PSN).",
   },
@@ -624,6 +629,7 @@ export const SKILLS: Skill[] = [
     power: 10,
     hits: 1,
     color: 0x7dd3fc,
+    flat: true,
     effect: { kind: "shock", chance: 1 },
     info: "A light hit. Stuns, not bosses.",
   },
@@ -726,15 +732,71 @@ export const SKILLS: Skill[] = [
   },
 ];
 
-// a move's MP now: a weapon tech's share of max MP (never under 1)
-export const skillCost = (skill: Skill, maxMp: number): number =>
-  skill.style === "weapon" ? Math.max(1, Math.round(maxMp * skill.mpShare)) : skill.cost;
+// Attack spells and magic moves (blows, spell techs) are sized flat, against
+// a FIGHT at the level they are learned (the Skills note), and a FIGHT grows
+// with ATK: by Lv30 it out-hit twelve of them (FIRE 12 against its ~46), so
+// the late game's list was the weapon techs and three big spells. Past the
+// story (MAGIC_BLOOM_LEVEL, the last boss's intended level) each level closes
+// part of the gap between a move's power and the strongest spell's
+// (MAGIC_PEAK, BLACK HOLE's), MAGIC_BLOOM_SHARE of it by MAX_LEVEL: the
+// weakest grow most, none passes one above it, and nothing changes at the
+// level a move is learned or at any story boss. A multi-hit blow pays DEF on
+// every hit, so its hits aim at the peak over hits ** MAGIC_HITS_SHARE, a
+// little more than an even share. The MP grows with the power, a little
+// faster (grownCost: the power's ratio ** MAGIC_COST_CURVE): at a flat MP a
+// damage that follows the level runs away a MP (DOUBLE SLASH, the weapon
+// techs' note), and at the plain ratio a Lv30 hero had four or five casts of
+// its weakness spell at x1.5, which the ABYSS and HARD MODE were not sized
+// for (the B20 GUARDIAN alone, 3 HI-POTIONs: 1% -> 59%; 31% at 1.25). At
+// Lv30 every cast deals 1.2-2.0 of a FIGHT and gains 0.5-1.5 a MP over one
+// (sim:battle --skill-table).
+// A `flat` move (THORNS, EMP) keeps both: its effect is what it is cast for.
+// Why not from the level it is learned: any growth before Lv24 is the bosses'
+// weakness spell growing (FIRE on the MOSS and GLACIER GOLEM, ICE on the
+// FLAME DRAKE), and a third more of it took the FLAME DRAKE from 43% to 77%
+// for a hero who braces nothing (sim-battle --nobrace, beside a WOLF).
+export const MAGIC_BLOOM_LEVEL = 24;
+export const MAGIC_BLOOM_SHARE = 0.55;
+export const MAGIC_COST_CURVE = 1.25;
+export const MAGIC_PEAK = 74;
+export const MAGIC_HITS_SHARE = 0.75;
+interface Grown {
+  power: number;
+  cost: number;
+  learnLevel: number;
+  hits?: number;
+  flat?: boolean;
+  pierce?: boolean;
+  kind?: Spell["kind"];
+}
+const grows = (move: Grown): boolean => !move.flat && (move.kind ?? "attack") === "attack" && move.power > 0;
+
+/** Each hit's power for a hero of `level` (the bloom above), a whole number. */
+export function grownPower(move: Grown, level: number): number {
+  if (!grows(move)) return move.power;
+  const from = Math.max(MAGIC_BLOOM_LEVEL, move.learnLevel);
+  const bloom = Math.min(1, Math.max(0, level - from) / (MAX_LEVEL - MAGIC_BLOOM_LEVEL)) * MAGIC_BLOOM_SHARE;
+  // LASER pays no DEF, so its hits share the peak evenly
+  const gap = Math.max(0, MAGIC_PEAK / (move.hits ?? 1) ** (move.pierce ? 1 : MAGIC_HITS_SHARE) - move.power);
+  return Math.round(move.power + gap * bloom);
+}
+
+/** Its MP for that hero: the cost grown as its power has (MAGIC_COST_CURVE). */
+export const grownCost = (move: Grown, level: number): number =>
+  grows(move) ? Math.round(move.cost * (grownPower(move, level) / move.power) ** MAGIC_COST_CURVE) : move.cost;
+
+// a move's MP now: a weapon tech's share of max MP (never under 1), a magic
+// one's grown with the hero's level
+export const skillCost = (skill: Skill, maxMp: number, level: number): number =>
+  skill.style === "weapon" ? Math.max(1, Math.round(maxMp * skill.mpShare)) : grownCost(skill, level);
 
 // what a hit is thrown at: the hero's ATK (a weapon tech's), the foe's DEF,
 // weakness and whether it flies
 export interface SkillTarget {
   atk: number;
   def: number;
+  /** the hero's level, which a blow's and a spell tech's power grows with */
+  level: number;
   weakness?: Element;
   flying?: boolean;
   /** the worn weapon's (edgeOf), a weapon tech's alone */
@@ -806,7 +868,8 @@ export function skillHit(
   const weak = skill.element !== undefined && target.weakness === skill.element;
   const w = weak ? WEAKNESS_MULT : 1;
   if (skill.style === "spell") {
-    const roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
+    const power = grownPower(skill, target.level);
+    const roll = power + Math.floor(rand() * Math.ceil(power / 2));
     return { dmg: Math.floor(roll * w), crit: false, weak };
   }
   const keen = target.edge?.crit ?? CRIT_CHANCE;
@@ -815,7 +878,8 @@ export function skillHit(
   let roll: number;
   let def: number;
   if (skill.style === "blow") {
-    roll = skill.power + Math.floor(rand() * Math.ceil(skill.power / 2));
+    const power = grownPower(skill, target.level);
+    roll = power + Math.floor(rand() * Math.ceil(power / 2));
     def = skill.pierce ? 0 : target.def;
   } else {
     const mult = skill.mult * (target.flying ? (skill.flierMult ?? 1) : 1);
@@ -853,10 +917,16 @@ export function rollDamage(
 // one counted)
 export const comboBonus = (combo: number): number => Math.min(combo - 1, COMBO_CAP) * COMBO_PCT;
 
-// an attack spell's damage: its power plus up to half again, x1.5 on the
-// foe's weakness
-export function spellRoll(spell: Spell, weakness: Element | undefined, rand: () => number = Math.random): { dmg: number; weak: boolean } {
-  const roll = spell.power + Math.floor(rand() * Math.ceil(spell.power / 2));
+// an attack spell's damage: its power for a hero of `level` (grownPower)
+// plus up to half again, x1.5 on the foe's weakness
+export function spellRoll(
+  spell: Spell,
+  weakness: Element | undefined,
+  level: number,
+  rand: () => number = Math.random,
+): { dmg: number; weak: boolean } {
+  const power = grownPower(spell, level);
+  const roll = power + Math.floor(rand() * Math.ceil(power / 2));
   const weak = spell.element !== undefined && weakness === spell.element;
   return { dmg: Math.floor(roll * (weak ? WEAKNESS_MULT : 1)), weak };
 }

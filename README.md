@@ -62,7 +62,7 @@
   - 받는 것: 골드·EXP x0.8(연승 보너스와 TRADE·STUDY 포함), 포션류·소재·보물 지도는 각각 x0.8 확률. 연승, 퀘스트·처치 바운티, 전투 수는 센다.
   - 없는 것: 승리 회복(+5 HP·+2 MP, MEND, CALM), LIMIT 충전, 동료 유대. 요리·축복은 횟수가 줄지 않고 그 골드·EXP·드롭 보너스도 붙지 않는다.
   - 설정(O)의 `OVERRUN: OFF` 로 끈다. 약한 종을 CANDY 로 잡으려 할 때나, PARRY·PERFECT·원소 반응 같은 전투 안 바운티 과제를 약한 적으로 채우려 할 때는 꺼야 한다(압도에는 전투가 없다).
-- 주문은 레벨이 되면 자동으로 배운다. 부가 효과 확률은 약점이면 2배
+- 주문은 레벨이 되면 자동으로 배운다. 부가 효과 확률은 약점이면 2배. 표의 MP 는 Lv24 까지의 값이고, 공격 주문은 Lv25 부터 위력과 MP 가 함께 자란다(아래 스킬 표 다음 줄)
 
   | 주문 | 레벨 | MP  | 효과                                      |
   | ---- | ---- | --- | ----------------------------------------- |
@@ -105,6 +105,7 @@
   | VOID          | 마법 스킬 | 28   | 28          | 66           | 무속성                                                |
   | BLACK HOLE    | 마법 기술 | 29   | 30          | 74           | 무속성, DEF 무시(마법 기술)                           |
 
+- 공격 주문·마법 스킬·마법 기술의 위력과 MP 는 Lv24 까지 위 표 그대로고(FIRE 위력 10, ICE 18, BOLT 30, NOVA 60), Lv25 부터 레벨마다 가장 센 BLACK HOLE 의 위력(74)과의 차이를 조금씩 좁혀 Lv30 에 그 55% 를 메운다(여러 대짜리는 한 대의 목표가 74 ÷ 대수^0.75, LASER 는 74 ÷ 대수). MP 는 위력이 늘어난 비율의 1.25 제곱만큼 는다. 약한 것일수록 많이 자라지만 순서는 뒤집히지 않고, THORNS·EMP 는 효과가 목적이라 그대로다. HEAL·WARD 와 무기 기술도 바뀌지 않는다. Lv30 의 위력(MP): FIRE 45(20), ICE 49(21), BOLT 54(21), NOVA 68(28), ARCANE BEAM 46(21), MISSILES 21 x 3(24), FLAME PILLAR 49(31), CHAIN BOLT 22 x 3(24), ICE SPIKES 52(21), LASER 13 x 4(17), SOUL DRAIN 52(24), QUAKE 57(21), FIRE TORNADO 57(22), SMITE 59(23), THUNDERCLAP 60(23), METEOR 64(29), FROST NOVA 61(27), STAR FALL 17 x 5(28), VOID 67(29), BLACK HOLE 74(30). 스킬 목록의 INFO 줄은 지금 레벨의 MP 를 보여 준다
 - 상태 이상: 독(WASP·SPIDER, MOSS GOLEM 의 SPORES), 빙결(FROST MOTH·YETI·GLACIER GOLEM, 1턴 행동 불가), 재생(MOSS GOLEM). WASP·SPIDER·FROST MOTH 의 독·빙결은 예고(`>POISON`·`>FREEZE`)된 일격에만 실리고 PARRY 하면 걸리지 않는다. YETI·GLACIER GOLEM 의 빙결은 예고 없이 평소 일격(20~25%)에 실린다. ANTIDOTE CHARM·EMBER RING·TALISMAN 으로 막는다
 - 원소 반응: 적에게 걸린 상태에 맞는 원소의 주문·스킬을 쓰면 그 상태를 써 버리고 반응이 난다. 한 상태에 한 번이라 상태를 다시 걸어야 또 난다. 스킬 목록에서 커서의 스킬이 지금 반응을 낼 수 있으면 설명 줄이 그 반응으로 바뀐다. 상태를 잘 거는 기술(THORNS 독 50%, FLAME PILLAR·METEOR 화상 20%, FROST NOVA 냉기 20%)이나 동료의 독·화상·냉기가 발판이다
 

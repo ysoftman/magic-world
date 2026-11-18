@@ -55,6 +55,8 @@
 // against: the default hero casts its weakness spell even where a FIGHT
 // would hit harder (FIRE's 18 on the GLACIER GOLEM against a Lv18 FIGHT's
 // ~25), so beside it the list would also be credited with the better pick.
+// (At Lv30 xFIGHT is the cast over a FIGHT: the spells and magic moves grow
+// past Lv24, battleRules grownPower, and are held to 1.15 or more there.)
 // --skill-table prints what each attack spell and skill deals a cast instead
 // of fighting (battleRules.ts sized the skills off it).
 //
@@ -98,6 +100,8 @@ const {
   bossBlastDamage,
   bossStrikeDamage,
   flurryCap,
+  grownCost,
+  grownPower,
   comboBonus,
   companionAtk,
   defendedDamage,
@@ -358,10 +362,11 @@ function makeHero(level: number, gear: BossCase["gear"] | null): Hero {
 // --- what a cast deals, on average (the --skills hero's pick, --skill-table) --
 
 // an attack spell's damage (spellRoll), every roll of its spread
-function spellMean(spell: Spell, weak: boolean): number {
-  const spread = Math.ceil(spell.power / 2);
+function spellMean(spell: Spell, weak: boolean, level: number): number {
+  const power = grownPower(spell, level);
+  const spread = Math.ceil(power / 2);
   let sum = 0;
-  for (let r = 0; r < spread; r++) sum += Math.floor((spell.power + r) * (weak ? WEAKNESS_MULT : 1));
+  for (let r = 0; r < spread; r++) sum += Math.floor((power + r) * (weak ? WEAKNESS_MULT : 1));
   return sum / spread;
 }
 
@@ -369,11 +374,19 @@ function spellMean(spell: Spell, weak: boolean): number {
 // a move, ATK, DEF, weakness and flier; `weak` gives the foe the move's
 // element as its weakness
 const skillMeans = new Map<string, number>();
-function skillMean(skill: Skill, atk: number, def: number, weak: boolean, flying = false, edge: Edge = edgeOf(null)): number {
-  const key = `${skill.name}:${atk}:${def}:${weak}:${flying}:${edge.defShare}:${edge.crit}`;
+function skillMean(
+  skill: Skill,
+  level: number,
+  atk: number,
+  def: number,
+  weak: boolean,
+  flying = false,
+  edge: Edge = edgeOf(null),
+): number {
+  const key = `${skill.name}:${level}:${atk}:${def}:${weak}:${flying}:${edge.defShare}:${edge.crit}`;
   let mean = skillMeans.get(key);
   if (mean === undefined) {
-    const target = { atk, def, weakness: weak ? skill.element : undefined, flying, edge };
+    const target = { atk, def, level, weakness: weak ? skill.element : undefined, flying, edge };
     let sum = 0;
     for (let i = 0; i < 20000; i++) for (let h = 0; h < skill.hits; h++) sum += skillHit(skill, target).dmg;
     mean = sum / 20000;
@@ -534,7 +547,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       if (hiPotions > 0) return { kind: "hiPotion" };
       if (potions > 0) return { kind: "potion" };
       const heal = hero.spells.find((s) => s.kind === "heal");
-      if (heal && mp >= heal.cost) return { kind: "magic", spell: heal };
+      if (heal && mp >= grownCost(heal, hero.level)) return { kind: "magic", spell: heal };
     }
     const ward = hero.spells.find((s) => s.kind === "ward");
     // a boss's announced blast or flurry is braced for as its wind-up is
@@ -544,7 +557,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     if (LIMIT !== null && !limitSpent && LIMIT + gauge() >= LIMIT_MAX) return { kind: "limit" };
     if (GREEDY) return greedy();
     const weak = hero.spells.find((s) => s.kind === "attack" && s.element !== undefined && s.element === foe.weakness);
-    if (weak && mp >= weak.cost) return { kind: "magic", spell: weak };
+    if (weak && mp >= grownCost(weak, hero.level)) return { kind: "magic", spell: weak };
     return { kind: "fight" };
   };
 
@@ -573,16 +586,17 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     let best: Action = { kind: "fight" };
     let most = fightMean(hero.atk, edgedDef(foe.def, hero.edge), hero.edge.crit) * (1 + comboBonus(combo + 1) * (1 + perk("flow")));
     for (const spell of hero.spells) {
-      if (spell.kind !== "attack" || mp < spell.cost) continue;
+      if (spell.kind !== "attack" || mp < grownCost(spell, hero.level)) continue;
       const weak = spell.element !== undefined && spell.element === foe.weakness;
-      const value = reacted(spellMean(spell, weak), spell.element) + dotValue(spell.effect, weak);
+      const value = reacted(spellMean(spell, weak, hero.level), spell.element) + dotValue(spell.effect, weak);
       if (value > most) [best, most] = [{ kind: "magic", spell }, value];
     }
     for (const skill of hero.skills) {
-      if (mp < skillCost(skill, hero.maxMp) || (skill.grounded && foe.flying)) continue;
+      if (mp < skillCost(skill, hero.maxMp, hero.level) || (skill.grounded && foe.flying)) continue;
       const weak = skill.element !== undefined && skill.element === foe.weakness;
       const value =
-        reacted(skillMean(skill, hero.atk, foe.def, weak, !!foe.flying, hero.edge), skill.element) + dotValue(skill.effect, weak);
+        reacted(skillMean(skill, hero.level, hero.atk, foe.def, weak, !!foe.flying, hero.edge), skill.element) +
+        dotValue(skill.effect, weak);
       if (value > most) [best, most] = [{ kind: "skill", skill }, value];
     }
     return best;
@@ -609,7 +623,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
 
   // BattleScene castSpell() + spellEffectCanLand() + landSpellEffect()
   const cast = (spell: Spell): void => {
-    mp -= spell.cost;
+    mp -= grownCost(spell, hero.level);
     if (spell.kind === "heal") {
       combo = 0;
       hp += Math.min(hero.maxHp - hp, spell.power);
@@ -621,7 +635,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
       wardTurns = WARD_TURNS;
       return;
     }
-    const { dmg, weak } = spellRoll(spell, foe.weakness);
+    const { dmg, weak } = spellRoll(spell, foe.weakness, hero.level);
     // CHAIN: a weakness hit is one more in the combo, any other cast resets it
     combo = weak ? combo + 1 : 0;
     const fx = spell.effect;
@@ -648,7 +662,7 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
   // effect rolled before the hits, landed if the foe outlives them; a hit
   // the foe is already down for isn't thrown
   const useSkill = (skill: Skill): void => {
-    mp -= skillCost(skill, hero.maxMp);
+    mp -= skillCost(skill, hero.maxMp, hero.level);
     const weak = skill.element !== undefined && skill.element === foe.weakness;
     const fx = skill.effect;
     const canLand =
@@ -664,7 +678,14 @@ function fight(hero: Hero, boss: BossCase, wolf: boolean, bond: number): Outcome
     let total = 0;
     let reaction: { mult: number; extra: number } | undefined;
     for (let i = 0; i < skill.hits && foe.curHp > 0; i++) {
-      const rolled = skillHit(skill, { atk: hero.atk, def: foe.def, weakness: foe.weakness, flying: foe.flying, edge: hero.edge }).dmg;
+      const rolled = skillHit(skill, {
+        atk: hero.atk,
+        def: foe.def,
+        level: hero.level,
+        weakness: foe.weakness,
+        flying: foe.flying,
+        edge: hero.edge,
+      }).dmg;
       reaction ??= react(skill.element);
       const dmg = Math.round(rolled * reaction.mult) + (i === 0 ? reaction.extra : 0);
       foe.curHp = Math.max(0, foe.curHp - dmg);
@@ -913,9 +934,9 @@ if (args.includes("--skill-table")) {
   type Row = {
     name: string;
     lv: number;
-    mp: (maxMp: number) => number;
+    mp: (maxMp: number, level: number) => number;
     hits: number;
-    at: (atk: number, def: number, weak: boolean) => number;
+    at: (level: number, atk: number, def: number, weak: boolean) => number;
     note: string;
   };
   const effectNote = (e: Skill["effect"]): string => (e ? `${e.kind} ${Math.round(e.chance * 100)}%` : "");
@@ -924,9 +945,9 @@ if (args.includes("--skill-table")) {
       (s): Row => ({
         name: s.name,
         lv: s.learnLevel,
-        mp: () => s.cost,
+        mp: (_maxMp, level) => grownCost(s, level),
         hits: 1,
-        at: (_atk, _def, weak) => spellMean(s, weak && s.element !== undefined),
+        at: (level, _atk, _def, weak) => spellMean(s, weak && s.element !== undefined, level),
         note: `SPELL ${[s.element, effectNote(s.effect)].filter(Boolean).join(", ")}`,
       }),
     ),
@@ -934,9 +955,9 @@ if (args.includes("--skill-table")) {
       (s): Row => ({
         name: s.name,
         lv: s.learnLevel,
-        mp: (maxMp) => skillCost(s, maxMp),
+        mp: (maxMp, level) => skillCost(s, maxMp, level),
         hits: s.hits,
-        at: (atk, def, weak) => skillMean(s, atk, def, weak && s.element !== undefined),
+        at: (level, atk, def, weak) => skillMean(s, level, atk, def, weak && s.element !== undefined),
         note: [
           s.style === "weapon" ? `weapon x${s.mult}${s.hits > 1 ? " each" : ""}` : s.style,
           s.element,
@@ -957,20 +978,21 @@ if (args.includes("--skill-table")) {
   const late = makeHero(LATE.level, null);
   console.log("ATTACK SPELLS AND SKILL-LIST MOVES: mean damage a cast (all hits), and its gain over a FIGHT a MP");
   console.log(`${"".padEnd(13)}    | at its level                         | at Lv${LATE.level}, ATK ${LATE.atk} DEF ${LATE.def}`);
-  console.log(`${"NAME".padEnd(13)} LV | ATK DEF MP    DMG  FIGHT  GAIN   WEAK | MP    DMG  GAIN | NOTE`);
+  console.log(`${"NAME".padEnd(13)} LV | ATK DEF MP    DMG  FIGHT  GAIN   WEAK | MP    DMG  GAIN xFIGHT | NOTE`);
   for (const r of rows) {
     const gear = [...BOSSES].reverse().find((b) => b.level <= r.lv)?.gear ?? BOSSES[0].gear;
     const hero = makeHero(r.lv, gear);
     const def = regionDef(r.lv);
-    const mp = r.mp(hero.maxMp);
-    const dmg = r.at(hero.atk, def, false);
+    const mp = r.mp(hero.maxMp, r.lv);
+    const dmg = r.at(r.lv, hero.atk, def, false);
     const fight = fightMean(hero.atk, def);
-    const lateMp = r.mp(late.maxMp);
-    const lateDmg = r.at(LATE.atk, LATE.def, false);
+    const lateMp = r.mp(late.maxMp, LATE.level);
+    const lateDmg = r.at(LATE.level, LATE.atk, LATE.def, false);
+    const lateFight = fightMean(LATE.atk, LATE.def);
     console.log(
       `${r.name.padEnd(13)} ${String(r.lv).padStart(2)} | ${String(hero.atk).padStart(3)} ${String(def).padStart(3)} ${String(mp).padStart(2)} ` +
-        `${f(dmg)} ${f(fight)} ${f((dmg - fight) / mp, 5)} ${f(r.at(hero.atk, def, true))} | ${String(lateMp).padStart(2)} ` +
-        `${f(lateDmg)} ${f((lateDmg - fightMean(LATE.atk, LATE.def)) / lateMp, 5)} | ${r.note}`,
+        `${f(dmg)} ${f(fight)} ${f((dmg - fight) / mp, 5)} ${f(r.at(r.lv, hero.atk, def, true))} | ${String(lateMp).padStart(2)} ` +
+        `${f(lateDmg)} ${f((lateDmg - lateFight) / lateMp, 5)} ${f(lateDmg / lateFight, 5)}  | ${r.note}`,
     );
   }
   process.exit(0);

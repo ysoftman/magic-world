@@ -564,7 +564,7 @@ NPC/건물/입구 라벨은 전부 `setOrigin(0.5)` 이라 폭 `문자수 x n x 
   `skillSfx.ts` 의 `VOICES` 를 같이 맞춘다. 빠진 이름은 tsc 가, 대수(`VOICES` 의 `hits` 포함, `skillSfxHits`)나
   무기/마법 구분이 어긋나면 dev 빌드의 BattleScene 이 console.error 로 잡는다(타격음이 모자라면 마지막 것을
   되풀이한다).
-  수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7)과
+  수치는 `bun run sim:battle --skill-table` 로 MP 당 이득을 기존 주문(제 레벨에서 FIGHT 대비 1.2~1.7. Lv30 열은 한 번 시전이 FIGHT 의 1.15배 이상(`xFIGHT`)·GAIN 0.5~1.8 이 기준이고 지금 1.2~2.0·0.5~1.5 다. 공격 주문·마법 스킬·마법 기술은 `grownPower`/`grownCost` 를 지나 Lv25 부터 자란다: 레벨마다 `MAGIC_PEAK`(BLACK HOLE 74)와의 차이를 좁혀 Lv30 에 55%, MP 는 위력 비율의 1.25 제곱, `flat`(THORNS·EMP)은 제외. 새 주문·스킬의 위력이 74 를 넘으면 `MAGIC_PEAK` 도 올린다. 실제 사례: 배운 레벨부터 자라게 했더니(레벨당 +1.2) 보스의 약점 주문이 같이 자라 Lv12 MOSS GOLEM 솔로 기본 승률 54→91%, Lv24 FLAME DRAKE nobrace 43→88% 가 됐다. Lv24 에서 ICE 가 3분의 1만 세져도 DRAKE nobrace 가 77% 였다. 그래서 스토리 보스의 의도 레벨(6~24)에서는 아무것도 바뀌지 않게 Lv24 뒤로 미뤘다. 실제 사례: MP 를 위력 비율 그대로 올리면 Lv30 영웅이 약점 주문(x1.5)을 네댓 번 써 심연 B20 GUARDIAN 솔로가 1→59% 였다(1.25 제곱에서 31%). 주문·스킬의 위력이나 이 상수를 바꾸면 `--abyss 15,20`·`--ng 1` 의 Lv30 표도 같이 잰다)과
   견주고, `--skills` 를 `--greedy` 와 견줘 보스전 라운드를 본다.
 
 ## 기습 (FIRST STRIKE, `sceneCommon` 의 `firstStrike`)
