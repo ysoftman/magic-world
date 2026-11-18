@@ -1459,7 +1459,7 @@ export class BattleScene extends Phaser.Scene {
       }
       if (e.code === "KeyZ") {
         const slot = ITEM_SLOTS[this.itemIndex];
-        if (GameState.inventory[slot.key] <= 0) {
+        if (!this.itemUsable(slot)) {
           Sfx.error();
           return;
         }
@@ -1667,7 +1667,7 @@ export class BattleScene extends Phaser.Scene {
           return;
         }
         const slot = ITEM_SLOTS[i];
-        if (GameState.inventory[slot.key] <= 0) {
+        if (!this.itemUsable(slot)) {
           Sfx.error();
           return;
         }
@@ -1819,7 +1819,7 @@ export class BattleScene extends Phaser.Scene {
       this.itemTexts[i].setVisible(true);
       const count = GameState.inventory[ITEM_SLOTS[i].key];
       this.itemTexts[i].setText(`${ITEM_SLOTS[i].label} x${count}`);
-      this.itemTexts[i].setColor(count > 0 ? "#ffffff" : DIM_TEXT);
+      this.itemTexts[i].setColor(this.itemUsable(ITEM_SLOTS[i]) ? "#ffffff" : DIM_TEXT);
     }
     this.itemCursor.setVisible(true);
     const target = this.itemTexts[this.itemIndex];
@@ -1831,6 +1831,19 @@ export class BattleScene extends Phaser.Scene {
     this.itemInfoText.setText(`${slot.label}: ${ITEM_INFO[slot.key]}`).setVisible(true);
     this.itemHintText.setVisible(true);
     bindKeyHint(this.itemHintText, () => keyHint("HJKL:MOVE  Z:OK  ESC:BACK", TOUCH_ITEM_HINT, { table: "battle" }));
+  }
+
+  // Whether picking it would do anything: one in the bag, and not a cure for
+  // what is already full or a CANDY for what can't be caught. Refused at
+  // input time, as STEAL and HEAL are, so it can't spend the turn and the combo
+  private itemUsable(slot: ItemSlot): boolean {
+    if (GameState.inventory[slot.key] <= 0) return false;
+    const mpFull = GameState.player.mp >= GameState.player.maxMp;
+    if (slot.key === "potion" || slot.key === "hiPotion") return !this.hpFull();
+    if (slot.key === "mPotion" || slot.key === "ether") return !mpFull;
+    if (slot.key === "elixir") return !(this.hpFull() && mpFull);
+    if (slot.key === "candy") return !this.enemy.boss && !this.practice && !this.arena && !this.abyss?.guardian;
+    return true;
   }
 
   private knownSpells(): Spell[] {
@@ -2678,11 +2691,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async usePotion(): Promise<void> {
     this.resetCombo();
-    if (this.hpFull()) {
-      Sfx.error();
-      await this.say("HP is already full!");
-      return;
-    }
     Sfx.buy();
     GameState.inventory.potion -= 1;
     const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, POTION_HP);
@@ -2695,11 +2703,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async useMPotion(): Promise<void> {
     this.resetCombo();
-    if (GameState.player.mp >= GameState.player.maxMp) {
-      Sfx.error();
-      await this.say("MP is already full!");
-      return;
-    }
     Sfx.buy();
     GameState.inventory.mPotion -= 1;
     const restored = Math.min(GameState.player.maxMp - GameState.player.mp, MPOTION_MP);
@@ -2711,11 +2714,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async useHiPotion(): Promise<void> {
     this.resetCombo();
-    if (this.hpFull()) {
-      Sfx.error();
-      await this.say("HP is already full!");
-      return;
-    }
     Sfx.buy();
     GameState.inventory.hiPotion -= 1;
     const healed = Math.min(GameState.effMaxHp() - GameState.player.hp, HI_POTION_HP);
@@ -2728,11 +2726,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async useEther(): Promise<void> {
     this.resetCombo();
-    if (GameState.player.mp >= GameState.player.maxMp) {
-      Sfx.error();
-      await this.say("MP is already full!");
-      return;
-    }
     Sfx.buy();
     GameState.inventory.ether -= 1;
     const restored = Math.min(GameState.player.maxMp - GameState.player.mp, ETHER_MP);
@@ -2744,11 +2737,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async useElixir(): Promise<void> {
     this.resetCombo();
-    if (this.hpFull() && GameState.player.mp >= GameState.player.maxMp) {
-      Sfx.error();
-      await this.say("HP and MP are already full!");
-      return;
-    }
     Sfx.buy();
     GameState.inventory.elixir -= 1;
     const hpBefore = GameState.player.hp;
@@ -2803,29 +2791,6 @@ export class BattleScene extends Phaser.Scene {
 
   private async throwCandy(): Promise<void> {
     this.resetCombo();
-    if (this.enemy.boss) {
-      Sfx.error();
-      await this.say(`The ${this.enemy.name} is too strong!`);
-      return;
-    }
-    if (this.practice) {
-      Sfx.error();
-      await this.say("No catching in the yard!");
-      return;
-    }
-    // the TROLL KING is a giant, catchable in the wild but not mid-gauntlet
-    if (this.arena) {
-      Sfx.error();
-      await this.say("No catching in the ARENA!");
-      return;
-    }
-    // ...nor as an ABYSS guardian (abyss.ts): a sure TROLL KING on B10 would
-    // be a free catch
-    if (this.abyss?.guardian) {
-      Sfx.error();
-      await this.say("A GUARDIAN can't be caught!");
-      return;
-    }
     Sfx.capture();
     GameState.inventory.candy -= 1;
     if (Math.random() < captureChance(this.enemy.curHp, this.enemy.hp) + GameState.perk("tamer")) {
