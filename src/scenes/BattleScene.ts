@@ -2978,7 +2978,8 @@ export class BattleScene extends Phaser.Scene {
     // surviving round, so a long fight builds bond faster than a one-shot kill
     const wasPartner = GameState.isPartner(name);
     const partnerBonus = GameState.partnerBonus();
-    GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
+    // (not in the yard: its endless rounds would hand out PARTNERs)
+    if (!this.practice) GameState.companionBond[name] = (GameState.companionBond[name] ?? 0) + 1;
     const bond = GameState.companionBondBonus(name);
     const atk = Math.round(companionAtk(def, GameState.player.level, bond) * (1 + GameState.perk("pack")));
     const skill = COMPANION_SKILLS[name];
@@ -4326,7 +4327,7 @@ export class BattleScene extends Phaser.Scene {
   // one more hit in the combo: a FIGHT, or a weakness spell's CHAIN
   private addCombo(): void {
     this.combo += 1;
-    if (this.combo >= COMBO_CAP) GameState.quest.comboCapped = true;
+    if (this.combo >= COMBO_CAP && !this.practice) GameState.quest.comboCapped = true;
     this.updateCombo();
   }
 
