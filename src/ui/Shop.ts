@@ -371,6 +371,8 @@ export class ShopUI {
 
   update(): void {
     if (!this.active) return;
+    // S hides and shows the HUD under an open panel too: the cover follows
+    if (PANEL_TOP === PANEL_TOP_UNDER_HUD_ROW1) showHudRow2Cover(this.hudCover);
     if (this.escQueued) {
       this.escQueued = false;
       this.close();

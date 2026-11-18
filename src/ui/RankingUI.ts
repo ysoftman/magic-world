@@ -201,7 +201,10 @@ export class RankingUI {
   }
 
   update(): void {
-    if (!this.active || !this.closeQueued) return;
+    if (!this.active) return;
+    // S hides and shows the HUD under an open panel too: the cover follows
+    showHudRow2Cover(this.hudCover);
+    if (!this.closeQueued) return;
     this.closeQueued = false;
     this.close();
   }
