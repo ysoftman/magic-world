@@ -181,6 +181,10 @@ export class Minimap {
     this.goal = scene.add.graphics();
     scene.tweens.add({ targets: this.goal, alpha: 0.3, duration: GOAL_PULSE_MS, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 
+    // inside the border's PAD, where the dot is drawn: at the container's
+    // corner the map and its markers sat 2px up and left of the hero's dot
+    mapG.setPosition(PAD, PAD);
+    this.goal.setPosition(PAD, PAD);
     this.playerDot = scene.add.rectangle(0, 0, DOT, DOT, 0xf5f5f5).setOrigin(0.5);
 
     const border = gridOutline(scene.add.rectangle(0, 0, w + PAD * 2, h + PAD * 2, 0x0b0b2b).setOrigin(0), 0xffffff);
