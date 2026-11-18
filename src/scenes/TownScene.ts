@@ -2172,10 +2172,10 @@ export class TownScene extends Phaser.Scene {
       lines.push("\nDELIVERY DONE TODAY.");
     } else {
       const reward = deliveryReward(d.material, d.need);
+      // one string, so the page breaks before it, never inside it: with a
+      // rank's rows ahead of it "YOU HAVE 0." was left alone on a second page
       lines.push(
-        `\nDELIVER ${d.need} ${name}`,
-        `FOR ${reward.gold} GOLD${reward.bomb ? " + A BOMB" : ""}.`,
-        `YOU HAVE ${GameState.inventory[d.material]}.`,
+        `\nDELIVER ${d.need} ${name} FOR ${reward.gold} GOLD${reward.bomb ? " + A BOMB" : ""}. YOU HAVE ${GameState.inventory[d.material]}.`,
       );
       if (canDeliver(d)) {
         lines.push(`HAND IN ${d.need} ${name}?`);
@@ -2204,7 +2204,7 @@ export class TownScene extends Phaser.Scene {
     );
   }
 
-  // The board's rank lines (boardRank.ts), each talk's on a row of their own:
+  // The board's rank lines (boardRank.ts), each on a row of its own:
   // the next rank handed over if its jobs are done, and with `paid` (a job
   // was just paid) how far it is otherwise. Sounds the talk either way: the
   // level-up's jingle for a rank, the purse's for a job paid.
@@ -2214,7 +2214,10 @@ export class TownScene extends Phaser.Scene {
     else if (paid) Sfx.buy();
     if (promoted) GameState.save();
     const lines = promoted || paid ? boardRankLines(GameState, promoted) : [];
-    return lines.map((l, i) => (i === 0 ? `\n${l}` : l));
+    // a row each and one string (a page can't break inside it): run on, the
+    // LEGEND's 64 glyphs broke as "BOUNTIES PAY / +50%." on a keyboard and
+    // "ATK +2 DEF / +2." on touch
+    return lines.length > 0 ? [`\n${lines.join("\n")}`] : [];
   }
 
   // A treasure map's dig gets the grace a fight's return does, so a roamer

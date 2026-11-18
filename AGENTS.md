@@ -1028,8 +1028,10 @@ BOUNTY BOARD 의 일(끝낸 바운티 + 넘긴 납품)이 쌓여 ROOKIE → SCOU
   `SEE BOARD` 는 마을의 `RANK BOARD`(영웅 레벨 순위 표지판) 이름표와 한 화면에 떠 그쪽을 가리키는 말로 읽혔다.
 - 알리는 곳은 넷이다.
   - 게시판 대화(`TownScene.boardRankUp`): 바운티를 받거나 납품한 그 대화에 제 줄로 `RANGER IN 2 MORE JOBS.`(최장 25글자), 건수가 찼으면
-    `RANK UP! YOU ARE NOW A CHAMPION.`(32) + `ATK +2 DEF +2. BOUNTIES PAY +50%.`(33). 각각 터치 한 줄 42 안이고, 키보드 60글자 줄에서는
-    LEGEND 만 두 줄(64글자)이다. 일이 없던 대화에는 아무 줄도 더하지 않는다(매일 읽는 대화라 쪽을 늘리지 않는다). 밀린 등급은 어떤
+    `RANK UP! YOU ARE NOW A CHAMPION.`(32) + `ATK +2 DEF +2. BOUNTIES PAY +50%.`(33). 각각 터치 한 줄 42 안이고, 등급 줄은
+    줄마다 제 줄에서 시작하는 한 문자열(`\n` 으로 이은 것)이라 쪽이 그 안에서 갈리지 않는다. 납품 안내(`DELIVER ... YOU HAVE n.`)도 같은
+    이유로 한 문자열이다. 실제 사례: 이어 쓰던 때 LEGEND 의 64글자가 키보드에서 `BOUNTIES PAY` / `+50%.`, 터치에서 `ATK +2 DEF` /
+    `+2.` 로 갈렸고, 등급 줄이 앞에 선 터치 대화는 `YOU HAVE 0.` 만 다음 쪽에 남았다. 일이 없던 대화에는 아무 줄도 더하지 않는다(매일 읽는 대화라 쪽을 늘리지 않는다). 밀린 등급은 어떤
     대화에서든 바운티 줄 뒤에 먼저 건넨다. 등급이 오르면 `Sfx.levelup()`, 아니면 예전의 `Sfx.buy()`.
   - 일지(`QuestLog`): 납품 행 다음 `BOUNTY RANK: SCOUT`(최장 `BOUNTY RANK: CHAMPION` 21글자, 한도 23) `2/6`, 힌트 `RANGER: MAX MP +5,
     BOUNTIES +10%`(최장 LEGEND 36글자, 한도 37). 받을 등급이 있으면 `READY`·`REPORT TO THE BOUNTY BOARD`, LEGEND 면 COMPLETED 로 간다.
