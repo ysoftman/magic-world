@@ -35,6 +35,7 @@ import {
   firstStrike,
   HeroWalk,
   isLandingCell,
+  justBackFromFight,
   meetFoe,
   noteFightSpot,
   type Opening,
@@ -426,7 +427,8 @@ export class SnowScene extends Phaser.Scene {
       if (this.peddler?.tryTalk()) return;
       const dx = this.player.x - SNOW_FISH_POS.x;
       const dy = this.player.y - SNOW_FISH_POS.y;
-      if (dx * dx + dy * dy <= 120 * 120) {
+      // (not on the Z that was skipping the fight's lines: justBackFromFight)
+      if (dx * dx + dy * dy <= 120 * 120 && !justBackFromFight(this)) {
         Sfx.buy();
         this.fishing.open();
         return;
