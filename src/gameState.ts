@@ -583,6 +583,10 @@ export function dayIndex(): number {
 // dayIndex() a rain or market day could be pulled up at x20 in minutes and
 // used at NORMAL for a real 24. Only the season (season.ts) and the
 // ending's DAY count the days the hero saw, dayIndex().
+// a loaded save's count, or list of names, whatever the file held (load())
+const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
 export function econDay(): number {
   return Math.floor(GameState.farmMinutes / 1440);
 }
@@ -1390,14 +1394,20 @@ export const GameState = {
       // straight from the title, and a field an old save lacks would keep
       // whatever the last game played this session had in it
       this.reset();
+      // a save code is typed or pasted in: a wrong type left as it came made
+      // NaN gold (every price affordable) or threw in effAtk() every frame
+      const fresh = { ...this.player };
       Object.assign(this.player, data.player);
+      for (const k of Object.keys(fresh) as (keyof typeof fresh)[]) {
+        if (typeof fresh[k] === "number" && !Number.isFinite(this.player[k])) Object.assign(this.player, { [k]: fresh[k] });
+      }
       this.player.name = typeof this.player.name === "string" ? this.player.name.slice(0, NAME_MAX) : "HERO";
       this.player.level = Math.min(MAX_LEVEL, this.player.level);
       this.player.maxHp = Math.min(MAX_HP, this.player.maxHp);
       this.player.maxMp = Math.min(MAX_MP, this.player.maxMp);
-      this.gold = Math.min(MAX_GOLD, data.gold ?? 0);
-      this.battles = data.battles ?? 0;
-      this.streak = data.streak ?? 0;
+      this.gold = Math.min(MAX_GOLD, count(data.gold));
+      this.battles = count(data.battles);
+      this.streak = count(data.streak);
       this.fishCaught = data.fishCaught ?? 0;
       // old saves have no log and start it empty; only numeric entries are
       // kept, since `name in fishLog` throws if an imported save code put a
@@ -1446,7 +1456,7 @@ export const GameState = {
         // an own key only: "toString" is `in` every object
         return plot && Object.keys(CROPS).includes(plot.crop) ? { crop: plot.crop as CropKey, plantedAt: plot.plantedAt ?? 0 } : null;
       });
-      this.achievements = data.achievements ?? [];
+      this.achievements = strings(data.achievements);
       // none on saves from before these trophies
       this.feats = loadFeats(data.feats);
       Object.assign(this.inventory, data.inventory);
@@ -1460,22 +1470,27 @@ export const GameState = {
       // migrate old boolean equipment flags -> inventory counts + equipped
       if (data.sword && this.inventory.sword === 0) this.inventory.sword = 1;
       if (data.shield && this.inventory.shield === 0) this.inventory.shield = 1;
-      this.equipped = data.equipped ?? {
+      for (const k of Object.keys(this.inventory) as (keyof typeof this.inventory)[]) this.inventory[k] = count(this.inventory[k]);
+      const worn = data.equipped ?? {
         weapon: data.sword ? "sword" : null,
         armor: data.shield ? "shield" : null,
         accessory: null,
       };
+      for (const slot of Object.keys(this.equipped) as EquipSlot[]) {
+        this.equipped[slot] =
+          Object.keys(EQUIP_SLOT).includes(worn[slot]) && EQUIP_SLOT[worn[slot] as EquipmentKey] === slot ? worn[slot] : null;
+      }
       // a save code can carry any HP/MP; the max counts the accessory just
       // loaded (a LIFE CHARM's +20). 0 HP would start the hero dead.
       const p = this.player;
       p.hp = Number.isFinite(p.hp) ? Math.min(this.effMaxHp(), Math.max(1, p.hp)) : this.effMaxHp();
       p.mp = Number.isFinite(p.mp) ? Math.min(p.maxMp, Math.max(0, p.mp)) : p.maxMp;
       this.refine = loadRefine(data.refine);
-      this.caught = data.caught ?? [];
-      this.seenMonsters = data.seenMonsters ?? [];
-      this.companion = data.companion ?? null;
-      this.companionBond = data.companionBond ?? {};
-      this.openedTreasures = data.openedTreasures ?? [];
+      this.caught = strings(data.caught);
+      this.seenMonsters = strings(data.seenMonsters);
+      this.companion = typeof data.companion === "string" ? data.companion : null;
+      this.companionBond = Object.fromEntries(Object.entries(data.companionBond ?? {}).map(([k, v]) => [k, count(v)]));
+      this.openedTreasures = strings(data.openedTreasures);
       // none on saves from before the star shards
       this.shards = loadShards(data.shards);
       // every seal shut on saves from before them
