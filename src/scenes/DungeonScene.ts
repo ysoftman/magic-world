@@ -41,7 +41,7 @@ import {
   fadeAreaTitle,
   firstStrike,
   HeroWalk,
-  isWalkableCell,
+  isLandingCell,
   meetFoe,
   noteFightSpot,
   type Opening,
@@ -103,6 +103,11 @@ const EXIT_TORCHES = [
 ];
 
 type CaveKind = "slime" | "goblin" | "king" | "bat" | "cursedGoblin";
+
+// what stands in the field with a body (the runner's walls), and with the
+// seal's plates where a fight's return must not set the hero down
+const SOLIDS = [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at), cellCentre(NESTS.dungeon.at)];
+const KEEP_OFF = [...SOLIDS, ...SEALS.dungeon.plates.map(cellCentre)];
 
 export class DungeonScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -221,7 +226,7 @@ export class DungeonScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.cursedGoblin.texture, {
       region: "dungeon",
       back: !!back,
-      walls: [DUNGEON_SHRINE_POS, DUNGEON_PEDDLER_POS, cellCentre(SEALS.dungeon.at), cellCentre(NESTS.dungeon.at)],
+      walls: SOLIDS,
       exits: [DUNGEON_ENTRY],
       zones: DUNGEON_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -557,7 +562,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(DUNGEON_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
+    const spot = escapeFromZones(DUNGEON_ZONES, this.player.x, this.player.y, (tx, ty) => isLandingCell(this.level, tx, ty, KEEP_OFF));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 

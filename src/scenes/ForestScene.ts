@@ -33,7 +33,7 @@ import {
   fadeAreaTitle,
   firstStrike,
   HeroWalk,
-  isWalkableCell,
+  isLandingCell,
   meetFoe,
   noteFightSpot,
   type Opening,
@@ -86,6 +86,11 @@ const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 const SEASON_FADE = 300;
 
 type ForestKind = "wasp" | "silverWasp" | "spider" | "orc" | "mossGolem";
+
+// what stands in the field with a body (the runner's walls), and with the
+// seal's plates where a fight's return must not set the hero down
+const SOLIDS = [FOREST_SHRINE_POS, FOREST_PEDDLER_POS, cellCentre(SEALS.forest.at), cellCentre(NESTS.forest.at)];
+const KEEP_OFF = [...SOLIDS, ...SEALS.forest.plates.map(cellCentre)];
 
 export class ForestScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -208,7 +213,7 @@ export class ForestScene extends Phaser.Scene {
       : FieldRunner.roll(this, this.player, level, ENEMIES.silverWasp.texture, {
           region: "forest",
           back: !!back,
-          walls: [FOREST_SHRINE_POS, FOREST_PEDDLER_POS, cellCentre(SEALS.forest.at), cellCentre(NESTS.forest.at)],
+          walls: SOLIDS,
           exits: [FOREST_ENTRY],
           zones: FOREST_ZONES,
           paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -501,7 +506,7 @@ export class ForestScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(FOREST_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
+    const spot = escapeFromZones(FOREST_ZONES, this.player.x, this.player.y, (tx, ty) => isLandingCell(this.level, tx, ty, KEEP_OFF));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 

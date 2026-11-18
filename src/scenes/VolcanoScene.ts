@@ -36,7 +36,7 @@ import {
   fadeAreaTitle,
   firstStrike,
   HeroWalk,
-  isWalkableCell,
+  isLandingCell,
   meetFoe,
   noteFightSpot,
   type Opening,
@@ -109,6 +109,11 @@ function lavaVents(level: readonly (readonly number[])[]): Array<{ x: number; y:
 // The last region, past the GLACIER GOLEM: same skeleton as SnowScene (roamer
 // zones, chests, an exit back to town, a boss that roams its own corner) on
 // the volcano's own ash/lava/basalt tiles rather than tinted grass.
+// what stands in the field with a body (the runner's walls), and with the
+// seal's plates where a fight's return must not set the hero down
+const SOLIDS = [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS, cellCentre(SEALS.volcano.at), cellCentre(NESTS.volcano.at)];
+const KEEP_OFF = [...SOLIDS, ...SEALS.volcano.plates.map(cellCentre)];
+
 export class VolcanoScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private companionFollower!: CompanionSprite;
@@ -215,7 +220,7 @@ export class VolcanoScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.gildedImp.texture, {
       region: "volcano",
       back: !!back,
-      walls: [VOLCANO_SHRINE_POS, VOLCANO_PEDDLER_POS, cellCentre(SEALS.volcano.at), cellCentre(NESTS.volcano.at)],
+      walls: SOLIDS,
       exits: [VOLCANO_ENTRY],
       zones: VOLCANO_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -458,7 +463,7 @@ export class VolcanoScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(VOLCANO_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
+    const spot = escapeFromZones(VOLCANO_ZONES, this.player.x, this.player.y, (tx, ty) => isLandingCell(this.level, tx, ty, KEEP_OFF));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 

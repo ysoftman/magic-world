@@ -140,6 +140,19 @@ export function isWalkableCell(level: readonly (readonly number[])[], tx: number
   return tile !== undefined && !SOLID.has(tile);
 }
 
+// Where a fight's return may set the hero down (escapeFromZones): floor that
+// is under none of `keepOff` (world points: the field's stones and stalls,
+// which have bodies, and a seal's plates, which count a hero set down on one
+// as a step and put the lit runes out)
+export function isLandingCell(
+  level: readonly (readonly number[])[],
+  tx: number,
+  ty: number,
+  keepOff: readonly { x: number; y: number }[],
+): boolean {
+  return isWalkableCell(level, tx, ty) && !keepOff.some((p) => Math.floor(p.x / TILE) === tx && Math.floor(p.y / TILE) === ty);
+}
+
 /**
  * The grid the terrain layer actually renders: every object tile swapped for
  * the ground that shows under it, now that trees and houses draw on their own

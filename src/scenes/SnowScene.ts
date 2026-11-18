@@ -34,7 +34,7 @@ import {
   fadeAreaTitle,
   firstStrike,
   HeroWalk,
-  isWalkableCell,
+  isLandingCell,
   meetFoe,
   noteFightSpot,
   type Opening,
@@ -88,6 +88,11 @@ const EXIT_SAFE_RADIUS_X = TILE * 2;
 const EXIT_SAFE_RADIUS_Y = TILE * 2.5;
 
 type SnowKind = "frostMoth" | "auroraMoth" | "yeti" | "iceGolem";
+
+// what stands in the field with a body (the runner's walls), and with the
+// seal's plates where a fight's return must not set the hero down
+const SOLIDS = [SNOW_SHRINE_POS, SNOW_PEDDLER_POS, cellCentre(SEALS.snow.at), cellCentre(NESTS.snow.at)];
+const KEEP_OFF = [...SOLIDS, ...SEALS.snow.plates.map(cellCentre)];
 
 export class SnowScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -214,7 +219,7 @@ export class SnowScene extends Phaser.Scene {
     this.runner = FieldRunner.roll(this, this.player, level, ENEMIES.auroraMoth.texture, {
       region: "snow",
       back: !!back,
-      walls: [SNOW_SHRINE_POS, SNOW_PEDDLER_POS, cellCentre(SEALS.snow.at), cellCentre(NESTS.snow.at)],
+      walls: SOLIDS,
       exits: [SNOW_ENTRY],
       zones: SNOW_ZONES,
       paused: () => this.uiBlocking() || this.quitting || this.fieldKeys.leaving(),
@@ -500,7 +505,7 @@ export class SnowScene extends Phaser.Scene {
   }
 
   private escapeMonsterZone(): void {
-    const spot = escapeFromZones(SNOW_ZONES, this.player.x, this.player.y, (tx, ty) => isWalkableCell(this.level, tx, ty));
+    const spot = escapeFromZones(SNOW_ZONES, this.player.x, this.player.y, (tx, ty) => isLandingCell(this.level, tx, ty, KEEP_OFF));
     if (spot) this.player.setPosition(spot.x, spot.y);
   }
 
